@@ -96,17 +96,16 @@ sequenceDiagram
     participant H as Harness
     participant L as lorebayd
     H->>L: Call without a token
-    L-->>H: 401 with the authorization server's location
-    H->>P: Open the browser at Lorebay's authorization page
-    P->>L: Sign in with username and password
-    L->>P: Consent page, agent name set to the client name
-    P->>L: Edit the name if needed, then approve
+    L-->>H: 401, where to authorize
+    H->>P: Open the authorization page
+    P->>L: Sign in
+    P->>L: Approve on the consent page
     L-->>H: Authorization code
     H->>L: Exchange the code
-    L-->>H: Access token and refresh token
+    L-->>H: Access and refresh tokens
     H->>L: Calls with the access token
-    H->>L: Refresh token, when the access token expires
-    L-->>H: New access token, without opening the browser
+    H->>L: Refresh, when the access token expires
+    L-->>H: New access token
 ```
 
 When the person revokes the authorization on the web, both tokens are

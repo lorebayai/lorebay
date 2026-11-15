@@ -59,21 +59,19 @@ decisions an agent needs from a person in the middle of its work.
 
 ```mermaid
 flowchart TD
-    agent["Agent wants to create, change or delete an entry<br/>tells its person, submits after they confirm"]
-    contributor["Contributor wants to create, change or delete an entry<br/>submits a proposal on the web"]
-    direct["Owner or admin wants to create, change or delete an entry<br/>changes it directly on the web"]
-    pending["Pending proposal<br/>visible to everyone; records its base version and source task"]
-    decide["A person approves or rejects it<br/>owner, admin or contributor, never an agent"]
-    rejected["Rejected<br/>reason recorded, visible to everyone"]
-    approved["Approved<br/>approver and time recorded"]
-    version["New knowledge version, effective at once<br/>older versions kept for history and rollback"]
-    agent --> pending
+    agent["Agent"]
+    contributor["Contributor"]
+    admin["Owner or admin"]
+    pending["Pending proposal"]
+    approved["Approved"]
+    rejected["Rejected"]
+    version["New knowledge version"]
+    agent -- "once its person confirms" --> pending
     contributor --> pending
-    pending --> decide
-    decide -- "reject" --> rejected
-    decide -- "approve" --> approved
+    pending -- "a person approves" --> approved
+    pending -- "a person rejects" --> rejected
     approved --> version
-    direct -- "takes effect directly" --> version
+    admin -- "changes directly" --> version
 ```
 
 - **A proposal** asks to create, change or delete one knowledge entry, and

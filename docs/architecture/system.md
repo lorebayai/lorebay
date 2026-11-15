@@ -28,24 +28,24 @@ runs exactly one.
 
 ```mermaid
 flowchart TD
-    human["Person (browser)"]
+    human["Person"]
     program["External program"]
-    agent["Agent (any harness)"]
-    subgraph lorebayd["lorebayd (one process)"]
-        web["Web API and web pages<br/>/api/v1, HTTP + JSON"]
-        mcp["MCP layer<br/>tool arguments to operation arguments<br/>task ID to space"]
-        ops["API operations (one set)"]
+    agent["Agent"]
+    subgraph lorebayd["lorebayd, one process"]
+        web["Web API and pages"]
+        mcp["MCP layer"]
+        ops["API operations"]
         rules["Permission and data rules"]
         db["Database layer"]
         fs["File storage layer"]
     end
     sqlite["SQLite"]
-    store["Artifact files<br/>local directory, served by lorebayd, or S3"]
+    store["Artifact files<br/>local directory or S3"]
     human -- "login cookie" --> web
     program -- "access token" --> web
-    agent -- "MCP, access token" --> mcp
-    human -- "short-lived download URL" --> store
-    agent -- "short-lived URLs" --> store
+    agent -- "access token" --> mcp
+    human -- "file URL" --> store
+    agent -- "file URL" --> store
     web --> ops
     mcp --> ops
     ops --> rules

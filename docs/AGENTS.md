@@ -59,8 +59,10 @@ Then number the top-level sections, in this order:
 - Add a term to [CONTEXT.md](../CONTEXT.md) once more than one doc uses it.
 - Link with relative paths, to a section anchor when citing one rule.
 - Draw a Mermaid diagram when a structure, sequence or flow reads more
-  clearly as a picture, and keep it in agreement with the prose. Quote every
-  edge label, as in `a -- "approve" --> b`.
+  clearly as a picture, and keep it in agreement with the prose. Label each
+  node, edge and message with a few words and leave the details to the
+  prose, so the diagram fits on one screen. Quote every edge label, as in
+  `a -- "approve" --> b`.
 
 ## Before finishing
 

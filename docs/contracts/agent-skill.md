@@ -71,21 +71,19 @@ sequenceDiagram
     participant P as Person
     participant A as Agent
     participant L as lorebayd
-    participant F as File URL (lorebayd or S3)
-    P->>A: Ask for some work
-    A->>L: list_spaces
-    A->>L: create_task (space, title)
+    participant F as File URL
+    P->>A: Ask for work
+    A->>L: list_spaces, create_task
     L-->>A: Task ID and key
-    A->>L: list_knowledge, read_knowledge (space)
-    A->>L: add_note (task ID): the plan
-    A->>L: add_note (task ID): one per finished step
-    A->>L: create_artifact (task ID): file name, summary
-    L-->>A: Short-lived upload URL and headers
-    A->>F: Upload the file over HTTP, with the headers
-    A->>L: complete_artifact (task ID)
-    A->>L: update_task (task ID): result
+    A->>L: list_knowledge, read_knowledge
+    A->>L: add_note: the plan, then each step
+    A->>L: create_artifact
+    L-->>A: Upload URL and headers
+    A->>F: Upload the file with the headers
+    A->>L: complete_artifact
+    A->>L: update_task: result
     A->>P: Stop and wait
-    A->>L: update_task (task ID): status ended
+    A->>L: update_task: ended
 ```
 
 Calls before `create_task` carry no task ID. From then on every call that
