@@ -53,6 +53,10 @@ to one of them.
 - **Knowledge deletion is the exception.** Deleting an entry marks its row
   deleted and adds a deletion version, with no content, recording who deleted
   it, when, and from which proposal. Earlier content stays in older versions.
+- **Every other version holds the full content and summary**, never a diff.
+  Approving a change proposal fills in the fields it leaves out from an
+  earlier version; [Knowledge](../contracts/knowledge.md#4-proposals) says
+  which.
 - **A proposal records its source task.** An agent always has a task ID when
   it proposes; a proposal made on the web has no source task.
 - **A proposal records its base version**, so approval can detect that the

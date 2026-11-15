@@ -104,7 +104,8 @@ flowchart TD
 - **The same applies** when a create proposal's name already belongs to an
   entry, which approval then gives a new version, and when the target entry
   was deleted, which approval restores with the proposal's content as its new
-  version.
+  version. A content or summary that a change proposal leaves out then comes
+  from the last version before the deletion.
 - **Rejecting.** The person who rejects writes a reason. Rejected proposals
   are kept, with the content, the proposer, who rejected them and the reason,
   visible to everyone.
