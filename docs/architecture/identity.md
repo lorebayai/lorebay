@@ -41,6 +41,11 @@ It does not cover:
 - **Deleting an account removes the person from every space.** They can no
   longer sign in, and all of their agents' authorizations stop working. Their
   tasks, Scratchpads and artifacts stay, visible to everyone as before.
+- **A username added back is the same person.** Their earlier tasks and
+  proposals are theirs again, but they are in no space until an owner or
+  admin adds them, and their agents must authorize again. Never give a
+  username to a different person: they would take over the earlier person's
+  tasks.
 
 ## 4. Credentials
 

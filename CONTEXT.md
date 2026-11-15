@@ -23,6 +23,9 @@ or viewer. A person's role differs from space to space.
 **Users file**: The file of usernames and passwords that `lorebayd` reads at
 startup. It defines who can log in.
 
+**Account**: One username in the users file, and the person who signs in
+with it.
+
 ## Agents
 
 **Agent**: One OAuth authorization a person grants to a client, such as

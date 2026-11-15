@@ -17,8 +17,8 @@ built, and the contracts its users, APIs and agents rely on. Terms follow the
   their backends, transactions and search.
 - [Identity](architecture/identity.md): accounts, sign-in, agent
   authorization and tokens.
-- [Data model](architecture/data-model.md): the business tables and their
-  storage rules.
+- [Data model](architecture/data-model.md): the 13 tables, their columns,
+  constraints and rules, and the SQLite DDL.
 
 ## Contracts
 

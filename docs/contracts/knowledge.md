@@ -31,8 +31,18 @@ decisions an agent needs from a person in the middle of its work.
 - **An entry is Markdown text** with a name, shaped like a file path, and a
   one-sentence summary. Knowledge belongs to the whole space, not to one
   person.
+- **Names.** A name is levels separated by `/`, such as `deploy/staging.md`,
+  with no `/` at the start or end and no empty level. An extension is only
+  part of the name: `guide.md` and `guide.txt` are two entries, and both show
+  as Markdown.
+- **Names ignore case.** They are compared ignoring case and shown as
+  written, so `Deploy.md` and `deploy.md` are the same name, and reading
+  `deploy.md` finds `Deploy.md`. This keeps one topic from splitting into two
+  entries that drift apart.
 - **Finding entries.** Entries are listed level by level by name prefix, and
-  searched by keyword across names, summaries and content.
+  searched by keyword across names, summaries and content. Levels that differ
+  only in case are one level, shown as the entry with the lowest key spells
+  it.
 - **Every version is kept.** Each version stores the content and the
   summary. People view the history and roll back on the web.
 - **Agents read only the latest version.** Older versions are kept, but
@@ -49,11 +59,11 @@ decisions an agent needs from a person in the middle of its work.
   can be rolled back; agents don't see them when listing or searching.
 - **Renaming** is a change: owners and admins rename directly, and anyone else
   includes the new name in a change proposal. A name must be unique within
-  the space, deleted entries included: a direct rename to a taken name is
-  rejected, and a proposal that would rename to a taken name cannot be
-  approved. Renaming keeps the key and the history, so references by key
-  still resolve. It creates no version, and rolling back never restores an
-  old name.
+  the space, deleted entries included: a direct rename to another entry's
+  name is rejected, and a proposal that would rename to another entry's name
+  cannot be approved. A rename may change only the case. Renaming keeps the
+  key and the history, so references by key still resolve. It creates no
+  version, and rolling back never restores an old name.
 
 ## 4. Proposals
 
