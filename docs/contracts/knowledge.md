@@ -94,11 +94,14 @@ flowchart TD
   proposed it; another person must approve it. Rejecting is not limited: a
   person may reject their own party's proposal, which withdraws it, and must
   give a reason.
-- **Changed since proposed.** If someone changes the entry after the proposal
-  was made, the proposal can still be approved. The page marks it "changed
-  since proposed" and shows the difference from the current content, and the
-  approver decides. On approval the proposal's content wins; the change in
-  between stays in the history and can be rolled back to.
+- **Changed since proposed.** If someone changes the entry's content or
+  summary after the proposal was made, the proposal can still be approved.
+  The page marks it "changed since proposed" and shows the difference from
+  the current content, and the approver decides. On approval the proposal's
+  content wins; the change in between stays in the history and can be rolled
+  back to. A rename in between is not marked, because renaming creates no
+  version; if the proposal also renames the entry, its name replaces the
+  newer one.
 - **The same applies** when a create proposal's name already belongs to an
   entry, which approval then gives a new version, and when the target entry
   was deleted, which approval restores with the proposal's content as its new

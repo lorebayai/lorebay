@@ -59,8 +59,9 @@ to one of them.
   which.
 - **A proposal records its source task.** An agent always has a task ID when
   it proposes; a proposal made on the web has no source task.
-- **A proposal records its base version**, so approval can detect that the
-  entry changed after the proposal was made.
+- **A proposal records its base version**, so approval can detect a version
+  added after the proposal was made. A rename adds none, so it goes
+  undetected.
 - **The name lives on the `knowledge` row.** Renaming creates no version, and
   rolling back never restores an old name. Names are unique within a space,
   deleted entries included.

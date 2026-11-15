@@ -31,12 +31,14 @@ It does not cover:
 
 - **Web API paths are under `/api/v1`.** A call on anything inside a space names
   the space in the path; `{space}` is the space's key, such as `SPACE-1`.
-- **Calls that write into a task also name the task** in the path.
-- **Paths accept keys**, such as `/api/v1/spaces/SPACE-1/tasks/TK-12`.
+- **Calls that write into a task also name the task** in the path, by its
+  task ID and never by key; see
+  [Keys and references](keys-and-references.md#4-task-ids).
+- **Other paths accept keys**, such as `/api/v1/spaces/SPACE-1/tasks/TK-12`.
 
 ```text
 GET  /api/v1/spaces/{space}/tasks
-POST /api/v1/spaces/{space}/tasks/{task}/notes
+POST /api/v1/spaces/{space}/tasks/{task_id}/notes
 POST /api/v1/spaces/{space}/proposals/{id}/approve
 ```
 

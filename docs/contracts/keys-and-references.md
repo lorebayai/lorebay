@@ -31,13 +31,17 @@ It does not cover showing an object which other objects reference it.
   It is the space's ID and never changes, even when the space is renamed.
 - **Objects to read may be named by key**, such as `TK-12` in `get_task` or
   `KN-3` in `read_knowledge`, resolved in the space the call names. Web API
-  paths accept keys too, such as `/api/v1/spaces/SPACE-1/tasks/TK-12`.
+  paths accept keys too, such as `/api/v1/spaces/SPACE-1/tasks/TK-12`,
+  except for the task in a call that writes into it; see
+  [section 4](#4-task-ids).
 
 ## 4. Task IDs
 
 - **A task ID is a random string**, separate from the task's key. Copying one
   wrong yields "not found", never another real task.
-- **The MCP `task_id` argument accepts only the task ID**, never a key.
+- **A call that writes into a task names it only by its task ID**, never by
+  key: the MCP `task_id` argument and the task in a Web API path alike.
+  Changing or deleting a task counts as writing into it.
 
 ## 5. References
 
