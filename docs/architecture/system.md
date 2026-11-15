@@ -88,5 +88,6 @@ Background jobs run inside `lorebayd`. Each job must be safe to run again.
 They include:
 
 - removing artifact registrations whose upload was never completed;
-- deleting stored files that no database record points to;
+- deleting stored files that no database record points to, and temporary
+  files left by interrupted uploads;
 - removing expired authorization codes and login sessions.

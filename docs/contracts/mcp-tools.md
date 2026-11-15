@@ -42,7 +42,7 @@ It does not cover a harness hook that fills in the task ID automatically.
 | `list_tasks` | Space | Lists the space's tasks, filtered by person, agent or status, or only the caller's party's tasks that are not `ended`; takes a keyword; each row has the agent name and last activity time; newest activity first | List tasks |
 | `get_task` | Space | Reads one task: its result and artifact list, and optionally its Scratchpad | Read a task |
 | `add_note` | Task ID | Appends a note to the task | Append a note |
-| `create_artifact` | Task ID | Registers a file name and summary; returns a short-lived upload URL | Register an artifact |
+| `create_artifact` | Task ID | Registers a file name and summary; returns a short-lived upload URL and the headers the upload must carry | Register an artifact |
 | `complete_artifact` | Task ID | Reports the upload finished; Lorebay checks the file is in storage, and only then is the upload complete | Report an upload complete |
 | `get_artifact_url` | Space | Returns a short-lived download URL | Get a download URL |
 | `list_knowledge` | Space | Lists one level by name prefix: its entries, with names and summaries, and the next level's prefixes; no prefix lists the top level; a keyword searches names, summaries and content across the space | List Knowledge |
@@ -56,7 +56,8 @@ It does not cover a harness hook that fills in the task ID automatically.
   unbounded result into the model's context. Paging follows
   [Web API](web-api.md#4-conventions).
 - **`create_artifact` returns an object, not a bare URL**, so multipart
-  upload can be added without changing the tool.
+  upload can be added without changing the tool. How an upload uses the URL
+  and headers is in [Tasks](tasks.md#5-artifacts).
 - **Files never pass through MCP.** Agents upload and download them over
   HTTP with the URLs they get.
 - **Objects to read may be named by key**; see

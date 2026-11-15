@@ -91,9 +91,16 @@ The Scratchpad records how the agent did the work. It holds notes only.
 Artifacts are files, often large, such as reports, images, exported
 documents or data.
 
-- **Uploads take two steps.** The agent gets a short-lived upload URL through
-  MCP or the Web API, then transfers the file over HTTP. Downloads work the
-  same way.
+- **Uploads take two steps.** The agent gets a short-lived upload URL and
+  the headers to send with it, through MCP or the Web API, then transfers
+  the file over HTTP. Downloads work the same way.
+- **Each upload URL writes one file.** The URL can be reused until it
+  expires, but only one upload succeeds:
+  - an upload without the returned headers is rejected with 403;
+  - once a file is uploaded, another upload to the same URL is rejected with
+    412, so a 412 means the file is already in storage;
+  - a failed or interrupted upload leaves no file, so the client may retry
+    with the same URL.
 - **An upload is complete only when the client reports it.** Until then the
   artifact is not listed among the task's artifacts.
 - **Each artifact has a file name and a one-sentence summary.**

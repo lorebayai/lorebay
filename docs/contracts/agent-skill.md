@@ -50,7 +50,7 @@ It does not cover:
 | # | Rule | Backstop |
 | --- | --- | --- |
 | 5 | **Write notes.** Each session that starts work on the task first writes a plan: what the person wants this time, then how you intend to do it. When a task spans several sessions, these plans mark where each one starts. Reopening an `ended` task also starts with a note: what was missed, and how you will fix it. After each finished step, write a note: what you did, and why. Write no closing note; the conclusion goes in the result. Never write secrets, such as keys, tokens or passwords, into notes. | None; a person can delete a note that holds a secret on the web |
-| 6 | **Upload artifacts.** Upload only files you produced that have no other home, such as reports, images, exported documents or data. Files already in a repository or a pull request are not uploaded; link them in Deliverables. After the transfer, call `complete_artifact`. | Partial: what gets uploaded is not checked; an upload never reported is not complete. See [Tasks](tasks.md#5-artifacts) |
+| 6 | **Upload artifacts.** Upload only files you produced that have no other home, such as reports, images, exported documents or data. Files already in a repository or a pull request are not uploaded; link them in Deliverables. Upload with the URL and headers that `create_artifact` returns, then call `complete_artifact`. If the upload returns 412, the file is already uploaded: call `complete_artifact`. | Partial: what gets uploaded is not checked; an upload without the headers, or a second upload to the same URL, is rejected; an upload never reported is not complete. See [Tasks](tasks.md#5-artifacts) |
 | 7 | **Write references.** Write them as `#KN-1`. Fix a wrong one where it was written; a note cannot be edited, so append a note that corrects it. | Partial: an unresolvable reference shows as plain text, with no error |
 | 8 | **Choose where knowledge goes.** Content about one repository, such as how to build it or its code conventions, stays in that repository's files, such as `CLAUDE.md` or `AGENTS.md`. Content that spans repositories, concerns the team, or is unrelated to code goes into Knowledge. | Partial: anything entering Knowledge needs a person's approval |
 | 9 | **Keep working when Lorebay is unreachable**, whether at session start, partway through, or because the authorization stopped working. Don't stop the work, and tell the person once that this stretch is not recorded. Don't backfill it; record as usual once Lorebay is back. | None |
@@ -80,8 +80,8 @@ sequenceDiagram
     A->>L: add_note (task ID): the plan
     A->>L: add_note (task ID): one per finished step
     A->>L: create_artifact (task ID): file name, summary
-    L-->>A: Short-lived upload URL
-    A->>F: Upload the file over HTTP
+    L-->>A: Short-lived upload URL and headers
+    A->>F: Upload the file over HTTP, with the headers
     A->>L: complete_artifact (task ID)
     A->>L: update_task (task ID): result
     A->>P: Stop and wait
