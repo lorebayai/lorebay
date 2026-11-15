@@ -1,0 +1,77 @@
+# Storage
+
+- **Status:** Proposed
+- **Level:** System
+- **Parent:** [System architecture](system.md)
+- **Related:** [Data model](data-model.md), [Tasks](../contracts/tasks.md)
+
+> Core code calls only the database layer and the file storage layer, never
+> SQLite or the filesystem directly.
+>
+> Storage backends are chosen at deployment and never change afterward.
+
+## 1. Purpose
+
+A default deployment must run with no external services, while a team that
+wants files on an external service can use S3. Two narrow abstractions let
+the core stay the same for both.
+
+## 2. Scope
+
+This doc covers the database layer, the file storage layer, their backends,
+transactions and search. The tables are in [Data model](data-model.md).
+
+It does not cover:
+
+- Postgres: the database layer has only SQLite;
+- moving an existing deployment between backends, such as from a local
+  directory to S3, or from SQLite to Postgres;
+- multipart upload of files over 5 GB.
+
+## 3. Layers
+
+| Layer | Abstracts | Default backend | Other backend |
+| --- | --- | --- | --- |
+| Database layer | Reads and writes per table, transactions, keyword search | SQLite | None |
+| File storage layer | Issue an upload URL, issue a download URL, check a file's existence and size, delete a file | Local directory | S3 |
+
+- **No external dependencies by default.** `lorebayd` starts with a data
+  directory that holds the SQLite file and the artifact files.
+- **A deployment runs on one host.** Both backends assume a single
+  `lorebayd` process.
+- **Backups need the service stopped.** Copy the data directory only while
+  `lorebayd` is stopped; a copy taken while it runs may hold a corrupt
+  database file.
+
+## 4. File storage
+
+- **The layer abstracts issuing URLs, not reading and writing bytes.** With a
+  local directory, `lorebayd` issues short-lived URLs and serves the files
+  itself. With S3, it issues presigned URLs, and files never pass through
+  `lorebayd`.
+- **URLs are short-lived, not single-use.** An S3 presigned URL can be reused
+  until it expires. The local directory behaves the same way, so both
+  backends match.
+- **The client reports a finished upload.** With S3, `lorebayd` cannot see
+  when an upload finishes. With either backend, the client must call
+  `complete_artifact` after the transfer. `lorebayd` then checks that the
+  file exists in storage and records its size.
+- **An artifact must not exceed 5 GB**, the limit of a single S3 upload.
+  Larger files would need multipart upload.
+- **Files that can run scripts are served as downloads.** Images other than
+  SVG, and PDFs, open in the browser. HTML, SVG and other files that can run
+  scripts are always served as downloads, never opened in the browser. An
+  uploaded HTML file therefore can never run inside Lorebay's pages with the
+  login cookie. Both backends follow this rule.
+
+## 5. Database
+
+- **The database layer provides transactions.** An operation that spans
+  several tables runs in one transaction, such as approving a proposal,
+  deleting a task, or taking the next key for a new record.
+- **Files are outside transactions.** Deleting a task or an artifact commits
+  the database first, then deletes the files. A background job removes files
+  left behind; see [System architecture](system.md#6-background-jobs).
+- **Keyword search is substring matching.** It uses SQL `LIKE`, not
+  full-text search. This is enough at team scale, and it matches Chinese
+  text without a tokenizer.

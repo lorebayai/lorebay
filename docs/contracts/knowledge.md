@@ -1,0 +1,110 @@
+# Knowledge
+
+- **Status:** Proposed
+- **Level:** Contract
+- **Parent:** [Lorebay](../product/lorebay.md)
+- **Related:** [Access control](access-control.md),
+  [Agent skill](agent-skill.md), [Data model](../architecture/data-model.md)
+
+> Only owners and admins change Knowledge directly. Every other change is a
+> proposal that takes effect only when a person approves it.
+>
+> Agents read only the latest version of a knowledge entry.
+
+## 1. Purpose
+
+Knowledge carries what later sessions need, so each new session doesn't
+start from nothing. Because every agent in the space reads it, changes stay
+under people's control and every version is kept.
+
+## 2. Scope
+
+This doc covers knowledge entries, their versions, and proposals. When agents
+read Knowledge, what belongs in it, and when agents propose changes are rules
+of the skill, in [Agent skill](agent-skill.md).
+
+It does not cover proposals for anything other than Knowledge, such as
+decisions an agent needs from a person in the middle of its work.
+
+## 3. Knowledge entries
+
+- **An entry is Markdown text** with a name, shaped like a file path, and a
+  one-sentence summary. Knowledge belongs to the whole space, not to one
+  person.
+- **Finding entries.** Entries are listed level by level by name prefix, and
+  searched by keyword across names, summaries and content.
+- **Every version is kept.** Each version stores the content and the
+  summary. People view the history and roll back on the web.
+- **Agents read only the latest version.** Older versions are kept, but
+  agents cannot read them.
+- **Rolling back creates a new version** whose content and summary equal the
+  chosen old version; the versions in between stay. Rolling back is a change:
+  owners and admins roll back directly, and a contributor's rollback is a
+  proposal whose content is the old version.
+- **Creating, changing and deleting an entry go through a proposal**, except
+  for owners and admins; see [section 4](#4-proposals).
+- **Deleting.** A deletion is recorded as a version, with who deleted the
+  entry and when. The content stays in earlier versions, and rolling back
+  restores it. Deleted entries are listed separately on the web, where they
+  can be rolled back; agents don't see them when listing or searching.
+- **Renaming** is a change: owners and admins rename directly, and anyone else
+  includes the new name in a change proposal. A name must be unique within
+  the space, deleted entries included: a direct rename to a taken name is
+  rejected, and a proposal that would rename to a taken name cannot be
+  approved. Renaming keeps the key and the history, so references by key
+  still resolve. It creates no version, and rolling back never restores an
+  old name.
+
+## 4. Proposals
+
+```mermaid
+flowchart TD
+    agent["Agent wants to create, change or delete an entry<br/>tells its person, submits after they confirm"]
+    contributor["Contributor wants to create, change or delete an entry<br/>submits a proposal on the web"]
+    direct["Owner or admin wants to create, change or delete an entry<br/>changes it directly on the web"]
+    pending["Pending proposal<br/>visible to everyone; records its base version and source task"]
+    decide["A person approves or rejects it<br/>owner, admin or contributor, never an agent"]
+    rejected["Rejected<br/>reason recorded, visible to everyone"]
+    approved["Approved<br/>approver and time recorded"]
+    version["New knowledge version, effective at once<br/>older versions kept for history and rollback"]
+    agent --> pending
+    contributor --> pending
+    pending --> decide
+    decide -- "reject" --> rejected
+    decide -- "approve" --> approved
+    approved --> version
+    direct -- "takes effect directly" --> version
+```
+
+- **A proposal** asks to create, change or delete one knowledge entry, and
+  takes effect only when approved. Its status is `pending`, `approved` or
+  `rejected`.
+- **Three kinds.** A create carries a name, a summary and content. A change
+  carries only the fields it changes, at least one of content, summary and
+  name; the rest keep their current values. A delete carries no content.
+- **A submitted proposal cannot be edited.** To revise it, a person of the
+  proposing party rejects it, which withdraws it, and submits a new one.
+- **Who must propose.** Everyone except owners and admins, people and agents
+  alike, creates, changes and deletes entries through proposals. Changes by
+  owners and admins take effect directly.
+- **Who decides.** Owners, admins and contributors may approve and reject.
+  Only people decide; agents can neither approve nor reject. Approval records
+  who approved and when.
+- **Approving one's own.** For approval, a person and that person's agents
+  are one party. Owners and admins may approve their own party's proposals. A
+  contributor may not, whether the contributor or one of their agents
+  proposed it; another person must approve it. Rejecting is not limited: a
+  person may reject their own party's proposal, which withdraws it, and must
+  give a reason.
+- **Changed since proposed.** If someone changes the entry after the proposal
+  was made, the proposal can still be approved. The page marks it "changed
+  since proposed" and shows the difference from the current content, and the
+  approver decides. On approval the proposal's content wins; the change in
+  between stays in the history and can be rolled back to.
+- **The same applies** when a create proposal's name already belongs to an
+  entry, which approval then gives a new version, and when the target entry
+  was deleted, which approval restores with the proposal's content as its new
+  version.
+- **Rejecting.** The person who rejects writes a reason. Rejected proposals
+  are kept, with the content, the proposer, who rejected them and the reason,
+  visible to everyone.
