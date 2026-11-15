@@ -70,7 +70,11 @@ A task holds:
   still names the agent that created it, and its notes and artifacts are not
   marked with the agent that wrote them.
 - **Finding tasks.** A space's tasks can be filtered by person, agent and
-  status, and searched by keyword in titles and results.
+  status, and searched by keyword in titles and results. An agent is matched
+  by the name copied onto its tasks, which is unique among one person's
+  agents; see [Identity](../architecture/identity.md#5-agent-authorization).
+  An agent authorized again under the same name is filtered together with
+  its earlier tasks.
 
 ## 4. Scratchpad
 

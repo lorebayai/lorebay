@@ -69,7 +69,12 @@ It does not cover:
   client and a name. The name defaults to the client name from the client's
   metadata, which the client reports about itself and is used only for
   display. On the consent page the person may change it, such as to
-  `Claude Code (home)`, to tell several copies of one client apart.
+  `Claude Code (home)`.
+- **A person's agents have distinct names.** When the name on the consent
+  page already belongs to another of the person's agents, the person picks
+  another name or replaces the old authorization. Replacing deletes the old
+  record and creates the new one in one transaction when the tokens are
+  issued, so the name carries over.
 - **An agent follows its person.** It is a participant in every space its
   person is in, and leaves a space when its person does. Its role is derived
   from its person's; see

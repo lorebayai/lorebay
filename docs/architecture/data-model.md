@@ -30,7 +30,7 @@ to one of them.
 | Table | Belongs to | Holds |
 | --- | --- | --- |
 | `user` | Lorebay | Username from the users file; the password stays only in the file |
-| `authorization` | `user` | Client, name (defaults to the client name), hashes of the access and refresh tokens |
+| `authorization` | `user` | Client, name (defaults to the client name, unique per person), hashes of the access and refresh tokens |
 | `space` | Lorebay | Key, such as `SPACE-1`; name; summary; owner |
 | `participant` | `space` | Person, role |
 | `task` | `space` | Key; person; agent name, copied from the authorization at creation; title; status; result; start, end and last activity times |
@@ -47,6 +47,10 @@ to one of them.
   whose they were.
 - **`participant` stores only people.** An agent's spaces and role are
   computed from its person, so "an agent follows its person" needs no sync.
+- **A task names its agent by the copied name**, not by a reference to the
+  authorization. Filtering by agent matches the person and the agent name,
+  which is unique per person, so it still works after the authorization is
+  revoked.
 - **Deletion is real.** Deleting a task, by its owner or by a space owner or
   admin, deletes its notes, its artifact rows and its files. A proposal's
   source task is cleared; keys written in text stay and show as plain text.
