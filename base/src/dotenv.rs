@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::io::{Read, Result as IoResult};
 use std::path::Path;
 
+use dotenvy::Error as DotenvError;
 use typed_builder::TypedBuilder;
 
 use crate::ConfigError;
@@ -20,10 +21,19 @@ pub(crate) fn dotenv_environment(
     };
     dotenvy::Iter::new(&mut reader)
         .collect::<Result<_, _>>()
-        .map_err(|_| ConfigError::EnvParse {
+        .map_err(|error| ConfigError::EnvParse {
             path: path.to_owned(),
-            line: reader.line.max(1),
+            line: error_line(error, reader.line),
         })
+}
+
+fn error_line(error: DotenvError, last_line: usize) -> usize {
+    let DotenvError::LineParse(input, index) = error else {
+        return last_line.max(1);
+    };
+    let newlines = input.bytes().filter(|byte| *byte == b'\n').count();
+    let preceding_newlines = input.chars().take(index).filter(|ch| *ch == '\n').count();
+    (last_line.saturating_sub(newlines) + preceding_newlines).max(1)
 }
 
 #[derive(Clone, Debug, TypedBuilder)]
