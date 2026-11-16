@@ -35,7 +35,7 @@ It does not cover:
 | Layer | Abstracts | Default backend | Other backend |
 | --- | --- | --- | --- |
 | Database layer | Reads and writes per table, transactions, keyword search | SQLite | Postgres |
-| File storage layer | Issue an upload URL and the headers it requires, issue a download URL, check a file's existence and size, delete a file | Local directory | S3 |
+| File storage layer | Issue an upload URL and the headers it requires, issue a download URL, check a file's existence and size, list the stored files, delete a file | Local directory | S3 |
 
 - **No external dependencies by default.** `lorebayd` starts with a data
   directory that holds the SQLite file and the artifact files.
@@ -71,6 +71,10 @@ It does not cover:
   when an upload finishes. With either backend, the client must call
   `complete_artifact` after the transfer. `lorebayd` then checks that the
   file exists in storage and records its size.
+- **The layer lists the stored files.** The background job that deletes
+  files no database record points to finds them in that list; see
+  [System architecture](system.md#6-background-jobs). Both backends can list
+  their files.
 - **An artifact must not exceed 5 GB**, the limit of a single S3 upload.
   Larger files would need multipart upload.
 - **Files that can run scripts are served as downloads.** Images other than

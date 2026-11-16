@@ -111,7 +111,7 @@ A mirror of the users file, synced at startup.
 | `deleted_at` | INTEGER | Nullable | When the username was removed from the file; empty while it is there |
 | `created_at` | INTEGER | Not null | When the first sync added it |
 
-- **Passwords stay out of the database**, only in the users file.
+- **Password hashes stay out of the database**, only in the users file.
 - **Startup sync.** A username in the file but not in the table gets a row.
   A row whose username left the file gets `deleted_at`, and its
   `participant`, `agent_authorization` and `login_session` rows and its

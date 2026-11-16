@@ -36,8 +36,10 @@ It does not cover:
 ## 3. Accounts
 
 - **Accounts live in the users file.** `lorebayd` reads a YAML or JSON users
-  file named in its configuration. It holds only usernames and passwords.
-  People sign in with them.
+  file named in its configuration. It holds only usernames and password
+  hashes, never plaintext passwords, so reading the file reveals no
+  password. `lorebayd` provides a command that produces the hash of a
+  password.
 - **Adding or removing a user means editing the file and restarting.**
 - **Everyone in the file can sign in**, create spaces, and be added to other
   people's spaces.
@@ -76,6 +78,8 @@ It does not cover:
   operation that returns a login session. Sign-in is a separate step from
   agent authorization, so it can move to emailed codes or SSO without
   changing anything on the agent side.
+- **Sign-in is rate limited by address.** Too many attempts from one address
+  in a short time are refused, which slows password guessing.
 - **The `lorebay` CLI signs in through the browser.** The CLI is a client
   built into `lorebayd`. It starts an authorization code flow with PKCE and a
   redirect to a port on the same computer; the person signs in on the page
@@ -94,6 +98,8 @@ It does not cover:
   define. Registration is open and needs no credential, as
   [RFC 7591](https://datatracker.ietf.org/doc/html/rfc7591) allows; a
   registered client can do nothing until a person authorizes it.
+  Registration is rate limited by address, as sign-in is, so open
+  registration cannot be used to fill the database with clients.
 - **Sign-in and consent are Web API operations.** The authorization endpoint
   is a minimal page that `lorebayd` serves. The page signs the person in,
   reads the request it was opened with, shows the client and asks for

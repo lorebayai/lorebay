@@ -20,8 +20,8 @@ and a role.
 **Role**: What a participant may do in one space: owner, admin, contributor
 or viewer. A person's role differs from space to space.
 
-**Users file**: The file of usernames and passwords that `lorebayd` reads at
-startup. It defines who can log in.
+**Users file**: The file of usernames and password hashes that `lorebayd`
+reads at startup. It defines who can log in.
 
 **Account**: One username in the users file, and the person who signs in
 with it.
