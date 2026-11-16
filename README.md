@@ -16,8 +16,14 @@ git clone git@github.com:lorebayai/lorebay.git
 Make each change in its own worktree, as
 [contribution.md](playbook/core/contribution.md#worktrees) describes.
 
-Install [rustup](https://rustup.rs); `rust-toolchain.toml` picks the Rust
-release. Install moon, then add `~/.moon/bin` to `PATH`:
+Install [rustup](https://rustup.rs), then install the Rust release that
+`rust-toolchain.toml` pins, before moon runs tasks in parallel:
+
+```bash
+rustup toolchain install
+```
+
+Install moon, then add `~/.moon/bin` to `PATH`:
 
 ```bash
 bash <(curl -fsSL https://moonrepo.dev/install/moon.sh)

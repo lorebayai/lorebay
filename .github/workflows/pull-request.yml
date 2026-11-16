@@ -24,6 +24,8 @@ jobs:
         uses: moonrepo/setup-toolchain@v0.6.4
         with:
           moon-version: 2.6.5
+      - name: Install Rust Toolchain
+        run: rustup toolchain install --no-self-update
       - name: Run Moon CI
         run: moon ci
       - name: Install Lock Extension
