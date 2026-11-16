@@ -55,6 +55,10 @@ POST /api/v1/spaces/{space}/proposals/{key}/approve
   header: a login session's for a person, an agent authorization's for an
   agent or external program. See
   [Identity](../architecture/identity.md#4-credentials).
+- **Sign-in and client registration are rate limited by address.** A call
+  over the limit is refused, and the caller may try again after a wait. See
+  Identity, on [sign-in](../architecture/identity.md#5-sign-in) and on
+  [registration](../architecture/identity.md#6-agent-authorization).
 - **Every list is paginated** with a cursor, a default page size and a fixed
   order.
 - **Writes don't check references**; see
