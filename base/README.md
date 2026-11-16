@@ -32,6 +32,8 @@ Consumers can inject their own `Clock` implementation through `Arc<dyn Clock>`.
 The loader applies defaults, an optional JSON file, an optional dotenv file,
 then the supplied environment map, with later values overriding earlier
 ones. Environment paths use `<PREFIX>__SECTION__FIELD`.
+Dotenv substitutions use earlier file assignments, then the supplied
+environment map. They never read the ambient process environment.
 
 | Key | Default | Values |
 | --- | --- | --- |

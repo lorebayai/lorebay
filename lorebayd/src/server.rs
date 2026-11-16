@@ -99,6 +99,11 @@ async fn serve(
         tokio::select! {
             biased;
             _ = stopped.changed() => break,
+            Some(result) = connections.join_next() => {
+                if let Err(error) = result {
+                    tracing::error!(%error, "HTTP connection task failed");
+                }
+            },
             result = listener.accept() => {
                 match result {
                     Ok((stream, _)) => {
@@ -108,11 +113,6 @@ async fn serve(
                         tracing::error!(%error, "could not accept HTTP connection");
                         sleep(ACCEPT_RETRY_DELAY).await;
                     },
-                }
-            },
-            Some(result) = connections.join_next() => {
-                if let Err(error) = result {
-                    tracing::error!(%error, "HTTP connection task failed");
                 }
             },
         }

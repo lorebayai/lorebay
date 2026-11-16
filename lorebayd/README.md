@@ -40,6 +40,8 @@ Precedence is defaults, JSON file, dotenv file, then process environment.
 Only `--dotenv` loads an env file; it does not change the process environment.
 Only process environment keys prefixed `LOREBAYD__` are read; a non-UTF-8
 value among them is a configuration error. Nested environment keys use `__`.
+Dotenv substitutions use earlier file assignments, then the supplied
+configuration environment; unprefixed process variables cannot affect them.
 Relative paths in `--config`, `--dotenv` and `data_directory` resolve against
 the working directory. Example:
 

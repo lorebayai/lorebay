@@ -64,7 +64,7 @@ where
     if let Some(path) = &sources.config_file {
         builder = builder.add_source(File::from_str(&read_json_file(path)?, FileFormat::Json));
     }
-    let mut environment = dotenv_environment(sources.dotenv_file.as_deref())?;
+    let mut environment = dotenv_environment(sources.dotenv_file.as_deref(), &sources.environment)?;
     environment.extend(sources.environment.clone());
     let values = builder
         .add_source(
