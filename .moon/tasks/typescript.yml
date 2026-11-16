@@ -1,0 +1,32 @@
+inheritedBy:
+  toolchain: 'typescript'
+
+fileGroups:
+  typescript:
+    - 'src/**/*'
+    - '*.{js,json,ts}'
+    - '/.prettierrc.json'
+    - '/tsconfig.base.json'
+    - '/eslint.base.js'
+    - '.prettierignore'
+    - '/package.json'
+    - '/pnpm-lock.yaml'
+    - '/pnpm-workspace.yaml'
+
+tasks:
+  format:
+    toolchains: ['javascript', 'node', 'typescript']
+    command: 'prettier --check .'
+    inputs:
+      - '@group(typescript)'
+      - '**/*.{js,json,ts,tsx,yml}'
+  lint:
+    toolchains: ['javascript', 'node', 'typescript']
+    command: 'eslint --max-warnings 0 .'
+    inputs:
+      - '@group(typescript)'
+  typecheck:
+    toolchains: ['javascript', 'node', 'typescript']
+    command: 'tsc --noEmit'
+    inputs:
+      - '@group(typescript)'

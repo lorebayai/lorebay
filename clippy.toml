@@ -1,0 +1,13 @@
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+allow-dbg-in-tests = true
+allow-print-in-tests = true
+absolute-paths-max-segments = 2
+source-item-ordering = ["enum"]
+too-many-lines-threshold = 60
+too-many-arguments-threshold = 5
+max-fn-params-bools = 1
+max-struct-bools = 3
+# Enclosing items count too: 5 permits three nested levels in an impl method, but four in a free function.
+excessive-nesting-threshold = 5

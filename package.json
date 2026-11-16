@@ -1,0 +1,11 @@
+{
+  "name": "lorebay",
+  "private": true,
+  "packageManager": "pnpm@12.21.0",
+  "type": "module",
+  "devDependencies": {
+    "eslint": "catalog:",
+    "typescript": "catalog:",
+    "typescript-eslint": "catalog:"
+  }
+}

@@ -1,0 +1,23 @@
+name: Feature request
+description: Propose something Lorebay doesn't do yet.
+type: Feature
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What you or your team cannot do today, and why it matters.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What Lorebay should do. Link the design doc it would change, if you know it.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Other approaches you considered, or how you work around it today.

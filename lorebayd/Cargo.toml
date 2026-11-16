@@ -1,0 +1,12 @@
+[package]
+name = "lorebayd"
+description = "The Lorebay server: the web pages, the Web API and the MCP server in one process."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

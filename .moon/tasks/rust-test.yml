@@ -1,0 +1,9 @@
+inheritedBy:
+  toolchain: 'rust'
+  layers: ['library', 'application']
+
+tasks:
+  test:
+    command: 'cargo test --lib --bins --locked'
+    inputs:
+      - '@group(rust)'

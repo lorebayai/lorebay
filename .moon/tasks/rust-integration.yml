@@ -1,0 +1,10 @@
+inheritedBy:
+  toolchain: 'rust'
+  file: 'tests/api/main.rs'
+
+tasks:
+  integration:
+    command: 'cargo test --test api --locked'
+    inputs:
+      - '@group(rust)'
+      - '@group(rust-tests)'

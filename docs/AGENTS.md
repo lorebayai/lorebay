@@ -28,7 +28,9 @@ Every doc starts with this header:
 ```
 
 - **Status:** `Proposed` is agreed but not built; `Current` matches the code.
-  The pull request that builds a design sets its doc to `Current`.
+  The pull request that builds a design sets its doc to `Current`. A
+  `Current` doc has no placeholders, open questions, unresolved
+  alternatives, roadmaps or review logs.
 - **Level:** the one level of abstraction the doc stays at:
 
   | Level | Covers | Leaves out |
@@ -63,6 +65,15 @@ Then number the top-level sections, in this order:
   node, edge and message with a few words and leave the details to the
   prose, so the diagram fits on one screen. Quote every edge label, as in
   `a -- "approve" --> b`.
+
+## Review
+
+- Review as a new reader, not as the author of the discussion behind the
+  doc.
+- Challenge every component, field, lock and config knob that no
+  requirement demands.
+- Reliability claims must cover a crash between every two durable steps.
+- Fold accepted findings into the design itself; never append a review log.
 
 ## Before finishing
 

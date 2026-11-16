@@ -1,0 +1,13 @@
+versionConstraint: '>=2.6.5'
+
+projects:
+  globFormat: source-path
+  globs:
+    - '*/moon.yml'
+    - 'tests/*/moon.yml'
+
+vcs:
+  defaultBranch: main
+
+constraints:
+  enforceLayerRelationships: true
