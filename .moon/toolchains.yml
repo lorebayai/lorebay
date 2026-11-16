@@ -1,4 +1,6 @@
-rust: {}
+rust:
+  bins:
+    - 'cargo-deny@0.20.2'
 
 javascript:
   packageManager: 'pnpm'

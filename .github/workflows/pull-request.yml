@@ -25,6 +25,8 @@ jobs:
         with:
           moon-version: 2.6.5
       - name: Run Moon CI
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: moon ci
       - name: Install Lock Extension
         env:

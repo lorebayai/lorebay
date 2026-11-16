@@ -26,6 +26,12 @@
   `Cargo.lock` must be committed.
 - Crates must inherit package fields from `[workspace.package]` and lints
   with `[lints] workspace = true`; they must not define their own lint tables.
+- `rust-toolchain.toml` pins one stable Rust release, and `rust-version` in
+  `[workspace.package]` names the same release. A toolchain bump changes
+  both in one pull request.
+- Every dependency must pass `cargo deny`, configured in the root
+  [`deny.toml`](../../deny.toml). A license joins its allow list only when it
+  lets the `lorebayd` executable ship under Apache-2.0.
 - A crate must not declare Cargo `[features]` unless a consumer must be able
   to omit a heavy optional dependency.
 - Rust projects must declare `language: rust` and their layer in `moon.yml`.
@@ -37,8 +43,9 @@
   must have a stock check unless this fragment states why it stays unchecked.
 - Authors must run moon commands from the repo root:
   `moon run <project>:format`, `moon run <project>:lint`,
-  `moon run <project>:build` and `moon run <project>:test`, plus
-  `moon run <project>:integration` where that task exists.
+  `moon run <project>:build`, `moon run <project>:test` and
+  `moon run <project>:deny`, plus `moon run <project>:integration` where
+  that task exists.
 - Formatting fixes should use `cargo fmt`; automatic lint fixes should use
   `cargo clippy --fix`. Authors must review automatic fixes and rerun the
   corresponding moon checks.

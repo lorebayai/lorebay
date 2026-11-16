@@ -1,0 +1,39 @@
+name: Bug report
+description: Lorebay doesn't behave as its docs describe.
+type: Bug
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: The Lorebay release or commit you run.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: The operating system, the file storage backend (local directory or S3), and the harness, if an agent is involved.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant lorebayd output. Remove tokens, passwords and other secrets first.
+      render: text

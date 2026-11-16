@@ -11,6 +11,8 @@ change in the repo.
 | `AGENTS.md`, with a `CLAUDE.md` symlink | The repo root and folders with their own agent rules | Rules for agents working in that folder |
 | Design docs | `docs/`, by topic | The current product and system design |
 | Glossary | `CONTEXT.md` at the repo root | Canonical domain terms |
+| `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md` | The repo root | How outside contributors propose changes, report vulnerabilities and behave |
+| Issue forms and the pull request template | `.github/` | What a new issue or pull request asks for |
 | Playbook fragments | `playbook/` | Conventions shared by several folders |
 | Drafts, plans, reviews | `docs/superpowers/` and `.superpowers/` (gitignored) | Local working files |
 
@@ -44,7 +46,8 @@ A project README has these sections, in this order, and no others:
 | `## Docs` | One link to its design home, or to the doc that covers it | When there is one |
 
 The root README has `# <name>` and one paragraph, `## Getting started`,
-`## Repository layout` (one line per top-level folder) and `## Docs`.
+`## Repository layout` (one line per top-level folder), `## Docs` and
+`## License`.
 
 Other folders with a README, such as `playbook/`, use the project sections
 that apply.

@@ -44,7 +44,8 @@ landing and cleanup. Applies to every change in the repo.
   Commits type and the optional `<scope>` names the project or topic:
   `docs(contracts): define artifact uploads`.
 - The title carries no issue number; the squash merge appends the PR number.
-- The body has one intent line per linked issue:
+- The body fills in the sections of the pull request template, and opens
+  with one intent line per linked issue:
 
   | Line | Intent |
   | --- | --- |

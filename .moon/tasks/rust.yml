@@ -31,3 +31,10 @@ tasks:
     command: 'cargo build --locked'
     inputs:
       - '@group(rust)'
+  deny:
+    command: 'cargo deny --locked check'
+    inputs:
+      - 'Cargo.toml'
+      - '/Cargo.toml'
+      - '/Cargo.lock'
+      - '/deny.toml'
