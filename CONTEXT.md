@@ -26,11 +26,19 @@ startup. It defines who can log in.
 **Account**: One username in the users file, and the person who signs in
 with it.
 
+**Login session**: One sign-in of a person, from the web pages or the
+`lorebay` CLI. It is the person's credential.
+
+**`lorebay`**: The command-line client. People use it for the operations
+only people perform.
+
 ## Agents
 
 **Agent**: One OAuth authorization a person grants to a client, such as
 Claude Code. An agent acts for that person. External programs that call the
 Web API are agents too.
+
+**Agent authorization**: The record and credential of one agent.
 
 **Party**: A person together with all of that person's agents.
 

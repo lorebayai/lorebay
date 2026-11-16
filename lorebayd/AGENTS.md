@@ -17,7 +17,7 @@ Follow these playbook fragments:
 
   ```text
   src/
-  ├── main.rs       Parses Config, starts logging, binds the listener, calls run
+  ├── main.rs       Loads Config, starts logging, binds the listener, calls run
   ├── lib.rs        Declares modules; re-exports Config and run
   ├── config.rs     Config
   ├── server.rs     run and the server state
@@ -55,7 +55,7 @@ and file storage layers.
 - Domain functions must not use transport types: no axum, HTTP or MCP
   types, and no request or response structs. They take typed inputs and the
   verified caller, a person and, for an agent, its authorization, never a
-  raw cookie or token.
+  raw token.
 - Domain functions check permissions, by the
   [permission matrix](../docs/contracts/access-control.md#4-permissions) and
   in the order of
@@ -94,15 +94,17 @@ and file storage layers.
 
 ### Configuration
 
-- `src/config.rs` holds one `Config` struct, which `main` builds from
-  command-line flags, such as the users file of
+- `src/config.rs` holds one `Config` struct, which `main` loads in layers:
+  the defaults, then an optional config file named by a command-line flag,
+  then environment variables with the `LOREBAYD__` prefix. It holds, among
+  others, the users file of
   [Identity](../docs/architecture/identity.md#3-accounts) and the data
   directory of [Storage](../docs/architecture/storage.md#3-layers).
-- `main` exits on a config error, naming the flag, before anything starts.
+- `main` exits on a config error, naming the key, before anything starts.
 
 ### Startup and shutdown
 
-1. `main` parses `Config`, starts logging, binds the listen address, and
+1. `main` loads `Config`, starts logging, binds the listen address, and
    calls `run` with a shutdown future that resolves on SIGINT or SIGTERM.
 2. `run` reads the users file, opens the database in the data directory and
    applies pending migrations

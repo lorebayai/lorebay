@@ -13,8 +13,9 @@
 ## 1. Purpose
 
 A default deployment must run with no external services, while a team that
-wants files on an external service can use S3. Two narrow abstractions let
-the core stay the same for both.
+wants its data on external services can use S3 for files and Postgres for
+the database. Two narrow abstractions let the core stay the same for all of
+them.
 
 ## 2. Scope
 
@@ -23,7 +24,6 @@ transactions and search. The tables are in [Data model](data-model.md).
 
 It does not cover:
 
-- Postgres: the database layer has only SQLite;
 - moving an existing deployment between backends, such as from a local
   directory to S3, or from SQLite to Postgres;
 - storage services other than Amazon S3 that offer the S3 API, such as
@@ -34,16 +34,19 @@ It does not cover:
 
 | Layer | Abstracts | Default backend | Other backend |
 | --- | --- | --- | --- |
-| Database layer | Reads and writes per table, transactions, keyword search | SQLite | None |
+| Database layer | Reads and writes per table, transactions, keyword search | SQLite | Postgres |
 | File storage layer | Issue an upload URL and the headers it requires, issue a download URL, check a file's existence and size, delete a file | Local directory | S3 |
 
 - **No external dependencies by default.** `lorebayd` starts with a data
   directory that holds the SQLite file and the artifact files.
-- **A deployment runs on one host.** Both backends assume a single
+- **Both database backends share one schema.** The tables use only what
+  SQLite and Postgres both support; see
+  [Data model](data-model.md#3-conventions).
+- **A deployment runs on one host.** Every backend assumes a single
   `lorebayd` process.
-- **Backups need the service stopped.** Copy the data directory only while
-  `lorebayd` is stopped; a copy taken while it runs may hold a corrupt
-  database file.
+- **Backups of the data directory need the service stopped.** Copy it only
+  while `lorebayd` is stopped; a copy taken while it runs may hold a corrupt
+  SQLite file.
 
 ## 4. File storage
 
@@ -74,7 +77,7 @@ It does not cover:
   SVG, and PDFs, open in the browser. HTML, SVG and other files that can run
   scripts are always served as downloads, never opened in the browser. An
   uploaded HTML file therefore can never run inside Lorebay's pages with the
-  login cookie. Both backends follow this rule.
+  person's login session. Both backends follow this rule.
 
 ## 5. Database
 

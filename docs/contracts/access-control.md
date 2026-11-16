@@ -56,7 +56,7 @@ It does not cover:
 Within a space, every participant reads all of its data, agents included,
 except where the table says otherwise.
 
-| Resource | Operation | Person (login cookie) | Agent (access token) |
+| Resource | Operation | Person (login session) | Agent (agent authorization) |
 | --- | --- | --- | --- |
 | Sign-in | Log in, log out | Yes | Not applicable |
 | Authorization | List own agents, revoke one | Yes | No |

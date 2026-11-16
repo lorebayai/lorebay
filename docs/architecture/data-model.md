@@ -62,8 +62,9 @@ It does not cover:
 - **Foreign keys are declared**, and every SQLite connection turns on
   `PRAGMA foreign_keys`. Each table's section says what a delete cascades to
   or clears.
-- **Tokens and authorization codes are stored only as SHA-256 hashes.** The
-  raw value is returned once, when it is issued.
+- **Refresh tokens and authorization codes are stored only as SHA-256
+  hashes.** The raw value is returned once, when it is issued. Access tokens
+  are signed and not stored; see [Identity](identity.md#7-tokens).
 - **Keyword search uses `LIKE`**, not a full-text index; see
   [Storage](storage.md#5-database). `%` and `_` in the keyword are escaped,
   with `LIKE ? ESCAPE '\'`, or `a_b` would match `axb`. SQLite's `LIKE`
@@ -79,6 +80,7 @@ It does not cover:
 ```mermaid
 erDiagram
     account ||--o{ agent_authorization : "authorizes"
+    oauth_client ||--o{ agent_authorization : "is the client of"
     account ||--o{ participant : "joins as"
     space ||--o{ participant : "has"
     space ||--o{ task : "holds"
@@ -121,45 +123,50 @@ A mirror of the users file, synced at startup.
 
 ### 5.2 `agent_authorization`
 
-One row per agent; see [Identity](identity.md#5-agent-authorization).
+One row per agent; see [Identity](identity.md#6-agent-authorization).
 
 | Column | Type | Constraints | Meaning |
 | --- | --- | --- | --- |
 | `id` | INTEGER | Primary key | |
 | `account_id` | INTEGER | Not null, foreign key to `account` | The person who authorized |
-| `client_id` | TEXT | Not null | URL of the client's metadata document |
-| `name` | TEXT | Not null | The agent name; defaults to the client name, and the person may change it on the consent page |
-| `access_token_hash` | TEXT | Not null, unique | |
-| `access_expires_at` | INTEGER | Not null | |
+| `client_id` | TEXT | Not null, foreign key to `oauth_client` | The registered client |
+| `name` | TEXT | Not null | The agent name; defaults to the client name, and the person may change it when consenting |
+| `random_id` | TEXT | Not null, unique | Names the authorization in its access tokens: 128 random bits, encoded as a string |
 | `refresh_token_hash` | TEXT | Not null, unique | |
 | `refresh_expires_at` | INTEGER | Not null | |
 | `created_at` | INTEGER | Not null | When the person authorized |
 
-- **`(account_id, name)` is unique**, compared exactly. The consent page
-  checks first, and the constraint catches the rest when the row is created.
+- **`(account_id, name)` is unique**, compared exactly. Consent checks
+  first, and the constraint catches the rest when the row is created.
   Replacing an agent of the same name is in [section 5.4](#54-oauth_code).
-- **Each request** finds the row by the access token's hash, and checks that
-  the token has not expired and the account is not deleted.
-- **A refresh replaces both tokens.** Both hashes are overwritten, so the old
-  refresh token stops working.
+- **Each request** verifies the access token's signature and expiry, finds
+  the row by the `random_id` the token names, and checks that the account is
+  not deleted. The integer `id` never appears in a token.
+- **A refresh replaces the refresh token.** Its hash is overwritten, so the
+  old refresh token stops working, and a new access token is signed.
 - **Revoking the authorization or deleting the account deletes the row.**
-  Tasks keep the agent name they copied.
-- **`client_id` is not a foreign key**: `oauth_client` is only a cache.
+  Its access tokens then name no row and are rejected. Tasks keep the agent
+  name they copied.
 
 ### 5.3 `login_session`
 
-A person's login cookie.
+A person's login session, from the web pages or the `lorebay` CLI.
 
 | Column | Type | Constraints | Meaning |
 | --- | --- | --- | --- |
 | `id` | INTEGER | Primary key | |
 | `account_id` | INTEGER | Not null, foreign key to `account` | The person signed in |
-| `token_hash` | TEXT | Not null, unique | Hash of the session token in the cookie |
+| `random_id` | TEXT | Not null, unique | Names the session in its access tokens: 128 random bits, encoded as a string |
+| `refresh_token_hash` | TEXT | Not null, unique | |
 | `created_at` | INTEGER | Not null | |
-| `expires_at` | INTEGER | Not null | |
+| `expires_at` | INTEGER | Not null | When the refresh token expires |
 
-A row is deleted on logout and with its account. A background job removes
-expired rows; see [System architecture](system.md#6-background-jobs).
+- **Requests and refreshes** work as for an agent authorization; see
+  [section 5.2](#52-agent_authorization). A refresh also moves `expires_at`
+  forward.
+- **A row is deleted on logout and with its account.** A background job
+  removes expired rows; see
+  [System architecture](system.md#6-background-jobs).
 
 ### 5.4 `oauth_code`
 
@@ -169,11 +176,11 @@ An authorization code, usable once.
 | --- | --- | --- | --- |
 | `id` | INTEGER | Primary key | |
 | `code_hash` | TEXT | Not null, unique | |
-| `account_id` | INTEGER | Not null, foreign key to `account` | The person who signed in and approved on the consent page |
-| `client_id` | TEXT | Not null | |
+| `account_id` | INTEGER | Not null, foreign key to `account` | The person who signed in and consented |
+| `client_id` | TEXT | Not null | The registered client, or the built-in `lorebay` CLI client |
 | `redirect_uri` | TEXT | Not null | Must match when the code is exchanged |
 | `code_challenge` | TEXT | Not null | The PKCE S256 challenge |
-| `agent_name` | TEXT | Not null | The agent name the person chose on the consent page |
+| `agent_name` | TEXT | Nullable | The agent name the person chose when consenting; empty for a code issued to the `lorebay` CLI |
 | `replaces_authorization_id` | INTEGER | Nullable, foreign key to `agent_authorization`, set null on delete | The authorization to replace, when the name was taken and the person chose to replace it |
 | `created_at` | INTEGER | Not null | |
 | `expires_at` | INTEGER | Not null | |
@@ -181,24 +188,29 @@ An authorization code, usable once.
 - **Exchanging the code is one transaction.** It deletes the authorization
   being replaced, if any, which ends its tokens; deletes this row; and
   creates the `agent_authorization` row.
+- **A code issued to the `lorebay` CLI creates a `login_session` row
+  instead**, because the CLI signs a person in; see
+  [Identity](identity.md#5-sign-in). The CLI client is built into `lorebayd`
+  and has no `oauth_client` row, so `client_id` is not a foreign key.
 - **Expired codes** are removed by a background job.
 
 ### 5.5 `oauth_client`
 
-A cache of Client ID Metadata Documents.
+The clients registered through Dynamic Client Registration; see
+[Identity](identity.md#6-agent-authorization).
 
 | Column | Type | Constraints | Meaning |
 | --- | --- | --- | --- |
 | `id` | INTEGER | Primary key | |
-| `client_id` | TEXT | Not null, unique | URL of the metadata document |
-| `client_name` | TEXT | Not null | The client name in the metadata; the default agent name on the consent page |
-| `metadata` | TEXT | Not null | The fetched document, as JSON |
-| `fetched_at` | INTEGER | Not null | |
-| `expires_at` | INTEGER | Not null | Computed from the HTTP cache headers |
+| `client_id` | TEXT | Not null, unique | Generated at registration: 128 random bits, encoded as a string |
+| `client_name` | TEXT | Not null | The client name the client registered; the default agent name at consent |
+| `metadata` | TEXT | Not null | The registration as accepted, as JSON, with its redirect URIs |
+| `created_at` | INTEGER | Not null | |
 
-Authorization looks the client up by `client_id`, fetches the document again
-when it is missing or expired, and checks the `redirect_uri` against it.
-Clearing this table does not affect existing authorizations.
+- **Authorization looks the client up by `client_id`** and checks the
+  `redirect_uri` against the registered ones.
+- **Rows are never deleted or changed.** An `agent_authorization` row names
+  its client, and a client registers again to change its metadata.
 
 ## 6. Spaces and participants
 
@@ -446,8 +458,9 @@ One row per knowledge entry; its content is in `knowledge_version`.
 
 ## 9. SQLite DDL
 
-The tables of sections 5 to 8, as the first migration. `proposal` comes
-before `knowledge_version`, which references it.
+The tables of sections 5 to 8, as the first migration. A table comes after
+the tables it references: `oauth_client` before `agent_authorization`, and
+`proposal` before `knowledge_version`.
 
 ```sql
 -- Every connection turns on foreign key checks: PRAGMA foreign_keys = ON;
@@ -459,13 +472,20 @@ CREATE TABLE account (
   created_at  INTEGER NOT NULL
 );
 
+CREATE TABLE oauth_client (
+  id           INTEGER PRIMARY KEY,
+  client_id    TEXT    NOT NULL UNIQUE,
+  client_name  TEXT    NOT NULL,
+  metadata     TEXT    NOT NULL,
+  created_at   INTEGER NOT NULL
+);
+
 CREATE TABLE agent_authorization (
   id                  INTEGER PRIMARY KEY,
   account_id          INTEGER NOT NULL REFERENCES account (id),
-  client_id           TEXT    NOT NULL,
+  client_id           TEXT    NOT NULL REFERENCES oauth_client (client_id),
   name                TEXT    NOT NULL,
-  access_token_hash   TEXT    NOT NULL UNIQUE,
-  access_expires_at   INTEGER NOT NULL,
+  random_id           TEXT    NOT NULL UNIQUE,
   refresh_token_hash  TEXT    NOT NULL UNIQUE,
   refresh_expires_at  INTEGER NOT NULL,
   created_at          INTEGER NOT NULL,
@@ -473,11 +493,12 @@ CREATE TABLE agent_authorization (
 );
 
 CREATE TABLE login_session (
-  id          INTEGER PRIMARY KEY,
-  account_id  INTEGER NOT NULL REFERENCES account (id),
-  token_hash  TEXT    NOT NULL UNIQUE,
-  created_at  INTEGER NOT NULL,
-  expires_at  INTEGER NOT NULL
+  id                  INTEGER PRIMARY KEY,
+  account_id          INTEGER NOT NULL REFERENCES account (id),
+  random_id           TEXT    NOT NULL UNIQUE,
+  refresh_token_hash  TEXT    NOT NULL UNIQUE,
+  created_at          INTEGER NOT NULL,
+  expires_at          INTEGER NOT NULL
 );
 
 CREATE TABLE oauth_code (
@@ -487,19 +508,10 @@ CREATE TABLE oauth_code (
   client_id       TEXT    NOT NULL,
   redirect_uri    TEXT    NOT NULL,
   code_challenge  TEXT    NOT NULL,
-  agent_name      TEXT    NOT NULL,
+  agent_name      TEXT,
   replaces_authorization_id  INTEGER REFERENCES agent_authorization (id) ON DELETE SET NULL,
   created_at      INTEGER NOT NULL,
   expires_at      INTEGER NOT NULL
-);
-
-CREATE TABLE oauth_client (
-  id           INTEGER PRIMARY KEY,
-  client_id    TEXT    NOT NULL UNIQUE,
-  client_name  TEXT    NOT NULL,
-  metadata     TEXT    NOT NULL,
-  fetched_at   INTEGER NOT NULL,
-  expires_at   INTEGER NOT NULL
 );
 
 CREATE TABLE space (

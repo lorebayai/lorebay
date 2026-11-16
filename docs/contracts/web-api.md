@@ -23,9 +23,7 @@ operations exist, and who may call each, is in
 It does not cover:
 
 - an OpenAPI document or a compatibility promise for API versions, which
-  come with personal access tokens for CI;
-- protection against cross-site request forgery for calls made with the
-  login cookie.
+  come with personal access tokens for CI.
 
 ## 3. Paths
 
@@ -43,14 +41,19 @@ POST /api/v1/spaces/{space}/proposals/{id}/approve
 ```
 
 - **OAuth endpoints are outside `/api/v1`**, at the standard locations:
-  metadata, authorize and token.
+  metadata, registration, authorize and token.
 - **Artifact file URLs are outside `/api/v1`.** They are short-lived URLs
   that point at `lorebayd` with a local directory, and at S3 with S3.
+- **Health checks are outside `/api/v1`** and need no credential. `/healthz`
+  answers while the process runs. `/readyz` answers once startup has
+  finished and until shutdown begins, so a proxy in front of `lorebayd`
+  knows when to send it calls.
 
 ## 4. Conventions
 
-- **Credentials.** People call with the login cookie; agents and external
-  programs call with an access token. See
+- **Credentials.** Every call carries an access token in its `Authorization`
+  header: a login session's for a person, an agent authorization's for an
+  agent or external program. See
   [Identity](../architecture/identity.md#4-credentials).
 - **Every list is paginated** with a cursor, a default page size and a fixed
   order.
