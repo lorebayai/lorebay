@@ -1,4 +1,5 @@
 use std::future::Future;
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -11,14 +12,21 @@ use axum::routing::get;
 use hyper::server::conn::http1;
 use hyper_util::rt::TokioIo;
 use hyper_util::service::TowerToHyperService;
+use sea_orm::{
+    ConnectOptions, Database, DatabaseConnection, SqliteTransactionMode, TransactionOptions,
+    TransactionTrait,
+};
+use sea_orm_migration::MigratorTrait;
 use tokio::fs;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::watch;
 use tokio::task::JoinSet;
 use tokio::time::{sleep, timeout};
+use typed_builder::TypedBuilder;
 
 use crate::Config;
 use crate::api::{self, ApiError, Envelope};
+use crate::migration::Migrator;
 
 /// Readiness remains observable for one second before connections stop being accepted.
 const READINESS_PROPAGATION: Duration = Duration::from_secs(1);
@@ -28,8 +36,16 @@ const HEALTH_PATH: &str = "/healthz";
 const READINESS_PATH: &str = "/readyz";
 const API_PREFIX: &str = "/api/v1";
 const ACCEPT_RETRY_DELAY: Duration = Duration::from_millis(100);
+const DATABASE_FILE: &str = "lorebay.sqlite3";
+const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// Creates the data directory and serves HTTP; the caller owns binding and shutdown signals.
+#[derive(Clone, Debug, TypedBuilder)]
+struct ServerState {
+    database: DatabaseConnection,
+    ready: Arc<AtomicBool>,
+}
+
+/// Applies pending database migrations before serving; the caller owns binding and shutdown signals.
 pub async fn run(
     config: Config,
     listener: TcpListener,
@@ -39,16 +55,67 @@ pub async fn run(
     fs::create_dir_all(&config.data_directory)
         .await
         .context("could not create data_directory")?;
-    let ready = Arc::new(AtomicBool::new(true));
+    let state = ServerState::builder()
+        .database(open_database(&config.data_directory).await?)
+        .ready(Arc::new(AtomicBool::new(true)))
+        .build();
+    let result = serve_until_shutdown(listener, state.clone(), shutdown).await;
+    state
+        .database
+        .close()
+        .await
+        .context("could not close database")?;
+    result
+}
+
+async fn open_database(directory: &Path) -> Result<DatabaseConnection> {
+    let path = directory.join(DATABASE_FILE);
+    let filename = path.clone();
+    let mut options = ConnectOptions::new("sqlite://");
+    options
+        .max_connections(1)
+        .sqlx_logging(false)
+        .map_sqlx_sqlite_opts(move |options| {
+            options
+                .filename(&filename)
+                .create_if_missing(true)
+                .foreign_keys(true)
+                .busy_timeout(SQLITE_BUSY_TIMEOUT)
+        });
+    let database = Database::connect(options)
+        .await
+        .with_context(|| format!("could not open database {}", path.display()))?;
+    let transaction = database
+        .begin_with_options(TransactionOptions {
+            sqlite_transaction_mode: Some(SqliteTransactionMode::Immediate),
+            ..Default::default()
+        })
+        .await
+        .context("could not begin database migration transaction")?;
+    Migrator::up(&transaction, None)
+        .await
+        .with_context(|| format!("could not migrate database {}", path.display()))?;
+    transaction
+        .commit()
+        .await
+        .context("could not commit database migrations")?;
+    Ok(database)
+}
+
+async fn serve_until_shutdown(
+    listener: TcpListener,
+    state: ServerState,
+    shutdown: impl Future<Output = ()> + Send,
+) -> Result<()> {
     let (stop, stopped) = watch::channel(false);
-    let server = serve(listener, router(ready.clone()), stopped);
+    let server = serve(listener, router(state.clone()), stopped);
     tokio::pin!(server);
     tracing::info!("lorebayd ready");
     tokio::select! {
         result = &mut server => return result,
         () = shutdown => {},
     }
-    ready.store(false, Ordering::Release);
+    state.ready.store(false, Ordering::Release);
     tracing::info!("shutdown begun; readiness disabled");
     let drain = async {
         tokio::select! {
@@ -66,11 +133,11 @@ pub async fn run(
     Ok(())
 }
 
-fn router(ready: Arc<AtomicBool>) -> Router {
+fn router(state: ServerState) -> Router {
     Router::new()
         .route(HEALTH_PATH, get(health))
         .route(READINESS_PATH, get(readiness))
-        .with_state(ready)
+        .with_state(state)
         .nest(API_PREFIX, api::router())
         .fallback(api::not_found)
         .method_not_allowed_fallback(|| async { ApiError::MethodNotAllowed })
@@ -80,8 +147,8 @@ async fn health() -> Envelope<&'static str> {
     Envelope::builder().data("ok").build()
 }
 
-async fn readiness(State(ready): State<Arc<AtomicBool>>) -> Response {
-    if ready.load(Ordering::Acquire) {
+async fn readiness(State(state): State<ServerState>) -> Response {
+    if state.ready.load(Ordering::Acquire) {
         health().await.into_response()
     } else {
         ApiError::Unavailable.into_response()

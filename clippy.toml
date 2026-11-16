@@ -11,3 +11,13 @@ max-fn-params-bools = 1
 max-struct-bools = 3
 # Enclosing items count too: 5 permits three nested levels in an impl method, but four in a free function.
 excessive-nesting-threshold = 5
+disallowed-methods = [
+    "sea_orm::Statement::from_string",
+    "sea_orm::Statement::from_sql_and_values",
+    "sea_orm::ConnectionTrait::execute_unprepared",
+    "sea_query::Expr::cust",
+    "sea_query::Expr::cust_with_values",
+    "sea_query::Expr::cust_with_expr",
+    "sea_query::Expr::cust_with_exprs",
+    "sea_query::Expr::custom_keyword",
+]
