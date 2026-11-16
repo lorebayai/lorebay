@@ -21,9 +21,9 @@ Follow these playbook fragments:
   ├── lib.rs        Declares modules; re-exports Config and run
   ├── config.rs     Config
   ├── server.rs     run and the server state
-  ├── api/          The Web API under /api/v1
+  ├── api/          The Web API under /api/v1, sign-in and consent included
   ├── mcp/          The MCP layer
-  ├── oauth/        Sign-in, consent and the OAuth endpoints
+  ├── oauth/        The OAuth endpoints and the authorization page
   ├── pages/        The embedded web pages
   ├── files/        Artifact file URLs served with the local directory backend
   ├── domain/       The API operations, one module per area
@@ -96,10 +96,11 @@ and file storage layers.
 
 - `src/config.rs` holds one `Config` struct, which `main` loads in layers:
   the defaults, then an optional config file named by a command-line flag,
-  then environment variables with the `LOREBAYD__` prefix. It holds, among
-  others, the users file of
-  [Identity](../docs/architecture/identity.md#3-accounts) and the data
-  directory of [Storage](../docs/architecture/storage.md#3-layers).
+  then environment variables with the `LOREBAYD__` prefix. The variables
+  come from an optional env file, named by another flag, and then from the
+  process environment, which wins. `Config` holds, among others, the users
+  file of [Identity](../docs/architecture/identity.md#3-accounts) and the
+  data directory of [Storage](../docs/architecture/storage.md#3-layers).
 - `main` exits on a config error, naming the key, before anything starts.
 
 ### Startup and shutdown
