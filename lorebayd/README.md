@@ -12,7 +12,6 @@ moon run lorebayd:format
 moon run lorebayd:lint
 moon run lorebayd:build
 moon run lorebayd:test
-moon run lorebayd:deny
 ```
 
 ## Docs
