@@ -1,0 +1,97 @@
+use reqwest::StatusCode;
+use serde_json::{Value, json};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::time::timeout;
+
+use crate::helpers::{Server, TEST_TIMEOUT};
+
+#[tokio::test]
+async fn check_health_succeeds_when_server_is_running() {
+    let server = Server::start().await;
+    for path in ["/healthz", "/readyz"] {
+        let response = server.get(path).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.json::<Value>().await.unwrap(),
+            json!({"data": "ok", "meta": {}})
+        );
+    }
+    let directory = server.stop().await;
+    let restarted = Server::restart(directory).await;
+    assert_eq!(restarted.get("/readyz").await.status(), StatusCode::OK);
+    restarted.stop().await;
+}
+
+#[tokio::test]
+async fn check_readiness_fails_when_shutdown_has_begun() {
+    let mut server = Server::start().await;
+    server.begin_shutdown();
+    server
+        .wait_for_status("/readyz", StatusCode::SERVICE_UNAVAILABLE)
+        .await;
+    let response = server.get("/readyz").await;
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(
+        response.headers()["content-type"],
+        "application/problem+json"
+    );
+    assert_eq!(
+        response.json::<Value>().await.unwrap(),
+        json!({
+            "type": "about:blank", "title": "Service Unavailable", "status": 503,
+            "code": "server.not_ready", "errors": []
+        })
+    );
+    assert_eq!(server.get("/healthz").await.status(), StatusCode::OK);
+    server.finish_shutdown().await;
+}
+
+#[tokio::test]
+async fn shut_down_completes_in_flight_request() {
+    let mut server = Server::start().await;
+    let mut upload = server.begin_upload().await;
+    server.begin_shutdown();
+    server
+        .wait_for_status("/readyz", StatusCode::SERVICE_UNAVAILABLE)
+        .await;
+    server.wait_for_listener_to_close().await;
+    let completion = async {
+        let mut response = String::new();
+        upload.write_all(b"{}").await.unwrap();
+        upload.read_to_string(&mut response).await.unwrap();
+        assert!(
+            response.starts_with("HTTP/1.1 404 Not Found\r\n"),
+            "{response}"
+        );
+        let body = response.split_once("\r\n\r\n").unwrap().1;
+        assert_eq!(
+            serde_json::from_str::<Value>(body).unwrap(),
+            json!({
+                "type": "about:blank", "title": "Not Found", "status": 404,
+                "code": "http.not_found", "errors": []
+            })
+        );
+    };
+    timeout(TEST_TIMEOUT, completion).await.unwrap();
+    server.finish_shutdown().await;
+}
+
+#[tokio::test]
+async fn shut_down_finishes_when_client_stalls() {
+    let mut server = Server::start().await;
+    let mut upload = server.begin_upload().await;
+    let started = Instant::now();
+    server.begin_shutdown();
+    server
+        .wait_for_status("/readyz", StatusCode::SERVICE_UNAVAILABLE)
+        .await;
+    server.finish_shutdown().await;
+    assert!(started.elapsed() >= Duration::from_secs(10));
+    let mut byte = [0];
+    let read = timeout(TEST_TIMEOUT, upload.read(&mut byte)).await.unwrap();
+    assert!(
+        matches!(read, Ok(0) | Err(_)),
+        "stalled connection remains open"
+    );
+}
+use std::time::{Duration, Instant};
