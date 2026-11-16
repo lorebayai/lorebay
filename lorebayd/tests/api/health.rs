@@ -1,4 +1,6 @@
-use reqwest::StatusCode;
+use std::time::{Duration, Instant};
+
+use reqwest::{Client, StatusCode};
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::time::timeout;
@@ -29,7 +31,17 @@ async fn check_readiness_fails_when_shutdown_has_begun() {
     server
         .wait_for_status("/readyz", StatusCode::SERVICE_UNAVAILABLE)
         .await;
-    let response = server.get("/readyz").await;
+    let client = Client::builder()
+        .pool_max_idle_per_host(0)
+        .timeout(TEST_TIMEOUT)
+        .no_proxy()
+        .build()
+        .unwrap();
+    let response = client
+        .get(format!("http://{}/readyz", server.address))
+        .send()
+        .await
+        .expect("new connection after shutdown receives readiness response");
     assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
     assert_eq!(
         response.headers()["content-type"],
@@ -42,7 +54,16 @@ async fn check_readiness_fails_when_shutdown_has_begun() {
             "code": "server.not_ready", "errors": []
         })
     );
-    assert_eq!(server.get("/healthz").await.status(), StatusCode::OK);
+    let response = client
+        .get(format!("http://{}/healthz", server.address))
+        .send()
+        .await
+        .expect("new connection after shutdown receives liveness response");
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response.json::<Value>().await.unwrap(),
+        json!({"data": "ok", "meta": {}})
+    );
     server.finish_shutdown().await;
 }
 
@@ -94,4 +115,3 @@ async fn shut_down_finishes_when_client_stalls() {
         "stalled connection remains open"
     );
 }
-use std::time::{Duration, Instant};

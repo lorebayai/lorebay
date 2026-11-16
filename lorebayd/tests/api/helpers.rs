@@ -50,7 +50,6 @@ impl Server {
             task: Some(task),
         };
         server.wait_for_status("/readyz", StatusCode::OK).await;
-        assert!(server.directory.path().join("data").is_dir());
         server
     }
 

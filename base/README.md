@@ -11,8 +11,6 @@ Run from the repository root:
 moon run base:format
 moon run base:lint
 moon run base:build
-moon run base:test
-moon run base:integration
 ```
 
 `load_config::<T>(&ConfigSources)` requires `T` to implement `Default`,

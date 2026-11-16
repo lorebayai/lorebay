@@ -50,7 +50,10 @@ pub async fn run(
     ready.store(false, Ordering::Release);
     tracing::info!("shutdown begun; readiness disabled");
     let drain = async {
-        sleep(READINESS_PROPAGATION).await;
+        tokio::select! {
+            result = &mut server => return result,
+            () = sleep(READINESS_PROPAGATION) => {},
+        }
         let _ = stop.send(true);
         server.await
     };
