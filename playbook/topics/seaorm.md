@@ -1,9 +1,11 @@
 # SeaORM
 
-How a Rust crate stores data in SQLite through SeaORM: dependencies,
-migrations, generated entities, repositories, schema, queries and
-transactions. Imported by the `AGENTS.md` of every Rust project that uses
-SeaORM.
+How a Rust crate stores data through SeaORM: dependencies, migrations,
+generated entities, repositories, schema, queries and transactions. SQLite
+is the backend the rules are written for; a rule that differs on Postgres,
+the database layer's other backend
+([Storage](../../docs/architecture/storage.md#3-layers)), says so. Imported
+by the `AGENTS.md` of every Rust project that uses SeaORM.
 
 ## Dependencies
 
@@ -71,9 +73,9 @@ SeaORM.
 - Domain functions build `ActiveModel`s, setting keys and timestamps.
   Transports never build `ActiveModel`s.
 - `run` opens one `DatabaseConnection` per process and holds it in its
-  state. Its connect options turn on foreign keys for every connection and
-  set a busy timeout, so a writer waits for the current one instead of
-  failing.
+  state. On SQLite, its connect options turn on foreign keys for every
+  connection and set a busy timeout, so a writer waits for the current one
+  instead of failing.
 
 ## Queries
 
@@ -105,12 +107,15 @@ Queries use the first of these that can express them:
 - A transaction covers only database work. File storage calls and outbound
   HTTP requests run after the commit
   ([Storage](../../docs/architecture/storage.md#5-database)).
-- A transaction that writes must begin with
+- On SQLite, a transaction that writes must begin with
   `begin_with_options` and `SqliteTransactionMode::Immediate`, taking the
   write lock before its first read. A deferred transaction that reads and
   then writes fails with `SQLITE_BUSY` when another connection writes in
   between, and the busy timeout cannot recover it. SQLite has no
   `FOR UPDATE`; the immediate write lock takes its place.
+- On Postgres, a transaction that reads a row and then writes it must lock
+  the row in that read with `FOR UPDATE`. Code that runs on both backends
+  does both: it begins as SQLite requires and locks as Postgres requires.
 - A read that needs one consistent view across several queries runs in a
   deferred transaction; a single query needs none.
 
