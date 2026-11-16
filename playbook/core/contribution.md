@@ -6,11 +6,20 @@ landing and cleanup. Applies to every change in the repo.
 ## Issues
 
 - Work is tracked in GitHub Issues on `lorebayai/lorebay` and planned in the
-  organization's GitHub Project.
+  organization's [Lorebay project](https://github.com/orgs/lorebayai/projects/2),
+  number 2. The organization's other projects, such as Genesis, plan other
+  repositories; a Lorebay issue never goes into them.
+- Add each new issue to the Lorebay project:
+
+  ```bash
+  gh project item-add 2 --owner lorebayai --url <issue-url>
+  ```
+
 - Each issue has a type: bug, feature or task. Split large work into
   sub-issues, and record ordering with blocked-by relationships.
 - Before starting an issue, read its asks, acceptance criteria and
-  dependencies, assign it, and set its Project status to In Progress.
+  dependencies, assign it, and set its status in the Lorebay project to
+  In Progress.
 
 ## Worktrees
 
