@@ -72,7 +72,7 @@ A task holds:
 - **Finding tasks.** A space's tasks can be filtered by person, agent and
   status, and searched by keyword in titles and results. An agent is matched
   by the name copied onto its tasks, which is unique among one person's
-  agents; see [Identity](../architecture/identity.md#5-agent-authorization).
+  agents; see [Identity](../architecture/identity.md#6-agent-authorization).
   An agent authorized again under the same name is filtered together with
   its earlier tasks.
 

@@ -41,9 +41,9 @@ flowchart TD
     end
     sqlite["SQLite"]
     store["Artifact files<br/>local directory or S3"]
-    human -- "login cookie" --> web
-    program -- "access token" --> web
-    agent -- "access token" --> mcp
+    human -- "login session" --> web
+    program -- "agent authorization" --> web
+    agent -- "agent authorization" --> mcp
     human -- "file URL" --> store
     agent -- "file URL" --> store
     web --> ops
@@ -57,9 +57,10 @@ flowchart TD
 
 | Caller | Entry point | Credential |
 | --- | --- | --- |
-| Person, in a browser | Web API and web pages | Login cookie |
-| External program | Web API | Access token |
-| Agent | MCP | Access token |
+| Person, in a browser | Web API and web pages | Login session |
+| Person, in a terminal | Web API, through the `lorebay` CLI | Login session |
+| External program | Web API | Agent authorization |
+| Agent | MCP | Agent authorization |
 
 ## 4. Entry points
 

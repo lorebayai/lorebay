@@ -19,18 +19,24 @@ agent may do, and nothing more.
 
 ## 2. Scope
 
-This doc covers the MCP protocol version, the tools, and how they map to Web
+This doc covers the MCP protocol versions, the tools, and how they map to Web
 API operations. Permissions are in [Access control](access-control.md).
 
-It does not cover a harness hook that fills in the task ID automatically.
+It does not cover:
 
-## 3. Protocol version
+- a harness hook that fills in the task ID automatically;
+- the HTTP+SSE transport of MCP 2024-11-05.
 
-- **Lorebay supports only MCP 2026-07-28.** Harnesses on earlier versions
-  cannot connect.
-- **Every call names its target.** This version has no protocol-level
-  session, and every request stands alone, so each call carries its own space
-  or task ID.
+## 3. Protocol versions
+
+- **Lorebay accepts MCP 2025-03-26 through 2026-07-28**, over the Streamable
+  HTTP transport, so a harness that has not moved to the newest version still
+  connects. Lorebay advertises 2026-07-28.
+- **Lorebay keeps no protocol session at any version.** A harness on a
+  version with an initialization handshake gets it answered, and nothing is
+  remembered from it.
+- **Every call names its target.** Every request stands alone, so each call
+  carries its own space or task ID.
 
 ## 4. Tools
 
@@ -108,3 +114,5 @@ Three rules reduce the risk:
 - [MCP changelog, 2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28/changelog):
   protocol-level sessions and the initialization handshake are removed, and
   every request stands alone.
+- [MCP transports, 2025-03-26](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports):
+  the first version with the Streamable HTTP transport.
