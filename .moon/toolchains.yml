@@ -1,0 +1,16 @@
+rust: {}
+
+javascript:
+  packageManager: 'pnpm'
+  inferTasksFromScripts: false
+  syncPackageManagerField: true
+
+node:
+  version: '26.13.1'
+
+pnpm:
+  version: '12.21.0'
+
+typescript:
+  syncProjectReferences: false
+  routeOutDirToCache: false

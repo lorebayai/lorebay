@@ -1,0 +1,33 @@
+inheritedBy:
+  toolchain: 'rust'
+
+env:
+  CARGO_TERM_COLOR: always
+
+fileGroups:
+  rust:
+    - 'src/**/*'
+    - 'Cargo.toml'
+    - '/Cargo.toml'
+    - '/Cargo.lock'
+    - '/rust-toolchain.toml'
+    - '/clippy.toml'
+    - '/rustfmt.toml'
+  rust-tests:
+    - 'tests/**/*'
+
+tasks:
+  format:
+    command: 'cargo fmt --check'
+    inputs:
+      - '@group(rust)'
+      - '@group(rust-tests)'
+  lint:
+    command: 'cargo clippy --all-targets --locked -- -D warnings'
+    inputs:
+      - '@group(rust)'
+      - '@group(rust-tests)'
+  build:
+    command: 'cargo build --locked'
+    inputs:
+      - '@group(rust)'
