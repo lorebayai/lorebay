@@ -37,7 +37,7 @@ It does not cover:
 ```text
 GET  /api/v1/spaces/{space}/tasks
 POST /api/v1/spaces/{space}/tasks/{task_id}/notes
-POST /api/v1/spaces/{space}/proposals/{id}/approve
+POST /api/v1/spaces/{space}/proposals/{key}/approve
 ```
 
 - **OAuth endpoints are outside `/api/v1`**, at the standard locations:

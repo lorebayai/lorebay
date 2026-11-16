@@ -32,9 +32,10 @@ decisions an agent needs from a person in the middle of its work.
   one-sentence summary. Knowledge belongs to the whole space, not to one
   person.
 - **Names.** A name is levels separated by `/`, such as `deploy/staging.md`,
-  with no `/` at the start or end and no empty level. An extension is only
-  part of the name: `guide.md` and `guide.txt` are two entries, and both show
-  as Markdown.
+  with no `/` at the start or end and no empty level. A level may not be
+  `.` or `..`, hold a control character, or start or end with whitespace. An
+  extension is only part of the name: `guide.md` and `guide.txt` are two
+  entries, and both show as Markdown.
 - **Names ignore case.** They are compared ignoring case and shown as
   written, so `Deploy.md` and `deploy.md` are the same name, and reading
   `deploy.md` finds `Deploy.md`. This keeps one topic from splitting into two

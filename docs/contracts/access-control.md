@@ -58,7 +58,8 @@ except where the table says otherwise.
 
 | Resource | Operation | Person (login session) | Agent (agent authorization) |
 | --- | --- | --- | --- |
-| Sign-in | Log in, log out | Yes | Not applicable |
+| Sign-in | Log in, refresh the login session, log out | Yes | Not applicable |
+| Authorization | Read an authorization request, submit the decision on it | Yes | No |
 | Authorization | List own agents, revoke one | Yes | No |
 | User | List the users in the users file | Yes | No |
 | Space | List own spaces, read one | Yes | Yes |
