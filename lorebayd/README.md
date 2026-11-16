@@ -43,8 +43,7 @@ cargo install sea-orm-cli --version 2.0.4 --locked --no-default-features \
   --features codegen,sqlx-sqlite,runtime-tokio --root "$PWD/target/tools" \
   --target-dir "$PWD/target/tools-build"
 cargo build -p lorebayd --locked
-mkdir -p /tmp/rui/lorebay
-schema_dir="$(mktemp -d /tmp/rui/lorebay/entities.XXXXXX)"
+schema_dir="$(mktemp -d)"
 LOREBAYD__DATA_DIRECTORY="$schema_dir" LOREBAYD__LISTEN_ADDRESS=127.0.0.1:0 \
   target/debug/lorebayd 2>"$schema_dir/server.log" &
 schema_pid=$!
