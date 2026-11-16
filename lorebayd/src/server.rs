@@ -27,6 +27,7 @@ const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
 const HEALTH_PATH: &str = "/healthz";
 const READINESS_PATH: &str = "/readyz";
 const API_PREFIX: &str = "/api/v1";
+const ACCEPT_RETRY_DELAY: Duration = Duration::from_millis(100);
 
 /// Creates the data directory and serves HTTP; the caller owns binding and shutdown signals.
 pub async fn run(
@@ -99,17 +100,28 @@ async fn serve(
             biased;
             _ = stopped.changed() => break,
             result = listener.accept() => {
-                let (stream, _) = result.context("could not accept HTTP connection")?;
-                connections.spawn(serve_connection(stream, router.clone(), stopped.clone()));
+                match result {
+                    Ok((stream, _)) => {
+                        connections.spawn(serve_connection(stream, router.clone(), stopped.clone()));
+                    },
+                    Err(error) => {
+                        tracing::error!(%error, "could not accept HTTP connection");
+                        sleep(ACCEPT_RETRY_DELAY).await;
+                    },
+                }
             },
             Some(result) = connections.join_next() => {
-                result.context("HTTP connection task failed")?;
+                if let Err(error) = result {
+                    tracing::error!(%error, "HTTP connection task failed");
+                }
             },
         }
     }
     drop(listener);
     while let Some(result) = connections.join_next().await {
-        result.context("HTTP connection task failed during shutdown")?;
+        if let Err(error) = result {
+            tracing::error!(%error, "HTTP connection task failed during shutdown");
+        }
     }
     Ok(())
 }

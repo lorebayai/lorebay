@@ -18,6 +18,11 @@ moon run base:build
 prefix and environment map explicitly. The loader does not mutate process
 state. Consumers validate their sections after loading.
 
+File errors name the path and distinguish read failures from parse failures.
+JSON parse errors include a line and column; env parse errors include a line
+number. Unknown keys are reported separately from invalid values. Diagnostics
+never display values or line contents.
+
 `init_logging(&LoggingConfig)` installs JSON logs on stderr once per process.
 `Clock::now` returns a `SystemTime`; `SystemClock` uses the system clock.
 Consumers can inject their own `Clock` implementation through `Arc<dyn Clock>`.

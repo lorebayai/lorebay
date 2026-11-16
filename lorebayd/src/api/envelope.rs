@@ -13,17 +13,7 @@ pub(crate) struct Envelope<T> {
 
 #[derive(Clone, Debug, Default, Serialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
-pub(crate) struct Meta {
-    #[builder(default = None)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub pagination: Option<Pagination>,
-}
-
-#[derive(Clone, Debug, Serialize, TypedBuilder)]
-#[builder(field_defaults(setter(into)))]
-pub(crate) struct Pagination {
-    pub next_cursor: Option<String>,
-}
+pub(crate) struct Meta {}
 
 impl<T: Serialize> IntoResponse for Envelope<T> {
     fn into_response(self) -> Response {

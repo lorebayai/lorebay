@@ -24,6 +24,9 @@ pub(crate) async fn not_found(body: Result<Bytes, BytesRejection>) -> ApiError {
                 .message("Could not read request body.")
                 .build(),
         ]),
-        Err(_) => ApiError::Internal,
+        Err(error) => {
+            tracing::error!(%error, "could not read request body");
+            ApiError::Internal
+        }
     }
 }

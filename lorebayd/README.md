@@ -18,14 +18,16 @@ cargo run -p lorebayd -- --config /path/to/lorebayd.json --dotenv /path/to/loreb
 
 Both flags are optional. With neither, the server listens on `127.0.0.1:8080`
 and creates `data/` in its working directory. Configuration errors stop startup
-and name the invalid key.
+and name the invalid key. File errors include the path and distinguish read
+failures from parse failures. JSON parse errors include a line and column;
+env parse errors include a line number. Unknown keys are reported separately
+from invalid values, and diagnostics never echo values or line contents.
 
-`GET /healthz` and `GET /readyz` need no credential. Success responses are
-`{"data":"ok","meta":{}}`. Unknown paths return 404 with RFC 9457
+`GET /healthz` and `GET /readyz` need no credential and return
+`{"data":"ok","meta":{}}` when healthy. Unknown paths return 404 with RFC 9457
 `application/problem+json`: `type`, `title`, `status`, stable `code` and an
 `errors` array of `{field, code, message}` objects. Internal errors disclose
-no cause. Success bodies use `{data, meta}`; collection cursors belong in
-`meta.pagination.next_cursor`.
+no cause. Success bodies use `{data, meta}`.
 
 SIGINT and SIGTERM start shutdown. Readiness returns 503 for one second
 before the listener closes; existing requests then finish within a total
@@ -36,8 +38,10 @@ are canceled. Liveness continues returning 200 while HTTP is being served.
 
 Precedence is defaults, JSON file, dotenv file, then process environment.
 Only `--dotenv` loads an env file; it does not change the process environment.
-Nested environment keys use `__`. JSON paths are relative to the working
-directory. Example:
+Only process environment keys prefixed `LOREBAYD__` are read; a non-UTF-8
+value among them is a configuration error. Nested environment keys use `__`.
+Relative paths in `--config`, `--dotenv` and `data_directory` resolve against
+the working directory. Example:
 
 ```json
 {
