@@ -56,7 +56,7 @@ reach one outcome the contract promises.
   the same entry point as `main`, with test configuration, on a random port.
   Only the start helper imports from the crate.
 - A test talks to `lorebayd` only over HTTP, as its callers do: the Web API
-  with a login cookie or an access token, MCP tool calls with an access
+  with a person's or an agent's access token, MCP tool calls with an access
   token, and uploads and downloads on the file URLs it returns.
 - A crate's test calls only the crate's public API, as a consumer would. The
   crate makes nothing public only for its tests.
@@ -66,7 +66,7 @@ reach one outcome the contract promises.
 - Each test gets its own data directory in a temporary folder, holding a
   fresh SQLite file and the artifact files, and its own users file.
 - Third-party services are fakes at the network boundary: a server the test
-  controls, such as one serving a Client ID Metadata Document.
+  controls.
 - Each test stands alone: it creates its own data, never reads or changes
   process-global state such as environment variables or the current
   directory, and passes in any order and in parallel. Code under test takes

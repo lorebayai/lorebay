@@ -29,7 +29,7 @@ built, and the contracts its users, APIs and agents rely on. Terms follow the
   proposals.
 - [Keys and references](contracts/keys-and-references.md): keys, task IDs
   and `#` references.
-- [MCP tools](contracts/mcp-tools.md): the protocol version and the 14 tools
+- [MCP tools](contracts/mcp-tools.md): the protocol versions and the 14 tools
   agents call.
 - [Web API](contracts/web-api.md): paths, credentials and conventions of
   `/api/v1`.
