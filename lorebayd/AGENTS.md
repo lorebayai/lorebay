@@ -12,13 +12,18 @@ Follow these playbook fragments:
   helper of its integration tests builds it through the same entry point as
   `main` ([testing.md](../playbook/topics/testing.md#black-box)).
 - The library exposes only what `main.rs` and the start helper use: the
-  `Config` type and the entry point `run`. Every other item is `pub(crate)`.
+  `Config` type, the entry point `run`, and the function that hashes a
+  password for the users file. Every other item is `pub(crate)`.
+- `main.rs` also runs the command that produces a password hash for the
+  users file ([Identity](../docs/architecture/identity.md#3-accounts)). The
+  command hashes with the library's function, so it and sign-in always
+  agree, and it starts nothing.
 - The source follows this layout, with only the folders the code needs:
 
   ```text
   src/
   ├── main.rs       Loads Config, starts logging, binds the listener, calls run
-  ├── lib.rs        Declares modules; re-exports Config and run
+  ├── lib.rs        Declares modules; re-exports the public items
   ├── config.rs     Config
   ├── server.rs     run and the server state
   ├── api/          The Web API under /api/v1, sign-in and consent included
