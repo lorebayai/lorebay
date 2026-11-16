@@ -1,0 +1,23 @@
+[package]
+name = "lorebay-base"
+description = "Configuration, logging and clock primitives for Lorebay."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+config.workspace = true
+mise-dotenv.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_path_to_error.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+typed-builder.workspace = true
+
+[lints]
+workspace = true
