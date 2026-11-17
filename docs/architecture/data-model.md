@@ -414,8 +414,9 @@ One row per knowledge entry; its content is in `knowledge_version`.
 | `proposal_id` | TEXT | Nullable, foreign key to `proposal` | The source proposal; empty for a direct change |
 | `created_at` | INTEGER | Not null | |
 
-- **Versions are only added.** Creating, changing, deleting and rolling back
-  each add a row and point `knowledge.latest_version` at it.
+- **Versions are only added.** Creating an entry, changing its content or
+  summary, deleting it and rolling back each add a row and point
+  `knowledge.latest_version` at it.
 - **A content version holds the full content and summary**, never a diff. A
   CHECK keeps both set for `content` and both empty for `deletion`. A
   deletion version records who deleted the entry, when, and from which
