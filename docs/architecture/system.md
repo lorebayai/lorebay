@@ -92,4 +92,7 @@ They include:
 - deleting stored files that no database record points to, and temporary
   files left by interrupted uploads;
 - removing expired authorization codes, device sign-in requests, login
-  sessions and agent authorizations.
+  sessions and agent authorizations, and replaced refresh tokens past their
+  expiry;
+- removing registered clients that were never authorized, once they reach
+  a configurable age; see [Identity](identity.md#6-agent-authorization).
