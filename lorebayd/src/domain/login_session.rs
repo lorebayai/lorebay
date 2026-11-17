@@ -2,7 +2,7 @@ use std::net::IpAddr;
 use std::time::{Duration, UNIX_EPOCH};
 
 use anyhow::anyhow;
-use lorebay_base::{Clock, RateLimiter, SystemClock};
+use lorebay_base::{Clock, RateLimitError, RateLimiter, SystemClock};
 use sea_orm::{
     ConnectionTrait, DatabaseConnection, DatabaseTransaction, Set, SqliteTransactionMode,
     TransactionOptions, TransactionTrait,
@@ -18,10 +18,10 @@ use crate::repository::account::AccountRepository;
 use crate::repository::login_session::LoginSessionRepository;
 
 use super::access::Caller;
-use super::id::{primary_key, random_id};
 use super::password::verify_password;
 use super::token::{Claims, TokenKind, TokenSigner, token_hash};
 use super::users::Users;
+use super::{primary_key, random_id};
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
@@ -44,6 +44,22 @@ pub(crate) enum LoginError {
     Unauthorized,
 }
 
+impl From<RateLimitError> for LoginError {
+    fn from(error: RateLimitError) -> Self {
+        match error {
+            RateLimitError::Exceeded { retry_after } => Self::RateLimited(
+                retry_after
+                    .as_secs()
+                    .saturating_add(u64::from(retry_after.subsec_nanos() != 0))
+                    .max(1),
+            ),
+            RateLimitError::Unavailable => {
+                Self::Internal(anyhow!("sign-in rate limiter is unavailable"))
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
 pub(crate) struct Tokens {
@@ -59,10 +75,7 @@ pub(crate) async fn log_in(
     username: String,
     password: String,
 ) -> Result<Tokens, LoginError> {
-    identity
-        .limiter
-        .check(address)
-        .map_err(|wait| LoginError::RateLimited(wait.as_secs().saturating_add(1)))?;
+    identity.limiter.check(address)?;
     let hash = identity
         .users
         .hashes
@@ -203,7 +216,7 @@ async fn create_session(
     account: Account,
 ) -> Result<Tokens, LoginError> {
     let now = now_millis()?;
-    let random_id = random_id()?;
+    let random_id = random_id().map_err(anyhow::Error::from)?;
     let refresh_token = new_refresh_token()?;
     let tokens = issue_tokens(
         identity,

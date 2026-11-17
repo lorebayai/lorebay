@@ -11,7 +11,7 @@ use crate::repository::login_session::LoginSessionRepository;
 use crate::repository::oauth_code::OauthCodeRepository;
 use crate::repository::participant::ParticipantRepository;
 
-use super::id::primary_key;
+use super::primary_key;
 use super::users::Users;
 
 pub(crate) async fn sync(database: &DatabaseConnection, users: &Users, now: i64) -> Result<()> {

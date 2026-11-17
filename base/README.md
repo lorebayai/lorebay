@@ -27,10 +27,10 @@ never display values or line contents.
 `Clock::now` returns a `SystemTime`; `SystemClock` uses the system clock.
 Consumers can inject their own `Clock` implementation through `Arc<dyn Clock>`.
 
-`RateLimiter<K, C>` counts attempts by a caller-supplied key in fixed windows,
-using an injected `Clock`. Build it with a positive `limit` and nonzero `window`.
-`check` counts an allowed attempt, or returns the duration to wait; expired
-windows are discarded on the next check.
+`RateLimiter::new` takes a positive attempt limit, a window duration and an
+injected clock. `check` counts attempts by a caller-supplied key; on exhaustion
+it returns the remaining wait. Clones share counters, expired keys are removed
+on checks, and counters live only in memory. Consumers validate their tunables.
 
 ## Configuration
 

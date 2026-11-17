@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use typed_builder::TypedBuilder;
 
-use super::id::random_id;
+use super::random_id;
 
 const SIGNING_KEY_FILE: &str = "signing.key";
 const SIGNING_KEY_BYTES: usize = 32;

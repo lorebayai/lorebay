@@ -1,3 +1,5 @@
+use std::net::SocketAddr;
+
 use axum::extract::State;
 use axum::extract::rejection::JsonRejection;
 use axum::http::StatusCode;
@@ -8,7 +10,7 @@ use typed_builder::TypedBuilder;
 use crate::api::{ApiError, Envelope, FieldError};
 use crate::domain::access::Caller;
 use crate::domain::login_session::{self, Tokens};
-use crate::server::{PeerAddress, ServerState};
+use crate::server::ServerState;
 
 #[derive(Clone, Debug, Deserialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
@@ -47,7 +49,7 @@ impl From<Tokens> for TokenResponse {
 
 pub(crate) async fn log_in(
     State(state): State<ServerState>,
-    Extension(peer): Extension<PeerAddress>,
+    Extension(peer): Extension<SocketAddr>,
     request: Result<Json<LoginRequest>, JsonRejection>,
 ) -> Result<Envelope<TokenResponse>, ApiError> {
     let Json(request) = request.map_err(invalid_json)?;
@@ -55,7 +57,7 @@ pub(crate) async fn log_in(
     let tokens = login_session::log_in(
         &state.identity,
         &state.database,
-        peer.address.ip(),
+        peer.ip(),
         request.username,
         request.password,
     )

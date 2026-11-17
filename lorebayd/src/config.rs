@@ -5,12 +5,16 @@ use std::path::PathBuf;
 use lorebay_base::{ConfigError, ConfigSources, LoggingConfig, load_config};
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
+use url::Url;
 
 const DEFAULT_ACCESS_TOKEN_LIFETIME_SECONDS: u64 = 900;
 const DEFAULT_REFRESH_TOKEN_LIFETIME_SECONDS: u64 = 2_592_000;
 const DEFAULT_LOGIN_RATE_LIMIT: u32 = 10;
 const DEFAULT_LOGIN_RATE_WINDOW_SECONDS: u64 = 60;
 const MAX_DURATION_SECONDS: u64 = 315_360_000;
+const DEFAULT_PUBLIC_URL: &str = "http://127.0.0.1:8080";
+const DEFAULT_REGISTRATION_RATE_LIMIT: u32 = 20;
+const DEFAULT_REGISTRATION_RATE_WINDOW_SECONDS: u64 = 60;
 const CONFIG_ENV_PREFIX: &str = "LOREBAYD";
 const DEFAULT_DATA_DIRECTORY: &str = "data";
 const DEFAULT_LISTEN_ADDRESS: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080);
@@ -23,6 +27,12 @@ pub struct Config {
     pub listen_address: SocketAddr,
     #[builder(default = PathBuf::from(DEFAULT_DATA_DIRECTORY))]
     pub data_directory: PathBuf,
+    #[builder(default = DEFAULT_PUBLIC_URL.to_owned())]
+    pub public_url: String,
+    #[builder(default = DEFAULT_REGISTRATION_RATE_LIMIT)]
+    pub registration_rate_limit: u32,
+    #[builder(default = DEFAULT_REGISTRATION_RATE_WINDOW_SECONDS)]
+    pub registration_rate_window_seconds: u64,
     #[builder(default = None)]
     pub users_file: Option<PathBuf>,
     #[builder(default = DEFAULT_ACCESS_TOKEN_LIFETIME_SECONDS)]
@@ -100,6 +110,47 @@ impl Config {
                 "must be greater than zero",
             ));
         }
+        self.validate_registration()?;
         self.logging.validate()
+    }
+
+    fn validate_registration(&self) -> Result<(), ConfigError> {
+        self.validate_public_url()?;
+        if self.registration_rate_limit == 0 {
+            return Err(ConfigError::invalid(
+                "registration_rate_limit",
+                "must be positive",
+            ));
+        }
+        if self.registration_rate_window_seconds == 0 {
+            return Err(ConfigError::invalid(
+                "registration_rate_window_seconds",
+                "must be positive",
+            ));
+        }
+        Ok(())
+    }
+
+    fn validate_public_url(&self) -> Result<(), ConfigError> {
+        let invalid = || {
+            ConfigError::invalid(
+                "public_url",
+                "expected an HTTP(S) origin without credentials, path, query or fragment",
+            )
+        };
+        let url = Url::parse(&self.public_url).map_err(|_| invalid())?;
+        if !matches!(url.scheme(), "http" | "https")
+            || !url.has_host()
+            || !url.username().is_empty()
+            || url.password().is_some()
+            || url.path() != "/"
+            || url.query().is_some()
+            || url.fragment().is_some()
+            || self.public_url != url.origin().ascii_serialization()
+                && self.public_url != format!("{}/", url.origin().ascii_serialization())
+        {
+            return Err(invalid());
+        }
+        Ok(())
     }
 }

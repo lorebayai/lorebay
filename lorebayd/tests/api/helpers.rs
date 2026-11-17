@@ -58,19 +58,33 @@ impl Server {
     }
 
     pub async fn restart_with_users(directory: TempDir, users: &[(&str, &str)]) -> Self {
-        Self::configured(directory, users, Settings::default()).await
+        Self::start_with(directory, users, |_| {}).await
     }
 
     pub async fn start_with_settings(settings: Settings) -> Self {
-        Self::configured(
+        Self::configured(|config| {
+            config.access_token_lifetime_seconds = settings.access_seconds;
+            config.refresh_token_lifetime_seconds = settings.refresh_seconds;
+            config.login_rate_limit = settings.rate_limit;
+            config.login_rate_window_seconds = settings.rate_window_seconds;
+        })
+        .await
+    }
+
+    pub async fn configured(configure: impl FnOnce(&mut Config)) -> Self {
+        Self::start_with(
             TempDir::new().unwrap(),
             &[(TEST_USERNAME, TEST_PASSWORD)],
-            settings,
+            configure,
         )
         .await
     }
 
-    async fn configured(directory: TempDir, users: &[(&str, &str)], settings: Settings) -> Self {
+    async fn start_with(
+        directory: TempDir,
+        users: &[(&str, &str)],
+        configure: impl FnOnce(&mut Config),
+    ) -> Self {
         let users_file = directory.path().join("users.json");
         let users: Vec<_> = users.iter().map(|(username, password)| {
             json!({"username": username, "password_hash": hash_password(password).unwrap()})
@@ -78,15 +92,13 @@ impl Server {
         fs::write(&users_file, serde_json::to_vec(&users).unwrap()).unwrap();
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
-        let config = Config::builder()
+        let mut config = Config::builder()
             .listen_address(address)
             .data_directory(directory.path().join("data"))
             .users_file(Some(users_file))
-            .access_token_lifetime_seconds(settings.access_seconds)
-            .refresh_token_lifetime_seconds(settings.refresh_seconds)
-            .login_rate_limit(settings.rate_limit)
-            .login_rate_window_seconds(settings.rate_window_seconds)
+            .public_url(format!("http://{address}"))
             .build();
+        configure(&mut config);
         let (shutdown, stopped) = oneshot::channel();
         let task = tokio::spawn(run(config, listener, async {
             let _ = stopped.await;

@@ -1,5 +1,5 @@
 use std::future::Future;
-use std::net::{IpAddr, SocketAddr};
+use std::num::NonZeroU32;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -33,6 +33,7 @@ use crate::domain::token::TokenSigner;
 use crate::domain::users::Users;
 use crate::domain::{account, login_session};
 use crate::migration::Migrator;
+use crate::oauth::{self, OAuthState};
 
 /// Readiness remains observable for one second before connections stop being accepted.
 const READINESS_PROPAGATION: Duration = Duration::from_secs(1);
@@ -51,12 +52,7 @@ pub(crate) struct ServerState {
     pub database: DatabaseConnection,
     pub identity: Arc<Identity>,
     ready: Arc<AtomicBool>,
-}
-
-#[derive(Clone, Copy, Debug, TypedBuilder)]
-#[builder(field_defaults(setter(into)))]
-pub(crate) struct PeerAddress {
-    pub address: SocketAddr,
+    oauth: OAuthState,
 }
 
 /// Applies pending database migrations before serving; the caller owns binding and shutdown signals.
@@ -76,21 +72,10 @@ pub async fn run(
         .context("could not create data_directory")?;
     let database = open_database(&config.data_directory).await?;
     account::sync(&database, &users, login_session::now_millis()?).await?;
-    let identity = Identity::builder()
-        .users(users)
-        .signer(TokenSigner::load(&config.data_directory)?)
-        .limiter(
-            RateLimiter::<IpAddr, _>::builder()
-                .limit(config.login_rate_limit)
-                .window(Duration::from_secs(config.login_rate_window_seconds))
-                .clock(SystemClock)
-                .build(),
-        )
-        .config(config)
-        .build();
     let state = ServerState::builder()
+        .oauth(OAuthState::new(&config, database.clone())?)
+        .identity(Arc::new(identity(config, users)?))
         .database(database)
-        .identity(Arc::new(identity))
         .ready(Arc::new(AtomicBool::new(true)))
         .build();
     let result = serve_until_shutdown(listener, state.clone(), shutdown).await;
@@ -100,6 +85,21 @@ pub async fn run(
         .await
         .context("could not close database")?;
     result
+}
+
+fn identity(config: Config, users: Users) -> Result<Identity> {
+    let limit =
+        NonZeroU32::new(config.login_rate_limit).context("login_rate_limit must be positive")?;
+    Ok(Identity::builder()
+        .users(users)
+        .signer(TokenSigner::load(&config.data_directory)?)
+        .limiter(RateLimiter::new(
+            limit,
+            Duration::from_secs(config.login_rate_window_seconds),
+            Arc::new(SystemClock),
+        ))
+        .config(config)
+        .build())
 }
 
 async fn open_database(directory: &Path) -> Result<DatabaseConnection> {
@@ -168,11 +168,13 @@ async fn serve_until_shutdown(
 }
 
 fn router(state: ServerState) -> Router {
+    let oauth = oauth::router(state.oauth.clone());
     Router::new()
         .route(HEALTH_PATH, get(health))
         .route(READINESS_PATH, get(readiness))
         .nest(API_PREFIX, api::router())
         .with_state(state)
+        .merge(oauth)
         .fallback(api::not_found)
         .method_not_allowed_fallback(|| async { ApiError::MethodNotAllowed })
 }
@@ -208,7 +210,8 @@ async fn serve(
             result = listener.accept() => {
                 match result {
                     Ok((stream, peer)) => {
-                        connections.spawn(serve_connection(stream, router.clone().layer(Extension(PeerAddress::builder().address(peer).build())), stopped.clone()));
+                        let connection_router = router.clone().layer(Extension(peer));
+                        connections.spawn(serve_connection(stream, connection_router, stopped.clone()));
                     },
                     Err(error) => {
                         tracing::error!(%error, "could not accept HTTP connection");

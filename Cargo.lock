@@ -1751,6 +1751,7 @@ dependencies = [
  "anyhow",
  "argon2",
  "axum",
+ "base64 0.23.1",
  "clap",
  "getrandom 0.4.3",
  "hyper",
@@ -1769,6 +1770,7 @@ dependencies = [
  "tokio",
  "tracing",
  "typed-builder",
+ "url",
  "uuid",
 ]
 

@@ -13,6 +13,7 @@ mod domain;
 )]
 mod entity;
 mod migration;
+mod oauth;
 mod repository;
 mod server;
 

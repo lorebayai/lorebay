@@ -16,7 +16,7 @@ async fn log_in_returns_access_and_refresh_tokens_when_password_matches() {
     let tokens = &body["data"];
     let access = tokens["access_token"].as_str().unwrap();
     assert_eq!(access.split('.').count(), 3);
-    assert_eq!(tokens["refresh_token"].as_str().unwrap().len(), 64);
+    assert_eq!(tokens["refresh_token"].as_str().unwrap().len(), 44);
     assert_eq!(tokens["token_type"], "Bearer");
     assert_eq!(tokens["expires_in"], 900);
     let directory = server.stop().await;

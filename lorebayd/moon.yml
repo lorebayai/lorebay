@@ -1,2 +1,10 @@
 language: 'rust'
 layer: 'application'
+
+tasks:
+  generate-entities:
+    command: 'bash lorebayd/scripts/generate-entities.sh'
+    options:
+      cache: false
+      runInCI: false
+      runFromWorkspaceRoot: true

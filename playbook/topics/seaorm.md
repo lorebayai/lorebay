@@ -61,8 +61,8 @@ by the `AGENTS.md` of every Rust project that uses SeaORM.
   never edited by hand.
 - A change to `src/migration/` regenerates `src/entity/` in the same commit,
   formatted with `cargo fmt`.
-- The crate README's Usage section holds the exact commands that apply the
-  migrations to a disposable file and generate the entities.
+- The crate README's Usage section names one command that applies the
+  migrations to a disposable file and generates the entities.
 - Lint exceptions the generated code needs go on the `mod entity;`
   declaration as `#[expect(clippy::<lint>, reason = "...")]`, with
   sea-orm-cli named in the reason. Generated files are never patched to
