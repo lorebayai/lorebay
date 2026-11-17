@@ -16,6 +16,22 @@ pub async fn prepare(server: &Server) -> (Value, Value, Value) {
     (person, agent, task)
 }
 
+pub async fn set_status(server: &Server, tokens: &Value, task: &Value, status: &str) -> Value {
+    let task_id = task["task_id"].as_str().unwrap();
+    let response = request(
+        server,
+        tokens,
+        Method::PATCH,
+        &format!("/api/v1/spaces/{SPACE}/tasks/{task_id}"),
+        json!({"status":status}),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let task = response.json::<Value>().await.unwrap()["data"].clone();
+    assert_eq!(task["status"], status);
+    task
+}
+
 pub async fn register(server: &Server, agent: &Value, task: &Value) -> Value {
     let response = registration(
         server,

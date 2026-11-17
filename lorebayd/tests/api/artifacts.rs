@@ -391,6 +391,52 @@ async fn complete_artifact_fails_when_file_was_not_uploaded() {
 }
 
 #[tokio::test]
+async fn register_artifact_fails_with_reopen_hint_when_task_is_ended() {
+    let (server, person, agent) = setup().await;
+    let task = create(&server, &agent, SPACE, "Paused artifact work").await;
+    let registered = register(&server, &agent, &task).await;
+    let ended = set_status(&server, &agent, &task, "ended").await;
+    let refusal = assert_problem(
+        registration(
+            &server,
+            &agent,
+            SPACE,
+            task["task_id"].as_str().unwrap(),
+            json!({"file_name":"rejected.txt", "summary":"Rejected upload"}),
+        )
+        .await,
+        StatusCode::CONFLICT,
+        "task.ended",
+    )
+    .await;
+    assert_eq!(
+        refusal["title"],
+        "Set the task back to in progress before registering an artifact"
+    );
+    assert_eq!(read(&server, &person, "TK-1").await, ended);
+    upload_ok(&server, &registered, "Before ending").await;
+    let response = complete(&server, &agent, &task, "AR-1").await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let completed = response.json::<Value>().await.unwrap()["data"].clone();
+    assert_eq!(completed["key"], "AR-1");
+    assert_eq!(completed["task_title"], "Paused artifact work");
+    assert_eq!(completed["size"], 13);
+    let after = read(&server, &person, "TK-1").await;
+    assert_eq!(after["status"], "ended");
+    assert_eq!(after["ended_at"], ended["ended_at"]);
+    assert_eq!(after["artifacts"][0]["key"], "AR-1");
+    assert_eq!(
+        after["artifacts"][0]["completed_at"],
+        completed["completed_at"]
+    );
+    let reopened = set_status(&server, &person, &task, "in progress").await;
+    assert_eq!(reopened["artifacts"], after["artifacts"]);
+    assert_eq!(read(&server, &person, "TK-1").await, reopened);
+    assert_eq!(register(&server, &agent, &task).await["key"], "AR-2");
+    server.stop().await;
+}
+
+#[tokio::test]
 async fn register_artifact_fails_when_caller_is_person() {
     let (server, person, agent) = setup().await;
     let task = create(&server, &agent, SPACE, "Agent only").await;
