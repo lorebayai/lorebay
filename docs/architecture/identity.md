@@ -126,18 +126,19 @@ It does not cover:
   define. Registration is open and needs no credential, as
   [RFC 7591](https://datatracker.ietf.org/doc/html/rfc7591) allows; a
   registered client can do nothing until a person authorizes it.
-  Registration is limited to 10 attempts per hour per address by default.
-  A background job removes clients older than a configurable age, 30 days
-  by default, that never had an agent authorization and have no authorization
-  code waiting to be exchanged. Together these rules bound the unused
-  clients one address can leave to about 7,200. A client that ever had an
-  agent authorization is kept after that authorization ends, because a
-  harness may still use its client ID.
-- **An HTTP loopback IP redirect URI matches on any port.** Its scheme,
-  host, path and query must still match the registered URI. Every other
-  redirect URI matches exactly, including `localhost` and HTTPS URIs.
+  Registration is rate limited by address. A background job removes clients
+  older than a configurable age that never had an agent authorization and
+  have no authorization code waiting to be exchanged. Together these rules
+  keep open registration from filling the database with unused clients.
+  A client that ever had an agent authorization is kept after that
+  authorization ends, because a harness may still use its client ID.
+- **An HTTP loopback IP redirect URI matches on any port**, as
+  [RFC 8252, section 7.3](https://datatracker.ietf.org/doc/html/rfc8252#section-7.3)
+  requires. Its scheme, host, path and query must still match the registered
+  URI. Every other redirect URI matches exactly, including `localhost` and
+  HTTPS URIs.
   The token request must use the exact redirect URI of its authorization
-  request, as [RFC 8252, section 7.3](https://datatracker.ietf.org/doc/html/rfc8252#section-7.3)
+  request, as [RFC 6749, section 4.1.3](https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3)
   requires.
 - **Sign-in and consent are Web API operations.** The authorization endpoint
   is a minimal page that `lorebayd` serves. The page signs the person in,
@@ -222,7 +223,11 @@ agent's next call fails.
 - [MCP authorization, 2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization):
   Dynamic Client Registration stays available for backward compatibility,
   and public clients' refresh tokens must rotate.
+- [RFC 6749](https://datatracker.ietf.org/doc/html/rfc6749): OAuth 2.0,
+  including exact redirect URI matching during code exchange.
 - [RFC 7591](https://datatracker.ietf.org/doc/html/rfc7591): OAuth 2.0
   Dynamic Client Registration.
+- [RFC 8252](https://datatracker.ietf.org/doc/html/rfc8252): OAuth 2.0 for
+  Native Apps, including loopback redirect ports.
 - [RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628): OAuth 2.0 Device
   Authorization Grant, including polling, code guessing and remote phishing.

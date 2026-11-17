@@ -1,7 +1,8 @@
 # lorebay-base
 
 Shared Rust primitives for Lorebay crates: layered configuration, structured
-logging, the `Clock` trait for injecting time, and periodic background jobs.
+logging, the `Clock` trait for injecting time, periodic background jobs, and
+a secret wrapper that redacts `Debug` output.
 
 ## Usage
 
@@ -13,9 +14,6 @@ moon run base:lint
 moon run base:build
 cargo doc -p lorebay-base --no-deps --open
 ```
-
-Use the generated `Secret<T>` API docs for `Secret::from(value)`, `expose()`,
-redacted `Debug` output and transparent serde serialization.
 
 `load_config::<T>(&ConfigSources)` requires `T` to implement `Default`,
 `Serialize` and `Deserialize`. Callers supply the file paths, environment
@@ -57,6 +55,8 @@ environment map. They never read the ambient process environment.
 | `LoggingConfig.level` | `info` | `off`, `error`, `warn`, `info`, `debug`, `trace` |
 
 ## Invariants
+
+Hold every secret in `Secret<T>`; never log it or serialize it into a log.
 
 Log selected safe fields only. Never log a whole configuration, request,
 token or password. Configuration errors name keys without echoing values.

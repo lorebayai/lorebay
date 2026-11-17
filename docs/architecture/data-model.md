@@ -250,7 +250,7 @@ The clients registered through Dynamic Client Registration; see
   expiry never clear it. When upgrading, clients with an agent authorization
   take the earliest authorization's `created_at`.
 - **Only unused clients are deleted.** The background job removes a client
-  older than `unused_client_lifetime_seconds`, 30 days by default, only when
+  older than `unused_client_lifetime_seconds` only when
   `first_authorized_at` is null and no unexpired, unexchanged authorization
   code names it.
   A client that ever had an agent authorization is kept. Registration metadata
