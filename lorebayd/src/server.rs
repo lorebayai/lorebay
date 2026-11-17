@@ -5,10 +5,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use axum::Router;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
+use axum::{Extension, Router};
 use hyper::server::conn::http1;
 use hyper_util::rt::TokioIo;
 use hyper_util::service::TowerToHyperService;
@@ -27,6 +27,7 @@ use typed_builder::TypedBuilder;
 use crate::Config;
 use crate::api::{self, ApiError, Envelope};
 use crate::migration::Migrator;
+use crate::oauth::{self, OAuthState};
 
 /// Readiness remains observable for one second before connections stop being accepted.
 const READINESS_PROPAGATION: Duration = Duration::from_secs(1);
@@ -43,6 +44,7 @@ const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 struct ServerState {
     database: DatabaseConnection,
     ready: Arc<AtomicBool>,
+    oauth: OAuthState,
 }
 
 /// Applies pending database migrations before serving; the caller owns binding and shutdown signals.
@@ -55,8 +57,10 @@ pub async fn run(
     fs::create_dir_all(&config.data_directory)
         .await
         .context("could not create data_directory")?;
+    let database = open_database(&config.data_directory).await?;
     let state = ServerState::builder()
-        .database(open_database(&config.data_directory).await?)
+        .oauth(OAuthState::new(&config, database.clone())?)
+        .database(database)
         .ready(Arc::new(AtomicBool::new(true)))
         .build();
     let result = serve_until_shutdown(listener, state.clone(), shutdown).await;
@@ -134,11 +138,13 @@ async fn serve_until_shutdown(
 }
 
 fn router(state: ServerState) -> Router {
+    let oauth = oauth::router(state.oauth.clone());
     Router::new()
         .route(HEALTH_PATH, get(health))
         .route(READINESS_PATH, get(readiness))
         .with_state(state)
         .nest(API_PREFIX, api::router())
+        .merge(oauth)
         .fallback(api::not_found)
         .method_not_allowed_fallback(|| async { ApiError::MethodNotAllowed })
 }
@@ -173,8 +179,9 @@ async fn serve(
             },
             result = listener.accept() => {
                 match result {
-                    Ok((stream, _)) => {
-                        connections.spawn(serve_connection(stream, router.clone(), stopped.clone()));
+                    Ok((stream, peer)) => {
+                        let connection_router = router.clone().layer(Extension(peer));
+                        connections.spawn(serve_connection(stream, connection_router, stopped.clone()));
                     },
                     Err(error) => {
                         tracing::error!(%error, "could not accept HTTP connection");

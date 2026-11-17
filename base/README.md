@@ -27,6 +27,11 @@ never display values or line contents.
 `Clock::now` returns a `SystemTime`; `SystemClock` uses the system clock.
 Consumers can inject their own `Clock` implementation through `Arc<dyn Clock>`.
 
+`RateLimiter::new` takes a positive attempt limit, a window duration and an
+injected clock. `check` counts attempts by a caller-supplied key; on exhaustion
+it returns the remaining wait. Clones share counters, expired keys are removed
+on checks, and counters live only in memory. Consumers validate their tunables.
+
 ## Configuration
 
 The loader applies defaults, an optional JSON file, an optional dotenv file,

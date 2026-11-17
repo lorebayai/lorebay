@@ -2,6 +2,7 @@
 
 mod api;
 mod config;
+mod domain;
 #[expect(dead_code, reason = "sea-orm-cli entities have no table consumers yet")]
 #[expect(
     clippy::arbitrary_source_item_ordering,
@@ -9,6 +10,8 @@ mod config;
 )]
 mod entity;
 mod migration;
+mod oauth;
+mod repository;
 mod server;
 
 pub use config::Config;
