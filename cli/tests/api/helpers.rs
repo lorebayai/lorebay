@@ -13,6 +13,11 @@ use tokio::process::{Child, ChildStderr, Command};
 use tokio::time::{Instant, sleep, timeout};
 use url::Url;
 
+mod team;
+pub use team::*;
+
+pub const SECOND_USERNAME: &str = "teammate /?#+%";
+
 pub const CREDENTIALS_FILE: &str = "credentials.json";
 pub const LOGIN_SESSION_PATH: &str = "/api/v1/login-session";
 pub const WAIT: Duration = Duration::from_secs(30);
@@ -52,13 +57,8 @@ impl Server {
             .to_str()
             .unwrap()
             .to_owned();
-        let hash = password_hash().await;
         let users = directory.path().join("users.json");
-        fs::write(
-            &users,
-            json!([{"username": username, "password_hash": hash}]).to_string(),
-        )
-        .unwrap();
+        write_users(&users, &username).await;
         let client = Client::builder()
             .no_proxy()
             .redirect(Policy::none())
@@ -138,6 +138,28 @@ impl Server {
         SigningIn::start(child).await
     }
 
+    pub async fn login_as(&self, username: &str) -> Output {
+        let mut command = self.cli(&["login", &self.url, "--no-browser", "--output", "json"]);
+        command.env("LOREBAY_HOME", self.directory.path().join(username));
+        let login = SigningIn::start(command.spawn().unwrap()).await;
+        self.decide_as(&login.link, "approve", username).await;
+        let output = login.finish().await;
+        assert_success(&output);
+        output
+    }
+
+    pub async fn run_as(&self, username: &str, arguments: &[&str]) -> Output {
+        timeout(
+            WAIT,
+            self.cli(arguments)
+                .env("LOREBAY_HOME", self.directory.path().join(username))
+                .output(),
+        )
+        .await
+        .unwrap()
+        .unwrap()
+    }
+
     pub async fn login(&self) -> Output {
         let login = self
             .signing_in(&["login", &self.url, "--no-browser", "--output", "json"])
@@ -168,10 +190,14 @@ impl Server {
     }
 
     pub async fn person(&self) -> Value {
+        self.person_as(&self.username).await
+    }
+
+    async fn person_as(&self, username: &str) -> Value {
         self.json(
             Method::POST,
             LOGIN_SESSION_PATH,
-            json!({"username": self.username, "password": PASSWORD}),
+            json!({"username": username, "password": PASSWORD}),
             None,
         )
         .await["data"]
@@ -179,11 +205,15 @@ impl Server {
     }
 
     pub async fn decide(&self, link: &Url, decision: &str) {
+        self.decide_as(link, decision, &self.username).await;
+    }
+
+    async fn decide_as(&self, link: &Url, decision: &str, username: &str) {
         assert_eq!(
             self.client.get(link.clone()).send().await.unwrap().status(),
             StatusCode::OK
         );
-        let person = self.person().await;
+        let person = self.person_as(username).await;
         let mut request = parameters(link);
         self.json(
             Method::POST,
@@ -355,6 +385,19 @@ pub fn parameters(link: &Url) -> Value {
             .map(|(name, value)| (name.into_owned(), json!(value)))
             .collect(),
     )
+}
+
+async fn write_users(path: &PathBuf, username: &str) {
+    let hash = password_hash().await;
+    fs::write(
+        path,
+        json!([
+            {"username": username, "password_hash": hash},
+            {"username": SECOND_USERNAME, "password_hash": hash}
+        ])
+        .to_string(),
+    )
+    .unwrap();
 }
 
 async fn password_hash() -> String {

@@ -1,5 +1,5 @@
 use reqwest::Method;
-use serde_json::{Value, json};
+use serde_json::Value;
 use url::{Position, Url};
 
 use crate::constants::{
@@ -13,6 +13,13 @@ use crate::http::{self, Http};
 use crate::login;
 use crate::output::{self, Outcome, Table};
 
+mod pages;
+mod participants;
+mod spaces;
+mod users;
+
+pub(super) use pages::{Listing, api_path, list_page};
+
 pub(crate) async fn run(command: Command, mode: OutputMode) -> Result<Outcome> {
     let store = Store::from_environment()?;
     match command {
@@ -23,6 +30,9 @@ pub(crate) async fn run(command: Command, mode: OutputMode) -> Result<Outcome> {
             login::login(&store, &server_url, no_browser).await?;
             Ok(Outcome::completion("Signed in."))
         }
+        Command::Participant { command } => participants::run(command, &store, mode).await,
+        Command::Space { command } => spaces::run(command, &store, mode).await,
+        Command::User { command } => users::run(command, &store, mode).await,
         Command::Logout => {
             http::logout(&store).await?;
             Ok(Outcome::completion("Signed out."))
@@ -33,21 +43,19 @@ pub(crate) async fn run(command: Command, mode: OutputMode) -> Result<Outcome> {
         Command::Agent {
             command: AgentCommand::Revoke { name, yes },
         } => {
+            let path = api_path(&[AGENTS, &name])?;
             if !yes {
                 output::confirm(&name)?;
             }
             Http::new()?
-                .authorized(
-                    &store,
-                    Method::DELETE,
-                    &agent_path(&name)?,
-                    Some(&json!({})),
-                )
+                .authorized(&store, Method::DELETE, &path, None)
                 .await?;
             Ok(Outcome::completion("Agent revoked."))
         }
     }
 }
+
+const AGENTS: &str = "agents";
 
 async fn list(store: &Store, page: Page, mode: OutputMode) -> Result<Outcome> {
     let mut url = Url::parse("http://localhost/api/v1/agents")
@@ -104,16 +112,6 @@ fn next_page(page: &Page, cursor: &str, mode: OutputMode) -> String {
         "Next page: lorebay agent list{size} --cursor {} --output {format}",
         output::shell_word(cursor)
     )
-}
-
-fn agent_path(name: &str) -> Result<String> {
-    let mut url = Url::parse("http://localhost/api/v1/agents/")
-        .map_err(|_| Failure::local(CLI_USAGE, "Could not construct the agent path."))?;
-    url.path_segments_mut()
-        .map_err(|_| Failure::local(CLI_USAGE, "Invalid agent path."))?
-        .pop_if_empty()
-        .push(name);
-    Ok(url.path().to_owned())
 }
 
 fn text(value: &Value) -> String {

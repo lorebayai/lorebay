@@ -13,6 +13,15 @@ cargo run -p lorebay-cli -- login https://lorebay.example --no-browser
 cargo run -p lorebay-cli -- agent list --page-size 20 --output json
 cargo run -p lorebay-cli -- agent list --cursor '<cursor>'
 cargo run -p lorebay-cli -- agent revoke 'Claude Code (home)' --yes
+cargo run -p lorebay-cli -- space list --page-size 20 --output json
+cargo run -p lorebay-cli -- space create --name Team --summary 'Team work'
+cargo run -p lorebay-cli -- space show SPACE-1
+cargo run -p lorebay-cli -- space change SPACE-1 --name 'New team' --summary 'New work'
+cargo run -p lorebay-cli -- user list
+cargo run -p lorebay-cli -- participant list SPACE-1 --page-size 20
+cargo run -p lorebay-cli -- participant add SPACE-1 alice --role viewer
+cargo run -p lorebay-cli -- participant set-role SPACE-1 alice --role contributor
+cargo run -p lorebay-cli -- participant remove SPACE-1 alice
 cargo run -p lorebay-cli -- logout
 cargo run -p lorebay-cli -- --help
 ```

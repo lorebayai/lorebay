@@ -14,14 +14,59 @@ use tokio::time::{sleep, timeout};
 use typed_builder::TypedBuilder;
 
 use crate::helpers::CREDENTIALS_FILE;
-use crate::helpers::{Server, SigningIn, WAIT, assert_success, body};
+use crate::helpers::{
+    Server, SigningIn, WAIT, assert_success, assert_usage, body, create, path_commands,
+};
 
 #[tokio::test]
-async fn agent_revoke_repeats_json_body_when_session_refreshes_after_unauthorized() {
+async fn path_arguments_fail_without_request_when_segment_is_empty_or_dot() {
+    let proxy = Proxy::start().await;
+    proxy.login().await;
+    let space = create(&proxy.server, "Keep team", "Keep summary").await;
+    proxy.server.agent("Keep agent").await;
+    let path = proxy.server.home().join(CREDENTIALS_FILE);
+    let original = fs::read(&path).unwrap();
+    let mut saved = proxy.server.credentials();
+    saved["expires_at"] = json!(0);
+    fs::write(&path, saved.to_string()).unwrap();
+    let unchanged = fs::read(&path).unwrap();
+    let calls = proxy.calls.load(Ordering::SeqCst);
+    for mode in ["human", "json"] {
+        for mut arguments in ["..", ".", ""].into_iter().flat_map(path_commands) {
+            arguments.extend(["--output", mode]);
+            let output = proxy.server.run(&arguments).await;
+            assert_eq!(output.status.code(), Some(2), "{arguments:?}");
+            assert!(output.stdout.is_empty());
+            assert_eq!(String::from_utf8_lossy(&output.stderr).lines().count(), 1);
+            if mode == "json" {
+                assert_usage(&output);
+            }
+            assert_eq!(proxy.calls.load(Ordering::SeqCst), calls, "{arguments:?}");
+            assert_eq!(proxy.refreshes.load(Ordering::SeqCst), 0);
+        }
+    }
+    assert_eq!(fs::read(&path).unwrap(), unchanged);
+    fs::write(&path, original).unwrap();
+    let shown = proxy
+        .server
+        .run(&["space", "show", &space, "--output", "json"])
+        .await;
+    assert_success(&shown);
+    assert_eq!(body(&shown)["data"]["name"], "Keep team");
+    assert_eq!(body(&shown)["data"]["summary"], "Keep summary");
+    let agents = proxy
+        .server
+        .run(&["agent", "list", "--output", "json"])
+        .await;
+    assert_success(&agents);
+    assert_eq!(body(&agents)["data"][0]["name"], "Keep agent");
+}
+
+#[tokio::test]
+async fn space_create_repeats_json_body_when_session_refreshes_after_unauthorized() {
     let mut proxy = Proxy::configured(json!({"access_token_lifetime_seconds": 2})).await;
     proxy.login().await;
     proxy.server.set_access_lifetime(900).await;
-    proxy.server.agent("Body retry agent").await;
     let mut saved = proxy.server.credentials();
     let previous_refresh = saved["refresh_token"].clone();
     saved["expires_at"] = json!(u64::MAX);
@@ -34,33 +79,57 @@ async fn agent_revoke_repeats_json_body_when_session_refreshes_after_unauthorize
     let output = proxy
         .server
         .run(&[
-            "agent",
-            "revoke",
-            "Body retry agent",
-            "--yes",
+            "space",
+            "create",
+            "--name",
+            "Retry team",
+            "--summary",
+            "Real body",
             "--output",
             "json",
         ])
         .await;
     assert_success(&output);
-    assert_eq!(body(&output), json!({"data": null, "meta": {}}));
+    let expected = json!({"data": {"key": "SPACE-1", "name": "Retry team", "summary": "Real body", "role": "owner"}, "meta": {}});
+    assert_eq!(body(&output), expected);
     let requests = proxy.requests.lock().await;
     assert_eq!(requests.len(), 2);
     for request in requests.iter() {
-        assert_eq!(request["body"], "{}");
+        assert_eq!(
+            serde_json::from_str::<Value>(request["body"].as_str().unwrap()).unwrap(),
+            json!({"name": "Retry team", "summary": "Real body"})
+        );
         assert_eq!(request["content_type"], "application/json");
     }
     assert_eq!(requests[0]["status"], 401);
-    assert_eq!(requests[1]["status"], 200);
+    assert_eq!(requests[1]["status"], 201);
     drop(requests);
     assert_eq!(proxy.refreshes.load(Ordering::SeqCst), 1);
     assert!(proxy.server.credentials()["refresh_token"] != previous_refresh);
-    let remaining = proxy
+    let shown = proxy
         .server
-        .run(&["agent", "list", "--output", "json"])
+        .run(&["space", "show", "SPACE-1", "--output", "json"])
         .await;
-    assert_success(&remaining);
-    assert_eq!(body(&remaining)["data"], json!([]));
+    assert_success(&shown);
+    assert_eq!(body(&shown), expected);
+}
+
+#[tokio::test]
+async fn agent_revoke_sends_no_request_body() {
+    let proxy = Proxy::start().await;
+    proxy.login().await;
+    proxy.server.agent("No body").await;
+    let output = proxy
+        .server
+        .run(&["agent", "revoke", "No body", "--yes", "--output", "json"])
+        .await;
+    assert_success(&output);
+    assert_eq!(body(&output), json!({"data": null, "meta": {}}));
+    let requests = proxy.requests.lock().await;
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0]["body"], "");
+    assert_eq!(requests[0]["content_type"], "");
+    assert_eq!(requests[0]["status"], 200);
 }
 
 #[tokio::test]
@@ -146,6 +215,7 @@ struct Proxy {
     server: Server,
     url: String,
     fault: Arc<AtomicU8>,
+    calls: Arc<AtomicUsize>,
     refreshes: Arc<AtomicUsize>,
     requests: Arc<Mutex<Vec<Value>>>,
     task: JoinHandle<()>,
@@ -156,6 +226,7 @@ struct Proxy {
 struct ProxyState {
     upstream: String,
     fault: Arc<AtomicU8>,
+    calls: Arc<AtomicUsize>,
     refreshes: Arc<AtomicUsize>,
     requests: Arc<Mutex<Vec<Value>>>,
     redirect_path: PathBuf,
@@ -182,11 +253,13 @@ impl Proxy {
         settings["public_url"] = json!(url);
         let server = Server::configured(settings).await;
         let fault = Arc::new(AtomicU8::new(0));
+        let calls = Arc::new(AtomicUsize::new(0));
         let refreshes = Arc::new(AtomicUsize::new(0));
         let requests = Arc::new(Mutex::new(Vec::new()));
         let state = ProxyState::builder()
             .upstream(server.url.clone())
             .fault(fault.clone())
+            .calls(calls.clone())
             .refreshes(refreshes.clone())
             .requests(requests.clone())
             .redirect_path(server.directory.path().join("redirect"))
@@ -207,6 +280,7 @@ impl Proxy {
             server,
             url,
             fault,
+            calls,
             refreshes,
             requests,
             task,
@@ -233,11 +307,13 @@ async fn forward(mut socket: TcpStream, state: ProxyState) -> io::Result<()> {
     let ProxyState {
         upstream,
         fault,
+        calls,
         refreshes,
         requests,
         redirect_path,
     } = state;
     let (mut request, headers, body) = read_request(&mut socket).await?;
+    calls.fetch_add(1, Ordering::SeqCst);
     let refresh =
         headers.starts_with("POST /oauth/token ") && body.starts_with(b"grant_type=refresh_token");
     if refresh {
@@ -285,7 +361,8 @@ async fn forward(mut socket: TcpStream, state: ProxyState) -> io::Result<()> {
 }
 
 async fn record_request(requests: &Mutex<Vec<Value>>, headers: &str, body: &[u8], response: &[u8]) {
-    if headers.starts_with("DELETE /api/v1/agents/") {
+    if headers.starts_with("DELETE /api/v1/agents/") || headers.starts_with("POST /api/v1/spaces ")
+    {
         let status = String::from_utf8_lossy(response)
             .split_whitespace()
             .nth(1)

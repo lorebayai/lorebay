@@ -8,3 +8,4 @@ mod helpers;
 mod login;
 mod network;
 mod session;
+mod spaces;

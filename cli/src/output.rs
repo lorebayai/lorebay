@@ -14,6 +14,18 @@ pub(crate) trait Render: Debug {
     fn human(&self) -> String;
 }
 
+#[derive(Clone, Debug)]
+pub(crate) enum Field {
+    Multiline(&'static str, String),
+    SingleLine(&'static str, String),
+}
+
+#[derive(Clone, Debug, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+pub(crate) struct Fields {
+    pub values: Vec<Field>,
+}
+
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
 pub(crate) struct Outcome {
@@ -28,6 +40,19 @@ pub(crate) struct Outcome {
 pub(crate) struct Table {
     pub columns: Vec<&'static str>,
     pub rows: Vec<Vec<String>>,
+}
+
+impl Render for Fields {
+    fn human(&self) -> String {
+        self.values
+            .iter()
+            .map(|field| match field {
+                Field::Multiline(label, value) => format!("{label}: {}", multiline(value)),
+                Field::SingleLine(label, value) => format!("{label}: {}", safe(value)),
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
 }
 
 impl Outcome {
@@ -131,4 +156,16 @@ impl Render for Completion {
     fn human(&self) -> String {
         self.message.to_owned()
     }
+}
+
+fn multiline(text: &str) -> String {
+    text.chars()
+        .flat_map(|c| {
+            if c.is_control() && !matches!(c, '\n' | '\t') {
+                c.escape_default().collect::<Vec<_>>()
+            } else {
+                vec![c]
+            }
+        })
+        .collect()
 }
