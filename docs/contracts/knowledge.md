@@ -44,8 +44,9 @@ decisions an agent needs from a person in the middle of its work.
   searched by keyword across names, summaries and content. Levels that differ
   only in case are one level, shown as the entry with the lowest key spells
   it.
-- **Every version is kept.** Each version stores the content and the
-  summary. People view the history and roll back on the web.
+- **Every version is kept.** A content version stores the content and the
+  summary; a deletion version stores neither. People view the history and
+  roll back on the web.
 - **Agents read only the latest version.** Older versions are kept, but
   agents cannot read them.
 - **Rolling back creates a new version** whose content and summary equal the
@@ -63,8 +64,9 @@ decisions an agent needs from a person in the middle of its work.
   the space, deleted entries included: a direct rename to another entry's
   name is rejected, and a proposal that would rename to another entry's name
   cannot be approved. A rename may change only the case. Renaming keeps the
-  key and the history, so references by key still resolve. It creates no
-  version, and rolling back never restores an old name.
+  key and the history, so references by key still resolve. Renaming an entry
+  that is not deleted creates no version, and rolling back never restores an
+  old name.
 
 ## 4. Proposals
 
@@ -76,13 +78,13 @@ flowchart TD
     pending["Pending proposal"]
     approved["Approved"]
     rejected["Rejected"]
-    version["New knowledge version"]
+    applied["Change takes effect"]
     agent -- "once its person confirms" --> pending
     contributor --> pending
     pending -- "a person approves" --> approved
     pending -- "a person rejects" --> rejected
-    approved --> version
-    admin -- "changes directly" --> version
+    approved --> applied
+    admin -- "changes directly" --> applied
 ```
 
 - **A proposal** asks to create, change or delete one knowledge entry, and
