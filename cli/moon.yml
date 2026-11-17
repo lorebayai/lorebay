@@ -6,6 +6,10 @@ tasks:
     outputs: ['/target/debug/lorebay']
   integration:
     deps: ['lorebayd:build']
+    inputs:
+      - '/lorebayd/**/*'
+      - '/base/**/*'
+      - '/web/**/*'
   test:
     command: 'cargo test --bins --locked'
     options:
