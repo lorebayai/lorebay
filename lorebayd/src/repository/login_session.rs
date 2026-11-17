@@ -10,6 +10,14 @@ pub(crate) struct LoginSessionRepository<'a, C> {
 }
 
 impl<C: ConnectionTrait> LoginSessionRepository<'_, C> {
+    pub async fn delete_expired(&self, now: i64) -> Result<u64, DbErr> {
+        Ok(Entity::delete_many()
+            .filter(Column::ExpiresAt.lte(now))
+            .exec(self.connection)
+            .await?
+            .rows_affected)
+    }
+
     pub async fn by_random_id(&self, id: &str) -> Result<Option<Model>, DbErr> {
         Entity::find()
             .filter(Column::RandomId.eq(id))

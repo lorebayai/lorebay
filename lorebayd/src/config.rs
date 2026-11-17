@@ -11,6 +11,7 @@ const DEFAULT_ACCESS_TOKEN_LIFETIME_SECONDS: u64 = 900;
 const DEFAULT_REFRESH_TOKEN_LIFETIME_SECONDS: u64 = 2_592_000;
 const DEFAULT_LOGIN_RATE_LIMIT: u32 = 10;
 const DEFAULT_LOGIN_RATE_WINDOW_SECONDS: u64 = 60;
+const DEFAULT_CREDENTIAL_CLEANUP_INTERVAL_SECONDS: u64 = 300;
 const MAX_DURATION_SECONDS: u64 = 315_360_000;
 const DEFAULT_PUBLIC_URL: &str = "http://127.0.0.1:8080";
 const DEFAULT_REGISTRATION_RATE_LIMIT: u32 = 20;
@@ -47,6 +48,8 @@ pub struct Config {
     pub login_rate_limit: u32,
     #[builder(default = DEFAULT_LOGIN_RATE_WINDOW_SECONDS)]
     pub login_rate_window_seconds: u64,
+    #[builder(default = DEFAULT_CREDENTIAL_CLEANUP_INTERVAL_SECONDS)]
+    pub credential_cleanup_interval_seconds: u64,
     #[builder(default = DEFAULT_REGISTRATION_CLIENT_NAME_MAX_BYTES)]
     pub registration_client_name_max_bytes: usize,
     #[builder(default = DEFAULT_REGISTRATION_REDIRECT_URI_LIMIT)]
@@ -108,6 +111,10 @@ impl Config {
                 self.refresh_token_lifetime_seconds,
             ),
             ("login_rate_window_seconds", self.login_rate_window_seconds),
+            (
+                "credential_cleanup_interval_seconds",
+                self.credential_cleanup_interval_seconds,
+            ),
         ] {
             if !(1..=MAX_DURATION_SECONDS).contains(&value) {
                 return Err(ConfigError::invalid(

@@ -17,6 +17,7 @@ mod oauth;
 mod pages;
 mod repository;
 mod server;
+mod worker;
 
 pub use config::Config;
 pub use domain::password::hash_password;

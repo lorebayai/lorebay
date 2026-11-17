@@ -40,27 +40,6 @@ pub(crate) struct DecisionRequest {
     agent_name: Option<String>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "snake_case")]
-enum Decision {
-    Approve,
-    Decline,
-}
-
-#[derive(Clone, Debug, Serialize, TypedBuilder)]
-#[builder(field_defaults(setter(into)))]
-struct AuthorizationResponse {
-    client_name: String,
-    redirect_host: String,
-    default_agent_name: Option<String>,
-}
-
-#[derive(Clone, Debug, Serialize, TypedBuilder)]
-#[builder(field_defaults(setter(into)))]
-struct DecisionResponse {
-    redirect_url: String,
-}
-
 impl AuthorizationRequest {
     fn validate(self, public_url: &str) -> Result<AuthorizationInput, ApiError> {
         if self.client_id.is_empty() {
@@ -97,16 +76,6 @@ impl AuthorizationRequest {
             .code_challenge(challenge)
             .state(self.state)
             .build())
-    }
-}
-
-impl From<AuthorizationDetails> for AuthorizationResponse {
-    fn from(details: AuthorizationDetails) -> Self {
-        Self::builder()
-            .client_name(details.client_name)
-            .redirect_host(details.redirect_host)
-            .default_agent_name(details.default_agent_name)
-            .build()
     }
 }
 
@@ -156,6 +125,37 @@ pub(crate) async fn decide(
         .data(DecisionResponse::builder().redirect_url(redirect).build())
         .build();
     Ok((no_store_headers(), body).into_response())
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum Decision {
+    Approve,
+    Decline,
+}
+
+#[derive(Clone, Debug, Serialize, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+struct AuthorizationResponse {
+    client_name: String,
+    redirect_host: String,
+    default_agent_name: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+struct DecisionResponse {
+    redirect_url: String,
+}
+
+impl From<AuthorizationDetails> for AuthorizationResponse {
+    fn from(details: AuthorizationDetails) -> Self {
+        Self::builder()
+            .client_name(details.client_name)
+            .redirect_host(details.redirect_host)
+            .default_agent_name(details.default_agent_name)
+            .build()
+    }
 }
 
 fn invalid_parameter(field: &str) -> ApiError {
