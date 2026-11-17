@@ -300,6 +300,48 @@ async fn list_tasks_fails_when_cursor_came_from_other_filters() {
     server.stop().await;
 }
 
+#[tokio::test]
+async fn list_tasks_omits_deleted_tasks_when_reusing_filtered_cursor() {
+    let (server, person, agent) = setup().await;
+    let mut tasks = Vec::new();
+    for _ in 0..3 {
+        tasks.push(create(&server, &agent, SPACE, "Matching task").await);
+    }
+    let filters = [
+        ("person", "alice"),
+        ("agent", "Research agent"),
+        ("status", "in progress"),
+        ("keyword", "Matching"),
+    ];
+    let mut query = filters.to_vec();
+    query.push(("page_size", "1"));
+    let page = list_page(&server, &person, TASKS, &query).await;
+    assert_eq!(keys(&page), ["TK-3"]);
+    let cursor = page["meta"]["next_cursor"].as_str().unwrap();
+    for task in [&tasks[2], &tasks[1]] {
+        remove(&server, &person, task).await;
+    }
+    assert_keys(&server, &person, &filters, &["TK-1"]).await;
+    query.pop();
+    query.push(("cursor", cursor));
+    assert_keys(&server, &person, &query, &["TK-1"]).await;
+    assert_keys(
+        &server,
+        &agent,
+        &[
+            ("own_open", "true"),
+            ("agent", "Research agent"),
+            ("keyword", "Matching"),
+        ],
+        &["TK-1"],
+    )
+    .await;
+    remove(&server, &person, &tasks[0]).await;
+    assert_keys(&server, &person, &query, &[]).await;
+    assert_keys(&server, &agent, &[("own_open", "true")], &[]).await;
+    server.stop().await;
+}
+
 async fn assert_own_open_cursors(server: &Server, person: &Value) {
     let page = list_page(
         server,
@@ -393,6 +435,22 @@ async fn end_task(server: &Server, tokens: &Value, number: i64) {
     let ended = change(server, tokens, &task, json!({"status":"ended"})).await;
     assert_eq!(ended["status"], "ended");
     assert!(ended["ended_at"].is_i64());
+}
+
+async fn remove(server: &Server, tokens: &Value, task: &Value) {
+    let response = request(
+        server,
+        tokens,
+        Method::DELETE,
+        &format!("{TASKS}/{}", task["task_id"].as_str().unwrap()),
+        Value::Null,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response.json::<Value>().await.unwrap(),
+        json!({"data":null,"meta":{}})
+    );
 }
 
 fn keys(page: &Value) -> Vec<&str> {
