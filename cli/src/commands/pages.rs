@@ -19,6 +19,15 @@ pub(crate) struct Listing {
 }
 
 pub(crate) fn api_path(segments: &[&str]) -> Result<String> {
+    if segments
+        .iter()
+        .any(|segment| matches!(*segment, "" | "." | ".."))
+    {
+        return Err(Failure::local(
+            CLI_USAGE,
+            "Path arguments must not be empty, '.' or '..'.",
+        ));
+    }
     let mut url = Url::parse(API_ROOT)
         .map_err(|_| Failure::local(CLI_USAGE, "Could not construct the API path."))?;
     url.path_segments_mut()

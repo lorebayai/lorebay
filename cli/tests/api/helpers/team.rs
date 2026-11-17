@@ -139,3 +139,40 @@ pub fn assert_removal(removed: &Output, mode: &str) {
         assert_eq!(removed.stdout, b"Participant removed.\n");
     }
 }
+
+pub fn path_commands(segment: &str) -> Vec<Vec<&str>> {
+    vec![
+        vec!["space", "show", segment],
+        vec!["space", "change", segment, "--name", "Unchanged"],
+        vec!["participant", "list", segment],
+        vec![
+            "participant",
+            "add",
+            segment,
+            SECOND_USERNAME,
+            "--role",
+            "viewer",
+        ],
+        vec![
+            "participant",
+            "set-role",
+            segment,
+            SECOND_USERNAME,
+            "--role",
+            "viewer",
+        ],
+        vec!["participant", "remove", segment, SECOND_USERNAME],
+        vec!["participant", "add", "SPACE-1", segment, "--role", "viewer"],
+        vec![
+            "participant",
+            "set-role",
+            "SPACE-1",
+            segment,
+            "--role",
+            "viewer",
+        ],
+        vec!["participant", "remove", "SPACE-1", segment],
+        vec!["agent", "revoke", segment, "--yes"],
+        vec!["agent", "revoke", segment],
+    ]
+}

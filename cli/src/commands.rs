@@ -43,16 +43,19 @@ pub(crate) async fn run(command: Command, mode: OutputMode) -> Result<Outcome> {
         Command::Agent {
             command: AgentCommand::Revoke { name, yes },
         } => {
+            let path = api_path(&[AGENTS, &name])?;
             if !yes {
                 output::confirm(&name)?;
             }
             Http::new()?
-                .authorized(&store, Method::DELETE, &agent_path(&name)?, None)
+                .authorized(&store, Method::DELETE, &path, None)
                 .await?;
             Ok(Outcome::completion("Agent revoked."))
         }
     }
 }
+
+const AGENTS: &str = "agents";
 
 async fn list(store: &Store, page: Page, mode: OutputMode) -> Result<Outcome> {
     let mut url = Url::parse("http://localhost/api/v1/agents")
@@ -109,16 +112,6 @@ fn next_page(page: &Page, cursor: &str, mode: OutputMode) -> String {
         "Next page: lorebay agent list{size} --cursor {} --output {format}",
         output::shell_word(cursor)
     )
-}
-
-fn agent_path(name: &str) -> Result<String> {
-    let mut url = Url::parse("http://localhost/api/v1/agents/")
-        .map_err(|_| Failure::local(CLI_USAGE, "Could not construct the agent path."))?;
-    url.path_segments_mut()
-        .map_err(|_| Failure::local(CLI_USAGE, "Invalid agent path."))?
-        .pop_if_empty()
-        .push(name);
-    Ok(url.path().to_owned())
 }
 
 fn text(value: &Value) -> String {

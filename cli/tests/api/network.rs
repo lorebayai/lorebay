@@ -14,7 +14,53 @@ use tokio::time::{sleep, timeout};
 use typed_builder::TypedBuilder;
 
 use crate::helpers::CREDENTIALS_FILE;
-use crate::helpers::{Server, SigningIn, WAIT, assert_success, body};
+use crate::helpers::{
+    Server, SigningIn, WAIT, assert_success, assert_usage, body, create, path_commands,
+};
+
+#[tokio::test]
+async fn path_arguments_fail_without_request_when_segment_is_empty_or_dot() {
+    let proxy = Proxy::start().await;
+    proxy.login().await;
+    let space = create(&proxy.server, "Keep team", "Keep summary").await;
+    proxy.server.agent("Keep agent").await;
+    let path = proxy.server.home().join(CREDENTIALS_FILE);
+    let original = fs::read(&path).unwrap();
+    let mut saved = proxy.server.credentials();
+    saved["expires_at"] = json!(0);
+    fs::write(&path, saved.to_string()).unwrap();
+    let unchanged = fs::read(&path).unwrap();
+    let calls = proxy.calls.load(Ordering::SeqCst);
+    for mode in ["human", "json"] {
+        for mut arguments in ["..", ".", ""].into_iter().flat_map(path_commands) {
+            arguments.extend(["--output", mode]);
+            let output = proxy.server.run(&arguments).await;
+            assert_eq!(output.status.code(), Some(2), "{arguments:?}");
+            assert!(output.stdout.is_empty());
+            assert_eq!(String::from_utf8_lossy(&output.stderr).lines().count(), 1);
+            if mode == "json" {
+                assert_usage(&output);
+            }
+            assert_eq!(proxy.calls.load(Ordering::SeqCst), calls, "{arguments:?}");
+            assert_eq!(proxy.refreshes.load(Ordering::SeqCst), 0);
+        }
+    }
+    assert_eq!(fs::read(&path).unwrap(), unchanged);
+    fs::write(&path, original).unwrap();
+    let shown = proxy
+        .server
+        .run(&["space", "show", &space, "--output", "json"])
+        .await;
+    assert_success(&shown);
+    assert_eq!(body(&shown)["data"]["name"], "Keep team");
+    assert_eq!(body(&shown)["data"]["summary"], "Keep summary");
+    let agents = proxy
+        .server
+        .run(&["agent", "list", "--output", "json"])
+        .await;
+    assert_success(&agents);
+    assert_eq!(body(&agents)["data"][0]["name"], "Keep agent");
+}
 
 #[tokio::test]
 async fn space_create_repeats_json_body_when_session_refreshes_after_unauthorized() {
@@ -169,6 +215,7 @@ struct Proxy {
     server: Server,
     url: String,
     fault: Arc<AtomicU8>,
+    calls: Arc<AtomicUsize>,
     refreshes: Arc<AtomicUsize>,
     requests: Arc<Mutex<Vec<Value>>>,
     task: JoinHandle<()>,
@@ -179,6 +226,7 @@ struct Proxy {
 struct ProxyState {
     upstream: String,
     fault: Arc<AtomicU8>,
+    calls: Arc<AtomicUsize>,
     refreshes: Arc<AtomicUsize>,
     requests: Arc<Mutex<Vec<Value>>>,
     redirect_path: PathBuf,
@@ -205,11 +253,13 @@ impl Proxy {
         settings["public_url"] = json!(url);
         let server = Server::configured(settings).await;
         let fault = Arc::new(AtomicU8::new(0));
+        let calls = Arc::new(AtomicUsize::new(0));
         let refreshes = Arc::new(AtomicUsize::new(0));
         let requests = Arc::new(Mutex::new(Vec::new()));
         let state = ProxyState::builder()
             .upstream(server.url.clone())
             .fault(fault.clone())
+            .calls(calls.clone())
             .refreshes(refreshes.clone())
             .requests(requests.clone())
             .redirect_path(server.directory.path().join("redirect"))
@@ -230,6 +280,7 @@ impl Proxy {
             server,
             url,
             fault,
+            calls,
             refreshes,
             requests,
             task,
@@ -256,11 +307,13 @@ async fn forward(mut socket: TcpStream, state: ProxyState) -> io::Result<()> {
     let ProxyState {
         upstream,
         fault,
+        calls,
         refreshes,
         requests,
         redirect_path,
     } = state;
     let (mut request, headers, body) = read_request(&mut socket).await?;
+    calls.fetch_add(1, Ordering::SeqCst);
     let refresh =
         headers.starts_with("POST /oauth/token ") && body.starts_with(b"grant_type=refresh_token");
     if refresh {
