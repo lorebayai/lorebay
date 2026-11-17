@@ -36,7 +36,7 @@ Every doc starts with this header:
   | Level | Covers | Leaves out |
   | --- | --- | --- |
   | System | Goals, boundaries, components, technology choices | Wire formats, table layouts |
-  | Contract | Behavior observable from outside `lorebayd`: the web pages, the Web API, MCP tools | Internal structure |
+  | Contract | Behavior observable from outside `lorebayd`: the web pages, the Web API, MCP tools, the `lorebay` CLI | Internal structure |
   | Implementation | Tables, modules and the rules they keep | Behavior a contract owns |
 
 - **Parent:** only when the doc refines another doc.

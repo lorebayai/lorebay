@@ -58,7 +58,7 @@ flowchart TD
 | Caller | Entry point | Credential |
 | --- | --- | --- |
 | Person, in a browser | Web API and web pages | Login session |
-| Person, in a terminal | Web API, through the `lorebay` CLI | Login session |
+| Person, in a terminal | Web API, through the [`lorebay` CLI](../contracts/cli.md) | Login session |
 | External program | Web API | Agent authorization |
 | Agent | MCP | Agent authorization |
 
@@ -91,5 +91,5 @@ They include:
 - removing artifact registrations whose upload was never completed;
 - deleting stored files that no database record points to, and temporary
   files left by interrupted uploads;
-- removing expired authorization codes, login sessions and agent
-  authorizations.
+- removing expired authorization codes, device sign-in requests, login
+  sessions and agent authorizations.

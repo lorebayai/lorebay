@@ -3,7 +3,8 @@
 Rules for the docs in `docs/contracts/`.
 
 - Contract docs are at the Contract level: they state what people on the web
-  pages, programs on the Web API and agents over MCP can observe.
+  pages or in the `lorebay` CLI, programs on the Web API and agents over MCP
+  can observe.
 - Who may do what lives only in the permission matrix of
   [access-control.md](access-control.md#4-permissions). Other contracts link
   to it.
