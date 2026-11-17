@@ -151,8 +151,8 @@ contains spaces. Optional arguments appear in brackets. List rows follow
   browser and never prints the secret device code. The person signs in there
   and approves or declines the request.
   The CLI waits at the server's polling pace and slows down when asked;
-  temporary connection failures and rate limits are retried while the
-  request lasts. Approval stores a login session; refusal or expiry stores
+  temporary connection failures, server errors and rate limits are retried
+  while the request lasts. Approval stores a login session; refusal or expiry stores
   nothing new and exits 1, saying which happened. `--device` and
   `--no-browser` together are a usage error.
 - **Credentials belong to one local directory.** The CLI keeps the server
