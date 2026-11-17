@@ -17,6 +17,8 @@ pub(crate) fn router() -> Router<ServerState> {
                 .patch(participants::change_role)
                 .delete(participants::remove),
         )
+        .route("/device-sign-in-request", post(device_sign_in::read))
+        .route("/device-sign-in-decision", post(device_sign_in::decide))
         .route("/authorization-request", post(authorization::read))
         .route("/authorization-decision", post(authorization::decide))
         .route(
@@ -28,6 +30,7 @@ pub(crate) fn router() -> Router<ServerState> {
 
 mod agents;
 mod authorization;
+mod device_sign_in;
 mod login_session;
 mod participants;
 mod spaces;

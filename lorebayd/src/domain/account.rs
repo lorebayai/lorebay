@@ -9,6 +9,7 @@ use sea_orm::{
 use crate::entity::account::ActiveModel;
 use crate::repository::account::AccountRepository;
 use crate::repository::agent_authorization::AgentAuthorizationRepository;
+use crate::repository::device_sign_in_request::DeviceSignInRequestRepository;
 use crate::repository::login_session::LoginSessionRepository;
 use crate::repository::oauth_code::OauthCodeRepository;
 use crate::repository::participant::ParticipantRepository;
@@ -65,6 +66,11 @@ pub(crate) async fn sync(
 }
 
 async fn remove_credentials(transaction: &DatabaseTransaction, ids: &[String]) -> Result<()> {
+    DeviceSignInRequestRepository::builder()
+        .connection(transaction)
+        .build()
+        .delete_by_accounts(ids)
+        .await?;
     ParticipantRepository::builder()
         .connection(transaction)
         .build()

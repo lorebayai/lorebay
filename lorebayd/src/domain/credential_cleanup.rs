@@ -8,6 +8,7 @@ use typed_builder::TypedBuilder;
 
 use crate::repository::OAuthClientRepository;
 use crate::repository::agent_authorization::AgentAuthorizationRepository;
+use crate::repository::device_sign_in_request::DeviceSignInRequestRepository;
 use crate::repository::login_session::LoginSessionRepository;
 use crate::repository::oauth_code::OauthCodeRepository;
 use crate::repository::refresh_token_history::RefreshTokenHistoryRepository;
@@ -30,6 +31,7 @@ pub(crate) struct RemovedCredentials {
     pub agent_authorizations: u64,
     pub refresh_token_history: u64,
     pub unused_clients: u64,
+    pub device_sign_in_requests: u64,
 }
 
 pub(crate) async fn remove_expired_credentials(
@@ -50,6 +52,13 @@ pub(crate) async fn remove_expired_credentials(
         .await?;
     let removed = RemovedCredentials::builder()
         .refresh_token_history(refresh_token_history)
+        .device_sign_in_requests(
+            DeviceSignInRequestRepository::builder()
+                .connection(&transaction)
+                .build()
+                .delete_expired(now)
+                .await?,
+        )
         .authorization_codes(
             OauthCodeRepository::builder()
                 .connection(&transaction)

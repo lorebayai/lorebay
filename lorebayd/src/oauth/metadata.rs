@@ -16,8 +16,9 @@ pub(super) struct AuthorizationServerResponse {
     authorization_endpoint: String,
     token_endpoint: String,
     registration_endpoint: String,
+    device_authorization_endpoint: String,
     response_types_supported: [&'static str; 1],
-    grant_types_supported: [&'static str; 2],
+    grant_types_supported: [&'static str; 3],
     code_challenge_methods_supported: [&'static str; 1],
     token_endpoint_auth_methods_supported: [&'static str; 1],
     authorization_response_iss_parameter_supported: bool,
@@ -37,8 +38,13 @@ impl From<AuthorizationServer> for AuthorizationServerResponse {
             .authorization_endpoint(metadata.authorization_endpoint)
             .token_endpoint(metadata.token_endpoint)
             .registration_endpoint(metadata.registration_endpoint)
+            .device_authorization_endpoint(metadata.device_authorization_endpoint)
             .response_types_supported([CODE_RESPONSE_TYPE])
-            .grant_types_supported([AUTHORIZATION_CODE_GRANT, REFRESH_TOKEN_GRANT])
+            .grant_types_supported([
+                AUTHORIZATION_CODE_GRANT,
+                REFRESH_TOKEN_GRANT,
+                super::DEVICE_CODE_GRANT,
+            ])
             .code_challenge_methods_supported([PKCE_METHOD])
             .token_endpoint_auth_methods_supported([PUBLIC_CLIENT_AUTH_METHOD])
             .authorization_response_iss_parameter_supported(true)

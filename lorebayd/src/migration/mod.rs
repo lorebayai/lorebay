@@ -4,6 +4,7 @@ mod m20261116_000001_create_tables;
 mod m20261117_000001_add_previous_refresh_token_hash;
 mod m20261117_000002_remember_replaced_credentials;
 mod m20261117_000003_add_oauth_client_first_authorized_at;
+mod m20261117_000004_create_device_sign_in_request;
 
 pub(crate) struct Migrator;
 
@@ -15,6 +16,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20261117_000001_add_previous_refresh_token_hash::Migration),
             Box::new(m20261117_000002_remember_replaced_credentials::Migration),
             Box::new(m20261117_000003_add_oauth_client_first_authorized_at::Migration),
+            Box::new(m20261117_000004_create_device_sign_in_request::Migration),
         ]
     }
 }

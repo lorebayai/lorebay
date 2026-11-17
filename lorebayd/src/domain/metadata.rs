@@ -5,6 +5,8 @@ pub(crate) const PROTECTED_RESOURCE_METADATA_PATH: &str =
     "/.well-known/oauth-protected-resource/mcp";
 pub(crate) const AUTHORIZATION_PATH: &str = "/oauth/authorize";
 pub(crate) const TOKEN_PATH: &str = "/oauth/token";
+pub(crate) const DEVICE_AUTHORIZATION_PATH: &str = "/oauth/device";
+pub(crate) const DEVICE_VERIFICATION_PATH: &str = "/oauth/device/verify";
 pub(crate) const REGISTRATION_PATH: &str = "/oauth/register";
 
 #[derive(Clone, Debug, TypedBuilder)]
@@ -14,6 +16,7 @@ pub(crate) struct AuthorizationServer {
     pub authorization_endpoint: String,
     pub token_endpoint: String,
     pub registration_endpoint: String,
+    pub device_authorization_endpoint: String,
 }
 
 #[derive(Clone, Debug, TypedBuilder)]
@@ -30,6 +33,7 @@ pub(crate) fn authorization_server_metadata(public_url: &str) -> AuthorizationSe
         .authorization_endpoint(format!("{issuer}{AUTHORIZATION_PATH}"))
         .token_endpoint(format!("{issuer}{TOKEN_PATH}"))
         .registration_endpoint(format!("{issuer}{REGISTRATION_PATH}"))
+        .device_authorization_endpoint(format!("{issuer}{DEVICE_AUTHORIZATION_PATH}"))
         .build()
 }
 

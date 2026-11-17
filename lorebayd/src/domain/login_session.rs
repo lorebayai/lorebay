@@ -48,6 +48,8 @@ pub(crate) struct Identity {
     pub signer: TokenSigner,
     pub config: Config,
     pub limiter: RateLimiter<IpAddr, SystemClock>,
+    pub device_limiter: RateLimiter<IpAddr, SystemClock>,
+    pub device_verification_limiter: RateLimiter<IpAddr, SystemClock>,
 }
 
 #[derive(Clone, Debug, TypedBuilder)]

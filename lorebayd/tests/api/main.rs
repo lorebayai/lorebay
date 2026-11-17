@@ -2,6 +2,7 @@
 
 mod agents;
 mod authorization;
+mod device_sign_in;
 mod health;
 mod helpers;
 mod login_session;

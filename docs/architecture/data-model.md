@@ -21,10 +21,10 @@ constraints, the rules they keep, and the SQL that creates them.
 
 ## 2. Scope
 
-This doc covers all 14 tables: the 10 business tables, and the 4 tables only
+This doc covers all 15 tables: the 10 business tables, and the 5 tables only
 the authorization implementation uses, `login_session`, `oauth_code`,
-`oauth_client` and `refresh_token_history`. Behavior observable through the
-APIs is in the contract docs.
+`oauth_client`, `refresh_token_history` and `device_sign_in_request`.
+Behavior observable through the APIs is in the contract docs.
 
 It does not cover:
 
@@ -91,6 +91,7 @@ It does not cover:
 erDiagram
     account ||--o{ agent_authorization : "authorizes"
     oauth_client ||--o{ agent_authorization : "is the client of"
+    account |o--o{ device_sign_in_request : "approves"
     account ||--o{ participant : "joins as"
     space ||--o{ participant : "has"
     space ||--o{ task : "holds"
@@ -105,7 +106,7 @@ erDiagram
 
 Tasks, knowledge entries, proposals and participants belong to a space;
 notes and artifacts belong to a task; each knowledge entry's history is in
-`knowledge_version`. The six account and authorization tables belong to no
+`knowledge_version`. The seven account and authorization tables belong to no
 space.
 
 ## 5. Accounts and authorization
@@ -280,6 +281,35 @@ Each refresh token replaced by a refresh of an agent authorization or login sess
   replacement, replay and expired-owner cleanup cascade to the history.
   The background job also deletes entries whose `expires_at` has passed,
   bounding history by the refresh token lifetime.
+
+### 5.7 `device_sign_in_request`
+
+A short-lived request to sign the built-in `lorebay` CLI in from another
+computer; see [Identity](identity.md#5-sign-in).
+
+| Column | Type | Constraints | Meaning |
+| --- | --- | --- | --- |
+| `id` | TEXT | Primary key, not null | |
+| `device_code_hash` | TEXT | Not null, unique | Hash of the secret device code |
+| `user_code_hash` | TEXT | Not null, unique | Hash of the uppercase user code without its separator |
+| `status` | TEXT | Not null | `pending`, `approved` or `declined` |
+| `account_id` | TEXT | Nullable, foreign key to `account` | Set only when the person approves |
+| `created_at` | INTEGER | Not null | When the request was made |
+| `expires_at` | INTEGER | Not null | Original expiry; a decision never extends it |
+| `poll_interval_seconds` | INTEGER | Not null | Minimum polling interval; each premature poll adds five seconds |
+| `last_polled_at` | INTEGER | Nullable | Last pending or premature poll; null before the first poll |
+
+- **Both codes are stored only as hashes.** The user code has eight random
+  letters from an alphabet without vowels or easily confused characters,
+  displayed with a separator after four letters. The device code has 256
+  random bits.
+- **A decision updates a pending row once.** Approval sets `account_id`;
+  refusal leaves it null. Both preserve the original expiry.
+- **Exchanging an approved request is one transaction.** It checks the
+  account, creates a `login_session` row and deletes this row. A refused or
+  expired request cannot issue a session.
+- **Expired rows are removed by the credential cleanup job.** An approved
+  row is also deleted when its account is removed.
 
 ## 6. Spaces and participants
 
@@ -608,6 +638,18 @@ CREATE TABLE oauth_code (
   agent_authorization_id  TEXT REFERENCES agent_authorization (id) ON DELETE SET NULL,
   login_session_id        TEXT REFERENCES login_session (id) ON DELETE SET NULL,
   CHECK (agent_authorization_id IS NULL OR login_session_id IS NULL)
+);
+
+CREATE TABLE device_sign_in_request (
+  id                     TEXT NOT NULL PRIMARY KEY,
+  device_code_hash       TEXT NOT NULL UNIQUE,
+  user_code_hash         TEXT NOT NULL UNIQUE,
+  status                 TEXT NOT NULL CHECK (status IN ('pending', 'approved', 'declined')),
+  account_id             TEXT REFERENCES account (id),
+  created_at             INTEGER NOT NULL,
+  expires_at             INTEGER NOT NULL,
+  poll_interval_seconds  INTEGER NOT NULL,
+  last_polled_at         INTEGER
 );
 
 CREATE TABLE space (

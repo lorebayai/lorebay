@@ -13,7 +13,8 @@ use typed_builder::TypedBuilder;
 use crate::Config;
 use crate::domain::login_session::Identity;
 use crate::domain::{
-    AUTHORIZATION_PATH, PROTECTED_RESOURCE_METADATA_PATH, REGISTRATION_PATH, TOKEN_PATH,
+    AUTHORIZATION_PATH, DEVICE_AUTHORIZATION_PATH, DEVICE_VERIFICATION_PATH,
+    PROTECTED_RESOURCE_METADATA_PATH, REGISTRATION_PATH, TOKEN_PATH,
 };
 use crate::pages;
 
@@ -60,6 +61,8 @@ pub(crate) fn router(state: OAuthState) -> Router {
     Router::new()
         .route(AUTHORIZATION_PATH, get(pages::authorization))
         .route(TOKEN_PATH, post(token::token))
+        .route(DEVICE_AUTHORIZATION_PATH, post(device::request))
+        .route(DEVICE_VERIFICATION_PATH, get(pages::device))
         .route(
             AUTHORIZATION_METADATA_PATH,
             get(metadata::authorization_server),
@@ -78,12 +81,14 @@ pub(crate) fn router(state: OAuthState) -> Router {
         .with_state(state)
 }
 
+mod device;
 mod error;
 mod metadata;
 mod register;
 mod token;
 
 const AUTHORIZATION_METADATA_PATH: &str = "/.well-known/oauth-authorization-server";
+const DEVICE_CODE_GRANT: &str = "urn:ietf:params:oauth:grant-type:device_code";
 const AUTHORIZATION_CODE_GRANT: &str = "authorization_code";
 const REFRESH_TOKEN_GRANT: &str = "refresh_token";
 const CODE_RESPONSE_TYPE: &str = "code";

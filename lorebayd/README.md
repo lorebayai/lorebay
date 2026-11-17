@@ -72,6 +72,12 @@ Relative paths resolve against the working directory.
 | `registration_redirect_uri_limit` | `LOREBAYD__REGISTRATION_REDIRECT_URI_LIMIT` | `4` | Positive maximum redirect URI count |
 | `registration_redirect_uri_max_bytes` | `LOREBAYD__REGISTRATION_REDIRECT_URI_MAX_BYTES` | `2048` | Positive maximum UTF-8 bytes per redirect URI |
 | `registration_body_limit_bytes` | `LOREBAYD__REGISTRATION_BODY_LIMIT_BYTES` | `65536` | Positive maximum registration request bytes; excess returns OAuth JSON 413 |
+| `device_request_lifetime_seconds` | `LOREBAYD__DEVICE_REQUEST_LIFETIME_SECONDS` | `600` | 1..315360000 seconds |
+| `device_poll_interval_seconds` | `LOREBAYD__DEVICE_POLL_INTERVAL_SECONDS` | `5` | 1..315360000 seconds; shorter than `device_request_lifetime_seconds` |
+| `device_rate_limit` | `LOREBAYD__DEVICE_RATE_LIMIT` | `10` | Positive u32 device requests per peer IP per window |
+| `device_rate_window_seconds` | `LOREBAYD__DEVICE_RATE_WINDOW_SECONDS` | `60` | 1..315360000 seconds |
+| `device_verification_rate_limit` | `LOREBAYD__DEVICE_VERIFICATION_RATE_LIMIT` | `10` | Positive u32 read and decision attempts per peer IP per window |
+| `device_verification_rate_window_seconds` | `LOREBAYD__DEVICE_VERIFICATION_RATE_WINDOW_SECONDS` | `60` | 1..315360000 seconds |
 | `logging.level` | `LOREBAYD__LOGGING__LEVEL` | `info` | `off`, `error`, `warn`, `info`, `debug`, `trace` |
 
 Set `public_url` to the origin clients reach, including through a TLS proxy
