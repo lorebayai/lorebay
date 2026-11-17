@@ -70,15 +70,7 @@ Only `--dotenv` loads an env file; it does not change the process environment.
 Only process environment keys prefixed `LOREBAYD__` are read; a non-UTF-8
 value among them is a configuration error. Nested environment keys use `__`.
 Dotenv substitutions use earlier assignments, then the configuration environment.
-Relative file paths resolve against the working directory. Example:
-
-```json
-{
-  "listen_address": "127.0.0.1:8080",
-  "data_directory": "data",
-  "logging": { "level": "info" }
-}
-```
+Relative file paths resolve against the working directory.
 
 | JSON key | Environment variable | Default | Values |
 | --- | --- | --- | --- |
@@ -87,12 +79,16 @@ Relative file paths resolve against the working directory. Example:
 | `public_url` | `LOREBAYD__PUBLIC_URL` | `http://127.0.0.1:8080` | Canonical HTTP(S) origin, optional trailing `/`; no credentials, path, query or fragment |
 | `registration_rate_limit` | `LOREBAYD__REGISTRATION_RATE_LIMIT` | `20` | Positive number of attempts per peer IP per window |
 | `registration_rate_window_seconds` | `LOREBAYD__REGISTRATION_RATE_WINDOW_SECONDS` | `60` | Positive fixed window in seconds |
+| `registration_client_name_max_bytes` | `LOREBAYD__REGISTRATION_CLIENT_NAME_MAX_BYTES` | `256` | Positive maximum UTF-8 bytes in a client name |
+| `registration_redirect_uri_limit` | `LOREBAYD__REGISTRATION_REDIRECT_URI_LIMIT` | `4` | Positive maximum redirect URI count |
+| `registration_redirect_uri_max_bytes` | `LOREBAYD__REGISTRATION_REDIRECT_URI_MAX_BYTES` | `2048` | Positive maximum UTF-8 bytes per redirect URI |
+| `registration_body_limit_bytes` | `LOREBAYD__REGISTRATION_BODY_LIMIT_BYTES` | `65536` | Positive maximum registration request bytes; excess returns OAuth JSON 413 |
 | `logging.level` | `LOREBAYD__LOGGING__LEVEL` | `info` | `off`, `error`, `warn`, `info`, `debug`, `trace` |
 
 Set `public_url` to the origin clients reach, including through a TLS proxy or
 port forward; metadata never uses `Host`. Harnesses require HTTPS off loopback.
-Limits count all registration attempts, ignore forwarding headers and reset on
-restart. Behind a proxy, callers share its peer IP quota; 429 gives `Retry-After`.
+Limits count every attempt by IPv4 address or IPv6 /64, ignore forwarding headers
+and reset on restart. Proxy callers share its quota; 429 gives `Retry-After`.
 Logs are JSON on stderr, excluding configs, bodies, queries and credentials.
 
 ## Docs

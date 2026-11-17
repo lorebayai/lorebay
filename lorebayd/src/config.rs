@@ -13,6 +13,10 @@ const DEFAULT_LISTEN_ADDRESS: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::
 const DEFAULT_PUBLIC_URL: &str = "http://127.0.0.1:8080";
 const DEFAULT_REGISTRATION_RATE_LIMIT: u32 = 20;
 const DEFAULT_REGISTRATION_RATE_WINDOW_SECONDS: u64 = 60;
+const DEFAULT_REGISTRATION_CLIENT_NAME_MAX_BYTES: usize = 256;
+const DEFAULT_REGISTRATION_REDIRECT_URI_LIMIT: usize = 4;
+const DEFAULT_REGISTRATION_REDIRECT_URI_MAX_BYTES: usize = 2048;
+const DEFAULT_REGISTRATION_BODY_LIMIT_BYTES: usize = 65_536;
 
 #[derive(Clone, Debug, Deserialize, Serialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
@@ -28,6 +32,14 @@ pub struct Config {
     pub registration_rate_limit: u32,
     #[builder(default = DEFAULT_REGISTRATION_RATE_WINDOW_SECONDS)]
     pub registration_rate_window_seconds: u64,
+    #[builder(default = DEFAULT_REGISTRATION_CLIENT_NAME_MAX_BYTES)]
+    pub registration_client_name_max_bytes: usize,
+    #[builder(default = DEFAULT_REGISTRATION_REDIRECT_URI_LIMIT)]
+    pub registration_redirect_uri_limit: usize,
+    #[builder(default = DEFAULT_REGISTRATION_REDIRECT_URI_MAX_BYTES)]
+    pub registration_redirect_uri_max_bytes: usize,
+    #[builder(default = DEFAULT_REGISTRATION_BODY_LIMIT_BYTES)]
+    pub registration_body_limit_bytes: usize,
     #[builder(default = LoggingConfig::default())]
     pub logging: LoggingConfig,
 }
@@ -62,6 +74,7 @@ impl Config {
             return Err(ConfigError::invalid("data_directory", "must not be empty"));
         }
         self.validate_public_url()?;
+        self.validate_registration_limits()?;
         if self.registration_rate_limit == 0 {
             return Err(ConfigError::invalid(
                 "registration_rate_limit",
@@ -75,6 +88,32 @@ impl Config {
             ));
         }
         self.logging.validate()
+    }
+
+    fn validate_registration_limits(&self) -> Result<(), ConfigError> {
+        for (key, value) in [
+            (
+                "registration_client_name_max_bytes",
+                self.registration_client_name_max_bytes,
+            ),
+            (
+                "registration_redirect_uri_limit",
+                self.registration_redirect_uri_limit,
+            ),
+            (
+                "registration_redirect_uri_max_bytes",
+                self.registration_redirect_uri_max_bytes,
+            ),
+            (
+                "registration_body_limit_bytes",
+                self.registration_body_limit_bytes,
+            ),
+        ] {
+            if value == 0 {
+                return Err(ConfigError::invalid(key, "must be positive"));
+            }
+        }
+        Ok(())
     }
 
     fn validate_public_url(&self) -> Result<(), ConfigError> {

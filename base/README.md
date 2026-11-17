@@ -28,9 +28,11 @@ never display values or line contents.
 Consumers can inject their own `Clock` implementation through `Arc<dyn Clock>`.
 
 `RateLimiter::new` takes a positive attempt limit, a window duration and an
-injected clock. `check` counts attempts by a caller-supplied key; on exhaustion
-it returns the remaining wait. Clones share counters, expired keys are removed
-on checks, and counters live only in memory. Consumers validate their tunables.
+injected clock. `check` normalizes caller-supplied `RateLimitKey` values; on
+exhaustion it returns the remaining wait. `IpAddr` keys preserve IPv4 addresses
+(including mapped IPv6) and group native IPv6 by /64. Clones share counters.
+Expired entries are swept at most once per window; each accessed key resets
+when its own window expires. Counters are in memory. Consumers validate tunables.
 
 ## Configuration
 

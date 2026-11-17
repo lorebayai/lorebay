@@ -13,7 +13,7 @@ use crate::domain::{self, NewOAuthClient};
 use crate::oauth::error::{OAuthError, no_store_headers};
 use crate::oauth::{
     AUTHORIZATION_CODE_GRANT, CODE_RESPONSE_TYPE, OAuthState, PUBLIC_CLIENT_AUTH_METHOD,
-    REFRESH_TOKEN_GRANT,
+    REFRESH_TOKEN_GRANT, RegistrationLimits,
 };
 
 #[derive(Clone, Debug, Deserialize, Serialize, TypedBuilder)]
@@ -60,7 +60,6 @@ impl TryFrom<&RegistrationRequest> for NewOAuthClient {
     type Error = OAuthError;
 
     fn try_from(request: &RegistrationRequest) -> Result<Self, Self::Error> {
-        request.validate()?;
         let metadata = serde_json::to_string(request).map_err(|error| {
             tracing::error!(%error, "could not encode OAuth client metadata");
             OAuthError::Internal
@@ -73,12 +72,17 @@ impl TryFrom<&RegistrationRequest> for NewOAuthClient {
 }
 
 impl RegistrationRequest {
-    fn validate(&self) -> Result<(), OAuthError> {
+    fn validate(&self, limits: &RegistrationLimits) -> Result<(), OAuthError> {
+        if self.client_name.len() > limits.client_name_max_bytes
+            || self.redirect_uris.len() > limits.redirect_uri_limit
+        {
+            return Err(OAuthError::InvalidClientMetadata);
+        }
         if self.redirect_uris.is_empty()
             || self
                 .redirect_uris
                 .iter()
-                .any(|uri| !valid_redirect_uri(uri))
+                .any(|uri| uri.len() > limits.redirect_uri_max_bytes || !valid_redirect_uri(uri))
         {
             return Err(OAuthError::InvalidRedirectUri);
         }
@@ -112,6 +116,7 @@ pub(super) async fn register(
     body: Result<Json<RegistrationRequest>, JsonRejection>,
 ) -> Result<Response, OAuthError> {
     let Json(metadata) = body.map_err(json_error)?;
+    metadata.validate(&state.registration_limits)?;
     let input = NewOAuthClient::try_from(&metadata)?;
     let client_id = domain::register_client(&state.database, input, state.clock.as_ref()).await?;
     let body = RegistrationResponse::builder()
