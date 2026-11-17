@@ -23,6 +23,11 @@ pub struct Model {
     pub replaces_authorization_id: Option<String>,
     pub created_at: i64,
     pub expires_at: i64,
+    pub exchanged_at: Option<i64>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub agent_authorization_id: Option<String>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub login_session_id: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -37,12 +42,28 @@ pub enum Relation {
     Account,
     #[sea_orm(
         belongs_to = "super::agent_authorization::Entity",
+        from = "Column::AgentAuthorizationId",
+        to = "super::agent_authorization::Column::Id",
+        on_update = "NoAction",
+        on_delete = "SetNull"
+    )]
+    AgentAuthorization2,
+    #[sea_orm(
+        belongs_to = "super::agent_authorization::Entity",
         from = "Column::ReplacesAuthorizationId",
         to = "super::agent_authorization::Column::Id",
         on_update = "NoAction",
         on_delete = "SetNull"
     )]
-    AgentAuthorization,
+    AgentAuthorization1,
+    #[sea_orm(
+        belongs_to = "super::login_session::Entity",
+        from = "Column::LoginSessionId",
+        to = "super::login_session::Column::Id",
+        on_update = "NoAction",
+        on_delete = "SetNull"
+    )]
+    LoginSession,
 }
 
 impl Related<super::account::Entity> for Entity {
@@ -51,9 +72,9 @@ impl Related<super::account::Entity> for Entity {
     }
 }
 
-impl Related<super::agent_authorization::Entity> for Entity {
+impl Related<super::login_session::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::AgentAuthorization.def()
+        Relation::LoginSession.def()
     }
 }
 

@@ -11,10 +11,12 @@ use typed_builder::TypedBuilder;
 use crate::entity::account::Model as Account;
 use crate::entity::agent_authorization::ActiveModel;
 use crate::entity::oauth_code::Model as Code;
+use crate::entity::{oauth_code, refresh_token_history};
 use crate::repository::account::AccountRepository;
 use crate::repository::agent_authorization::AgentAuthorizationRepository;
 use crate::repository::login_session::LoginSessionRepository;
 use crate::repository::oauth_code::OauthCodeRepository;
+use crate::repository::refresh_token_history::RefreshTokenHistoryRepository;
 
 use super::authorization::CLI_CLIENT_ID;
 use super::login_session::{
@@ -104,6 +106,11 @@ async fn exchange_code(
     {
         return Err(TokenError::InvalidGrant);
     }
+    if code.exchanged_at.is_some() {
+        end_code_authorization(&transaction, &code).await?;
+        transaction.commit().await?;
+        return Err(TokenError::InvalidGrant);
+    }
     let account = active_account(&transaction, &code.account_id).await?;
     if let Some(id) = &code.replaces_authorization_id {
         AgentAuthorizationRepository::builder()
@@ -112,12 +119,21 @@ async fn exchange_code(
             .delete(id, &code.account_id)
             .await?;
     }
-    repository.delete(&code.id).await?;
-    let tokens = if code.client_id == CLI_CLIENT_ID {
+    let is_cli = code.client_id == CLI_CLIENT_ID;
+    let (id, tokens) = if is_cli {
         login_session::create_session(identity, &transaction, account).await?
     } else {
-        create_agent(identity, &transaction, code, account, now).await?
+        create_agent(identity, &transaction, code.clone(), account, now).await?
     };
+    let mut model: oauth_code::ActiveModel = code.into();
+    model.exchanged_at = Set(Some(now));
+    model.replaces_authorization_id = Set(None);
+    if is_cli {
+        model.login_session_id = Set(Some(id));
+    } else {
+        model.agent_authorization_id = Set(Some(id));
+    }
+    repository.update(model).await?;
     transaction.commit().await?;
     Ok(tokens)
 }
@@ -128,7 +144,7 @@ async fn create_agent(
     code: Code,
     account: Account,
     now: i64,
-) -> Result<Tokens, TokenError> {
+) -> Result<(String, Tokens), TokenError> {
     let random_id = random_id().map_err(anyhow::Error::from)?;
     let refresh_token = new_refresh_token()?;
     let tokens = issue_tokens(
@@ -141,14 +157,14 @@ async fn create_agent(
         refresh_token.clone(),
         now,
     )?;
+    let id = primary_key();
     let model = ActiveModel {
-        id: Set(primary_key()),
+        id: Set(id.clone()),
         account_id: Set(account.id),
         client_id: Set(code.client_id),
         name: Set(code.agent_name.ok_or(TokenError::InvalidGrant)?),
         random_id: Set(random_id),
         refresh_token_hash: Set(token_hash(&refresh_token)),
-        previous_refresh_token_hash: Set(None),
         refresh_expires_at: Set(session_expiry(identity, now)),
         created_at: Set(now),
     };
@@ -161,7 +177,7 @@ async fn create_agent(
             Some(SqlErr::UniqueConstraintViolation(_)) => TokenError::AgentNameTaken,
             _ => TokenError::Database(error),
         })?;
-    Ok(tokens)
+    Ok((id, tokens))
 }
 
 async fn refresh_agent(
@@ -191,8 +207,18 @@ async fn refresh_agent(
         refresh_token.clone(),
         now,
     )?;
+    RefreshTokenHistoryRepository::builder()
+        .connection(transaction)
+        .build()
+        .insert(refresh_token_history::ActiveModel {
+            id: Set(primary_key()),
+            token_hash: Set(hash.to_owned()),
+            agent_authorization_id: Set(Some(authorization.id.clone())),
+            login_session_id: Set(None),
+            expires_at: Set(authorization.refresh_expires_at),
+        })
+        .await?;
     let mut model: ActiveModel = authorization.into();
-    model.previous_refresh_token_hash = Set(Some(hash.to_owned()));
     model.refresh_token_hash = Set(token_hash(&refresh_token));
     model.refresh_expires_at = Set(session_expiry(identity, now));
     repository.update(model).await?;
@@ -206,17 +232,27 @@ async fn refresh_tokens(
 ) -> Result<Tokens, TokenError> {
     let transaction = begin_write(database).await?;
     let hash = token_hash(&input.refresh_token);
-    let deleted_authorizations = AgentAuthorizationRepository::builder()
+    let now = now_millis()?;
+    let history = RefreshTokenHistoryRepository::builder()
         .connection(&transaction)
         .build()
-        .delete_by_previous_refresh_hash(&hash)
+        .by_hash(&hash, now)
         .await?;
-    let deleted_sessions = LoginSessionRepository::builder()
-        .connection(&transaction)
-        .build()
-        .delete_by_previous_refresh_hash(&hash)
-        .await?;
-    if deleted_authorizations + deleted_sessions > 0 {
+    if let Some(history) = history {
+        if let Some(id) = history.agent_authorization_id {
+            AgentAuthorizationRepository::builder()
+                .connection(&transaction)
+                .build()
+                .delete_by_id(&id)
+                .await?;
+        }
+        if let Some(id) = history.login_session_id {
+            LoginSessionRepository::builder()
+                .connection(&transaction)
+                .build()
+                .delete_by_id(&id)
+                .await?;
+        }
         transaction.commit().await?;
         return Err(TokenError::InvalidGrant);
     }
@@ -249,4 +285,25 @@ async fn begin_write(database: &DatabaseConnection) -> Result<DatabaseTransactio
             ..Default::default()
         })
         .await?)
+}
+
+async fn end_code_authorization(
+    transaction: &DatabaseTransaction,
+    code: &Code,
+) -> Result<(), TokenError> {
+    if let Some(id) = &code.agent_authorization_id {
+        AgentAuthorizationRepository::builder()
+            .connection(transaction)
+            .build()
+            .delete(id, &code.account_id)
+            .await?;
+    }
+    if let Some(id) = &code.login_session_id {
+        LoginSessionRepository::builder()
+            .connection(transaction)
+            .build()
+            .delete(id, &code.account_id)
+            .await?;
+    }
+    Ok(())
 }

@@ -147,6 +147,9 @@ async fn issue_code<C: ConnectionTrait>(
         replaces_authorization_id: Set(replaces_authorization_id),
         created_at: Set(now),
         expires_at: Set(now + CODE_LIFETIME_MILLIS),
+        exchanged_at: Set(None),
+        agent_authorization_id: Set(None),
+        login_session_id: Set(None),
     };
     OauthCodeRepository::builder()
         .connection(connection)

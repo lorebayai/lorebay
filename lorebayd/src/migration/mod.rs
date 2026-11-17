@@ -2,6 +2,7 @@ use sea_orm_migration::prelude::*;
 
 mod m20261116_000001_create_tables;
 mod m20261117_000001_add_previous_refresh_token_hash;
+mod m20261117_000002_remember_replaced_credentials;
 
 pub(crate) struct Migrator;
 
@@ -11,6 +12,7 @@ impl MigratorTrait for Migrator {
         vec![
             Box::new(m20261116_000001_create_tables::Migration),
             Box::new(m20261117_000001_add_previous_refresh_token_hash::Migration),
+            Box::new(m20261117_000002_remember_replaced_credentials::Migration),
         ]
     }
 }

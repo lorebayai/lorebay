@@ -196,7 +196,6 @@ async fn exchange_code_replaces_old_authorization_when_person_chose_to_replace()
             .await,
     )
     .await;
-    assert_oauth_error(server.exchange_code(&client, &code).await, "invalid_grant").await;
     assert_taken(submit(&server, decision(&client), &person).await).await;
     server.stop().await;
 }
@@ -740,4 +739,319 @@ async fn replacement_code(server: &Server, client: &str, person: &Value) -> Stri
     let mut input = decision(client);
     input["replace_existing"] = json!(true);
     approved_code(submit(server, input, person).await).await
+}
+
+#[tokio::test]
+async fn refresh_token_ends_agent_authorization_when_older_replaced_refresh_token_is_presented() {
+    let server = Server::start().await;
+    let agent = server.authorize_agent(AGENT_NAME).await;
+    let independent = server.authorize_agent("Independent agent").await;
+    let newest = refresh_twice(&server, &agent.client_id, &agent.tokens).await;
+    assert_oauth_error(
+        server
+            .refresh_oauth(
+                "unknown-client",
+                agent.tokens["refresh_token"].as_str().unwrap(),
+            )
+            .await,
+        "invalid_grant",
+    )
+    .await;
+    assert_ended(&server, &agent.client_id, &newest).await;
+    assert_live(&server, &independent.client_id, &independent.tokens).await;
+    let code = server
+        .approve_code(&agent.client_id, Some(AGENT_NAME))
+        .await;
+    assert_tokens(server.exchange_code(&agent.client_id, &code).await).await;
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn refresh_token_ends_login_session_when_older_replaced_cli_refresh_token_is_presented() {
+    let server = Server::start().await;
+    let code = server.approve_code(CLI_CLIENT, None).await;
+    let original = assert_tokens(server.exchange_code(CLI_CLIENT, &code).await).await;
+    let response = server
+        .refresh(original["refresh_token"].as_str().unwrap())
+        .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let refreshed = response.json::<Value>().await.unwrap()["data"].clone();
+    let newest = assert_tokens(
+        server
+            .refresh_oauth(CLI_CLIENT, refreshed["refresh_token"].as_str().unwrap())
+            .await,
+    )
+    .await;
+    assert_oauth_error(
+        server
+            .refresh_oauth(
+                "unknown-client",
+                original["refresh_token"].as_str().unwrap(),
+            )
+            .await,
+        "invalid_grant",
+    )
+    .await;
+    assert_ended(&server, CLI_CLIENT, &newest).await;
+    let code = server.approve_code(CLI_CLIENT, None).await;
+    let fresh = assert_tokens(server.exchange_code(CLI_CLIENT, &code).await).await;
+    assert_person(&server, &fresh).await;
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn refresh_login_session_ends_agent_authorization_when_replaced_refresh_token_is_presented() {
+    let server = Server::start().await;
+    let agent = server.authorize_agent(AGENT_NAME).await;
+    let independent = server.authorize_agent("Independent agent").await;
+    assert_eq!(
+        server
+            .refresh(agent.tokens["refresh_token"].as_str().unwrap())
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let newest = refresh_twice(&server, &agent.client_id, &agent.tokens).await;
+    let unknown = server.refresh("unknown-refresh-token").await;
+    let replay = server
+        .refresh(agent.tokens["refresh_token"].as_str().unwrap())
+        .await;
+    assert_eq!(replay.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        replay.headers()["content-type"],
+        unknown.headers()["content-type"]
+    );
+    assert_eq!(
+        replay.json::<Value>().await.unwrap(),
+        unknown.json::<Value>().await.unwrap()
+    );
+    let directory = server.stop().await;
+    let server = Server::restart(directory).await;
+    assert_ended(&server, &agent.client_id, &newest).await;
+    assert_live(&server, &independent.client_id, &independent.tokens).await;
+    let code = server
+        .approve_code(&agent.client_id, Some(AGENT_NAME))
+        .await;
+    assert_tokens(server.exchange_code(&agent.client_id, &code).await).await;
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn refresh_token_fails_without_ending_agent_authorization_when_replaced_refresh_token_has_expired()
+ {
+    let server = Server::start().await;
+    let agent = server.authorize_agent(AGENT_NAME).await;
+    let newest = refresh_twice(&server, &agent.client_id, &agent.tokens).await;
+    server
+        .expire_oauth_credential("refresh_token_history", "expires_at")
+        .await;
+    assert_oauth_error(
+        server
+            .refresh_oauth(
+                &agent.client_id,
+                agent.tokens["refresh_token"].as_str().unwrap(),
+            )
+            .await,
+        "invalid_grant",
+    )
+    .await;
+    assert_eq!(
+        server
+            .refresh(agent.tokens["refresh_token"].as_str().unwrap())
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_live(&server, &agent.client_id, &newest).await;
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn refresh_token_fails_without_ending_login_session_when_replaced_refresh_token_has_expired()
+{
+    let server = Server::start().await;
+    let original = server.tokens().await;
+    let newest = refresh_twice(&server, CLI_CLIENT, &original).await;
+    server
+        .expire_oauth_credential("refresh_token_history", "expires_at")
+        .await;
+    assert_eq!(
+        server
+            .refresh(original["refresh_token"].as_str().unwrap())
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_oauth_error(
+        server
+            .refresh_oauth(CLI_CLIENT, original["refresh_token"].as_str().unwrap())
+            .await,
+        "invalid_grant",
+    )
+    .await;
+    assert_live(&server, CLI_CLIENT, &newest).await;
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn exchange_code_ends_agent_authorization_when_code_was_already_exchanged() {
+    let server = Server::start().await;
+    let client = server.register_client(AGENT_NAME).await;
+    let code = server.approve_code(&client, Some(AGENT_NAME)).await;
+    let original = assert_tokens(server.exchange_code(&client, &code).await).await;
+    let newest = refresh_twice(&server, &client, &original).await;
+    assert_oauth_error(server.exchange_code(&client, &code).await, "invalid_grant").await;
+    assert_ended(&server, &client, &original).await;
+    assert_ended(&server, &client, &newest).await;
+    let fresh_code = server.approve_code(&client, Some(AGENT_NAME)).await;
+    let fresh = assert_tokens(server.exchange_code(&client, &fresh_code).await).await;
+    assert_oauth_error(server.exchange_code(&client, &code).await, "invalid_grant").await;
+    assert_live(&server, &client, &fresh).await;
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn exchange_code_ends_login_session_when_cli_code_was_already_exchanged() {
+    let server = Server::start().await;
+    let code = server.approve_code(CLI_CLIENT, None).await;
+    let original = assert_tokens(server.exchange_code(CLI_CLIENT, &code).await).await;
+    let newest = refresh_twice(&server, CLI_CLIENT, &original).await;
+    let independent = server.tokens().await;
+    assert_oauth_error(
+        server.exchange_code(CLI_CLIENT, &code).await,
+        "invalid_grant",
+    )
+    .await;
+    assert_ended(&server, CLI_CLIENT, &original).await;
+    assert_ended(&server, CLI_CLIENT, &newest).await;
+    assert_oauth_error(
+        server.exchange_code(CLI_CLIENT, &code).await,
+        "invalid_grant",
+    )
+    .await;
+    assert_live(&server, CLI_CLIENT, &independent).await;
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn exchange_code_keeps_agent_authorization_when_replay_verifier_is_wrong() {
+    let server = Server::start().await;
+    let client = server.register_client(AGENT_NAME).await;
+    for client in [client.as_str(), CLI_CLIENT] {
+        let code = server.approve_code(client, None).await;
+        let tokens = assert_tokens(server.exchange_code(client, &code).await).await;
+        let mut form = exchange_form(client, &code);
+        form[4].1 = "wrong-verifier-that-is-still-valid-and-long-enough";
+        assert_oauth_error(server.token_request(&form).await, "invalid_grant").await;
+        assert_live(&server, client, &tokens).await;
+    }
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn exchange_code_keeps_authorization_when_replay_binding_differs() {
+    let server = Server::start().await;
+    let client = server.register_client(AGENT_NAME).await;
+    let other = server.register_client("Other client").await;
+    for client in [client.as_str(), CLI_CLIENT] {
+        let code = server.approve_code(client, None).await;
+        let tokens = assert_tokens(server.exchange_code(client, &code).await).await;
+        for (field, value) in [
+            (1, other.as_str()),
+            (1, "unknown-client"),
+            (3, "http://127.0.0.1:46138/callback"),
+        ] {
+            let mut form = exchange_form(client, &code);
+            form[field].1 = value;
+            assert_oauth_error(server.token_request(&form).await, "invalid_grant").await;
+        }
+        assert_live(&server, client, &tokens).await;
+    }
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn exchange_code_keeps_authorization_when_exchanged_code_has_expired() {
+    let server = Server::start().await;
+    let client = server.register_client(AGENT_NAME).await;
+    for client in [client.as_str(), CLI_CLIENT] {
+        let code = server.approve_code(client, None).await;
+        let tokens = assert_tokens(server.exchange_code(client, &code).await).await;
+        server
+            .expire_oauth_credential("oauth_code", "expires_at")
+            .await;
+        assert_oauth_error(server.exchange_code(client, &code).await, "invalid_grant").await;
+        assert_live(&server, client, &tokens).await;
+    }
+    server.stop().await;
+}
+
+async fn refresh_twice(server: &Server, client: &str, original: &Value) -> Value {
+    let mut tokens = original.clone();
+    for _ in 0..2 {
+        tokens = assert_tokens(
+            server
+                .refresh_oauth(client, tokens["refresh_token"].as_str().unwrap())
+                .await,
+        )
+        .await;
+    }
+    tokens
+}
+
+async fn assert_ended(server: &Server, client: &str, tokens: &Value) {
+    assert_eq!(
+        server
+            .json(
+                Method::GET,
+                "/api/v1/agents",
+                Value::Null,
+                tokens["access_token"].as_str()
+            )
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_oauth_error(
+        server
+            .refresh_oauth(client, tokens["refresh_token"].as_str().unwrap())
+            .await,
+        "invalid_grant",
+    )
+    .await;
+    if client == CLI_CLIENT {
+        assert_eq!(
+            server
+                .refresh(tokens["refresh_token"].as_str().unwrap())
+                .await
+                .status(),
+            StatusCode::UNAUTHORIZED
+        );
+    }
+}
+
+async fn assert_live(server: &Server, client: &str, tokens: &Value) {
+    let expected = if client == CLI_CLIENT {
+        StatusCode::OK
+    } else {
+        StatusCode::FORBIDDEN
+    };
+    assert_eq!(
+        server
+            .json(
+                Method::GET,
+                "/api/v1/agents",
+                Value::Null,
+                tokens["access_token"].as_str()
+            )
+            .await
+            .status(),
+        expected
+    );
+    assert_tokens(
+        server
+            .refresh_oauth(client, tokens["refresh_token"].as_str().unwrap())
+            .await,
+    )
+    .await;
 }

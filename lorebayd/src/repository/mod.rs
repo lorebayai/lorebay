@@ -3,6 +3,7 @@ pub(crate) mod agent_authorization;
 pub(crate) mod login_session;
 pub(crate) mod oauth_code;
 pub(crate) mod participant;
+pub(crate) mod refresh_token_history;
 
 pub(crate) use oauth_client::*;
 pub(crate) use space::*;

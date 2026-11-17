@@ -15,8 +15,11 @@ use typed_builder::TypedBuilder;
 use crate::Config;
 use crate::entity::account::Model as Account;
 use crate::entity::login_session::{ActiveModel, Model};
+use crate::entity::refresh_token_history;
 use crate::repository::account::AccountRepository;
+use crate::repository::agent_authorization::AgentAuthorizationRepository;
 use crate::repository::login_session::LoginSessionRepository;
+use crate::repository::refresh_token_history::RefreshTokenHistoryRepository;
 
 use super::access::Caller;
 use super::caller::{CallerError, VerifiedCaller};
@@ -95,7 +98,7 @@ pub(crate) async fn log_in(
         .await?
         .filter(|account| account.deleted_at.is_none())
         .ok_or(LoginError::Unauthorized)?;
-    let tokens = create_session(identity, &transaction, account).await?;
+    let (_, tokens) = create_session(identity, &transaction, account).await?;
     transaction.commit().await?;
     Ok(tokens)
 }
@@ -107,12 +110,26 @@ pub(crate) async fn refresh(
 ) -> Result<Tokens, LoginError> {
     let transaction = begin_write(database).await?;
     let hash = token_hash(token);
-    let deleted = LoginSessionRepository::builder()
+    let history = RefreshTokenHistoryRepository::builder()
         .connection(&transaction)
         .build()
-        .delete_by_previous_refresh_hash(&hash)
+        .by_hash(&hash, now_millis()?)
         .await?;
-    if deleted > 0 {
+    if let Some(history) = history {
+        if let Some(id) = history.agent_authorization_id {
+            AgentAuthorizationRepository::builder()
+                .connection(&transaction)
+                .build()
+                .delete_by_id(&id)
+                .await?;
+        }
+        if let Some(id) = history.login_session_id {
+            LoginSessionRepository::builder()
+                .connection(&transaction)
+                .build()
+                .delete_by_id(&id)
+                .await?;
+        }
         transaction.commit().await?;
         return Err(LoginError::Unauthorized);
     }
@@ -146,8 +163,18 @@ pub(crate) async fn rotate_refresh(
         refresh_token.clone(),
         now,
     )?;
+    RefreshTokenHistoryRepository::builder()
+        .connection(transaction)
+        .build()
+        .insert(refresh_token_history::ActiveModel {
+            id: Set(primary_key()),
+            token_hash: Set(hash.to_owned()),
+            agent_authorization_id: Set(None),
+            login_session_id: Set(Some(session.id.clone())),
+            expires_at: Set(session.expires_at),
+        })
+        .await?;
     let mut model: ActiveModel = session.into();
-    model.previous_refresh_token_hash = Set(Some(hash.to_owned()));
     model.refresh_token_hash = Set(token_hash(&refresh_token));
     model.expires_at = Set(session_expiry(identity, now));
     repository.update(model).await?;
@@ -210,7 +237,7 @@ pub(crate) async fn create_session(
     identity: &Identity,
     transaction: &DatabaseTransaction,
     account: Account,
-) -> Result<Tokens, LoginError> {
+) -> Result<(String, Tokens), LoginError> {
     let now = now_millis()?;
     let random_id = random_id().map_err(anyhow::Error::from)?;
     let refresh_token = new_refresh_token()?;
@@ -224,12 +251,12 @@ pub(crate) async fn create_session(
         refresh_token.clone(),
         now,
     )?;
+    let id = primary_key();
     let model = ActiveModel {
-        id: Set(primary_key()),
+        id: Set(id.clone()),
         account_id: Set(account.id),
         random_id: Set(random_id),
         refresh_token_hash: Set(token_hash(&refresh_token)),
-        previous_refresh_token_hash: Set(None),
         created_at: Set(now),
         expires_at: Set(session_expiry(identity, now)),
     };
@@ -238,7 +265,7 @@ pub(crate) async fn create_session(
         .build()
         .insert(model)
         .await?;
-    Ok(tokens)
+    Ok((id, tokens))
 }
 
 pub(crate) fn issue_tokens(
