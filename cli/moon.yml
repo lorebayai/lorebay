@@ -1,0 +1,12 @@
+language: 'rust'
+layer: 'application'
+
+tasks:
+  build:
+    outputs: ['/target/debug/lorebay']
+  integration:
+    deps: ['lorebayd:build']
+  test:
+    command: 'cargo test --bins --locked'
+    options:
+      mergeArgs: 'replace'
