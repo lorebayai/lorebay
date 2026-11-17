@@ -519,21 +519,23 @@ CREATE TABLE agent_authorization (
   name                TEXT    NOT NULL,
   random_id           TEXT    NOT NULL UNIQUE,
   refresh_token_hash  TEXT    NOT NULL UNIQUE,
-  previous_refresh_token_hash TEXT UNIQUE,
   refresh_expires_at  INTEGER NOT NULL,
   created_at          INTEGER NOT NULL,
+  previous_refresh_token_hash TEXT,
   UNIQUE (account_id, name)
 );
+CREATE UNIQUE INDEX agent_authorization_previous_refresh_token_hash ON agent_authorization (previous_refresh_token_hash);
 
 CREATE TABLE login_session (
   id                  TEXT NOT NULL PRIMARY KEY,
   account_id          TEXT NOT NULL REFERENCES account (id),
   random_id           TEXT    NOT NULL UNIQUE,
   refresh_token_hash  TEXT    NOT NULL UNIQUE,
-  previous_refresh_token_hash TEXT UNIQUE,
   created_at          INTEGER NOT NULL,
-  expires_at          INTEGER NOT NULL
+  expires_at          INTEGER NOT NULL,
+  previous_refresh_token_hash TEXT
 );
+CREATE UNIQUE INDEX login_session_previous_refresh_token_hash ON login_session (previous_refresh_token_hash);
 
 CREATE TABLE oauth_code (
   id              TEXT NOT NULL PRIMARY KEY,
