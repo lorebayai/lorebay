@@ -138,4 +138,15 @@ impl Server {
     }
 }
 
+pub async fn assert_taken(response: Response) {
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert!(!response.headers().contains_key("location"));
+    assert_eq!(
+        response.json::<Value>().await.unwrap(),
+        json!({"type": "about:blank", "title": "Bad Request", "status": 400,
+            "code": "request.invalid_body", "errors": [{"field": "agent_name",
+                "code": "taken", "message": "You already have an agent with this name."}]})
+    );
+}
+
 const PKCE_CHALLENGE: &str = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
