@@ -308,6 +308,9 @@ async fn call_web_api_fails_when_access_token_has_expired() {
     let server =
         Server::start_with_settings(Settings::builder().access_seconds(1_u64).build()).await;
     let tokens = server.tokens().await;
+    // Refreshed tokens need the default lifetime to stay valid for the final call on slow runners.
+    let directory = server.stop().await;
+    let server = Server::restart(directory).await;
     sleep(Duration::from_secs(2)).await;
     assert_eq!(
         server
