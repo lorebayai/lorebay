@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Authorize with Lorebay</title>
+<h1>Authorize with Lorebay</h1>
+<p id="message" role="status" aria-live="polite">Sign in to review this request.</p>
+<noscript>JavaScript is required to sign in and review this request.</noscript>
+<form id="login">
+  <p><label>Username <input name="username" autocomplete="username" required></label></p>
+  <p><label>Password <input name="password" type="password" autocomplete="current-password" required></label></p>
+  <button type="submit">Sign in</button>
+</form>
+<form id="consent" hidden>
+  <p>Client: <strong id="client"></strong></p>
+  <p>Return to: <strong id="host"></strong></p>
+  <p id="purpose"></p>
+  <p id="agent"><label>Agent name <input name="agent_name" required></label></p>
+  <button type="submit" value="approve">Approve</button>
+  <button type="submit" value="decline" formnovalidate>Decline</button>
+</form>
+<button id="finish" type="button" hidden>Retry sign-out and continue</button>
+<script>{{SCRIPT}}</script>
+</html>

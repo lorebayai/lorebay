@@ -1,7 +1,7 @@
-use sea_orm::{ColumnTrait, ConnectionTrait, DbErr, EntityTrait, QueryFilter};
+use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, DbErr, EntityTrait, QueryFilter};
 use typed_builder::TypedBuilder;
 
-use crate::entity::oauth_code::{Column, Entity};
+use crate::entity::oauth_code::{ActiveModel, Column, Entity, Model};
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
@@ -16,6 +16,10 @@ impl<C: ConnectionTrait> OauthCodeRepository<'_, C> {
             .exec(self.connection)
             .await?
             .rows_affected)
+    }
+
+    pub async fn insert(&self, model: ActiveModel) -> Result<Model, DbErr> {
+        model.insert(self.connection).await
     }
 
     pub async fn delete_by_accounts(&self, ids: &[String]) -> Result<(), DbErr> {

@@ -104,7 +104,7 @@ fn validate_field(field: &str, value: &str) -> Result<(), ApiError> {
     Ok(())
 }
 
-fn invalid_json(error: JsonRejection) -> ApiError {
+pub(super) fn invalid_json(error: JsonRejection) -> ApiError {
     if error.status() == StatusCode::PAYLOAD_TOO_LARGE {
         return ApiError::PayloadTooLarge;
     }

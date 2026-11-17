@@ -96,7 +96,7 @@ impl IntoResponse for OAuthError {
     }
 }
 
-pub(super) fn no_store_headers() -> [(header::HeaderName, &'static str); 2] {
+pub(crate) fn no_store_headers() -> [(header::HeaderName, &'static str); 2] {
     [
         (header::CACHE_CONTROL, "no-store"),
         (header::PRAGMA, "no-cache"),

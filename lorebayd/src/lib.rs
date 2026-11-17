@@ -14,6 +14,7 @@ mod domain;
 mod entity;
 mod migration;
 mod oauth;
+mod pages;
 mod repository;
 mod server;
 mod worker;
