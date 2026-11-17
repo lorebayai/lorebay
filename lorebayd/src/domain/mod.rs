@@ -1,5 +1,6 @@
 pub(crate) mod access;
 pub(crate) mod account;
+pub(crate) mod authorization;
 mod id;
 pub(crate) mod login_session;
 mod metadata;

@@ -15,9 +15,11 @@ use sea_orm::DatabaseConnection;
 use typed_builder::TypedBuilder;
 
 use crate::Config;
-use crate::domain::REGISTRATION_PATH;
+use crate::domain::{AUTHORIZATION_PATH, REGISTRATION_PATH};
+use crate::pages;
 
 use error::OAuthError;
+pub(crate) use error::no_store_headers;
 
 const AUTHORIZATION_METADATA_PATH: &str = "/.well-known/oauth-authorization-server";
 const PROTECTED_RESOURCE_METADATA_PATH: &str = "/.well-known/oauth-protected-resource/mcp";
@@ -78,6 +80,7 @@ impl OAuthState {
 
 pub(crate) fn router(state: OAuthState) -> Router {
     Router::new()
+        .route(AUTHORIZATION_PATH, get(pages::authorization))
         .route(
             AUTHORIZATION_METADATA_PATH,
             get(metadata::authorization_server),
