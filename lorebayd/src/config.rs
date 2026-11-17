@@ -7,12 +7,17 @@ use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 use url::Url;
 
-const CONFIG_ENV_PREFIX: &str = "LOREBAYD";
-const DEFAULT_DATA_DIRECTORY: &str = "data";
-const DEFAULT_LISTEN_ADDRESS: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080);
+const DEFAULT_ACCESS_TOKEN_LIFETIME_SECONDS: u64 = 900;
+const DEFAULT_REFRESH_TOKEN_LIFETIME_SECONDS: u64 = 2_592_000;
+const DEFAULT_LOGIN_RATE_LIMIT: u32 = 10;
+const DEFAULT_LOGIN_RATE_WINDOW_SECONDS: u64 = 60;
+const MAX_DURATION_SECONDS: u64 = 315_360_000;
 const DEFAULT_PUBLIC_URL: &str = "http://127.0.0.1:8080";
 const DEFAULT_REGISTRATION_RATE_LIMIT: u32 = 20;
 const DEFAULT_REGISTRATION_RATE_WINDOW_SECONDS: u64 = 60;
+const CONFIG_ENV_PREFIX: &str = "LOREBAYD";
+const DEFAULT_DATA_DIRECTORY: &str = "data";
+const DEFAULT_LISTEN_ADDRESS: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080);
 const DEFAULT_REGISTRATION_CLIENT_NAME_MAX_BYTES: usize = 256;
 const DEFAULT_REGISTRATION_REDIRECT_URI_LIMIT: usize = 4;
 const DEFAULT_REGISTRATION_REDIRECT_URI_MAX_BYTES: usize = 2048;
@@ -32,6 +37,16 @@ pub struct Config {
     pub registration_rate_limit: u32,
     #[builder(default = DEFAULT_REGISTRATION_RATE_WINDOW_SECONDS)]
     pub registration_rate_window_seconds: u64,
+    #[builder(default = None)]
+    pub users_file: Option<PathBuf>,
+    #[builder(default = DEFAULT_ACCESS_TOKEN_LIFETIME_SECONDS)]
+    pub access_token_lifetime_seconds: u64,
+    #[builder(default = DEFAULT_REFRESH_TOKEN_LIFETIME_SECONDS)]
+    pub refresh_token_lifetime_seconds: u64,
+    #[builder(default = DEFAULT_LOGIN_RATE_LIMIT)]
+    pub login_rate_limit: u32,
+    #[builder(default = DEFAULT_LOGIN_RATE_WINDOW_SECONDS)]
+    pub login_rate_window_seconds: u64,
     #[builder(default = DEFAULT_REGISTRATION_CLIENT_NAME_MAX_BYTES)]
     pub registration_client_name_max_bytes: usize,
     #[builder(default = DEFAULT_REGISTRATION_REDIRECT_URI_LIMIT)]
@@ -73,6 +88,45 @@ impl Config {
         if self.data_directory.as_os_str().is_empty() {
             return Err(ConfigError::invalid("data_directory", "must not be empty"));
         }
+        if self
+            .users_file
+            .as_ref()
+            .is_none_or(|path| path.as_os_str().is_empty())
+        {
+            return Err(ConfigError::invalid(
+                "users_file",
+                "a nonempty file path is required",
+            ));
+        }
+        for (key, value) in [
+            (
+                "access_token_lifetime_seconds",
+                self.access_token_lifetime_seconds,
+            ),
+            (
+                "refresh_token_lifetime_seconds",
+                self.refresh_token_lifetime_seconds,
+            ),
+            ("login_rate_window_seconds", self.login_rate_window_seconds),
+        ] {
+            if !(1..=MAX_DURATION_SECONDS).contains(&value) {
+                return Err(ConfigError::invalid(
+                    key,
+                    "must be between 1 and 315360000 seconds",
+                ));
+            }
+        }
+        if self.login_rate_limit == 0 {
+            return Err(ConfigError::invalid(
+                "login_rate_limit",
+                "must be greater than zero",
+            ));
+        }
+        self.validate_registration()?;
+        self.logging.validate()
+    }
+
+    fn validate_registration(&self) -> Result<(), ConfigError> {
         self.validate_public_url()?;
         self.validate_registration_limits()?;
         if self.registration_rate_limit == 0 {
@@ -87,7 +141,7 @@ impl Config {
                 "must be positive",
             ));
         }
-        self.logging.validate()
+        Ok(())
     }
 
     fn validate_registration_limits(&self) -> Result<(), ConfigError> {

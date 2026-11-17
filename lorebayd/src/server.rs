@@ -1,4 +1,5 @@
 use std::future::Future;
+use std::num::NonZeroU32;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -12,6 +13,7 @@ use axum::{Extension, Router};
 use hyper::server::conn::http1;
 use hyper_util::rt::TokioIo;
 use hyper_util::service::TowerToHyperService;
+use lorebay_base::{RateLimiter, SystemClock};
 use sea_orm::{
     ConnectOptions, Database, DatabaseConnection, SqliteTransactionMode, TransactionOptions,
     TransactionTrait,
@@ -26,6 +28,11 @@ use typed_builder::TypedBuilder;
 
 use crate::Config;
 use crate::api::{self, ApiError, Envelope};
+use crate::domain::login_session::Identity;
+use crate::domain::token::TokenSigner;
+use crate::domain::user_store::UserStore;
+use crate::domain::users::FileUserStore;
+use crate::domain::{account, login_session};
 use crate::migration::Migrator;
 use crate::oauth::{self, OAuthState};
 
@@ -41,8 +48,10 @@ const DATABASE_FILE: &str = "lorebay.sqlite3";
 const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Clone, Debug, TypedBuilder)]
-struct ServerState {
-    database: DatabaseConnection,
+#[builder(field_defaults(setter(into)))]
+pub(crate) struct ServerState {
+    pub database: DatabaseConnection,
+    pub identity: Arc<Identity>,
     ready: Arc<AtomicBool>,
     oauth: OAuthState,
 }
@@ -54,12 +63,19 @@ pub async fn run(
     shutdown: impl Future<Output = ()> + Send,
 ) -> Result<()> {
     config.validate()?;
+    let users_path = config
+        .users_file
+        .as_deref()
+        .context("users_file path is required")?;
+    let users: Arc<dyn UserStore> = Arc::new(FileUserStore::load(users_path).await?);
     fs::create_dir_all(&config.data_directory)
         .await
         .context("could not create data_directory")?;
     let database = open_database(&config.data_directory).await?;
+    account::sync(&database, users.as_ref(), login_session::now_millis()?).await?;
     let state = ServerState::builder()
         .oauth(OAuthState::new(&config, database.clone())?)
+        .identity(Arc::new(identity(config, users)?))
         .database(database)
         .ready(Arc::new(AtomicBool::new(true)))
         .build();
@@ -70,6 +86,21 @@ pub async fn run(
         .await
         .context("could not close database")?;
     result
+}
+
+fn identity(config: Config, users: Arc<dyn UserStore>) -> Result<Identity> {
+    let limit =
+        NonZeroU32::new(config.login_rate_limit).context("login_rate_limit must be positive")?;
+    Ok(Identity::builder()
+        .user_store(users)
+        .signer(TokenSigner::load(&config.data_directory)?)
+        .limiter(RateLimiter::new(
+            limit,
+            Duration::from_secs(config.login_rate_window_seconds),
+            Arc::new(SystemClock),
+        ))
+        .config(config)
+        .build())
 }
 
 async fn open_database(directory: &Path) -> Result<DatabaseConnection> {
@@ -142,8 +173,8 @@ fn router(state: ServerState) -> Router {
     Router::new()
         .route(HEALTH_PATH, get(health))
         .route(READINESS_PATH, get(readiness))
-        .with_state(state)
         .nest(API_PREFIX, api::router())
+        .with_state(state)
         .merge(oauth)
         .fallback(api::not_found)
         .method_not_allowed_fallback(|| async { ApiError::MethodNotAllowed })

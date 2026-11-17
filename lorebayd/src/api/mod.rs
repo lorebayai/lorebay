@@ -1,6 +1,9 @@
+mod auth;
 mod envelope;
 mod problem;
+mod v1;
 
+use crate::server::ServerState;
 use axum::Router;
 use axum::body::Bytes;
 use axum::extract::rejection::BytesRejection;
@@ -9,8 +12,8 @@ use axum::http::StatusCode;
 pub(crate) use envelope::*;
 pub(crate) use problem::*;
 
-pub(crate) fn router() -> Router {
-    Router::new().fallback(not_found)
+pub(crate) fn router() -> Router<ServerState> {
+    v1::router().fallback(not_found)
 }
 
 pub(crate) async fn not_found(body: Result<Bytes, BytesRejection>) -> ApiError {
