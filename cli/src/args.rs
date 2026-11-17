@@ -1,6 +1,8 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use typed_builder::TypedBuilder;
 
+use crate::constants::HUMAN_OUTPUT;
+
 #[derive(Clone, Debug, Subcommand)]
 pub(crate) enum AgentCommand {
     /// List one page of your agents.
@@ -41,7 +43,7 @@ pub(crate) enum OutputMode {
 #[builder(field_defaults(setter(into)))]
 #[command(name = "lorebay", version, about = "The Lorebay command-line client")]
 pub(crate) struct Cli {
-    #[arg(long, global = true, value_enum, default_value = "human")]
+    #[arg(long, global = true, value_enum, default_value = HUMAN_OUTPUT)]
     pub output: OutputMode,
     #[command(subcommand)]
     pub command: Option<Command>,

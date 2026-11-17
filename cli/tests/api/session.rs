@@ -7,6 +7,7 @@ use serde_json::{Value, json};
 use tokio::time::{sleep, timeout};
 
 use crate::helpers::{CLIENT_ID, Server, WAIT, assert_success, body};
+use crate::helpers::{CREDENTIALS_FILE, LOGIN_SESSION_PATH};
 
 #[tokio::test]
 async fn agent_list_fails_with_login_hint_when_not_logged_in() {
@@ -23,7 +24,7 @@ async fn agent_list_fails_with_login_hint_when_not_logged_in() {
     server
         .json(
             Method::DELETE,
-            "/api/v1/login-session",
+            LOGIN_SESSION_PATH,
             Value::Null,
             credentials["access_token"].as_str(),
         )
@@ -33,7 +34,7 @@ async fn agent_list_fails_with_login_hint_when_not_logged_in() {
         "json",
         "invalid_grant",
     );
-    assert!(!server.home().join("credentials.json").exists());
+    assert!(!server.home().join(CREDENTIALS_FILE).exists());
 }
 
 #[tokio::test]
@@ -59,7 +60,7 @@ async fn agent_list_refreshes_login_session_when_server_returns_unauthorized() {
     let mut saved = server.credentials();
     let original = saved["refresh_token"].clone();
     saved["expires_at"] = json!(u64::MAX);
-    fs::write(server.home().join("credentials.json"), saved.to_string()).unwrap();
+    fs::write(server.home().join(CREDENTIALS_FILE), saved.to_string()).unwrap();
     server.set_access_lifetime(900).await;
     sleep(Duration::from_secs(3)).await;
     assert_success(&server.run(&["agent", "list"]).await);
@@ -97,15 +98,15 @@ async fn agent_list_preserves_credentials_when_server_cannot_be_reached() {
     server.login().await;
     let mut saved = server.credentials();
     saved["expires_at"] = json!(0);
-    fs::write(server.home().join("credentials.json"), saved.to_string()).unwrap();
-    let before = fs::read(server.home().join("credentials.json")).unwrap();
+    fs::write(server.home().join(CREDENTIALS_FILE), saved.to_string()).unwrap();
+    let before = fs::read(server.home().join(CREDENTIALS_FILE)).unwrap();
     server.stop();
     let output = server.run(&["agent", "list", "--output", "json"]).await;
     assert_eq!(output.status.code(), Some(1));
     assert!(output.stdout.is_empty());
     let error: Value = serde_json::from_slice(&output.stderr).unwrap();
     assert_eq!(error["code"], "cli.connection");
-    assert!(fs::read(server.home().join("credentials.json")).unwrap() == before);
+    assert!(fs::read(server.home().join(CREDENTIALS_FILE)).unwrap() == before);
 }
 
 #[tokio::test]
@@ -114,8 +115,8 @@ async fn agent_list_times_out_when_credentials_lock_is_held() {
     server.login().await;
     let mut saved = server.credentials();
     saved["expires_at"] = json!(0);
-    fs::write(server.home().join("credentials.json"), saved.to_string()).unwrap();
-    let before = fs::read(server.home().join("credentials.json")).unwrap();
+    fs::write(server.home().join(CREDENTIALS_FILE), saved.to_string()).unwrap();
+    let before = fs::read(server.home().join(CREDENTIALS_FILE)).unwrap();
     let lock = OpenOptions::new()
         .read(true)
         .write(true)
@@ -126,7 +127,7 @@ async fn agent_list_times_out_when_credentials_lock_is_held() {
     assert_eq!(output.status.code(), Some(1));
     let error: Value = serde_json::from_slice(&output.stderr).unwrap();
     assert_eq!(error["code"], "cli.timeout");
-    assert!(fs::read(server.home().join("credentials.json")).unwrap() == before);
+    assert!(fs::read(server.home().join(CREDENTIALS_FILE)).unwrap() == before);
     drop(lock);
     assert_success(&server.run(&["agent", "list"]).await);
 }
@@ -139,7 +140,7 @@ async fn logout_ends_login_session_and_removes_credentials() {
     let output = server.run(&["logout", "--output", "json"]).await;
     assert_success(&output);
     assert_eq!(body(&output), json!({"data": null, "meta": {}}));
-    assert!(!server.home().join("credentials.json").exists());
+    assert!(!server.home().join(CREDENTIALS_FILE).exists());
     assert_eq!(
         server
             .client
@@ -175,7 +176,7 @@ async fn logout_ends_login_session_and_removes_credentials() {
     assert!(
         String::from_utf8_lossy(&output.stderr).contains("session was not ended on the server")
     );
-    assert!(!server.home().join("credentials.json").exists());
+    assert!(!server.home().join(CREDENTIALS_FILE).exists());
 }
 
 #[tokio::test]
@@ -186,20 +187,20 @@ async fn logout_succeeds_when_server_session_has_already_ended() {
     server
         .json(
             Method::DELETE,
-            "/api/v1/login-session",
+            LOGIN_SESSION_PATH,
             Value::Null,
             saved["access_token"].as_str(),
         )
         .await;
     assert_success(&server.run(&["logout"]).await);
-    assert!(!server.home().join("credentials.json").exists());
+    assert!(!server.home().join(CREDENTIALS_FILE).exists());
 }
 
 #[tokio::test]
 async fn logout_reports_failure_when_credentials_cannot_be_removed() {
     let server = Server::start().await;
     server.login().await;
-    let path = server.home().join("credentials.json");
+    let path = server.home().join(CREDENTIALS_FILE);
     let saved = fs::read(&path).unwrap();
     fs::remove_file(&path).unwrap();
     fs::create_dir(&path).unwrap();
@@ -209,7 +210,7 @@ async fn logout_reports_failure_when_credentials_cannot_be_removed() {
     let error: Value = serde_json::from_slice(&output.stderr).unwrap();
     assert_eq!(error["code"], "cli.credentials");
     fs::remove_dir(path).unwrap();
-    fs::write(server.home().join("credentials.json"), saved).unwrap();
+    fs::write(server.home().join(CREDENTIALS_FILE), saved).unwrap();
     assert_success(&server.run(&["logout"]).await);
 }
 
@@ -217,7 +218,7 @@ async fn logout_reports_failure_when_credentials_cannot_be_removed() {
 async fn agent_list_reports_invalid_credentials_without_printing_secrets() {
     let server = Server::start().await;
     fs::create_dir_all(server.home()).unwrap();
-    let path = server.home().join("credentials.json");
+    let path = server.home().join(CREDENTIALS_FILE);
     fs::write(path, "invalid credentials secret-value").unwrap();
     let output = server.run(&["agent", "list", "--output", "json"]).await;
     assert_eq!(output.status.code(), Some(1));
@@ -225,10 +226,10 @@ async fn agent_list_reports_invalid_credentials_without_printing_secrets() {
     assert!(!String::from_utf8_lossy(&output.stderr).contains("secret-value"));
     let error: Value = serde_json::from_slice(&output.stderr).unwrap();
     assert_eq!(error["code"], "cli.credentials");
-    assert!(File::open(server.home().join("credentials.json")).is_ok());
+    assert!(File::open(server.home().join(CREDENTIALS_FILE)).is_ok());
     let output = server.run(&["logout", "--output", "json"]).await;
     assert_eq!(output.status.code(), Some(1));
-    assert!(!server.home().join("credentials.json").exists());
+    assert!(!server.home().join(CREDENTIALS_FILE).exists());
 }
 
 #[tokio::test]
@@ -238,7 +239,7 @@ async fn logout_refreshes_login_session_when_access_token_is_expired() {
     server.set_access_lifetime(900).await;
     sleep(Duration::from_secs(3)).await;
     assert_success(&server.run(&["logout", "--output", "json"]).await);
-    assert!(!server.home().join("credentials.json").exists());
+    assert!(!server.home().join(CREDENTIALS_FILE).exists());
 }
 
 #[tokio::test]
@@ -249,7 +250,7 @@ async fn logout_preserves_server_error_when_caller_is_agent() {
     let agent = server.agent("Caller agent").await;
     let mut saved = original.clone();
     saved["access_token"] = agent["access_token"].clone();
-    fs::write(server.home().join("credentials.json"), saved.to_string()).unwrap();
+    fs::write(server.home().join(CREDENTIALS_FILE), saved.to_string()).unwrap();
     let output = server.run(&["logout", "--output", "json"]).await;
     assert_eq!(output.status.code(), Some(1));
     assert!(output.stdout.is_empty());
@@ -264,7 +265,7 @@ async fn logout_preserves_server_error_when_caller_is_agent() {
             .unwrap()
             .contains("session was not ended on the server")
     );
-    assert!(!server.home().join("credentials.json").exists());
+    assert!(!server.home().join(CREDENTIALS_FILE).exists());
     let response = server
         .client
         .get(format!("{}/api/v1/agents", server.url))
@@ -282,7 +283,7 @@ async fn agent_list_keeps_login_session_when_two_commands_retry_unauthorized() {
     server.set_access_lifetime(900).await;
     let mut saved = server.credentials();
     saved["expires_at"] = json!(u64::MAX);
-    fs::write(server.home().join("credentials.json"), saved.to_string()).unwrap();
+    fs::write(server.home().join(CREDENTIALS_FILE), saved.to_string()).unwrap();
     sleep(Duration::from_secs(3)).await;
     let (first, second) = tokio::join!(
         server.run(&["agent", "list"]),

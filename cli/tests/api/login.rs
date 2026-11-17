@@ -5,6 +5,7 @@ use reqwest::StatusCode;
 use serde_json::{Value, json};
 use url::Url;
 
+use crate::helpers::CREDENTIALS_FILE;
 use crate::helpers::{Server, SigningIn, WAIT, assert_success, body, query};
 use tokio::time::timeout;
 
@@ -13,7 +14,11 @@ async fn login_saves_login_session_when_person_approves() {
     let server = Server::start().await;
     let output = server.login().await;
     assert_eq!(body(&output), json!({"data": null, "meta": {}}));
-    let path = server.home().join("credentials.json");
+    let path = server.home().join(CREDENTIALS_FILE);
+    assert_eq!(
+        fs::metadata(server.home()).unwrap().permissions().mode() & 0o777,
+        0o700
+    );
     assert_eq!(
         fs::metadata(path).unwrap().permissions().mode() & 0o777,
         0o600
@@ -51,7 +56,7 @@ async fn login_fails_when_person_declines() {
     .unwrap();
     assert_eq!(error["code"], "access_denied");
     assert!(error["message"].as_str().unwrap().contains("declined"));
-    assert!(!server.home().join("credentials.json").exists());
+    assert!(!server.home().join(CREDENTIALS_FILE).exists());
 }
 
 #[tokio::test]
@@ -71,7 +76,7 @@ async fn login_fails_when_server_is_plain_http_outside_loopback() {
         assert!(output.stdout.is_empty());
         let error: Value = serde_json::from_slice(&output.stderr).unwrap();
         assert_eq!(error["code"], "cli.usage");
-        assert!(!server.home().join("credentials.json").exists());
+        assert!(!server.home().join(CREDENTIALS_FILE).exists());
     }
 }
 
@@ -112,13 +117,13 @@ async fn login_ignores_requests_when_callback_does_not_match() {
 async fn login_preserves_login_session_when_new_sign_in_fails() {
     let server = Server::start().await;
     server.login().await;
-    let before = fs::read(server.home().join("credentials.json")).unwrap();
+    let before = fs::read(server.home().join(CREDENTIALS_FILE)).unwrap();
     let login = server
         .signing_in(&["login", &server.url, "--no-browser"])
         .await;
     server.decide(&login.link, "decline").await;
     assert_eq!(login.finish().await.status.code(), Some(1));
-    assert!(before == fs::read(server.home().join("credentials.json")).unwrap());
+    assert!(before == fs::read(server.home().join(CREDENTIALS_FILE)).unwrap());
     assert_success(&server.run(&["agent", "list"]).await);
 }
 
@@ -210,10 +215,19 @@ async fn login_uses_home_directory_when_override_is_absent() {
     let path = server
         .directory
         .path()
-        .join("home/.lorebay/credentials.json");
+        .join("home/.lorebay")
+        .join(CREDENTIALS_FILE);
     assert_eq!(
         fs::metadata(path).unwrap().permissions().mode() & 0o777,
         0o600
+    );
+    assert_eq!(
+        fs::metadata(server.directory.path().join("home/.lorebay"))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777,
+        0o700
     );
     assert!(!server.home().exists());
     let output = timeout(
@@ -227,6 +241,27 @@ async fn login_uses_home_directory_when_override_is_absent() {
     .unwrap()
     .unwrap();
     assert_success(&output);
+}
+
+#[tokio::test]
+async fn login_preserves_permissions_when_credentials_directory_exists() {
+    let server = Server::start().await;
+    fs::create_dir(server.home()).unwrap();
+    fs::set_permissions(server.home(), fs::Permissions::from_mode(0o750)).unwrap();
+    server.login().await;
+    assert_eq!(
+        fs::metadata(server.home()).unwrap().permissions().mode() & 0o777,
+        0o750
+    );
+    assert_eq!(
+        fs::metadata(server.home().join(CREDENTIALS_FILE))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777,
+        0o600
+    );
+    assert_success(&server.run(&["agent", "list"]).await);
 }
 
 #[tokio::test]

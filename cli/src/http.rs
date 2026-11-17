@@ -2,6 +2,7 @@ use std::env;
 use std::fs;
 use std::time::Duration;
 
+use lorebay_base::Secret;
 use reqwest::redirect::Policy;
 use reqwest::retry;
 use reqwest::{Certificate, Client, Method, Response, StatusCode};
@@ -10,7 +11,12 @@ use serde_json::{Value, json};
 use typed_builder::TypedBuilder;
 use url::{Host, Url};
 
-use crate::credentials::{Secret, Session, Store, now};
+use crate::constants::{
+    CLI_CONNECTION, CLI_USAGE, CLIENT_ID_FIELD, CODE, CODE_VERIFIER, ERROR, GRANT_TYPE, LOGIN_HINT,
+    LOGIN_SESSION_PATH, MESSAGE, REFRESH_TOKEN, STATUS,
+};
+
+use crate::credentials::{Session, Store, now};
 use crate::error::{Failure, Result};
 
 pub(crate) const CLIENT_ID: &str = "lorebay-cli";
@@ -32,8 +38,8 @@ pub(crate) struct Metadata {
 #[derive(Clone, Debug, Deserialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
 pub(crate) struct Tokens {
-    pub access_token: Secret,
-    pub refresh_token: Secret,
+    pub access_token: Secret<String>,
+    pub refresh_token: Secret<String>,
     pub expires_in: u64,
     pub token_type: String,
 }
@@ -46,10 +52,10 @@ impl Http {
             .timeout(REQUEST_TIMEOUT);
         if let Some(path) = env::var_os("SSL_CERT_FILE") {
             let pem = fs::read(path)
-                .map_err(|_| Failure::local("cli.connection", "Could not read SSL_CERT_FILE."))?;
+                .map_err(|_| Failure::local(CLI_CONNECTION, "Could not read SSL_CERT_FILE."))?;
             let certificates = Certificate::from_pem_bundle(&pem).map_err(|_| {
                 Failure::local(
-                    "cli.connection",
+                    CLI_CONNECTION,
                     "SSL_CERT_FILE must contain PEM certificate authorities.",
                 )
             })?;
@@ -90,13 +96,13 @@ impl Http {
             .map_err(Failure::connection)?;
         let secrets: Vec<_> = form
             .iter()
-            .filter(|(key, _)| matches!(*key, "code" | "code_verifier" | "refresh_token"))
+            .filter(|(key, _)| matches!(*key, CODE | CODE_VERIFIER | REFRESH_TOKEN))
             .map(|(_, value)| *value)
             .collect();
         let tokens: Tokens = serde_json::from_value(decode(response, &secrets).await?)
             .map_err(|_| invalid_response())?;
-        if tokens.access_token.value.is_empty()
-            || tokens.refresh_token.value.is_empty()
+        if tokens.access_token.expose().is_empty()
+            || tokens.refresh_token.expose().is_empty()
             || !tokens.token_type.eq_ignore_ascii_case("bearer")
             || tokens.expires_in == 0
         {
@@ -105,7 +111,13 @@ impl Http {
         Ok(tokens)
     }
 
-    pub async fn authorized(&self, store: &Store, method: Method, path: &str) -> Result<Value> {
+    pub async fn authorized(
+        &self,
+        store: &Store,
+        method: Method,
+        path: &str,
+        body: Option<&Value>,
+    ) -> Result<Value> {
         let mut session = store.load()?.ok_or_else(Failure::login_required)?;
         let mut refreshed = false;
         if session.expires_at <= now() {
@@ -116,11 +128,11 @@ impl Http {
                 refreshed = true;
             }
         }
-        let mut response = self.call(&session, method.clone(), path).await?;
+        let mut response = self.call(&session, method.clone(), path, body).await?;
         if response.status() == StatusCode::UNAUTHORIZED && !refreshed {
             let _lock = store.lock().await?;
             let latest = store.load()?.ok_or_else(Failure::login_required)?;
-            session = if latest.access_token.value != session.access_token.value
+            session = if latest.access_token.expose() != session.access_token.expose()
                 && latest.expires_at > now()
             {
                 latest
@@ -128,11 +140,14 @@ impl Http {
                 self.refresh(store, latest).await?
             };
             drop(_lock);
-            response = self.call(&session, method, path).await?;
+            response = self.call(&session, method, path, body).await?;
         }
         decode(
             response,
-            &[&session.access_token.value, &session.refresh_token.value],
+            &[
+                session.access_token.expose().as_str(),
+                session.refresh_token.expose().as_str(),
+            ],
         )
         .await
     }
@@ -144,9 +159,9 @@ impl Http {
             .tokens(
                 &session.token_endpoint,
                 &[
-                    ("grant_type", "refresh_token"),
-                    ("client_id", CLIENT_ID),
-                    ("refresh_token", &session.refresh_token.value),
+                    (GRANT_TYPE, REFRESH_TOKEN),
+                    (CLIENT_ID_FIELD, CLIENT_ID),
+                    (REFRESH_TOKEN, session.refresh_token.expose().as_str()),
                 ],
             )
             .await;
@@ -163,15 +178,23 @@ impl Http {
         Ok(session)
     }
 
-    pub async fn call(&self, session: &Session, method: Method, path: &str) -> Result<Response> {
+    pub async fn call(
+        &self,
+        session: &Session,
+        method: Method,
+        path: &str,
+        body: Option<&Value>,
+    ) -> Result<Response> {
         let server = server_url(&session.server_url)?;
         let url = endpoint(&server, path)?;
-        self.client
+        let mut request = self
+            .client
             .request(method, url)
-            .bearer_auth(&session.access_token.value)
-            .send()
-            .await
-            .map_err(Failure::connection)
+            .bearer_auth(session.access_token.expose());
+        if let Some(body) = body {
+            request = request.json(body);
+        }
+        request.send().await.map_err(Failure::connection)
     }
 }
 
@@ -225,7 +248,7 @@ pub(crate) fn same_server(server: &Url, address: &str) -> Result<()> {
         || url.fragment().is_some()
     {
         return Err(Failure::local(
-            "cli.connection",
+            CLI_CONNECTION,
             "The server returned an endpoint on another server.",
         ));
     }
@@ -256,17 +279,20 @@ async fn end_session(store: &Store, mut session: Session) -> Result<()> {
         refreshed = true;
     }
     let mut response = http
-        .call(&session, Method::DELETE, "/api/v1/login-session")
+        .call(&session, Method::DELETE, LOGIN_SESSION_PATH, None)
         .await?;
     if response.status() == StatusCode::UNAUTHORIZED && !refreshed {
         session = http.refresh(store, session).await?;
         response = http
-            .call(&session, Method::DELETE, "/api/v1/login-session")
+            .call(&session, Method::DELETE, LOGIN_SESSION_PATH, None)
             .await?;
     }
     decode(
         response,
-        &[&session.access_token.value, &session.refresh_token.value],
+        &[
+            session.access_token.expose().as_str(),
+            session.refresh_token.expose().as_str(),
+        ],
     )
     .await?;
     Ok(())
@@ -281,17 +307,17 @@ async fn decode(response: Response, secrets: &[&str]) -> Result<Value> {
     if status.is_success() {
         return Ok(body);
     }
-    let mut body = if let Some(code) = body["error"].as_str() {
-        json!({"code": code, "message": body["error_description"].as_str().unwrap_or("OAuth request failed.")})
+    let mut body = if let Some(code) = body[ERROR].as_str() {
+        json!({(CODE): code, (MESSAGE): body["error_description"].as_str().unwrap_or("OAuth request failed.")})
     } else {
         body
     };
-    if !body.is_object() || !body["code"].is_string() {
+    if !body.is_object() || !body[CODE].is_string() {
         return Err(invalid_response());
     }
     redact(&mut body, secrets);
-    if body["status"] == 401 {
-        body["message"] = json!("Run `lorebay login` again.");
+    if body[STATUS] == StatusCode::UNAUTHORIZED.as_u16() {
+        body[MESSAGE] = json!(LOGIN_HINT);
     }
     Err(Failure::server(body))
 }
@@ -316,12 +342,12 @@ fn endpoint(server: &Url, path: &str) -> Result<Url> {
 }
 
 fn invalid_response() -> Failure {
-    Failure::local("cli.connection", "The server returned an invalid response.")
+    Failure::local(CLI_CONNECTION, "The server returned an invalid response.")
 }
 
 fn invalid_url() -> Failure {
     Failure::local(
-        "cli.usage",
+        CLI_USAGE,
         "Use an HTTPS server origin, or HTTP on localhost, 127.0.0.0/8 or ::1; omit credentials, paths, queries and fragments.",
     )
 }

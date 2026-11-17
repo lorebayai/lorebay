@@ -1,8 +1,8 @@
 Follow these playbook fragments:
 
 - @../playbook/languages/rust.md
+- @../playbook/topics/testing.md
 
 ## CLI conventions
 
-- Scenarios run the compiled `lorebay` against a compiled `lorebayd`
-  started by their helper. Drive browser sign-in over HTTP.
+- Drive browser sign-in over HTTP in scenarios.

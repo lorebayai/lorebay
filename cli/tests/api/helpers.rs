@@ -13,6 +13,8 @@ use tokio::process::{Child, ChildStderr, Command};
 use tokio::time::{Instant, sleep, timeout};
 use url::Url;
 
+pub const CREDENTIALS_FILE: &str = "credentials.json";
+pub const LOGIN_SESSION_PATH: &str = "/api/v1/login-session";
 pub const WAIT: Duration = Duration::from_secs(30);
 pub const HTTP_WAIT: Duration = Duration::from_secs(10);
 pub const PASSWORD: &str = "scenario password";
@@ -106,7 +108,7 @@ impl Server {
     }
 
     pub fn credentials(&self) -> Value {
-        serde_json::from_slice(&fs::read(self.home().join("credentials.json")).unwrap()).unwrap()
+        serde_json::from_slice(&fs::read(self.home().join(CREDENTIALS_FILE)).unwrap()).unwrap()
     }
 
     pub fn cli(&self, arguments: &[&str]) -> Command {
@@ -168,7 +170,7 @@ impl Server {
     pub async fn person(&self) -> Value {
         self.json(
             Method::POST,
-            "/api/v1/login-session",
+            LOGIN_SESSION_PATH,
             json!({"username": self.username, "password": PASSWORD}),
             None,
         )
@@ -201,7 +203,7 @@ impl Server {
             .await;
         self.json(
             Method::DELETE,
-            "/api/v1/login-session",
+            LOGIN_SESSION_PATH,
             Value::Null,
             person["access_token"].as_str(),
         )

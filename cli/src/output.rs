@@ -5,6 +5,8 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use typed_builder::TypedBuilder;
 
+use crate::constants::{CLI_CANCELLED, DATA, META};
+
 use crate::args::OutputMode;
 use crate::error::{Failure, Result};
 
@@ -39,7 +41,7 @@ impl Outcome {
 
     pub fn completion(message: &'static str) -> Self {
         Self::new(
-            json!({"data": null, "meta": {}}),
+            json!({(DATA): null, (META): {}}),
             Completion::builder().message(message).build(),
         )
     }
@@ -47,12 +49,12 @@ impl Outcome {
 
 impl Render for Table {
     fn human(&self) -> String {
-        let mut lines = vec![self.columns.join("\t")];
+        let mut lines = vec![self.columns.join(COLUMN_SEPARATOR)];
         lines.extend(self.rows.iter().map(|row| {
             row.iter()
                 .map(|cell| safe(cell))
                 .collect::<Vec<_>>()
-                .join("\t")
+                .join(COLUMN_SEPARATOR)
         }));
         lines.join("\n")
     }
@@ -97,7 +99,7 @@ pub(crate) fn confirm(target: &str) -> Result<()> {
     if matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
         Ok(())
     } else {
-        Err(Failure::local("cli.cancelled", "Revocation cancelled."))
+        Err(Failure::local(CLI_CANCELLED, "Revocation cancelled."))
     }
 }
 
@@ -116,6 +118,8 @@ pub(crate) fn safe(text: &str) -> String {
 pub(crate) fn shell_word(text: &str) -> String {
     format!("'{}'", text.replace('\'', "'\\''"))
 }
+
+const COLUMN_SEPARATOR: &str = "\t";
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]

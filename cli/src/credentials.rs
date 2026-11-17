@@ -1,32 +1,27 @@
 use std::env;
-use std::fmt;
-use std::fs::{self, File, OpenOptions, Permissions, TryLockError};
+use std::fs::{self, DirBuilder, File, OpenOptions, Permissions, TryLockError};
 use std::io::{self, Write};
-use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use lorebay_base::Secret;
 use serde::{Deserialize, Serialize};
 use tempfile::NamedTempFile;
 use tokio::time::{Instant, sleep};
 use typed_builder::TypedBuilder;
 
-use crate::error::{Failure, Result};
+use crate::constants::{CLI_CREDENTIALS, CLI_TIMEOUT, CREDENTIALS_FILE};
 
-#[derive(Clone, Deserialize, Serialize, TypedBuilder)]
-#[builder(field_defaults(setter(into)))]
-#[serde(transparent)]
-pub(crate) struct Secret {
-    pub value: String,
-}
+use crate::error::{Failure, Result};
 
 #[derive(Clone, Debug, Deserialize, Serialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
 pub(crate) struct Session {
     pub server_url: String,
     pub token_endpoint: String,
-    pub access_token: Secret,
-    pub refresh_token: Secret,
+    pub access_token: Secret<String>,
+    pub refresh_token: Secret<String>,
     pub expires_at: u64,
 }
 
@@ -36,19 +31,13 @@ pub(crate) struct Store {
     pub directory: PathBuf,
 }
 
-impl fmt::Debug for Secret {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("<redacted>")
-    }
-}
-
 impl Store {
     pub fn from_environment() -> Result<Self> {
         let directory = match env::var_os("LOREBAY_HOME") {
             Some(path) if !path.is_empty() => PathBuf::from(path),
             Some(_) => {
                 return Err(Failure::local(
-                    "cli.credentials",
+                    CLI_CREDENTIALS,
                     "LOREBAY_HOME must not be empty.",
                 ));
             }
@@ -58,7 +47,7 @@ impl Store {
                 .map(|home| home.join(".lorebay"))
                 .ok_or_else(|| {
                     Failure::local(
-                        "cli.credentials",
+                        CLI_CREDENTIALS,
                         "Set HOME or LOREBAY_HOME to locate credentials.",
                     )
                 })?,
@@ -67,7 +56,10 @@ impl Store {
     }
 
     pub async fn lock(&self) -> Result<File> {
-        fs::create_dir_all(&self.directory)?;
+        DirBuilder::new()
+            .recursive(true)
+            .mode(DIRECTORY_MODE)
+            .create(&self.directory)?;
         let file = OpenOptions::new()
             .read(true)
             .write(true)
@@ -85,7 +77,7 @@ impl Store {
             }
             if Instant::now() >= deadline {
                 return Err(Failure::local(
-                    "cli.timeout",
+                    CLI_TIMEOUT,
                     "Timed out waiting for the credentials lock.",
                 ));
             }
@@ -94,7 +86,7 @@ impl Store {
     }
 
     pub fn load(&self) -> Result<Option<Session>> {
-        let file = match File::open(self.directory.join("credentials.json")) {
+        let file = match File::open(self.directory.join(CREDENTIALS_FILE)) {
             Ok(file) => file,
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
             Err(error) => return Err(error.into()),
@@ -102,7 +94,7 @@ impl Store {
         file.set_permissions(Permissions::from_mode(PRIVATE_MODE))?;
         serde_json::from_reader(file).map(Some).map_err(|_| {
             Failure::local(
-                "cli.credentials",
+                CLI_CREDENTIALS,
                 "Could not decode credentials.json; run `lorebay login` again.",
             )
         })
@@ -114,22 +106,22 @@ impl Store {
             .as_file()
             .set_permissions(Permissions::from_mode(PRIVATE_MODE))?;
         let bytes = serde_json::to_vec(session)
-            .map_err(|_| Failure::local("cli.credentials", "Could not encode credentials."))?;
+            .map_err(|_| Failure::local(CLI_CREDENTIALS, "Could not encode credentials."))?;
         temporary.write_all(&bytes)?;
         temporary.as_file().sync_all()?;
         temporary
-            .persist(self.directory.join("credentials.json"))
+            .persist(self.directory.join(CREDENTIALS_FILE))
             .map_err(|error| error.error)?;
         File::open(&self.directory)?.sync_all()?;
         Ok(())
     }
 
     pub fn remove(&self) -> Result<()> {
-        match fs::remove_file(self.directory.join("credentials.json")) {
+        match fs::remove_file(self.directory.join(CREDENTIALS_FILE)) {
             Ok(()) => Ok(()),
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
             Err(_) => Err(Failure::local(
-                "cli.credentials",
+                CLI_CREDENTIALS,
                 "The credentials could not be removed.",
             )),
         }
@@ -144,5 +136,6 @@ pub(crate) fn now() -> u64 {
 }
 
 const PRIVATE_MODE: u32 = 0o600;
+const DIRECTORY_MODE: u32 = 0o700;
 const LOCK_WAIT: Duration = Duration::from_secs(15);
 const LOCK_POLL: Duration = Duration::from_millis(25);

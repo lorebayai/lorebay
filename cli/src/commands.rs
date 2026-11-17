@@ -1,6 +1,10 @@
 use reqwest::Method;
-use serde_json::Value;
+use serde_json::{Value, json};
 use url::{Position, Url};
+
+use crate::constants::{
+    CLI_CONNECTION, CLI_USAGE, CLIENT_ID_FIELD, DATA, HUMAN_OUTPUT, JSON_OUTPUT, META,
+};
 
 use crate::args::{AgentCommand, Command, OutputMode, Page};
 use crate::credentials::Store;
@@ -33,7 +37,12 @@ pub(crate) async fn run(command: Command, mode: OutputMode) -> Result<Outcome> {
                 output::confirm(&name)?;
             }
             Http::new()?
-                .authorized(&store, Method::DELETE, &agent_path(&name)?)
+                .authorized(
+                    &store,
+                    Method::DELETE,
+                    &agent_path(&name)?,
+                    Some(&json!({})),
+                )
                 .await?;
             Ok(Outcome::completion("Agent revoked."))
         }
@@ -42,7 +51,7 @@ pub(crate) async fn run(command: Command, mode: OutputMode) -> Result<Outcome> {
 
 async fn list(store: &Store, page: Page, mode: OutputMode) -> Result<Outcome> {
     let mut url = Url::parse("http://localhost/api/v1/agents")
-        .map_err(|_| Failure::local("cli.usage", "Could not construct the agents path."))?;
+        .map_err(|_| Failure::local(CLI_USAGE, "Could not construct the agents path."))?;
     if let Some(size) = page.page_size {
         url.query_pairs_mut()
             .append_pair("page_size", &size.to_string());
@@ -51,24 +60,23 @@ async fn list(store: &Store, page: Page, mode: OutputMode) -> Result<Outcome> {
         url.query_pairs_mut().append_pair("cursor", cursor);
     }
     let path = &url[Position::BeforePath..];
-    let body = Http::new()?.authorized(store, Method::GET, path).await?;
-    let items = body["data"].as_array().ok_or_else(|| {
-        Failure::local(
-            "cli.connection",
-            "The server returned an invalid agent list.",
-        )
+    let body = Http::new()?
+        .authorized(store, Method::GET, path, None)
+        .await?;
+    let items = body[DATA].as_array().ok_or_else(|| {
+        Failure::local(CLI_CONNECTION, "The server returned an invalid agent list.")
     })?;
     let rows: Vec<_> = items
         .iter()
         .map(|item| {
             vec![
                 text(&item["name"]),
-                text(&item["client_id"]),
+                text(&item[CLIENT_ID_FIELD]),
                 item["created_at"].to_string(),
             ]
         })
         .collect();
-    let next = body["meta"]["next_cursor"]
+    let next = body[META]["next_cursor"]
         .as_str()
         .filter(|cursor| !cursor.is_empty())
         .map(|cursor| next_page(&page, cursor, mode));
@@ -89,8 +97,8 @@ fn next_page(page: &Page, cursor: &str, mode: OutputMode) -> String {
         .map(|size| format!(" --page-size {size}"))
         .unwrap_or_default();
     let format = match mode {
-        OutputMode::Human => "human",
-        OutputMode::Json => "json",
+        OutputMode::Human => HUMAN_OUTPUT,
+        OutputMode::Json => JSON_OUTPUT,
     };
     format!(
         "Next page: lorebay agent list{size} --cursor {} --output {format}",
@@ -100,9 +108,9 @@ fn next_page(page: &Page, cursor: &str, mode: OutputMode) -> String {
 
 fn agent_path(name: &str) -> Result<String> {
     let mut url = Url::parse("http://localhost/api/v1/agents/")
-        .map_err(|_| Failure::local("cli.usage", "Could not construct the agent path."))?;
+        .map_err(|_| Failure::local(CLI_USAGE, "Could not construct the agent path."))?;
     url.path_segments_mut()
-        .map_err(|_| Failure::local("cli.usage", "Invalid agent path."))?
+        .map_err(|_| Failure::local(CLI_USAGE, "Invalid agent path."))?
         .pop_if_empty()
         .push(name);
     Ok(url.path().to_owned())

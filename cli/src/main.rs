@@ -4,11 +4,14 @@ use std::process::ExitCode;
 use clap::error::ErrorKind;
 use clap::{CommandFactory, Parser};
 
+use crate::constants::{CLI_USAGE, JSON_OUTPUT};
+
 use crate::args::{Cli, OutputMode};
 use crate::error::{Failure, Result};
 
 mod args;
 mod commands;
+mod constants;
 mod credentials;
 mod error;
 mod http;
@@ -20,7 +23,7 @@ async fn main() -> ExitCode {
     let arguments: Vec<_> = env::args_os().collect();
     let fallback = arguments
         .windows(2)
-        .any(|pair| pair[0] == "--output" && pair[1] == "json")
+        .any(|pair| pair[0] == "--output" && pair[1] == JSON_OUTPUT)
         || arguments.iter().any(|arg| arg == "--output=json");
     let fallback = if fallback {
         OutputMode::Json
@@ -38,10 +41,7 @@ async fn main() -> ExitCode {
             return finish(fallback, output::help(&error.to_string()));
         }
         Err(error) => {
-            return finish(
-                fallback,
-                Err(Failure::local("cli.usage", error.to_string())),
-            );
+            return finish(fallback, Err(Failure::local(CLI_USAGE, error.to_string())));
         }
     };
     let result = match cli.command {

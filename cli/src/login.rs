@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use lorebay_base::Secret;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -13,6 +14,11 @@ use tokio::signal::ctrl_c;
 use tokio::time::timeout;
 use typed_builder::TypedBuilder;
 use url::Url;
+
+use crate::constants::{
+    CLI_CANCELLED, CLI_CONNECTION, CLI_CREDENTIALS, CLI_TIMEOUT, CLIENT_ID_FIELD, CODE,
+    CODE_VERIFIER, ERROR, GRANT_TYPE, MESSAGE, REDIRECT_URI, STATE,
+};
 
 use crate::credentials::Store;
 use crate::error::{Failure, Result};
@@ -37,18 +43,18 @@ pub(crate) async fn login(store: &Store, address: &str, no_browser: bool) -> Res
     }
     let code = tokio::select! {
         result = timeout(LOGIN_WAIT, wait_for_callback(listener, &attempt)) => result
-            .map_err(|_| Failure::local("cli.timeout", "Sign-in timed out."))??,
-        _ = ctrl_c() => return Err(Failure::local("cli.cancelled", "Sign-in cancelled.")),
+            .map_err(|_| Failure::local(CLI_TIMEOUT, "Sign-in timed out."))??,
+        _ = ctrl_c() => return Err(Failure::local(CLI_CANCELLED, "Sign-in cancelled.")),
     };
     let tokens = http
         .tokens(
             &attempt.metadata.token_endpoint,
             &[
-                ("grant_type", "authorization_code"),
-                ("client_id", CLIENT_ID),
-                ("code", &code),
-                ("redirect_uri", &attempt.redirect),
-                ("code_verifier", &attempt.verifier),
+                (GRANT_TYPE, "authorization_code"),
+                (CLIENT_ID_FIELD, CLIENT_ID),
+                (CODE, code.expose()),
+                (REDIRECT_URI, &attempt.redirect),
+                (CODE_VERIFIER, attempt.verifier.expose()),
             ],
         )
         .await?;
@@ -57,6 +63,7 @@ pub(crate) async fn login(store: &Store, address: &str, no_browser: bool) -> Res
     store.save(&session)
 }
 
+const HEADER_END: &[u8] = b"\r\n\r\n";
 const LOGIN_WAIT: Duration = Duration::from_secs(300);
 const CALLBACK_WAIT: Duration = Duration::from_secs(2);
 const MAX_CALLBACK_BYTES: usize = 8192;
@@ -65,34 +72,34 @@ const RANDOM_BYTES: usize = 32;
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
 struct Attempt {
-    state: String,
-    verifier: String,
+    state: Secret<String>,
+    verifier: Secret<String>,
     redirect: String,
     metadata: Metadata,
 }
 
-fn random() -> Result<String> {
+fn random() -> Result<Secret<String>> {
     let mut bytes = [0; RANDOM_BYTES];
     getrandom::fill(&mut bytes).map_err(|_| {
         Failure::local(
-            "cli.credentials",
+            CLI_CREDENTIALS,
             "Could not generate secure sign-in randomness.",
         )
     })?;
-    Ok(URL_SAFE_NO_PAD.encode(bytes))
+    Ok(URL_SAFE_NO_PAD.encode(bytes).into())
 }
 
 fn authorization_url(attempt: &Attempt) -> Result<Url> {
     let mut url = Url::parse(&attempt.metadata.authorization_endpoint)
-        .map_err(|_| Failure::local("cli.connection", "Invalid authorization endpoint."))?;
+        .map_err(|_| Failure::local(CLI_CONNECTION, "Invalid authorization endpoint."))?;
     url.query_pairs_mut()
-        .append_pair("client_id", CLIENT_ID)
-        .append_pair("response_type", "code")
-        .append_pair("redirect_uri", &attempt.redirect)
-        .append_pair("state", &attempt.state)
+        .append_pair(CLIENT_ID_FIELD, CLIENT_ID)
+        .append_pair("response_type", CODE)
+        .append_pair(REDIRECT_URI, &attempt.redirect)
+        .append_pair(STATE, attempt.state.expose())
         .append_pair(
             "code_challenge",
-            &URL_SAFE_NO_PAD.encode(Sha256::digest(&attempt.verifier)),
+            &URL_SAFE_NO_PAD.encode(Sha256::digest(attempt.verifier.expose())),
         )
         .append_pair("code_challenge_method", "S256");
     Ok(url)
@@ -109,7 +116,7 @@ fn open_browser(url: Url) {
     });
 }
 
-async fn wait_for_callback(listener: TcpListener, attempt: &Attempt) -> Result<String> {
+async fn wait_for_callback(listener: TcpListener, attempt: &Attempt) -> Result<Secret<String>> {
     loop {
         let (stream, _) = listener.accept().await?;
         if let Ok(Ok(Some(result))) = timeout(CALLBACK_WAIT, serve_callback(stream, attempt)).await
@@ -122,10 +129,10 @@ async fn wait_for_callback(listener: TcpListener, attempt: &Attempt) -> Result<S
 async fn serve_callback(
     mut stream: TcpStream,
     attempt: &Attempt,
-) -> Result<Option<Result<String>>> {
+) -> Result<Option<Result<Secret<String>>>> {
     let mut request = Vec::new();
     let mut byte = [0];
-    while request.len() < MAX_CALLBACK_BYTES && !request.ends_with(b"\r\n\r\n") {
+    while request.len() < MAX_CALLBACK_BYTES && !request.ends_with(HEADER_END) {
         if stream.read(&mut byte).await? == 0 {
             return Ok(None);
         }
@@ -150,8 +157,8 @@ async fn serve_callback(
     Ok(result)
 }
 
-fn classify_callback(request: &[u8], attempt: &Attempt) -> Option<Result<String>> {
-    if !request.ends_with(b"\r\n\r\n") {
+fn classify_callback(request: &[u8], attempt: &Attempt) -> Option<Result<Secret<String>>> {
+    if !request.ends_with(HEADER_END) {
         return None;
     }
     let line = str::from_utf8(request).ok()?.lines().next()?;
@@ -173,15 +180,15 @@ fn classify_callback(request: &[u8], attempt: &Attempt) -> Option<Result<String>
     let pairs: Vec<_> = url.query_pairs().collect();
     let query: HashMap<_, _> = pairs.iter().cloned().collect();
     if pairs.len() != query.len()
-        || query.get("state")?.as_ref() != attempt.state
+        || query.get(STATE)?.as_ref() != attempt.state.expose()
         || query.get("iss")?.as_ref() != attempt.metadata.issuer
     {
         return None;
     }
-    match (query.get("code"), query.get("error")) {
-        (Some(code), None) if !code.is_empty() => Some(Ok(code.to_string())),
+    match (query.get(CODE), query.get(ERROR)) {
+        (Some(code), None) if !code.is_empty() => Some(Ok(code.to_string().into())),
         (None, Some(error)) if !error.is_empty() => Some(Err(Failure::server(json!({
-            "code": error, "message": if error == "access_denied" { "Sign-in was declined." }
+            (CODE): error, (MESSAGE): if error == "access_denied" { "Sign-in was declined." }
                 else { "OAuth sign-in failed." }
         })))),
         _ => None,
