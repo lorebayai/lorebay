@@ -5,8 +5,10 @@ members = ["base", "lorebayd"]
 [workspace.dependencies]
 anyhow = "1.0.104"
 axum = { version = "0.8.9", default-features = false, features = ["http1", "json", "tokio"] }
+base64 = { version = "0.23.1", default-features = false, features = ["std"] }
 clap = { version = "4.6.7", features = ["derive"] }
 config = { version = "0.15.27", default-features = false, features = ["json"] }
+getrandom = "0.4.3"
 hyper = { version = "1.12.0", features = ["http1", "server"] }
 hyper-util = { version = "0.1.21", features = ["service", "tokio"] }
 lorebay-base = { path = "base" }
@@ -23,6 +25,8 @@ tokio = { version = "1.54.1", features = ["fs", "io-util", "macros", "net", "rt-
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt", "json"] }
 typed-builder = "0.23.2"
+url = "2.5.8"
+uuid = { version = "1.29.2", features = ["v7"] }
 
 [workspace.package]
 edition = "2024"

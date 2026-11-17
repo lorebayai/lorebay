@@ -17,17 +17,21 @@ cargo run -p lorebayd -- --config /path/to/lorebayd.json --dotenv /path/to/loreb
 ```
 
 Both flags are optional. With neither, the server listens on `127.0.0.1:8080`
-and creates `data/` in its working directory. Configuration errors stop startup
-and name the invalid key. File errors include the path and distinguish read
-failures from parse failures. JSON parse errors include a line and column;
-env parse errors include a line number. Unknown keys are reported separately
-from invalid values, and diagnostics never echo values or line contents.
+and creates `data/` in its working directory. Configuration errors stop startup,
+name the key or file and report parse locations without echoing values.
 
 `GET /healthz` and `GET /readyz` need no credential and return
 `{"data":"ok","meta":{}}` when healthy. Unknown paths return 404 with RFC 9457
 `application/problem+json`: `type`, `title`, `status`, stable `code` and an
 `errors` array of `{field, code, message}` objects. Internal errors disclose
-no cause. Success bodies use `{data, meta}`.
+no cause. Web API success bodies use `{data, meta}`.
+
+OAuth JSON metadata is served at `/.well-known/oauth-authorization-server` and
+`/.well-known/oauth-protected-resource/mcp`. Open registration at
+`POST /oauth/register` returns a client ID and accepted metadata, with OAuth
+JSON errors on rejection. Clients are permanent public clients with no secret;
+redirect URIs require HTTPS or HTTP on `localhost`, `127.0.0.1` or `::1`.
+Metadata fixes `/mcp`, `/oauth/authorize` and `/oauth/token` as endpoint paths.
 
 SIGINT and SIGTERM start shutdown. Readiness returns 503 for one second
 before the listener closes; existing requests then finish within a total
@@ -65,27 +69,27 @@ Precedence is defaults, JSON file, dotenv file, then process environment.
 Only `--dotenv` loads an env file; it does not change the process environment.
 Only process environment keys prefixed `LOREBAYD__` are read; a non-UTF-8
 value among them is a configuration error. Nested environment keys use `__`.
-Dotenv substitutions use earlier file assignments, then the supplied
-configuration environment; unprefixed process variables cannot affect them.
-Relative paths in `--config`, `--dotenv` and `data_directory` resolve against
-the working directory. Example:
-
-```json
-{
-  "listen_address": "127.0.0.1:8080",
-  "data_directory": "data",
-  "logging": { "level": "info" }
-}
-```
+Dotenv substitutions use earlier assignments, then the configuration environment.
+Relative file paths resolve against the working directory.
 
 | JSON key | Environment variable | Default | Values |
 | --- | --- | --- | --- |
 | `listen_address` | `LOREBAYD__LISTEN_ADDRESS` | `127.0.0.1:8080` | IP address and port; port 0 selects a free port |
 | `data_directory` | `LOREBAYD__DATA_DIRECTORY` | `data` | Nonempty directory path; created at startup |
+| `public_url` | `LOREBAYD__PUBLIC_URL` | `http://127.0.0.1:8080` | Canonical HTTP(S) origin, optional trailing `/`; no credentials, path, query or fragment |
+| `registration_rate_limit` | `LOREBAYD__REGISTRATION_RATE_LIMIT` | `20` | Positive number of attempts per peer IP per window |
+| `registration_rate_window_seconds` | `LOREBAYD__REGISTRATION_RATE_WINDOW_SECONDS` | `60` | Positive fixed window in seconds |
+| `registration_client_name_max_bytes` | `LOREBAYD__REGISTRATION_CLIENT_NAME_MAX_BYTES` | `256` | Positive maximum UTF-8 bytes in a client name |
+| `registration_redirect_uri_limit` | `LOREBAYD__REGISTRATION_REDIRECT_URI_LIMIT` | `4` | Positive maximum redirect URI count |
+| `registration_redirect_uri_max_bytes` | `LOREBAYD__REGISTRATION_REDIRECT_URI_MAX_BYTES` | `2048` | Positive maximum UTF-8 bytes per redirect URI |
+| `registration_body_limit_bytes` | `LOREBAYD__REGISTRATION_BODY_LIMIT_BYTES` | `65536` | Positive maximum registration request bytes; excess returns OAuth JSON 413 |
 | `logging.level` | `LOREBAYD__LOGGING__LEVEL` | `info` | `off`, `error`, `warn`, `info`, `debug`, `trace` |
 
-Logs are JSON on stderr. Configuration dumps, request bodies, query strings
-and authorization headers are never logged.
+Set `public_url` to the origin clients reach, including through a TLS proxy or
+port forward; metadata never uses `Host`. Harnesses require HTTPS off loopback.
+Limits count every attempt by IPv4 address or IPv6 /64, ignore forwarding headers
+and reset on restart. Proxy callers share its quota; 429 gives `Retry-After`.
+Logs are JSON on stderr, excluding configs, bodies, queries and credentials.
 
 ## Docs
 

@@ -5,10 +5,18 @@ use std::path::PathBuf;
 use lorebay_base::{ConfigError, ConfigSources, LoggingConfig, load_config};
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
+use url::Url;
 
 const CONFIG_ENV_PREFIX: &str = "LOREBAYD";
 const DEFAULT_DATA_DIRECTORY: &str = "data";
 const DEFAULT_LISTEN_ADDRESS: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080);
+const DEFAULT_PUBLIC_URL: &str = "http://127.0.0.1:8080";
+const DEFAULT_REGISTRATION_RATE_LIMIT: u32 = 20;
+const DEFAULT_REGISTRATION_RATE_WINDOW_SECONDS: u64 = 60;
+const DEFAULT_REGISTRATION_CLIENT_NAME_MAX_BYTES: usize = 256;
+const DEFAULT_REGISTRATION_REDIRECT_URI_LIMIT: usize = 4;
+const DEFAULT_REGISTRATION_REDIRECT_URI_MAX_BYTES: usize = 2048;
+const DEFAULT_REGISTRATION_BODY_LIMIT_BYTES: usize = 65_536;
 
 #[derive(Clone, Debug, Deserialize, Serialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
@@ -18,6 +26,20 @@ pub struct Config {
     pub listen_address: SocketAddr,
     #[builder(default = PathBuf::from(DEFAULT_DATA_DIRECTORY))]
     pub data_directory: PathBuf,
+    #[builder(default = DEFAULT_PUBLIC_URL.to_owned())]
+    pub public_url: String,
+    #[builder(default = DEFAULT_REGISTRATION_RATE_LIMIT)]
+    pub registration_rate_limit: u32,
+    #[builder(default = DEFAULT_REGISTRATION_RATE_WINDOW_SECONDS)]
+    pub registration_rate_window_seconds: u64,
+    #[builder(default = DEFAULT_REGISTRATION_CLIENT_NAME_MAX_BYTES)]
+    pub registration_client_name_max_bytes: usize,
+    #[builder(default = DEFAULT_REGISTRATION_REDIRECT_URI_LIMIT)]
+    pub registration_redirect_uri_limit: usize,
+    #[builder(default = DEFAULT_REGISTRATION_REDIRECT_URI_MAX_BYTES)]
+    pub registration_redirect_uri_max_bytes: usize,
+    #[builder(default = DEFAULT_REGISTRATION_BODY_LIMIT_BYTES)]
+    pub registration_body_limit_bytes: usize,
     #[builder(default = LoggingConfig::default())]
     pub logging: LoggingConfig,
 }
@@ -51,6 +73,69 @@ impl Config {
         if self.data_directory.as_os_str().is_empty() {
             return Err(ConfigError::invalid("data_directory", "must not be empty"));
         }
+        self.validate_public_url()?;
+        self.validate_registration_limits()?;
+        if self.registration_rate_limit == 0 {
+            return Err(ConfigError::invalid(
+                "registration_rate_limit",
+                "must be positive",
+            ));
+        }
+        if self.registration_rate_window_seconds == 0 {
+            return Err(ConfigError::invalid(
+                "registration_rate_window_seconds",
+                "must be positive",
+            ));
+        }
         self.logging.validate()
+    }
+
+    fn validate_registration_limits(&self) -> Result<(), ConfigError> {
+        for (key, value) in [
+            (
+                "registration_client_name_max_bytes",
+                self.registration_client_name_max_bytes,
+            ),
+            (
+                "registration_redirect_uri_limit",
+                self.registration_redirect_uri_limit,
+            ),
+            (
+                "registration_redirect_uri_max_bytes",
+                self.registration_redirect_uri_max_bytes,
+            ),
+            (
+                "registration_body_limit_bytes",
+                self.registration_body_limit_bytes,
+            ),
+        ] {
+            if value == 0 {
+                return Err(ConfigError::invalid(key, "must be positive"));
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_public_url(&self) -> Result<(), ConfigError> {
+        let invalid = || {
+            ConfigError::invalid(
+                "public_url",
+                "expected an HTTP(S) origin without credentials, path, query or fragment",
+            )
+        };
+        let url = Url::parse(&self.public_url).map_err(|_| invalid())?;
+        if !matches!(url.scheme(), "http" | "https")
+            || !url.has_host()
+            || !url.username().is_empty()
+            || url.password().is_some()
+            || url.path() != "/"
+            || url.query().is_some()
+            || url.fragment().is_some()
+            || self.public_url != url.origin().ascii_serialization()
+                && self.public_url != format!("{}/", url.origin().ascii_serialization())
+        {
+            return Err(invalid());
+        }
+        Ok(())
     }
 }

@@ -28,12 +28,22 @@ impl Server {
     }
 
     pub async fn restart(directory: TempDir) -> Self {
+        Self::start_with(directory, |_| {}).await
+    }
+
+    pub async fn configured(configure: impl FnOnce(&mut Config)) -> Self {
+        Self::start_with(TempDir::new().unwrap(), configure).await
+    }
+
+    async fn start_with(directory: TempDir, configure: impl FnOnce(&mut Config)) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
-        let config = Config::builder()
+        let mut config = Config::builder()
             .listen_address(address)
             .data_directory(directory.path().join("data"))
+            .public_url(format!("http://{address}"))
             .build();
+        configure(&mut config);
         let (shutdown, stopped) = oneshot::channel();
         let task = tokio::spawn(run(config, listener, async {
             let _ = stopped.await;

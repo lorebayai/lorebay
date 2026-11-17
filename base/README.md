@@ -27,6 +27,13 @@ never display values or line contents.
 `Clock::now` returns a `SystemTime`; `SystemClock` uses the system clock.
 Consumers can inject their own `Clock` implementation through `Arc<dyn Clock>`.
 
+`RateLimiter::new` takes a positive attempt limit, a window duration and an
+injected clock. `check` normalizes caller-supplied `RateLimitKey` values; on
+exhaustion it returns the remaining wait. `IpAddr` keys preserve IPv4 addresses
+(including mapped IPv6) and group native IPv6 by /64. Clones share counters.
+Expired entries are swept at most once per window; each accessed key resets
+when its own window expires. Counters are in memory. Consumers validate tunables.
+
 ## Configuration
 
 The loader applies defaults, an optional JSON file, an optional dotenv file,
