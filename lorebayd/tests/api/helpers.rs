@@ -18,10 +18,11 @@ use tokio::task::JoinHandle;
 use tokio::time::{sleep, timeout};
 use typed_builder::TypedBuilder;
 
+pub use oauth::*;
+
 pub const TEST_TIMEOUT: Duration = Duration::from_secs(15);
 pub const TEST_USERNAME: &str = "alice";
 pub const TEST_PASSWORD: &str = "correct horse battery staple";
-const POLL_INTERVAL: Duration = Duration::from_millis(10);
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
@@ -36,18 +37,18 @@ pub struct Settings {
     pub rate_window_seconds: u64,
 }
 
-impl Default for Settings {
-    fn default() -> Self {
-        Self::builder().build()
-    }
-}
-
 pub struct Server {
     pub client: Client,
     pub address: SocketAddr,
     pub directory: TempDir,
     shutdown: Option<oneshot::Sender<()>>,
     task: Option<JoinHandle<Result<()>>>,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self::builder().build()
+    }
 }
 
 impl Server {
@@ -270,6 +271,6 @@ impl Server {
         stream
     }
 }
-mod oauth;
 
-pub use oauth::*;
+const POLL_INTERVAL: Duration = Duration::from_millis(10);
+mod oauth;

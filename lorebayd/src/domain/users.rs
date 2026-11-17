@@ -18,14 +18,6 @@ pub(crate) struct FileUserStore {
     dummy_hash: String,
 }
 
-#[derive(Clone, Debug, Deserialize, TypedBuilder)]
-#[builder(field_defaults(setter(into)))]
-#[serde(deny_unknown_fields)]
-struct User {
-    username: String,
-    password_hash: String,
-}
-
 impl UserStore for FileUserStore {
     fn usernames(&self) -> Result<Vec<String>> {
         Ok(self.hashes.keys().cloned().collect())
@@ -78,6 +70,14 @@ impl FileUserStore {
         };
         Ok(Self { hashes, dummy_hash })
     }
+}
+
+#[derive(Clone, Debug, Deserialize, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+#[serde(deny_unknown_fields)]
+struct User {
+    username: String,
+    password_hash: String,
 }
 
 fn validate_username(username: &str) -> Result<()> {

@@ -10,8 +10,6 @@ use typed_builder::TypedBuilder;
 
 use crate::Clock;
 
-const IPV6_PREFIX_MASK: u128 = u128::MAX << 64;
-
 pub trait RateLimitKey: Eq + Hash {
     fn normalized(self) -> Self;
 }
@@ -86,6 +84,8 @@ impl<K: RateLimitKey, C: Clock> RateLimiter<K, C> {
         Ok(())
     }
 }
+
+const IPV6_PREFIX_MASK: u128 = u128::MAX << 64;
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
