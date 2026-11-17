@@ -29,7 +29,10 @@ are optional. The users file is a YAML list or a JSON array with these fields:
 
 Replace the abbreviated hash with the command's complete output. Usernames
 must be unique, nonempty and have no leading or trailing whitespace.
+All hashes in one file must use the same Argon2 parameters.
 Edit this file and restart the server to add or remove accounts.
+Changing a hash does not end existing login sessions or agent authorizations;
+to end them, remove the username, restart, add it back and restart.
 
 ## Configuration
 
@@ -52,11 +55,15 @@ Relative paths resolve against the working directory.
 | `login_rate_window_seconds` | `LOREBAYD__LOGIN_RATE_WINDOW_SECONDS` | `60` | 1..315360000 seconds |
 | `registration_rate_limit` | `LOREBAYD__REGISTRATION_RATE_LIMIT` | `20` | Positive u32 attempts per peer IP per window |
 | `registration_rate_window_seconds` | `LOREBAYD__REGISTRATION_RATE_WINDOW_SECONDS` | `60` | Positive fixed window in seconds |
+| `registration_client_name_max_bytes` | `LOREBAYD__REGISTRATION_CLIENT_NAME_MAX_BYTES` | `256` | Positive maximum UTF-8 bytes in a client name |
+| `registration_redirect_uri_limit` | `LOREBAYD__REGISTRATION_REDIRECT_URI_LIMIT` | `4` | Positive maximum redirect URI count |
+| `registration_redirect_uri_max_bytes` | `LOREBAYD__REGISTRATION_REDIRECT_URI_MAX_BYTES` | `2048` | Positive maximum UTF-8 bytes per redirect URI |
+| `registration_body_limit_bytes` | `LOREBAYD__REGISTRATION_BODY_LIMIT_BYTES` | `65536` | Positive maximum registration request bytes; excess returns OAuth JSON 413 |
 | `logging.level` | `LOREBAYD__LOGGING__LEVEL` | `info` | `off`, `error`, `warn`, `info`, `debug`, `trace` |
 
 Set `public_url` to the origin clients reach, including through a TLS proxy
 or port forward. Use HTTPS for harness connections outside loopback.
-The rate limits use the connection's peer IP. Behind a reverse proxy every
+The rate limits group peers by IPv4 address or IPv6 /64. Behind a reverse proxy every
 caller shares one rate limit; limits per caller belong on the proxy.
 The signing key is kept in `data_directory/signing.key` with mode 0600.
 Logs are JSON on stderr and exclude configuration dumps and credentials.

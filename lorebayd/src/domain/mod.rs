@@ -6,6 +6,7 @@ mod metadata;
 mod oauth_client;
 pub(crate) mod password;
 pub(crate) mod token;
+pub(crate) mod user_store;
 pub(crate) mod users;
 
 pub(crate) use id::*;

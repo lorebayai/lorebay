@@ -1,4 +1,5 @@
 use std::net::IpAddr;
+use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
 
 use anyhow::anyhow;
@@ -18,15 +19,14 @@ use crate::repository::account::AccountRepository;
 use crate::repository::login_session::LoginSessionRepository;
 
 use super::access::Caller;
-use super::password::verify_password;
 use super::token::{Claims, TokenKind, TokenSigner, token_hash};
-use super::users::Users;
+use super::user_store::UserStore;
 use super::{primary_key, random_id};
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
 pub(crate) struct Identity {
-    pub users: Users,
+    pub user_store: Arc<dyn UserStore>,
     pub signer: TokenSigner,
     pub config: Config,
     pub limiter: RateLimiter<IpAddr, SystemClock>,
@@ -76,16 +76,12 @@ pub(crate) async fn log_in(
     password: String,
 ) -> Result<Tokens, LoginError> {
     identity.limiter.check(address)?;
-    let hash = identity
-        .users
-        .hashes
-        .get(&username)
-        .unwrap_or(&identity.users.dummy_hash)
-        .clone();
-    let matches = spawn_blocking(move || verify_password(&password, &hash))
+    let store = Arc::clone(&identity.user_store);
+    let supplied_username = username.clone();
+    let matches = spawn_blocking(move || store.verify(&supplied_username, &password))
         .await
-        .map_err(|error| anyhow!(error))?;
-    if !matches || !identity.users.hashes.contains_key(&username) {
+        .map_err(|error| anyhow!(error))??;
+    if !matches {
         return Err(LoginError::Unauthorized);
     }
     let transaction = begin_write(database).await?;

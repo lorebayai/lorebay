@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use anyhow::Result;
 use sea_orm::{
     DatabaseConnection, DatabaseTransaction, Set, SqliteTransactionMode, TransactionOptions,
@@ -12,9 +14,14 @@ use crate::repository::oauth_code::OauthCodeRepository;
 use crate::repository::participant::ParticipantRepository;
 
 use super::primary_key;
-use super::users::Users;
+use super::user_store::UserStore;
 
-pub(crate) async fn sync(database: &DatabaseConnection, users: &Users, now: i64) -> Result<()> {
+pub(crate) async fn sync(
+    database: &DatabaseConnection,
+    users: &dyn UserStore,
+    now: i64,
+) -> Result<()> {
+    let usernames: BTreeSet<_> = users.usernames()?.into_iter().collect();
     let transaction = database
         .begin_with_options(TransactionOptions {
             sqlite_transaction_mode: Some(SqliteTransactionMode::Immediate),
@@ -27,21 +34,16 @@ pub(crate) async fn sync(database: &DatabaseConnection, users: &Users, now: i64)
     let accounts = repository.all().await?;
     let removed: Vec<_> = accounts
         .iter()
-        .filter(|account| {
-            account.deleted_at.is_none() && !users.hashes.contains_key(&account.username)
-        })
+        .filter(|account| account.deleted_at.is_none() && !usernames.contains(&account.username))
         .map(|account| account.id.clone())
         .collect();
     let restored: Vec<_> = accounts
         .iter()
-        .filter(|account| {
-            account.deleted_at.is_some() && users.hashes.contains_key(&account.username)
-        })
+        .filter(|account| account.deleted_at.is_some() && usernames.contains(&account.username))
         .map(|account| account.id.clone())
         .collect();
-    let new = users
-        .hashes
-        .keys()
+    let new = usernames
+        .iter()
         .filter(|username| {
             !accounts
                 .iter()

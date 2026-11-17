@@ -1,12 +1,13 @@
-use std::fs::{self, OpenOptions};
+use std::fs::{self, File};
 use std::io::{ErrorKind, Write};
-use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
 use anyhow::{Context, Result, bail};
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use tempfile::Builder;
 use typed_builder::TypedBuilder;
 
 use super::random_id;
@@ -85,20 +86,8 @@ pub(crate) fn token_hash(token: &str) -> String {
 }
 
 fn load_key(path: &Path) -> Result<Vec<u8>> {
-    match OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .mode(0o600)
-        .open(path)
-    {
-        Ok(mut file) => {
-            let mut key = vec![0; SIGNING_KEY_BYTES];
-            getrandom::fill(&mut key)?;
-            file.write_all(&key)?;
-            file.sync_all()?;
-        }
-        Err(error) if error.kind() == ErrorKind::AlreadyExists => {}
-        Err(error) => return Err(error.into()),
+    if !path.try_exists()? {
+        create_key(path)?;
     }
     if fs::metadata(path)?.permissions().mode() & 0o077 != 0 {
         bail!("signing key must be readable only by its owner (mode 0600)");
@@ -108,4 +97,24 @@ fn load_key(path: &Path) -> Result<Vec<u8>> {
         bail!("signing key must contain 32 bytes");
     }
     Ok(key)
+}
+
+fn create_key(path: &Path) -> Result<()> {
+    let directory = path
+        .parent()
+        .context("signing key has no parent directory")?;
+    let mut temporary = Builder::new()
+        .prefix(".signing-key-")
+        .tempfile_in(directory)?;
+    let mut key = [0; SIGNING_KEY_BYTES];
+    getrandom::fill(&mut key)?;
+    temporary.write_all(&key)?;
+    temporary.as_file().sync_all()?;
+    match temporary.persist_noclobber(path) {
+        Ok(_) => {}
+        Err(error) if error.error.kind() == ErrorKind::AlreadyExists => {}
+        Err(error) => return Err(error.error.into()),
+    }
+    File::open(directory)?.sync_all()?;
+    Ok(())
 }

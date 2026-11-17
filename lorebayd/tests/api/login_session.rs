@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use reqwest::StatusCode;
 use serde_json::{Value, json};
@@ -257,6 +257,36 @@ async fn call_web_api_fails_when_access_token_has_expired() {
             .log_out(new["data"]["access_token"].as_str())
             .await
             .status(),
+        StatusCode::OK
+    );
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn log_in_masks_unknown_username_when_hash_uses_nondefault_parameters() {
+    let server = Server::start_with_nondefault_hash().await;
+    let mut known = Vec::new();
+    let mut unknown = Vec::new();
+    for _ in 0..3 {
+        let started = Instant::now();
+        let response = server.log_in(TEST_USERNAME, "incorrect password").await;
+        known.push(started.elapsed());
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        let body: Value = response.json().await.unwrap();
+        let started = Instant::now();
+        let response = server.log_in("unknown", "incorrect password").await;
+        unknown.push(started.elapsed());
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(response.json::<Value>().await.unwrap(), body);
+    }
+    let known = known.into_iter().min().unwrap();
+    let unknown = unknown.into_iter().min().unwrap();
+    assert!(
+        known <= unknown * 3 && unknown <= known * 3,
+        "known={known:?}, unknown={unknown:?}"
+    );
+    assert_eq!(
+        server.log_in(TEST_USERNAME, TEST_PASSWORD).await.status(),
         StatusCode::OK
     );
     server.stop().await;

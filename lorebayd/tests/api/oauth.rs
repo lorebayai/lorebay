@@ -139,6 +139,65 @@ async fn register_client_fails_when_client_asks_for_a_secret() {
 }
 
 #[tokio::test]
+async fn register_client_fails_when_client_name_is_too_long() {
+    let server = Server::start().await;
+    for name in ["x".repeat(257), "\u{e9}".repeat(129)] {
+        let body = registration(&name, "http://127.0.0.1:46137/callback");
+        assert_error(
+            register(&server, &body).await,
+            StatusCode::BAD_REQUEST,
+            "invalid_client_metadata",
+            "Unsupported or invalid client metadata.",
+        )
+        .await;
+    }
+    let body = registration(&"\u{e9}".repeat(128), "http://127.0.0.1:46137/callback");
+    assert_eq!(register(&server, &body).await.status(), StatusCode::CREATED);
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn register_client_fails_when_registration_metadata_exceeds_limits() {
+    let server = Server::start().await;
+    let mut body = registration("Codex", "http://127.0.0.1:46137/callback");
+    body["redirect_uris"] = json!(vec!["https://client.example/callback"; 5]);
+    assert_error(
+        register(&server, &body).await,
+        StatusCode::BAD_REQUEST,
+        "invalid_client_metadata",
+        "Unsupported or invalid client metadata.",
+    )
+    .await;
+    let prefix = "https://client.example/";
+    body["redirect_uris"] = json!([format!("{prefix}{}", "x".repeat(2049 - prefix.len()))]);
+    assert_error(
+        register(&server, &body).await,
+        StatusCode::BAD_REQUEST,
+        "invalid_redirect_uri",
+        "Redirect URIs must use HTTPS or HTTP on loopback, without credentials or fragments.",
+    )
+    .await;
+    body = registration("Codex", "http://127.0.0.1:46137/callback");
+    body["padding"] = json!("x".repeat(65_536));
+    assert_error(
+        register(&server, &body).await,
+        StatusCode::PAYLOAD_TOO_LARGE,
+        "invalid_client_metadata",
+        "Expected a JSON client registration object.",
+    )
+    .await;
+    body.as_object_mut().unwrap().remove("padding");
+    body["client_name"] = json!("x".repeat(256));
+    body["redirect_uris"] = json!(
+        (0..4)
+            .map(|_| format!("{prefix}{}", "x".repeat(2048 - prefix.len())))
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(register(&server, &body).await.status(), StatusCode::CREATED);
+    server.stop().await;
+}
+
+#[tokio::test]
 async fn register_client_fails_when_rate_limit_is_exceeded() {
     let server = Server::configured(|config| {
         config.registration_rate_limit = 1;

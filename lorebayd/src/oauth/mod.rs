@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use axum::Router;
+use axum::extract::DefaultBodyLimit;
 use axum::routing::{get, post};
 use lorebay_base::{ConfigError, RateLimiter, SystemClock};
 use sea_orm::DatabaseConnection;
@@ -32,7 +33,28 @@ pub(crate) struct OAuthState {
     database: DatabaseConnection,
     public_url: String,
     registration_limiter: RateLimiter<IpAddr, SystemClock>,
+    registration_limits: RegistrationLimits,
     clock: Arc<SystemClock>,
+}
+
+#[derive(Clone, Debug, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+struct RegistrationLimits {
+    client_name_max_bytes: usize,
+    redirect_uri_limit: usize,
+    redirect_uri_max_bytes: usize,
+    body_limit_bytes: usize,
+}
+
+impl From<&Config> for RegistrationLimits {
+    fn from(config: &Config) -> Self {
+        Self::builder()
+            .client_name_max_bytes(config.registration_client_name_max_bytes)
+            .redirect_uri_limit(config.registration_redirect_uri_limit)
+            .redirect_uri_max_bytes(config.registration_redirect_uri_max_bytes)
+            .body_limit_bytes(config.registration_body_limit_bytes)
+            .build()
+    }
 }
 
 impl OAuthState {
@@ -43,6 +65,7 @@ impl OAuthState {
         Ok(Self::builder()
             .database(database)
             .public_url(config.public_url.clone())
+            .registration_limits(RegistrationLimits::from(config))
             .registration_limiter(RateLimiter::new(
                 limit,
                 Duration::from_secs(config.registration_rate_window_seconds),
@@ -63,7 +86,12 @@ pub(crate) fn router(state: OAuthState) -> Router {
             PROTECTED_RESOURCE_METADATA_PATH,
             get(metadata::protected_resource),
         )
-        .route(REGISTRATION_PATH, post(register::register))
+        .route(
+            REGISTRATION_PATH,
+            post(register::register).layer(DefaultBodyLimit::max(
+                state.registration_limits.body_limit_bytes,
+            )),
+        )
         .method_not_allowed_fallback(|| async { OAuthError::MethodNotAllowed })
         .with_state(state)
 }

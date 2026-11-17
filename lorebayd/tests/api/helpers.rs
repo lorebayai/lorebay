@@ -3,6 +3,8 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use anyhow::Result;
+use argon2::password_hash::PasswordHasher;
+use argon2::{Algorithm, Argon2, Params, Version};
 use lorebayd::{Config, hash_password, run};
 use reqwest::{Client, Method, Response, StatusCode};
 use sea_orm::sea_query::{Alias, Expr, Query};
@@ -67,6 +69,23 @@ impl Server {
             config.refresh_token_lifetime_seconds = settings.refresh_seconds;
             config.login_rate_limit = settings.rate_limit;
             config.login_rate_window_seconds = settings.rate_window_seconds;
+        })
+        .await
+    }
+
+    pub async fn start_with_nondefault_hash() -> Self {
+        let parameters = Params::new(65_536, 3, 4, Some(32)).unwrap();
+        let hash = Argon2::new(Algorithm::Argon2id, Version::V0x13, parameters)
+            .hash_password(TEST_PASSWORD.as_bytes())
+            .unwrap()
+            .to_string();
+        Self::configured(|config| {
+            let users = json!([{ "username": TEST_USERNAME, "password_hash": hash }]);
+            fs::write(
+                config.users_file.as_ref().unwrap(),
+                serde_json::to_vec(&users).unwrap(),
+            )
+            .unwrap();
         })
         .await
     }

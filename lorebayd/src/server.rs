@@ -30,7 +30,8 @@ use crate::Config;
 use crate::api::{self, ApiError, Envelope};
 use crate::domain::login_session::Identity;
 use crate::domain::token::TokenSigner;
-use crate::domain::users::Users;
+use crate::domain::user_store::UserStore;
+use crate::domain::users::FileUserStore;
 use crate::domain::{account, login_session};
 use crate::migration::Migrator;
 use crate::oauth::{self, OAuthState};
@@ -66,12 +67,12 @@ pub async fn run(
         .users_file
         .as_deref()
         .context("users_file path is required")?;
-    let users = Users::load(users_path).await?;
+    let users: Arc<dyn UserStore> = Arc::new(FileUserStore::load(users_path).await?);
     fs::create_dir_all(&config.data_directory)
         .await
         .context("could not create data_directory")?;
     let database = open_database(&config.data_directory).await?;
-    account::sync(&database, &users, login_session::now_millis()?).await?;
+    account::sync(&database, users.as_ref(), login_session::now_millis()?).await?;
     let state = ServerState::builder()
         .oauth(OAuthState::new(&config, database.clone())?)
         .identity(Arc::new(identity(config, users)?))
@@ -87,11 +88,11 @@ pub async fn run(
     result
 }
 
-fn identity(config: Config, users: Users) -> Result<Identity> {
+fn identity(config: Config, users: Arc<dyn UserStore>) -> Result<Identity> {
     let limit =
         NonZeroU32::new(config.login_rate_limit).context("login_rate_limit must be positive")?;
     Ok(Identity::builder()
-        .users(users)
+        .user_store(users)
         .signer(TokenSigner::load(&config.data_directory)?)
         .limiter(RateLimiter::new(
             limit,
