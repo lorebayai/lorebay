@@ -12,10 +12,12 @@ use typed_builder::TypedBuilder;
 
 use super::random_id;
 
-const SIGNING_KEY_FILE: &str = "signing.key";
-const SIGNING_KEY_BYTES: usize = 32;
-const TOKEN_ISSUER: &str = "lorebayd";
-const TOKEN_AUDIENCE: &str = "lorebay-web-api";
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum TokenKind {
+    AgentAuthorization,
+    LoginSession,
+}
 
 #[derive(Clone, Debug, Deserialize, Serialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
@@ -28,13 +30,6 @@ pub(crate) struct Claims {
     pub jti: String,
     pub iss: String,
     pub aud: String,
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum TokenKind {
-    AgentAuthorization,
-    LoginSession,
 }
 
 #[derive(Clone, Debug, TypedBuilder)]
@@ -92,6 +87,11 @@ pub(crate) fn token_hash(token: &str) -> String {
         .map(|byte| format!("{byte:02x}"))
         .collect()
 }
+
+const SIGNING_KEY_FILE: &str = "signing.key";
+const SIGNING_KEY_BYTES: usize = 32;
+const TOKEN_ISSUER: &str = "lorebayd";
+const TOKEN_AUDIENCE: &str = "lorebay-web-api";
 
 fn load_key(path: &Path) -> Result<Vec<u8>> {
     if !path.try_exists()? {

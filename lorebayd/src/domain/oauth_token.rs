@@ -22,22 +22,6 @@ use super::login_session::{
 use super::token::{TokenKind, TokenSubject, token_hash};
 use super::{primary_key, random_id};
 
-#[derive(Clone, Debug, TypedBuilder)]
-#[builder(field_defaults(setter(into)))]
-pub(crate) struct CodeExchange {
-    pub client_id: String,
-    pub code: String,
-    pub redirect_uri: String,
-    pub code_verifier: String,
-}
-
-#[derive(Clone, Debug, TypedBuilder)]
-#[builder(field_defaults(setter(into)))]
-pub(crate) struct TokenRefresh {
-    pub client_id: String,
-    pub refresh_token: String,
-}
-
 #[derive(Clone, Debug)]
 pub(crate) enum TokenGrant {
     AuthorizationCode(CodeExchange),
@@ -54,6 +38,22 @@ pub(crate) enum TokenError {
     Internal(#[from] anyhow::Error),
     #[error("Invalid grant")]
     InvalidGrant,
+}
+
+#[derive(Clone, Debug, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+pub(crate) struct CodeExchange {
+    pub client_id: String,
+    pub code: String,
+    pub redirect_uri: String,
+    pub code_verifier: String,
+}
+
+#[derive(Clone, Debug, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+pub(crate) struct TokenRefresh {
+    pub client_id: String,
+    pub refresh_token: String,
 }
 
 impl From<LoginError> for TokenError {

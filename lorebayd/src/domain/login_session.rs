@@ -23,15 +23,6 @@ use super::token::{Claims, TokenKind, TokenSigner, TokenSubject, token_hash};
 use super::user_store::UserStore;
 use super::{primary_key, random_id};
 
-#[derive(Clone, Debug, TypedBuilder)]
-#[builder(field_defaults(setter(into)))]
-pub(crate) struct Identity {
-    pub user_store: Arc<dyn UserStore>,
-    pub signer: TokenSigner,
-    pub config: Config,
-    pub limiter: RateLimiter<IpAddr, SystemClock>,
-}
-
 #[derive(Debug, Error)]
 pub(crate) enum LoginError {
     #[error(transparent)]
@@ -42,6 +33,23 @@ pub(crate) enum LoginError {
     RateLimited(u64),
     #[error("Unauthorized")]
     Unauthorized,
+}
+
+#[derive(Clone, Debug, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+pub(crate) struct Identity {
+    pub user_store: Arc<dyn UserStore>,
+    pub signer: TokenSigner,
+    pub config: Config,
+    pub limiter: RateLimiter<IpAddr, SystemClock>,
+}
+
+#[derive(Clone, Debug, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+pub(crate) struct Tokens {
+    pub access_token: String,
+    pub refresh_token: String,
+    pub expires_in: u64,
 }
 
 impl From<RateLimitError> for LoginError {
@@ -58,14 +66,6 @@ impl From<RateLimitError> for LoginError {
             }
         }
     }
-}
-
-#[derive(Clone, Debug, TypedBuilder)]
-#[builder(field_defaults(setter(into)))]
-pub(crate) struct Tokens {
-    pub access_token: String,
-    pub refresh_token: String,
-    pub expires_in: u64,
 }
 
 pub(crate) async fn log_in(
@@ -182,33 +182,6 @@ pub(crate) fn now_millis() -> anyhow::Result<i64> {
     )?)
 }
 
-async fn begin_write(database: &DatabaseConnection) -> Result<DatabaseTransaction, LoginError> {
-    Ok(database
-        .begin_with_options(TransactionOptions {
-            sqlite_transaction_mode: Some(SqliteTransactionMode::Immediate),
-            ..Default::default()
-        })
-        .await?)
-}
-
-async fn active_username<C: ConnectionTrait>(
-    connection: &C,
-    session: &Model,
-    now: i64,
-) -> Result<String, LoginError> {
-    if session.expires_at <= now {
-        return Err(LoginError::Unauthorized);
-    }
-    let account = AccountRepository::builder()
-        .connection(connection)
-        .build()
-        .by_id(&session.account_id)
-        .await?
-        .filter(|account| account.deleted_at.is_none())
-        .ok_or(LoginError::Unauthorized)?;
-    Ok(account.username)
-}
-
 pub(crate) async fn create_session(
     identity: &Identity,
     transaction: &DatabaseTransaction,
@@ -264,4 +237,31 @@ pub(crate) fn new_refresh_token() -> anyhow::Result<String> {
 
 pub(crate) fn session_expiry(identity: &Identity, now: i64) -> i64 {
     now + Duration::from_secs(identity.config.refresh_token_lifetime_seconds).as_millis() as i64
+}
+
+async fn begin_write(database: &DatabaseConnection) -> Result<DatabaseTransaction, LoginError> {
+    Ok(database
+        .begin_with_options(TransactionOptions {
+            sqlite_transaction_mode: Some(SqliteTransactionMode::Immediate),
+            ..Default::default()
+        })
+        .await?)
+}
+
+async fn active_username<C: ConnectionTrait>(
+    connection: &C,
+    session: &Model,
+    now: i64,
+) -> Result<String, LoginError> {
+    if session.expires_at <= now {
+        return Err(LoginError::Unauthorized);
+    }
+    let account = AccountRepository::builder()
+        .connection(connection)
+        .build()
+        .by_id(&session.account_id)
+        .await?
+        .filter(|account| account.deleted_at.is_none())
+        .ok_or(LoginError::Unauthorized)?;
+    Ok(account.username)
 }

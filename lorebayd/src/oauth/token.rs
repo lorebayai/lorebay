@@ -25,15 +25,6 @@ pub(super) struct TokenRequest {
     resource: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize, TypedBuilder)]
-#[builder(field_defaults(setter(into)))]
-struct TokenResponse {
-    access_token: String,
-    refresh_token: String,
-    token_type: &'static str,
-    expires_in: u64,
-}
-
 impl TokenRequest {
     fn validate(self, public_url: &str) -> Result<TokenGrant, OAuthError> {
         if self.resource.as_deref().is_some_and(|resource| {
@@ -74,17 +65,6 @@ impl TokenRequest {
     }
 }
 
-impl From<Tokens> for TokenResponse {
-    fn from(tokens: Tokens) -> Self {
-        Self::builder()
-            .access_token(tokens.access_token)
-            .refresh_token(tokens.refresh_token)
-            .token_type("Bearer")
-            .expires_in(tokens.expires_in)
-            .build()
-    }
-}
-
 pub(super) async fn token(
     State(state): State<OAuthState>,
     body: Result<Form<TokenRequest>, FormRejection>,
@@ -100,6 +80,26 @@ pub(super) async fn token(
     let grant = request.validate(&state.public_url)?;
     let tokens = grant_tokens(&state.identity, &state.database, grant).await?;
     Ok((no_store_headers(), Json(TokenResponse::from(tokens))).into_response())
+}
+
+#[derive(Clone, Debug, Serialize, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+struct TokenResponse {
+    access_token: String,
+    refresh_token: String,
+    token_type: &'static str,
+    expires_in: u64,
+}
+
+impl From<Tokens> for TokenResponse {
+    fn from(tokens: Tokens) -> Self {
+        Self::builder()
+            .access_token(tokens.access_token)
+            .refresh_token(tokens.refresh_token)
+            .token_type("Bearer")
+            .expires_in(tokens.expires_in)
+            .build()
+    }
 }
 
 fn required(value: Option<String>) -> Result<String, OAuthError> {

@@ -9,7 +9,6 @@ use super::Server;
 
 pub const REDIRECT_URI: &str = "http://127.0.0.1:46137/callback";
 pub const PKCE_VERIFIER: &str = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
-const PKCE_CHALLENGE: &str = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
@@ -116,3 +115,5 @@ impl Server {
         database.close().await.unwrap();
     }
 }
+
+const PKCE_CHALLENGE: &str = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
