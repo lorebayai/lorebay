@@ -77,7 +77,7 @@ impl Server {
     }
 
     pub async fn start_with_nondefault_hash() -> Self {
-        let parameters = Params::new(65_536, 3, 4, Some(32)).unwrap();
+        let parameters = Params::new(4_096, 1, 1, Some(32)).unwrap();
         let hash = Argon2::new(Algorithm::Argon2id, Version::V0x13, parameters)
             .hash_password(TEST_PASSWORD.as_bytes())
             .unwrap()
