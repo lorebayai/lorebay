@@ -13,6 +13,7 @@ use crate::entity::agent_authorization::ActiveModel;
 use crate::entity::oauth_code::Model as Code;
 use crate::repository::account::AccountRepository;
 use crate::repository::agent_authorization::AgentAuthorizationRepository;
+use crate::repository::login_session::LoginSessionRepository;
 use crate::repository::oauth_code::OauthCodeRepository;
 
 use super::authorization::CLI_CLIENT_ID;
@@ -76,10 +77,7 @@ pub(crate) async fn grant_tokens(
 ) -> Result<Tokens, TokenError> {
     match grant {
         TokenGrant::AuthorizationCode(input) => exchange_code(identity, database, input).await,
-        TokenGrant::RefreshToken(input) if input.client_id == CLI_CLIENT_ID => {
-            Ok(login_session::refresh(identity, database, &input.refresh_token).await?)
-        }
-        TokenGrant::RefreshToken(input) => refresh_agent(identity, database, input).await,
+        TokenGrant::RefreshToken(input) => refresh_tokens(identity, database, input).await,
     }
 }
 
@@ -149,6 +147,7 @@ async fn create_agent(
         name: Set(code.agent_name.ok_or(TokenError::InvalidGrant)?),
         random_id: Set(random_id),
         refresh_token_hash: Set(token_hash(&refresh_token)),
+        previous_refresh_token_hash: Set(None),
         refresh_expires_at: Set(session_expiry(identity, now)),
         created_at: Set(now),
     };
@@ -166,20 +165,20 @@ async fn create_agent(
 
 async fn refresh_agent(
     identity: &Identity,
-    database: &DatabaseConnection,
+    transaction: &DatabaseTransaction,
     input: TokenRefresh,
+    hash: &str,
 ) -> Result<Tokens, TokenError> {
-    let transaction = begin_write(database).await?;
     let repository = AgentAuthorizationRepository::builder()
-        .connection(&transaction)
+        .connection(transaction)
         .build();
     let now = now_millis()?;
     let authorization = repository
-        .by_refresh_hash(&token_hash(&input.refresh_token))
+        .by_refresh_hash(hash)
         .await?
         .filter(|row| row.client_id == input.client_id && row.refresh_expires_at > now)
         .ok_or(TokenError::InvalidGrant)?;
-    let account = active_account(&transaction, &authorization.account_id).await?;
+    let account = active_account(transaction, &authorization.account_id).await?;
     let refresh_token = new_refresh_token()?;
     let tokens = issue_tokens(
         identity,
@@ -192,9 +191,39 @@ async fn refresh_agent(
         now,
     )?;
     let mut model: ActiveModel = authorization.into();
+    model.previous_refresh_token_hash = Set(Some(hash.to_owned()));
     model.refresh_token_hash = Set(token_hash(&refresh_token));
     model.refresh_expires_at = Set(session_expiry(identity, now));
     repository.update(model).await?;
+    Ok(tokens)
+}
+
+async fn refresh_tokens(
+    identity: &Identity,
+    database: &DatabaseConnection,
+    input: TokenRefresh,
+) -> Result<Tokens, TokenError> {
+    let transaction = begin_write(database).await?;
+    let hash = token_hash(&input.refresh_token);
+    let deleted_authorizations = AgentAuthorizationRepository::builder()
+        .connection(&transaction)
+        .build()
+        .delete_by_previous_refresh_hash(&hash)
+        .await?;
+    let deleted_sessions = LoginSessionRepository::builder()
+        .connection(&transaction)
+        .build()
+        .delete_by_previous_refresh_hash(&hash)
+        .await?;
+    if deleted_authorizations + deleted_sessions > 0 {
+        transaction.commit().await?;
+        return Err(TokenError::InvalidGrant);
+    }
+    let tokens = if input.client_id == CLI_CLIENT_ID {
+        login_session::rotate_refresh(identity, &transaction, &hash).await?
+    } else {
+        refresh_agent(identity, &transaction, input, &hash).await?
+    };
     transaction.commit().await?;
     Ok(tokens)
 }

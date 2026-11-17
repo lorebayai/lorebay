@@ -159,10 +159,11 @@ async fn exchange_code_fails_when_client_differs() {
 }
 
 #[tokio::test]
-async fn refresh_token_returns_new_tokens_and_ends_old_refresh_token() {
+async fn refresh_token_returns_new_tokens() {
     let server =
         Server::start_with_settings(Settings::builder().refresh_seconds(3_u64).build()).await;
     let agent = server.authorize_agent("Build agent").await;
+    let oldest_refresh = agent.tokens["refresh_token"].as_str().unwrap().to_owned();
     let mut tokens = agent.tokens;
     for _ in 0..2 {
         sleep(RENEWAL_WAIT).await;
@@ -176,14 +177,64 @@ async fn refresh_token_returns_new_tokens_and_ends_old_refresh_token() {
         assert_ne!(refreshed["access_token"], tokens["access_token"]);
         assert_eq!(claims(&refreshed)["sid"], claims(&tokens)["sid"]);
         assert_eq!(claims(&refreshed)["kind"], "agent_authorization");
-        assert_oauth_error(
+        tokens = refreshed;
+    }
+    assert_oauth_error(
+        server
+            .refresh_oauth(&agent.client_id, &oldest_refresh)
+            .await,
+        "invalid_grant",
+    )
+    .await;
+    assert_tokens(
+        server
+            .refresh_oauth(&agent.client_id, tokens["refresh_token"].as_str().unwrap())
+            .await,
+    )
+    .await;
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn refresh_token_ends_agent_authorization_when_refresh_token_was_already_exchanged() {
+    let server = Server::start().await;
+    let agent = server.authorize_agent("Build agent").await;
+    let other = server.register_client("Other client").await;
+    let mut tokens = agent.tokens;
+    for client in [
+        agent.client_id.as_str(),
+        other.as_str(),
+        CLI_CLIENT,
+        "unknown-client",
+    ] {
+        let refreshed = assert_tokens(
             server
                 .refresh_oauth(&agent.client_id, tokens["refresh_token"].as_str().unwrap())
+                .await,
+        )
+        .await;
+        assert_oauth_error(
+            server
+                .refresh_oauth(client, tokens["refresh_token"].as_str().unwrap())
                 .await,
             "invalid_grant",
         )
         .await;
-        tokens = refreshed;
+        assert_oauth_error(
+            server
+                .refresh_oauth(
+                    &agent.client_id,
+                    refreshed["refresh_token"].as_str().unwrap(),
+                )
+                .await,
+            "invalid_grant",
+        )
+        .await;
+        let code = server
+            .approve_code(&agent.client_id, Some("Build agent"))
+            .await;
+        tokens = assert_tokens(server.exchange_code(&agent.client_id, &code).await).await;
+        assert_ne!(claims(&tokens)["sid"], claims(&refreshed)["sid"]);
     }
     server.stop().await;
 }
@@ -194,6 +245,7 @@ async fn refresh_token_renews_login_session_when_client_is_cli() {
         Server::start_with_settings(Settings::builder().refresh_seconds(3_u64).build()).await;
     let code = server.approve_code(CLI_CLIENT, None).await;
     let mut tokens = assert_tokens(server.exchange_code(CLI_CLIENT, &code).await).await;
+    let oldest_refresh = tokens["refresh_token"].as_str().unwrap().to_owned();
     for _ in 0..2 {
         sleep(RENEWAL_WAIT).await;
         let refreshed = assert_tokens(
@@ -206,15 +258,106 @@ async fn refresh_token_renews_login_session_when_client_is_cli() {
         assert_ne!(refreshed["access_token"], tokens["access_token"]);
         assert_eq!(claims(&refreshed)["sid"], claims(&tokens)["sid"]);
         assert_person(&server, &refreshed).await;
-        assert_oauth_error(
+        tokens = refreshed;
+    }
+    assert_oauth_error(
+        server.refresh_oauth(CLI_CLIENT, &oldest_refresh).await,
+        "invalid_grant",
+    )
+    .await;
+    assert_person(&server, &tokens).await;
+    assert_tokens(
+        server
+            .refresh_oauth(CLI_CLIENT, tokens["refresh_token"].as_str().unwrap())
+            .await,
+    )
+    .await;
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn refresh_token_ends_login_session_when_cli_refresh_token_was_already_exchanged() {
+    let server = Server::start().await;
+    let other = server.register_client("Other client").await;
+    let independent = server.tokens().await;
+    for client in [CLI_CLIENT, other.as_str(), "unknown-client"] {
+        let code = server.approve_code(CLI_CLIENT, None).await;
+        let tokens = assert_tokens(server.exchange_code(CLI_CLIENT, &code).await).await;
+        let refreshed = assert_tokens(
             server
                 .refresh_oauth(CLI_CLIENT, tokens["refresh_token"].as_str().unwrap())
+                .await,
+        )
+        .await;
+        assert_person(&server, &refreshed).await;
+        assert_oauth_error(
+            server
+                .refresh_oauth(client, tokens["refresh_token"].as_str().unwrap())
                 .await,
             "invalid_grant",
         )
         .await;
-        tokens = refreshed;
+        assert_eq!(
+            server
+                .log_out(refreshed["access_token"].as_str())
+                .await
+                .status(),
+            StatusCode::UNAUTHORIZED
+        );
+        assert_oauth_error(
+            server
+                .refresh_oauth(CLI_CLIENT, refreshed["refresh_token"].as_str().unwrap())
+                .await,
+            "invalid_grant",
+        )
+        .await;
+        assert_person(&server, &independent).await;
     }
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn refresh_token_ends_login_session_when_refreshes_race_across_endpoints() {
+    let server = Server::start().await;
+    let code = server.approve_code(CLI_CLIENT, None).await;
+    let tokens = assert_tokens(server.exchange_code(CLI_CLIENT, &code).await).await;
+    let refresh = tokens["refresh_token"].as_str().unwrap();
+    let (web, oauth) = tokio::join!(
+        server.refresh(refresh),
+        server.refresh_oauth(CLI_CLIENT, refresh),
+    );
+    let renewed = if web.status() == StatusCode::OK {
+        assert_oauth_error(oauth, "invalid_grant").await;
+        web.json::<Value>().await.unwrap()["data"].clone()
+    } else {
+        assert_eq!(web.status(), StatusCode::UNAUTHORIZED);
+        assert_tokens(oauth).await
+    };
+    let directory = server.stop().await;
+    let server = Server::restart(directory).await;
+    for credentials in [&tokens, &renewed] {
+        assert_eq!(
+            server
+                .log_out(credentials["access_token"].as_str())
+                .await
+                .status(),
+            StatusCode::UNAUTHORIZED
+        );
+    }
+    assert_eq!(
+        server
+            .refresh(renewed["refresh_token"].as_str().unwrap())
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_oauth_error(
+        server
+            .refresh_oauth(CLI_CLIENT, renewed["refresh_token"].as_str().unwrap())
+            .await,
+        "invalid_grant",
+    )
+    .await;
     server.stop().await;
 }
 

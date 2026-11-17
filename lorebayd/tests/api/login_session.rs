@@ -52,21 +52,32 @@ async fn log_in_fails_when_password_is_wrong() {
 }
 
 #[tokio::test]
-async fn refresh_login_session_returns_new_tokens_and_ends_old_refresh_token() {
+async fn refresh_login_session_returns_new_tokens() {
     let server = Server::start().await;
-    let tokens = server.tokens().await;
-    let refresh = tokens["refresh_token"].as_str().unwrap();
-    let response = server.refresh(refresh).await;
-    assert_eq!(response.status(), StatusCode::OK);
-    let body: Value = response.json().await.unwrap();
-    assert_eq!(body["meta"], json!({}));
-    let new = &body["data"];
-    assert_ne!(new["access_token"], tokens["access_token"]);
-    assert_ne!(new["refresh_token"], tokens["refresh_token"]);
+    let mut tokens = server.tokens().await;
+    let oldest_refresh = tokens["refresh_token"].as_str().unwrap().to_owned();
+    for _ in 0..2 {
+        let response = server
+            .refresh(tokens["refresh_token"].as_str().unwrap())
+            .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body: Value = response.json().await.unwrap();
+        assert_eq!(body["meta"], json!({}));
+        let new = &body["data"];
+        assert_ne!(new["access_token"], tokens["access_token"]);
+        assert_ne!(new["refresh_token"], tokens["refresh_token"]);
+        tokens = new.clone();
+    }
     assert_eq!(
-        server.refresh(refresh).await.status(),
+        server.refresh(&oldest_refresh).await.status(),
         StatusCode::UNAUTHORIZED
     );
+    let response = server
+        .refresh(tokens["refresh_token"].as_str().unwrap())
+        .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body: Value = response.json().await.unwrap();
+    let new = &body["data"];
     assert_eq!(
         server.log_out(new["access_token"].as_str()).await.status(),
         StatusCode::OK
@@ -77,6 +88,64 @@ async fn refresh_login_session_returns_new_tokens_and_ends_old_refresh_token() {
             .await
             .status(),
         StatusCode::UNAUTHORIZED
+    );
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn refresh_login_session_ends_login_session_when_refresh_token_was_already_exchanged() {
+    let server = Server::start().await;
+    let tokens = server.tokens().await;
+    let independent = server.tokens().await;
+    let response = server
+        .refresh(tokens["refresh_token"].as_str().unwrap())
+        .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let refreshed = response.json::<Value>().await.unwrap()["data"].clone();
+    let unknown = server.refresh("unknown-refresh-token").await;
+    let replay = server
+        .refresh(tokens["refresh_token"].as_str().unwrap())
+        .await;
+    assert_eq!(replay.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(replay.status(), unknown.status());
+    assert_eq!(
+        replay.headers()["content-type"],
+        unknown.headers()["content-type"]
+    );
+    assert_eq!(
+        replay.json::<Value>().await.unwrap(),
+        unknown.json::<Value>().await.unwrap()
+    );
+    let directory = server.stop().await;
+    let server = Server::restart(directory).await;
+    assert_eq!(
+        server
+            .log_out(refreshed["access_token"].as_str())
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        server
+            .refresh(refreshed["refresh_token"].as_str().unwrap())
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        server
+            .log_out(independent["access_token"].as_str())
+            .await
+            .status(),
+        StatusCode::OK
+    );
+    let signed_in = server.tokens().await;
+    assert_eq!(
+        server
+            .log_out(signed_in["access_token"].as_str())
+            .await
+            .status(),
+        StatusCode::OK
     );
     server.stop().await;
 }
