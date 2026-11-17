@@ -26,6 +26,11 @@ jobs:
           moon-version: 2.6.5
       - name: Install Rust Toolchain
         run: rustup toolchain install --no-self-update
+      - name: Restore Cargo Cache
+        uses: Swatinem/rust-cache@v2.9.3
+        with:
+          shared-key: ci-linux
+          save-if: 'false'
       - name: Run Moon CI
         run: moon ci
       - name: Install Lock Extension

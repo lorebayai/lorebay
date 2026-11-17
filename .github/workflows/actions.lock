@@ -3,9 +3,14 @@
 # Docs: https://gh.io/actions-lockfile
 version: 'v0.0.3'
 workflows:
+    '.github/workflows/cargo-cache.yml':
+        - 'actions/checkout@v7.0.1'
+        - 'moonrepo/setup-toolchain@v0.6.4'
+        - 'swatinem/rust-cache@v2.9.3'
     '.github/workflows/pull-request.yml':
         - 'actions/checkout@v7.0.1'
         - 'moonrepo/setup-toolchain@v0.6.4'
+        - 'swatinem/rust-cache@v2.9.3'
 dependencies:
     'actions/checkout@v7.0.1':
         ref: 'v7.0.1'
@@ -17,3 +22,8 @@ dependencies:
         commit: 'sha1-261c62cb5b0f580c7be7c8cd0f023a2e96756095'
         owner_id: 102833400
         repo_id: 698332712
+    'swatinem/rust-cache@v2.9.3':
+        ref: 'v2.9.3'
+        commit: 'sha1-d1527c8f67ef9af357290475d4af4b0fab8f12e0'
+        owner_id: 580492
+        repo_id: 298565987
