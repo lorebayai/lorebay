@@ -3,15 +3,16 @@ use axum::extract::rejection::{JsonRejection, PathRejection, QueryRejection};
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use lorebay_base::Secret;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use typed_builder::TypedBuilder;
 
 use crate::api::{ApiError, Envelope, FieldError, ListQuery, Meta, invalid_query};
 use crate::domain::caller::VerifiedCaller;
 use crate::domain::pagination::{Page, PageOptions};
 use crate::domain::{
-    CreatedTask, Note, NoteAdded, NoteContent, Task, TaskError, TaskRead, TaskTextError, TaskTitle,
-    add_note, create_task, list_tasks, read_scratchpad, read_task,
+    CreatedTask, Note, NoteAdded, NoteContent, Task, TaskChanges, TaskError, TaskRead, TaskResult,
+    TaskStatus, TaskTextError, TaskTitle, add_note, change_task, create_task, list_tasks,
+    read_scratchpad, read_task,
 };
 use crate::server::ServerState;
 
@@ -29,6 +30,18 @@ pub(crate) struct CreateTaskRequest {
 #[serde(deny_unknown_fields)]
 pub(crate) struct AddNoteRequest {
     content: String,
+}
+
+#[derive(Clone, Debug, Deserialize, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ChangeTaskRequest {
+    #[serde(default, deserialize_with = "present_string")]
+    title: Option<String>,
+    #[serde(default, deserialize_with = "present_string")]
+    status: Option<String>,
+    #[serde(default, deserialize_with = "present_string")]
+    result: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, TypedBuilder)]
@@ -100,6 +113,41 @@ impl TryFrom<AddNoteRequest> for NoteContent {
 
     fn try_from(request: AddNoteRequest) -> Result<Self, Self::Error> {
         Self::try_from(request.content).map_err(|error| invalid_text("content", error))
+    }
+}
+
+impl TryFrom<ChangeTaskRequest> for TaskChanges {
+    type Error = ApiError;
+
+    fn try_from(request: ChangeTaskRequest) -> Result<Self, Self::Error> {
+        if request.title.is_none() && request.status.is_none() && request.result.is_none() {
+            return Err(invalid_field(
+                "body",
+                "required",
+                "Provide a title, status or result.",
+            ));
+        }
+        let title = request
+            .title
+            .map(TaskTitle::try_from)
+            .transpose()
+            .map_err(|error| invalid_text("title", error))?;
+        let status = request
+            .status
+            .as_deref()
+            .map(TaskStatus::try_from)
+            .transpose()
+            .map_err(|_| invalid_field("status", "invalid", "Expected in progress or ended."))?;
+        let result = request
+            .result
+            .map(TaskResult::try_from)
+            .transpose()
+            .map_err(|error| invalid_text("result", error))?;
+        Ok(Self::builder()
+            .title(title)
+            .status(status)
+            .result(result)
+            .build())
     }
 }
 
@@ -220,6 +268,27 @@ pub(crate) async fn append_note(
     Ok((StatusCode::CREATED, Envelope::builder().data(note).build()))
 }
 
+pub(crate) async fn change(
+    State(state): State<ServerState>,
+    caller: VerifiedCaller,
+    path: Result<Path<(String, Secret<String>)>, PathRejection>,
+    request: Result<Json<ChangeTaskRequest>, JsonRejection>,
+) -> Result<Envelope<TaskResponse>, ApiError> {
+    let Path((space, task_id)) = path.map_err(invalid_path)?;
+    let Json(request) = request.map_err(invalid_json)?;
+    let task = change_task(
+        &state.database,
+        &caller,
+        Some(&space),
+        task_id.expose(),
+        request.try_into()?,
+    )
+    .await?;
+    Ok(Envelope::builder()
+        .data(TaskRead::builder().task(task).scratchpad(None).build())
+        .build())
+}
+
 pub(crate) async fn list(
     State(state): State<ServerState>,
     caller: VerifiedCaller,
@@ -281,13 +350,21 @@ fn invalid_text(field: &str, error: TaskTextError) -> ApiError {
         TaskTextError::Empty => "required",
         TaskTextError::TooLong(_) => "too_long",
     };
+    invalid_field(field, code, &error.to_string())
+}
+
+fn invalid_field(field: &str, code: &str, message: &str) -> ApiError {
     ApiError::InvalidBody(vec![
         FieldError::builder()
             .field(field)
             .code(code)
-            .message(error.to_string())
+            .message(message)
             .build(),
     ])
+}
+
+fn present_string<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<String>, D::Error> {
+    String::deserialize(deserializer).map(Some)
 }
 
 fn invalid_path(_error: PathRejection) -> ApiError {

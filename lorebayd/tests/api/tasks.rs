@@ -11,6 +11,7 @@ use crate::helpers::{
 
 use helpers::*;
 
+mod change;
 mod helpers;
 
 #[tokio::test]

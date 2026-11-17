@@ -7,6 +7,7 @@ use thiserror::Error;
 use typed_builder::TypedBuilder;
 
 use crate::entity::{account, note, task};
+use crate::repository::account::AccountRepository;
 use crate::repository::{NoteRepository, SpaceRepository, TaskAfter, TaskRepository};
 
 use super::caller::{CallerError, VerifiedCaller};
@@ -14,7 +15,8 @@ use super::login_session::now_millis;
 use super::pagination::{Page, PageOptions, decode_cursor, encode_cursor};
 use super::{
     NoteContent, SpaceAccessError, TASK_READ_ROLES, TASK_WRITE_ROLES, TaskAccessError, TaskAction,
-    TaskTitle, check_space, check_task, format_key, parse_key, primary_key, random_task_id,
+    TaskResult, TaskTitle, check_space, check_task, format_key, parse_key, primary_key,
+    random_task_id,
 };
 
 #[derive(Debug, Error)]
@@ -35,7 +37,7 @@ pub(crate) enum TaskError {
     Space(#[from] SpaceAccessError),
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum TaskStatus {
     Ended,
     InProgress,
@@ -75,6 +77,14 @@ pub(crate) struct Task {
     pub started_at: i64,
     pub ended_at: Option<i64>,
     pub last_activity_at: i64,
+}
+
+#[derive(Clone, Debug, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+pub(crate) struct TaskChanges {
+    pub title: Option<TaskTitle>,
+    pub status: Option<TaskStatus>,
+    pub result: Option<TaskResult>,
 }
 
 #[derive(Clone, Debug, TypedBuilder)]
@@ -227,6 +237,57 @@ pub(crate) async fn add_note(
         .await?;
     transaction.commit().await?;
     Ok(NoteAdded::builder().time(time).task_title(title).build())
+}
+
+pub(crate) async fn change_task(
+    database: &DatabaseConnection,
+    caller: &VerifiedCaller,
+    path_space: Option<&str>,
+    task_id: &str,
+    changes: TaskChanges,
+) -> Result<Task, TaskError> {
+    let transaction = write_transaction(database).await?;
+    let action = if changes.title.is_none()
+        && changes.result.is_none()
+        && changes.status == Some(TaskStatus::Ended)
+    {
+        TaskAction::Close
+    } else {
+        TaskAction::Change
+    };
+    let task = check_task(&transaction, caller, task_id, path_space, action).await?;
+    let account = AccountRepository::builder()
+        .connection(&transaction)
+        .build()
+        .by_id(&task.account_id)
+        .await?;
+    let status = changes
+        .status
+        .filter(|status| status.as_str() != task.status);
+    let mut model = task.into_active_model();
+    if let Some(title) = changes.title {
+        model.title = Set(title.into());
+    }
+    let now = now_millis()?;
+    if let Some(status) = status {
+        model.status = Set(status.as_str().to_owned());
+        model.ended_at = Set(match status {
+            TaskStatus::Ended => Some(now),
+            TaskStatus::InProgress => None,
+        });
+    }
+    if let Some(result) = changes.result {
+        model.result = Set(result.into());
+        model.last_activity_at = Set(now);
+    }
+    let task = TaskRepository::builder()
+        .connection(&transaction)
+        .build()
+        .update(model)
+        .await?;
+    let task = Task::try_from((task, account))?;
+    transaction.commit().await?;
+    Ok(task)
 }
 
 pub(crate) async fn list_tasks(

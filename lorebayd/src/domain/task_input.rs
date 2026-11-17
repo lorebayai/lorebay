@@ -17,6 +17,12 @@ pub(crate) struct TaskTitle {
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
+pub(crate) struct TaskResult {
+    value: String,
+}
+
+#[derive(Clone, Debug, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
 pub(crate) struct NoteContent {
     value: String,
 }
@@ -36,6 +42,23 @@ impl From<TaskTitle> for String {
     }
 }
 
+impl TryFrom<String> for TaskResult {
+    type Error = TaskTextError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        if value.chars().count() > RESULT_MAX_CHARACTERS {
+            return Err(TaskTextError::TooLong(RESULT_MAX_CHARACTERS));
+        }
+        Ok(Self { value })
+    }
+}
+
+impl From<TaskResult> for String {
+    fn from(result: TaskResult) -> Self {
+        result.value
+    }
+}
+
 impl TryFrom<String> for NoteContent {
     type Error = TaskTextError;
 
@@ -52,6 +75,7 @@ impl From<NoteContent> for String {
 }
 
 const NOTE_MAX_CHARACTERS: usize = 10_000;
+const RESULT_MAX_CHARACTERS: usize = 100_000;
 const TITLE_MAX_CHARACTERS: usize = 200;
 
 fn validate_text(value: &str, maximum: usize) -> Result<(), TaskTextError> {
