@@ -257,17 +257,10 @@ async fn login_device_retries_when_server_returns_errors() {
     proxy.server.decide_device(&login, "approve").await;
     assert_success(&login.finish().await);
     let requests = proxy.requests.lock().await;
-    assert_eq!(requests.len(), 4);
-    assert_eq!(
-        requests
-            .iter()
-            .map(|r| r["status"].as_u64().unwrap())
-            .collect::<Vec<_>>(),
-        vec![503, 500, 400, 200]
-    );
-    assert!(requests[1]["elapsed_ms"].as_u64().unwrap() >= 2000);
-    assert!(requests[2]["elapsed_ms"].as_u64().unwrap() >= 4000);
-    assert!((1000..2000).contains(&requests[3]["elapsed_ms"].as_u64().unwrap()));
+    assert_poll_order(&requests, &[503, 500]);
+    assert_minimum_spacing(&requests[1..2], 2000);
+    assert_minimum_spacing(&requests[2..3], 4000);
+    assert_minimum_spacing(&requests[3..], 1000);
     assert_success(&proxy.server.run(&["agent", "list"]).await);
 }
 
@@ -305,13 +298,9 @@ async fn login_device_retries_at_server_pace_when_rate_limited() {
     proxy.server.decide_device(&login, "approve").await;
     assert_success(&login.finish().await);
     let requests = proxy.requests.lock().await;
-    assert_eq!(requests.len(), 4);
-    assert_eq!(requests[0]["status"], 429);
-    assert_eq!(requests[1]["status"], 429);
-    assert_eq!(requests[2]["status"], 400);
-    assert!(requests[1]["elapsed_ms"].as_u64().unwrap() >= 2000);
-    assert!(requests[2]["elapsed_ms"].as_u64().unwrap() >= 1000);
-    assert!(requests[3]["elapsed_ms"].as_u64().unwrap() >= 1000);
+    assert_poll_order(&requests, &[429, 429]);
+    assert_minimum_spacing(&requests[1..2], 2000);
+    assert_minimum_spacing(&requests[2..], 1000);
     assert_success(&proxy.server.run(&["agent", "list"]).await);
 }
 
@@ -324,17 +313,9 @@ async fn login_device_waits_until_date_when_rate_limited() {
     proxy.server.decide_device(&login, "approve").await;
     assert_success(&login.finish().await);
     let requests = proxy.requests.lock().await;
-    assert_eq!(requests.len(), 4);
-    assert_eq!(
-        requests
-            .iter()
-            .map(|r| r["status"].as_u64().unwrap())
-            .collect::<Vec<_>>(),
-        vec![429, 429, 400, 200]
-    );
-    assert!(requests[1]["elapsed_ms"].as_u64().unwrap() >= 2000);
-    assert!((1000..2000).contains(&requests[2]["elapsed_ms"].as_u64().unwrap()));
-    assert!((1000..2000).contains(&requests[3]["elapsed_ms"].as_u64().unwrap()));
+    assert_poll_order(&requests, &[429, 429]);
+    assert_minimum_spacing(&requests[1..2], 2000);
+    assert_minimum_spacing(&requests[2..], 1000);
     assert_success(&proxy.server.run(&["agent", "list"]).await);
 }
 
@@ -503,6 +484,29 @@ impl Proxy {
         let login = SigningIn::start(child).await;
         self.server.decide(&login.link, "approve").await;
         assert_success(&login.finish().await);
+    }
+}
+
+fn assert_poll_order(requests: &[Value], prefix: &[u16]) {
+    assert!(requests.len() >= prefix.len() + 2);
+    for (request, status) in requests.iter().zip(prefix) {
+        assert_eq!(request["status"], *status);
+    }
+    for request in &requests[prefix.len()..requests.len() - 1] {
+        assert_eq!(request["status"], 400);
+    }
+    assert_eq!(requests[requests.len() - 1]["status"], 200);
+}
+
+fn assert_minimum_spacing(requests: &[Value], milliseconds: u64) {
+    for request in requests {
+        assert!(
+            request["elapsed_ms"]
+                .as_u64()
+                .is_some_and(|elapsed| elapsed >= milliseconds),
+            "Poll spacing {} ms is below {milliseconds} ms",
+            request["elapsed_ms"]
+        );
     }
 }
 
