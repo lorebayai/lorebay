@@ -14,6 +14,7 @@ pub(crate) mod users;
 
 pub(crate) use credential_cleanup::*;
 pub(crate) use id::*;
+pub(crate) use key::*;
 pub(crate) use metadata::*;
 pub(crate) use oauth_client::*;
 pub(crate) use participants::*;
@@ -23,6 +24,7 @@ pub(crate) use user_directory::*;
 
 mod credential_cleanup;
 mod id;
+mod key;
 mod metadata;
 mod oauth_client;
 mod participants;

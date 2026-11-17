@@ -7,6 +7,7 @@ use crate::repository::SpaceRepository;
 use crate::repository::participant::ParticipantRepository;
 
 use super::caller::VerifiedCaller;
+use super::parse_key;
 
 #[derive(Debug, Error)]
 pub(crate) enum SpaceAccessError {
@@ -79,11 +80,7 @@ pub(crate) async fn check_space<C: ConnectionTrait>(
     key: &str,
     allowed_roles: &[SpaceRole],
 ) -> Result<AuthorizedSpace, SpaceAccessError> {
-    let number = key
-        .strip_prefix("SPACE-")
-        .and_then(|value| value.parse::<i64>().ok())
-        .filter(|number| *number > 0 && key == format!("SPACE-{number}"))
-        .ok_or(SpaceAccessError::NotFound)?;
+    let number = parse_key("SPACE", key).ok_or(SpaceAccessError::NotFound)?;
     let space = SpaceRepository::builder()
         .connection(connection)
         .build()

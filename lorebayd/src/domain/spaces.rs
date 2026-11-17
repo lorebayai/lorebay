@@ -12,7 +12,7 @@ use crate::repository::participant::ParticipantRepository;
 use super::caller::{CallerError, VerifiedCaller};
 use super::login_session::now_millis;
 use super::pagination::{Page, PageOptions, decode_cursor, encode_cursor};
-use super::{AuthorizedSpace, SpaceAccessError, SpaceRole, check_space, primary_key};
+use super::{AuthorizedSpace, SpaceAccessError, SpaceRole, check_space, format_key, primary_key};
 
 #[derive(Debug, Error)]
 pub(crate) enum SpaceError {
@@ -54,7 +54,7 @@ pub(crate) struct SpaceChanges {
 impl From<AuthorizedSpace> for Space {
     fn from(authorized: AuthorizedSpace) -> Self {
         Self::builder()
-            .key(format!("SPACE-{}", authorized.space.number))
+            .key(format_key("SPACE", authorized.space.number))
             .name(authorized.space.name)
             .summary(authorized.space.summary)
             .role(authorized.role)
