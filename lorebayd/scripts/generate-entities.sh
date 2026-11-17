@@ -49,6 +49,20 @@ kill -TERM "$server_pid"
 wait "$server_pid"
 server_pid=""
 
+python3 - "$schema_dir/lorebay.sqlite3" "$schema_dir/entity-projection.sqlite3" <<'PY'
+from contextlib import closing
+from pathlib import Path
+import sqlite3
+import sys
+
+schema_uri = Path(sys.argv[1]).as_uri() + "?mode=ro"
+with closing(sqlite3.connect(schema_uri, uri=True)) as schema:
+    with closing(sqlite3.connect(sys.argv[2])) as projection:
+        schema.backup(projection)
+        for index_name in ("participant_one_owner",):
+            projection.execute(f'DROP INDEX "{index_name}"')
+PY
+
 "$cli" generate entity --compact-format --with-prelude none \
-  --database-url "sqlite://$schema_dir/lorebay.sqlite3" --output-dir "$repo_root/lorebayd/src/entity"
+  --database-url "sqlite://$schema_dir/entity-projection.sqlite3" --output-dir "$repo_root/lorebayd/src/entity"
 cargo fmt --all
