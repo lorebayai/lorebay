@@ -85,6 +85,8 @@ the API and the start helper in `tests/api/helpers.rs`, so all of them build
 as one test binary. `lorebayd` is a library crate with a thin `src/main.rs`,
 so the start helper can build it. Another crate uses the same `tests/api/`
 binary, without a start helper.
+The CLI's scenarios instead run the compiled `lorebay` against a compiled
+`lorebayd` that their own start helper starts.
 
 Run them with `moon run <project>:integration`.
 

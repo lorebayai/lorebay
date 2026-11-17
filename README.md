@@ -39,6 +39,7 @@ moon ci
 ## Repository layout
 
 - `base/`: the Rust library for configuration, logging and clocks.
+- `cli/`: the Rust crate that builds the `lorebay` command-line client.
 - `docs/`: product and system design docs.
 - `lorebayd/`: the Rust crate that builds the `lorebayd` executable.
 - `playbook/`: conventions for coding agents, imported from `AGENTS.md`
