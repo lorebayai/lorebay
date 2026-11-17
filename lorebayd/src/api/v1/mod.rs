@@ -13,7 +13,10 @@ pub(crate) fn router() -> Router<ServerState> {
             "/spaces/{space}/tasks",
             get(tasks::list).post(tasks::create),
         )
-        .route("/spaces/{space}/tasks/{task}", get(tasks::read))
+        .route(
+            "/spaces/{space}/tasks/{task}",
+            get(tasks::read).patch(tasks::change),
+        )
         .route(
             "/spaces/{space}/tasks/{task}/notes",
             post(tasks::append_note),

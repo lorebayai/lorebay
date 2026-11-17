@@ -34,6 +34,8 @@ pub(crate) enum TaskAccessError {
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum TaskAction {
     AppendNote,
+    Change,
+    Close,
 }
 
 pub(crate) async fn check_task<C: ConnectionTrait>(
@@ -63,15 +65,14 @@ pub(crate) async fn check_task<C: ConnectionTrait>(
         .build()
         .by_space_and_account(&task.space_id, caller.account_id())
         .await?;
-    if task.account_id != caller.account_id() {
-        return Err(if participant.is_some() {
-            TaskAccessError::PermissionRequired
-        } else {
-            TaskAccessError::NotFound
-        });
-    }
     let participant = participant.ok_or(TaskAccessError::NotFound)?;
-    if SpaceRole::for_caller(&participant.role, caller)? == SpaceRole::Viewer {
+    let role = SpaceRole::for_caller(&participant.role, caller)?;
+    let may_close_any =
+        matches!(action, TaskAction::Close) && matches!(role, SpaceRole::Owner | SpaceRole::Admin);
+    if task.account_id != caller.account_id() && !may_close_any {
+        return Err(TaskAccessError::PermissionRequired);
+    }
+    if role == SpaceRole::Viewer {
         return Err(TaskAccessError::PermissionRequired);
     }
     if matches!(action, TaskAction::AppendNote) && task.status == "ended" {
