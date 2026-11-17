@@ -1,6 +1,9 @@
 use thiserror::Error;
 use typed_builder::TypedBuilder;
 
+pub(crate) const NOTE_MAX_CHARACTERS: usize = 10_000;
+pub(crate) const TITLE_MAX_CHARACTERS: usize = 200;
+
 #[derive(Debug, Error)]
 pub(crate) enum TaskTextError {
     #[error("Must not be empty.")]
@@ -96,9 +99,7 @@ impl TryFrom<String> for TaskKeyword {
 }
 
 const KEYWORD_MAX_CHARACTERS: usize = 200;
-const NOTE_MAX_CHARACTERS: usize = 10_000;
 const RESULT_MAX_CHARACTERS: usize = 100_000;
-const TITLE_MAX_CHARACTERS: usize = 200;
 
 fn validate_text(value: &str, maximum: usize) -> Result<(), TaskTextError> {
     if value.trim().is_empty() {

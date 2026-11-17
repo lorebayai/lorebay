@@ -3,6 +3,11 @@ use axum::routing::{delete, get, post};
 
 use crate::server::ServerState;
 
+pub(crate) use spaces::SpaceResponse;
+pub(crate) use tasks::{
+    NoteAddedResponse, ReadTaskQuery, TaskResponse, TaskSummaryResponse, invalid_text,
+};
+
 pub(crate) fn router() -> Router<ServerState> {
     Router::new()
         .route("/agents", get(agents::list))

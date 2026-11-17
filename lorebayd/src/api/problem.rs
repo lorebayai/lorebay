@@ -79,6 +79,16 @@ pub(crate) struct ProblemDetails {
 }
 
 impl ApiError {
+    pub(crate) fn invalid_body() -> Self {
+        Self::InvalidBody(vec![
+            FieldError::builder()
+                .field("body")
+                .code("invalid")
+                .message("Expected a JSON object with the required string fields.")
+                .build(),
+        ])
+    }
+
     fn parts(&self) -> (StatusCode, &'static str) {
         match self {
             Self::AgentRequired => (StatusCode::FORBIDDEN, "auth.agent_required"),
@@ -170,27 +180,34 @@ impl From<TaskAccessError> for ApiError {
     }
 }
 
-impl IntoResponse for ApiError {
-    fn into_response(self) -> Response {
-        let (status, code) = self.parts();
-        let title = self.to_string();
-        let wait = match &self {
-            Self::RateLimited(wait) => Some(*wait),
-            _ => None,
-        };
-        let errors = match self {
-            Self::InvalidBody(errors) | Self::InvalidPath(errors) | Self::InvalidQuery(errors) => {
-                errors
-            }
+impl From<ApiError> for ProblemDetails {
+    fn from(error: ApiError) -> Self {
+        let (status, code) = error.parts();
+        let title = error.to_string();
+        let errors = match error {
+            ApiError::InvalidBody(errors)
+            | ApiError::InvalidPath(errors)
+            | ApiError::InvalidQuery(errors) => errors,
             _ => Vec::new(),
         };
-        let problem = ProblemDetails::builder()
+        Self::builder()
             .problem_type(GENERIC_PROBLEM_TYPE)
             .title(title)
             .status(status.as_u16())
             .code(code)
             .errors(errors)
-            .build();
+            .build()
+    }
+}
+
+impl IntoResponse for ApiError {
+    fn into_response(self) -> Response {
+        let (status, _) = self.parts();
+        let wait = match &self {
+            Self::RateLimited(wait) => Some(*wait),
+            _ => None,
+        };
+        let problem = ProblemDetails::from(self);
         let mut response = (
             status,
             [(header::CONTENT_TYPE, PROBLEM_MEDIA_TYPE)],

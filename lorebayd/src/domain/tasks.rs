@@ -52,6 +52,7 @@ pub(crate) enum TaskStatus {
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
 pub(crate) struct CreatedTask {
+    pub task_title: String,
     pub key: String,
     pub task_id: Secret<String>,
 }
@@ -175,7 +176,7 @@ pub(crate) async fn create_task(
         .await?;
     let now = now_millis()?;
     let task_id = random_task_id().map_err(anyhow::Error::from)?;
-    TaskRepository::builder()
+    let task = TaskRepository::builder()
         .connection(&transaction)
         .build()
         .insert(task::ActiveModel {
@@ -195,6 +196,7 @@ pub(crate) async fn create_task(
         .await?;
     transaction.commit().await?;
     Ok(CreatedTask::builder()
+        .task_title(task.title)
         .key(format_key("TK", number))
         .task_id(Secret::from(task_id))
         .build())

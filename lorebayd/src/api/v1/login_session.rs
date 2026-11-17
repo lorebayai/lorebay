@@ -110,13 +110,7 @@ pub(super) fn invalid_json(error: JsonRejection) -> ApiError {
     if error.status() == StatusCode::PAYLOAD_TOO_LARGE {
         return ApiError::PayloadTooLarge;
     }
-    ApiError::InvalidBody(vec![
-        FieldError::builder()
-            .field("body")
-            .code("invalid")
-            .message("Expected a JSON object with the required string fields.")
-            .build(),
-    ])
+    ApiError::invalid_body()
 }
 
 fn validate_field(field: &str, value: &str) -> Result<(), ApiError> {

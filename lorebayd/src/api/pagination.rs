@@ -5,6 +5,9 @@ use crate::domain::pagination::PageOptions;
 
 use super::{ApiError, FieldError};
 
+pub(crate) const DEFAULT_PAGE_SIZE: u64 = 20;
+pub(crate) const MAX_PAGE_SIZE: u64 = 100;
+
 #[derive(Clone, Debug, Deserialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
 pub(crate) struct ListQuery {
@@ -42,6 +45,3 @@ pub(crate) fn invalid_query(field: &str) -> ApiError {
             .build(),
     ])
 }
-
-const DEFAULT_PAGE_SIZE: u64 = 20;
-const MAX_PAGE_SIZE: u64 = 100;

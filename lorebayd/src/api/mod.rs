@@ -7,6 +7,10 @@ use axum::http::StatusCode;
 pub(crate) use envelope::*;
 pub(crate) use pagination::*;
 pub(crate) use problem::*;
+pub(crate) use v1::{
+    NoteAddedResponse, ReadTaskQuery, SpaceResponse, TaskResponse, TaskSummaryResponse,
+    invalid_text,
+};
 
 pub(crate) fn router() -> Router<ServerState> {
     v1::router().fallback(not_found)
