@@ -37,6 +37,14 @@
     </p>
     <button type="submit" value="approve">Approve</button>
     <button type="submit" value="decline" formnovalidate>Decline</button>
+    <div id="name-conflict" hidden>
+      <p>Choose another name, or replace the old agent's authorization.</p>
+      <p>Replacing ends the old agent's access.</p>
+      <button id="choose-name" type="button">Choose another name</button>
+      <button id="replace" type="submit" value="replace">
+        Replace old authorization
+      </button>
+    </div>
   </form>
   <button id="finish" type="button" hidden>Retry sign-out and continue</button>
   <!-- AUTHORIZATION_SCRIPT -->

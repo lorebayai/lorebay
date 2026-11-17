@@ -23,6 +23,9 @@ Open the metadata's `/oauth/authorize` endpoint with the client's authorization
 parameters to sign in and consent. The built-in CLI client ID is `lorebay-cli`;
 it accepts loopback redirects on any port and takes no agent name.
 
+If you already use an agent name, choose another name or explicitly replace
+the old authorization. Its tokens end when the new client exchanges its code.
+
 `hash-password` reads a password from standard input and prints an Argon2id
 PHC hash. It removes one final line ending and starts no server.
 It accepts no password argument.

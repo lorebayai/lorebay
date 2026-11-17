@@ -16,8 +16,15 @@
     redirect_url: string;
   }
 
+  interface ProblemDetails {
+    errors?: { field: string; code: string }[];
+  }
+
   class HttpError extends Error {
-    constructor(readonly status: number) {
+    constructor(
+      readonly status: number,
+      readonly problem: ProblemDetails = {},
+    ) {
       super("The request failed. Check the link or sign in again.");
     }
   }
@@ -27,6 +34,8 @@
   const message = element("#message", HTMLParagraphElement);
   const finish = element("#finish", HTMLButtonElement);
   const agentName = element("#agent input", HTMLInputElement);
+  const nameConflict = element("#name-conflict", HTMLDivElement);
+  const chooseName = element("#choose-name", HTMLButtonElement);
   const query = new URLSearchParams(window.location.search);
   const parameters: Partial<Record<string, string>> = {};
   const fields = [
@@ -43,6 +52,7 @@
   let isCli = false;
   let busy = false;
   let redirectUrl: string | undefined;
+  let conflictedName: string | undefined;
 
   for (const field of fields) {
     if (query.getAll(field).length > 1) {
@@ -86,7 +96,10 @@
         consent.hidden = true;
         login.hidden = false;
       }
-      throw new HttpError(response.status);
+      const problem = (await response
+        .json()
+        .catch(() => ({}))) as ProblemDetails;
+      throw new HttpError(response.status, problem);
     }
     const envelope = (await response.json()) as { data: T };
     return envelope.data;
@@ -158,6 +171,8 @@
       element("#agent", HTMLElement).hidden = isCli;
       agentName.disabled = isCli;
       agentName.value = details.default_agent_name ?? "";
+      conflictedName = undefined;
+      nameConflict.hidden = true;
       login.hidden = true;
       consent.hidden = false;
       message.textContent = "Review this request before deciding.";
@@ -177,17 +192,23 @@
   async function decide(submitter: HTMLElement | null): Promise<void> {
     if (busy) return;
     busy = true;
+    const submittedName = agentName.value;
     try {
+      const action =
+        submitter instanceof HTMLButtonElement ? submitter.value : "approve";
       const body: typeof parameters & {
         decision: string;
         agent_name?: string;
+        replace_existing?: boolean;
       } = {
         ...parameters,
-        decision:
-          submitter instanceof HTMLButtonElement ? submitter.value : "approve",
+        decision: action === "decline" ? "decline" : "approve",
       };
-      if (!isCli && body.decision === "approve")
-        body.agent_name = agentName.value;
+      if (!isCli && body.decision === "approve") {
+        body.agent_name = submittedName;
+        body.replace_existing =
+          action === "replace" && conflictedName === submittedName;
+      }
       const result = await request<DecisionResult>(
         "authorization-decision",
         "POST",
@@ -196,7 +217,18 @@
       redirectUrl = result.redirect_url;
       await followRedirect();
     } catch (error) {
-      showError(error);
+      if (
+        error instanceof HttpError &&
+        error.problem.errors?.some(
+          (field) => field.field === "agent_name" && field.code === "taken",
+        )
+      ) {
+        conflictedName = submittedName;
+        nameConflict.hidden = agentName.value !== submittedName;
+        message.textContent = "You already have an agent with this name.";
+      } else {
+        showError(error);
+      }
     } finally {
       busy = false;
     }
@@ -222,6 +254,19 @@
   consent.addEventListener("submit", (event) => {
     event.preventDefault();
     void decide(event.submitter);
+  });
+
+  agentName.addEventListener("input", () => {
+    conflictedName = undefined;
+    nameConflict.hidden = true;
+  });
+
+  chooseName.addEventListener("click", () => {
+    conflictedName = undefined;
+    nameConflict.hidden = true;
+    agentName.focus();
+    agentName.select();
+    message.textContent = "Enter another agent name, then approve.";
   });
 
   finish.addEventListener("click", () => {

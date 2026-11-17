@@ -9,6 +9,7 @@ use url::{Host, Url};
 
 use crate::entity::oauth_code::ActiveModel;
 use crate::repository::OAuthClientRepository;
+use crate::repository::agent_authorization::AgentAuthorizationRepository;
 use crate::repository::oauth_code::OauthCodeRepository;
 
 use super::access::Caller;
@@ -19,13 +20,24 @@ use super::{authorization_server_metadata, primary_key, random_id};
 pub(crate) const CLI_CLIENT_ID: &str = "lorebay-cli";
 
 #[derive(Clone, Debug)]
+pub(crate) enum AgentNameConflict {
+    Reject,
+    Replace,
+}
+
+#[derive(Clone, Debug)]
 pub(crate) enum AuthorizationDecision {
-    Approve(Option<String>),
+    Approve {
+        agent_name: Option<String>,
+        conflict: AgentNameConflict,
+    },
     Decline,
 }
 
 #[derive(Debug, Error)]
 pub(crate) enum AuthorizationError {
+    #[error("Agent name is already taken")]
+    AgentNameTaken,
     #[error(transparent)]
     Database(#[from] sea_orm::DbErr),
     #[error(transparent)]
@@ -74,27 +86,12 @@ pub(crate) async fn decide_authorization(
         .await?;
     let details = client_details(&transaction, &input).await?;
     let response = match decision {
-        AuthorizationDecision::Approve(name) => {
-            let agent_name = chosen_agent_name(details, name)?;
-            let code = random_id().map_err(anyhow::Error::from)?;
-            let now = now_millis()?;
-            let model = ActiveModel {
-                id: Set(primary_key()),
-                code_hash: Set(token_hash(&code)),
-                account_id: Set(caller.account_id.clone()),
-                client_id: Set(input.client_id.clone()),
-                redirect_uri: Set(input.redirect_uri.clone()),
-                code_challenge: Set(input.code_challenge.clone()),
-                agent_name: Set(agent_name),
-                replaces_authorization_id: Set(None),
-                created_at: Set(now),
-                expires_at: Set(now + CODE_LIFETIME_MILLIS),
-            };
-            OauthCodeRepository::builder()
-                .connection(&transaction)
-                .build()
-                .insert(model)
-                .await?;
+        AuthorizationDecision::Approve {
+            agent_name,
+            conflict,
+        } => {
+            let agent_name = chosen_agent_name(details, agent_name)?;
+            let code = issue_code(&transaction, caller, &input, agent_name, conflict).await?;
             ("code", code)
         }
         AuthorizationDecision::Decline => ("error", "access_denied".to_owned()),
@@ -110,6 +107,48 @@ const CODE_LIFETIME_MILLIS: i64 = 300_000;
 #[builder(field_defaults(setter(into)))]
 struct RegisteredRedirects {
     redirect_uris: Vec<String>,
+}
+
+async fn issue_code<C: ConnectionTrait>(
+    connection: &C,
+    caller: &Caller,
+    input: &AuthorizationInput,
+    agent_name: Option<String>,
+    conflict: AgentNameConflict,
+) -> Result<String, AuthorizationError> {
+    let existing = if let Some(name) = &agent_name {
+        AgentAuthorizationRepository::builder()
+            .connection(connection)
+            .build()
+            .by_account_and_name(&caller.account_id, name)
+            .await?
+    } else {
+        None
+    };
+    let replaces_authorization_id = match (existing, conflict) {
+        (Some(_), AgentNameConflict::Reject) => return Err(AuthorizationError::AgentNameTaken),
+        (existing, _) => existing.map(|authorization| authorization.id),
+    };
+    let code = random_id().map_err(anyhow::Error::from)?;
+    let now = now_millis()?;
+    let model = ActiveModel {
+        id: Set(primary_key()),
+        code_hash: Set(token_hash(&code)),
+        account_id: Set(caller.account_id.clone()),
+        client_id: Set(input.client_id.clone()),
+        redirect_uri: Set(input.redirect_uri.clone()),
+        code_challenge: Set(input.code_challenge.clone()),
+        agent_name: Set(agent_name),
+        replaces_authorization_id: Set(replaces_authorization_id),
+        created_at: Set(now),
+        expires_at: Set(now + CODE_LIFETIME_MILLIS),
+    };
+    OauthCodeRepository::builder()
+        .connection(connection)
+        .build()
+        .insert(model)
+        .await?;
+    Ok(code)
 }
 
 async fn client_details<C: ConnectionTrait>(
