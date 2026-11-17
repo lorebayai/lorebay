@@ -19,10 +19,13 @@ pub(crate) async fn authorization() -> Response {
             (header::X_CONTENT_TYPE_OPTIONS, "nosniff".to_owned()),
             (header::X_FRAME_OPTIONS, "DENY".to_owned()),
         ],
-        Html(DOCUMENT.replace("{{SCRIPT}}", SCRIPT)),
+        Html(DOCUMENT.replace(
+            "<!-- AUTHORIZATION_SCRIPT -->",
+            &format!("<script>{SCRIPT}</script>"),
+        )),
     )
         .into_response()
 }
 
-const DOCUMENT: &str = include_str!("authorization.html");
-const SCRIPT: &str = include_str!("authorization.js");
+const DOCUMENT: &str = include_str!("../../../web/out/authorization.html");
+const SCRIPT: &str = include_str!("../../../web/out/authorization.js");

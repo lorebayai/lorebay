@@ -9,9 +9,13 @@ Run these commands from the repo root:
 
 ```bash
 moon run lorebayd:format lorebayd:lint lorebayd:build lorebayd:test lorebayd:integration
+moon run web:build
 cargo run -p lorebayd -- hash-password < /path/to/password.txt
 cargo run -p lorebayd -- --config /path/to/lorebayd.json --dotenv /path/to/lorebayd.env
 ```
+
+`moon run web:build` builds the static web files before direct Cargo commands.
+The server build, lint and test tasks run it as a dependency.
 
 Run `moon run lorebayd:generate-entities` to regenerate entities from a disposable database.
 
