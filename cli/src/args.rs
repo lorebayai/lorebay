@@ -42,6 +42,11 @@ pub(crate) enum Command {
         #[command(subcommand)]
         command: SpaceCommand,
     },
+    /// Read a space's tasks and notes.
+    Task {
+        #[command(subcommand)]
+        command: TaskCommand,
+    },
     /// Find people to add to a space.
     User {
         #[command(subcommand)]
@@ -122,6 +127,25 @@ pub(crate) enum SpaceCommand {
 pub(crate) enum UserCommand {
     /// List one page of usernames.
     List(Page),
+}
+
+#[derive(Clone, Debug, Subcommand)]
+pub(crate) enum TaskCommand {
+    /// List one page of tasks, newest activity first.
+    List {
+        space: String,
+        #[command(flatten)]
+        page: Page,
+    },
+    /// Read one page of a task's notes in time order.
+    Scratchpad {
+        space: String,
+        task: String,
+        #[command(flatten)]
+        page: Page,
+    },
+    /// Show a task's fields and task ID.
+    Show { space: String, task: String },
 }
 
 #[derive(Clone, Debug, Parser, TypedBuilder)]

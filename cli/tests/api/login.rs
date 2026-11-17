@@ -145,6 +145,10 @@ async fn help_and_usage_use_documented_exit_codes() {
         vec!["--help"],
         vec!["login", "--help"],
         vec!["agent", "list", "--help"],
+        vec!["task", "--help"],
+        vec!["task", "list", "--help"],
+        vec!["task", "show", "--help"],
+        vec!["task", "scratchpad", "--help"],
     ] {
         let output = server.run(&arguments).await;
         assert_success(&output);
@@ -157,6 +161,9 @@ async fn help_and_usage_use_documented_exit_codes() {
         vec!["--output=json", "invalid"],
         vec!["agent", "list", "--page-size", "-1", "--output=json"],
         vec!["agent", "revoke"],
+        vec!["task", "list"],
+        vec!["task", "show", "SPACE-1"],
+        vec!["task", "scratchpad", "SPACE-1"],
     ] {
         let output = server.run(&arguments).await;
         assert_eq!(output.status.code(), Some(2));

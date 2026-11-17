@@ -1,4 +1,5 @@
 use reqwest::Method;
+use serde_json::Value;
 use typed_builder::TypedBuilder;
 use url::{Position, Url};
 
@@ -16,6 +17,8 @@ pub(crate) struct Listing {
     pub command: String,
     pub columns: Vec<&'static str>,
     pub fields: Vec<&'static str>,
+    #[builder(default = Vec::new())]
+    pub multiline_columns: Vec<usize>,
 }
 
 pub(crate) fn api_path(segments: &[&str]) -> Result<String> {
@@ -65,7 +68,7 @@ pub(crate) async fn list_page(
             listing
                 .fields
                 .iter()
-                .map(|field| item[field].as_str().unwrap_or_default().to_owned())
+                .map(|field| display_value(&item[field]))
                 .collect::<Vec<_>>()
         })
         .collect();
@@ -75,10 +78,22 @@ pub(crate) async fn list_page(
         .map(|cursor| next_page(&listing.command, &page, cursor, mode));
     let mut outcome = Outcome::new(
         body,
-        Table::builder().columns(listing.columns).rows(rows).build(),
+        Table::builder()
+            .columns(listing.columns)
+            .rows(rows)
+            .multiline_columns(listing.multiline_columns)
+            .build(),
     );
     outcome.next = next;
     Ok(outcome)
+}
+
+pub(crate) fn display_value(value: &Value) -> String {
+    match value {
+        Value::Null => String::new(),
+        Value::String(text) => text.clone(),
+        value => value.to_string(),
+    }
 }
 
 const API_ROOT: &str = "http://localhost/api/v1/";

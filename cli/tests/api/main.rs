@@ -10,3 +10,4 @@ mod login;
 mod network;
 mod session;
 mod spaces;
+mod tasks;

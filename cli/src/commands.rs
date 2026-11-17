@@ -17,9 +17,10 @@ use crate::output::{self, Outcome, Table};
 mod pages;
 mod participants;
 mod spaces;
+mod tasks;
 mod users;
 
-pub(super) use pages::{Listing, api_path, list_page};
+pub(super) use pages::{Listing, api_path, display_value, list_page};
 
 pub(crate) async fn run(command: Command, mode: OutputMode) -> Result<Outcome> {
     let store = Store::from_environment()?;
@@ -38,6 +39,7 @@ pub(crate) async fn run(command: Command, mode: OutputMode) -> Result<Outcome> {
         }
         Command::Participant { command } => participants::run(command, &store, mode).await,
         Command::Space { command } => spaces::run(command, &store, mode).await,
+        Command::Task { command } => tasks::run(command, &store, mode).await,
         Command::User { command } => users::run(command, &store, mode).await,
         Command::Logout => {
             http::logout(&store).await?;
@@ -51,7 +53,7 @@ pub(crate) async fn run(command: Command, mode: OutputMode) -> Result<Outcome> {
         } => {
             let path = api_path(&[AGENTS, &name])?;
             if !yes {
-                output::confirm(&name)?;
+                output::confirm("Revoke agent", &name)?;
             }
             Http::new()?
                 .authorized(&store, Method::DELETE, &path, None)
