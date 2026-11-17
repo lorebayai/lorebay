@@ -146,6 +146,8 @@ pub fn path_commands(segment: &str) -> Vec<Vec<&str>> {
         vec!["task", "list", segment],
         vec!["task", "show", segment, "TK-1"],
         vec!["task", "show", "SPACE-1", segment],
+        vec!["task", "close", segment, "task-id"],
+        vec!["task", "close", "SPACE-1", segment],
         vec!["task", "scratchpad", segment, "TK-1"],
         vec!["task", "scratchpad", "SPACE-1", segment],
         vec!["space", "change", segment, "--name", "Unchanged"],

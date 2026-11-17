@@ -1,9 +1,8 @@
-use reqwest::Method;
-use serde_json::{Value, json};
+use serde_json::json;
 
 use crate::helpers::{
     SECOND_USERNAME, append_note, assert_success, assert_task_error, body, create, create_task,
-    task_context, task_pages,
+    read_task, task_context, task_id_from_show, task_pages, task_with_artifacts,
 };
 
 #[tokio::test]
@@ -44,40 +43,95 @@ async fn task_list_returns_tasks_in_activity_order() {
 }
 
 #[tokio::test]
-async fn task_show_prints_fields_and_task_id() {
+async fn task_show_prints_result_task_id_and_artifacts() {
     let (server, space, agent) = task_context().await;
     let title = "# Work\n- source\ttext\u{1b}[0m\r\u{7}\u{2066}";
-    let task = create_task(&server, &space, &agent, title).await;
+    let result = "# Findings\n- **Done**\tcode\u{1b}[0m\r\u{7}\u{202e}";
+    let expected = task_with_artifacts(&server, &space, &agent, title, result).await;
     let shown = server
         .run(&["task", "show", &space, "TK-1", "--output", "json"])
         .await;
     assert_success(&shown);
     assert!(shown.stderr.is_empty());
-    let person = server.credentials();
-    let expected = server
-        .json(
-            Method::GET,
-            &format!("/api/v1/spaces/{space}/tasks/TK-1"),
-            Value::Null,
-            person["access_token"].as_str(),
-        )
-        .await;
-    assert_eq!(body(&shown), expected);
-    assert_eq!(expected["data"]["task_id"], task["task_id"]);
-    assert_eq!(expected["data"]["result"], "");
-    assert_eq!(expected["data"]["artifacts"], json!([]));
+    assert_eq!(body(&shown), json!({"data": expected, "meta": {}}));
+    assert_eq!(
+        body(&shown)["data"]["artifacts"].as_array().unwrap().len(),
+        2
+    );
     let human = server.run(&["task", "show", &space, "TK-1"]).await;
     assert_success(&human);
     assert!(human.stderr.is_empty());
-    let id = task["task_id"].as_str().unwrap();
-    let started = expected["data"]["started_at"].as_i64().unwrap();
+    let id = expected["task_id"].as_str().unwrap();
+    let started = expected["started_at"].as_i64().unwrap();
+    let last_activity = expected["last_activity_at"].as_i64().unwrap();
+    let artifacts = &expected["artifacts"];
     assert_eq!(
         String::from_utf8(human.stdout).unwrap(),
         format!(
-            "Key: TK-1\nTask ID: {id}\nTitle: # Work\n- source\ttext\\u{{1b}}[0m\\r\\u{{7}}\\u{{2066}}\nStatus: in progress\nPerson: {}\nAgent name: Task agent\nStarted at: {started}\nEnded at: \nLast activity at: {started}\nResult: \nArtifacts: []\n",
+            "Key: TK-1\nTask ID: {id}\nTitle: # Work\n- source\ttext\\u{{1b}}[0m\\r\\u{{7}}\\u{{2066}}\nStatus: in progress\nPerson: {}\nAgent name: Task agent\nStarted at: {started}\nEnded at: \nLast activity at: {last_activity}\nResult: # Findings\n- **Done**\tcode\\u{{1b}}[0m\\r\\u{{7}}\\u{{202e}}\nArtifacts: {artifacts}\n",
             server.username
         )
     );
+}
+
+#[tokio::test]
+async fn task_close_ends_task_named_by_task_id() {
+    let (server, space, agent) = task_context().await;
+    for mode in ["human", "json"] {
+        let mut expected = task_with_artifacts(
+            &server,
+            &space,
+            &agent,
+            "Keep title",
+            "**Keep result**\nDetails",
+        )
+        .await;
+        let key = expected["key"].as_str().unwrap().to_owned();
+        let id = task_id_from_show(&server, &space, &key, mode).await;
+        assert_eq!(expected["task_id"], id);
+        let closed = server
+            .run(&["task", "close", &space, &id, "--output", mode])
+            .await;
+        assert_success(&closed);
+        assert!(closed.stderr.is_empty());
+        let after = read_task(&server, &space, &key).await;
+        let ended = after["ended_at"].as_i64().unwrap();
+        assert!(ended >= expected["started_at"].as_i64().unwrap());
+        expected["status"] = json!("ended");
+        expected["ended_at"] = json!(ended);
+        assert_eq!(after, expected);
+        if mode == "json" {
+            assert_eq!(body(&closed), json!({"data": expected, "meta": {}}));
+        } else {
+            let shown = server.run(&["task", "show", &space, &key]).await;
+            assert_success(&shown);
+            assert_eq!(closed.stdout, shown.stdout);
+            let text = String::from_utf8(closed.stdout).unwrap();
+            assert!(text.contains("Status: ended\n"));
+            assert!(text.contains(&format!("Ended at: {ended}\n")));
+        }
+    }
+}
+
+#[tokio::test]
+async fn task_close_fails_with_server_error_when_given_task_key() {
+    let (server, space, agent) = task_context().await;
+    let task = create_task(&server, &space, &agent, "Keep task").await;
+    let key = task["key"].as_str().unwrap();
+    let expected = read_task(&server, &space, key).await;
+    assert_eq!(expected["status"], "in progress");
+    for mode in ["human", "json"] {
+        for argument in [key, "task/id?query#fragment%"] {
+            let output = server
+                .run(&["task", "close", &space, argument, "--output", mode])
+                .await;
+            assert_task_error(&output, mode, "task.not_found");
+            if mode == "human" {
+                assert_eq!(output.stderr, b"Task not found\n");
+            }
+            assert_eq!(read_task(&server, &space, key).await, expected);
+        }
+    }
 }
 
 #[tokio::test]

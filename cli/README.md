@@ -26,6 +26,7 @@ cargo run -p lorebay-cli -- participant remove SPACE-1 alice
 cargo run -p lorebay-cli -- task list SPACE-1 --page-size 20 --output json
 cargo run -p lorebay-cli -- task show SPACE-1 TK-1
 cargo run -p lorebay-cli -- task scratchpad SPACE-1 TK-1 --page-size 20
+cargo run -p lorebay-cli -- task close SPACE-1 '<task-id>'
 cargo run -p lorebay-cli -- logout
 cargo run -p lorebay-cli -- --help
 ```

@@ -1,5 +1,5 @@
 use reqwest::Method;
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use crate::args::{OutputMode, Page, TaskCommand};
 use crate::constants::DATA;
@@ -12,6 +12,7 @@ use super::{Listing, api_path, display_value, list_page};
 
 pub(super) async fn run(command: TaskCommand, store: &Store, mode: OutputMode) -> Result<Outcome> {
     match command {
+        TaskCommand::Close { space, task_id } => close(store, &space, &task_id).await,
         TaskCommand::List { space, page } => list(store, &space, page, mode).await,
         TaskCommand::Scratchpad { space, task, page } => {
             list_page(
@@ -49,6 +50,18 @@ pub(super) async fn run(command: TaskCommand, store: &Store, mode: OutputMode) -
 const SCRATCHPAD: &str = "scratchpad";
 const SPACES: &str = "spaces";
 const TASKS: &str = "tasks";
+
+async fn close(store: &Store, space: &str, task_id: &str) -> Result<Outcome> {
+    let body = Http::new()?
+        .authorized(
+            store,
+            Method::PATCH,
+            &api_path(&[SPACES, space, TASKS, task_id])?,
+            Some(&json!({"status": "ended"})),
+        )
+        .await?;
+    Ok(task_output(body))
+}
 
 async fn list(store: &Store, space: &str, page: Page, mode: OutputMode) -> Result<Outcome> {
     list_page(

@@ -131,6 +131,8 @@ pub(crate) enum UserCommand {
 
 #[derive(Clone, Debug, Subcommand)]
 pub(crate) enum TaskCommand {
+    /// End a task named by its task ID.
+    Close { space: String, task_id: String },
     /// List one page of tasks, newest activity first.
     List {
         space: String,
