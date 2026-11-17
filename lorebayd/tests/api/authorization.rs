@@ -5,10 +5,14 @@ use base64::engine::general_purpose::STANDARD;
 use reqwest::{Method, Response, StatusCode};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
+use tempfile::TempDir;
 use url::Url;
 
-use crate::helpers::{REDIRECT_URI as TOKEN_REDIRECT_URI, Server};
+use crate::helpers::{
+    REDIRECT_URI as TOKEN_REDIRECT_URI, Server, TEST_PASSWORD, TEST_USERNAME, assert_taken,
+};
 
+const AGENT_NAME: &str = "Build agent";
 const READ_PATH: &str = "/api/v1/authorization-request";
 const DECISION_PATH: &str = "/api/v1/authorization-decision";
 const REDIRECT_URI: &str = "http://127.0.0.1:46137/callback?tenant=example";
@@ -312,6 +316,84 @@ async fn get_authorization_page_returns_page_without_external_scripts() {
     server.stop().await;
 }
 
+#[tokio::test]
+async fn decide_authorization_fails_when_agent_name_is_taken() {
+    let server = Server::start().await;
+    let old = server.authorize_agent(AGENT_NAME).await;
+    let client = server.register_client(AGENT_NAME).await;
+    let person = server.tokens().await;
+    for client in [&client, &old.client_id] {
+        let mut input = authorization_request(client, TOKEN_REDIRECT_URI, &server);
+        input["decision"] = json!("approve");
+        assert_taken(operation(&server, DECISION_PATH, input.clone(), Some(&person)).await).await;
+        let mut explicit = input;
+        explicit["agent_name"] = json!(AGENT_NAME);
+        explicit["replace_existing"] = json!(false);
+        assert_taken(operation(&server, DECISION_PATH, explicit, Some(&person)).await).await;
+    }
+    let mut input = authorization_request(&client, TOKEN_REDIRECT_URI, &server);
+    input["decision"] = json!("approve");
+    input["agent_name"] = json!("Another agent");
+    let code = decide(&server, input, &person).await["code"].clone();
+    successful_tokens(server.exchange_code(&client, &code).await).await;
+    successful_tokens(
+        server
+            .refresh_oauth(
+                &old.client_id,
+                old.tokens["refresh_token"].as_str().unwrap(),
+            )
+            .await,
+    )
+    .await;
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn decide_authorization_compares_agent_names_exactly_for_each_person() {
+    let server = Server::restart_with_users(
+        TempDir::new().unwrap(),
+        &[(TEST_USERNAME, TEST_PASSWORD), ("bob", TEST_PASSWORD)],
+    )
+    .await;
+    let old = server.authorize_agent(AGENT_NAME).await;
+    let client = server.register_client(AGENT_NAME).await;
+    let person = server.tokens().await;
+    for name in ["build agent", "Build agent "] {
+        let mut input = authorization_request(&client, TOKEN_REDIRECT_URI, &server);
+        input["decision"] = json!("approve");
+        input["agent_name"] = json!(name);
+        let code = decide(&server, input, &person).await["code"].clone();
+        successful_tokens(server.exchange_code(&client, &code).await).await;
+    }
+    let response = server.log_in("bob", TEST_PASSWORD).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let bob = response.json::<Value>().await.unwrap()["data"].clone();
+    let mut input = authorization_request(&client, TOKEN_REDIRECT_URI, &server);
+    input["decision"] = json!("approve");
+    input["replace_existing"] = json!(true);
+    let code = decide(&server, input, &bob).await["code"].clone();
+    let tokens = successful_tokens(server.exchange_code(&client, &code).await).await;
+    successful_tokens(
+        server
+            .refresh_oauth(&client, tokens["refresh_token"].as_str().unwrap())
+            .await,
+    )
+    .await;
+    successful_tokens(
+        server
+            .refresh_oauth(
+                &old.client_id,
+                old.tokens["refresh_token"].as_str().unwrap(),
+            )
+            .await,
+    )
+    .await;
+    let mut input = authorization_request(&client, TOKEN_REDIRECT_URI, &server);
+    input["decision"] = json!("approve");
+    assert_taken(operation(&server, DECISION_PATH, input, Some(&person)).await).await;
+    server.stop().await;
+}
+
 async fn registered_request(server: &Server) -> Value {
     let response = server
         .json(
@@ -393,4 +475,21 @@ async fn decide(server: &Server, input: Value, tokens: &Value) -> HashMap<String
         .unwrap();
     assert_eq!(query["iss"], metadata["issuer"].as_str().unwrap());
     query
+}
+
+async fn successful_tokens(response: Response) -> Value {
+    assert_eq!(response.status(), StatusCode::OK);
+    let tokens = response.json::<Value>().await.unwrap();
+    assert_eq!(tokens["token_type"], "Bearer");
+    assert!(
+        tokens["refresh_token"]
+            .as_str()
+            .is_some_and(|token| !token.is_empty())
+    );
+    assert!(
+        tokens["access_token"]
+            .as_str()
+            .is_some_and(|token| !token.is_empty())
+    );
+    tokens
 }
