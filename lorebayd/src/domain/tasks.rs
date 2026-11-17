@@ -272,6 +272,7 @@ pub(crate) async fn change_task(
     let status = changes
         .status
         .filter(|status| status.as_str() != task.status);
+    let last_activity_at = task.last_activity_at;
     let mut model = task.into_active_model();
     if let Some(title) = changes.title {
         model.title = Set(title.into());
@@ -286,7 +287,7 @@ pub(crate) async fn change_task(
     }
     if let Some(result) = changes.result {
         model.result = Set(result.into());
-        model.last_activity_at = Set(now);
+        model.last_activity_at = Set(now.max(last_activity_at));
     }
     let task = TaskRepository::builder()
         .connection(&transaction)

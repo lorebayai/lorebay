@@ -261,6 +261,7 @@ async fn delete_note_removes_one_note_from_scratchpad() {
             .await;
     }
     assert_eq!(scratchpad(&server, &person, "TK-1").await, json!([]));
+    update_result(&server, &person, id).await;
     let next = append(&server, &agent, &task, "After deletion").await;
     assert!(next["time"].as_i64().unwrap() > notes[2]["time"].as_i64().unwrap());
     server.stop().await;
@@ -276,6 +277,18 @@ async fn assert_invalid_times(server: &Server, tokens: &Value, id: &str) {
         .await;
         assert_eq!(problem["errors"][0]["field"], "time");
     }
+}
+
+async fn update_result(server: &Server, tokens: &Value, id: &str) {
+    let response = request(
+        server,
+        tokens,
+        Method::PATCH,
+        &format!("{TASKS}/{id}"),
+        json!({"result":"Notes removed"}),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
 }
 
 async fn remove(
