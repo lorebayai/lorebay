@@ -21,6 +21,7 @@ use crate::repository::oauth_code::OauthCodeRepository;
 use crate::repository::refresh_token_history::RefreshTokenHistoryRepository;
 
 use super::authorization::CLI_CLIENT_ID;
+use super::device_sign_in::{DeviceError, exchange_device_code};
 use super::login_session::{
     self, Identity, LoginError, Tokens, issue_tokens, new_refresh_token, now_millis, session_expiry,
 };
@@ -30,6 +31,10 @@ use super::{primary_key, random_id};
 #[derive(Clone, Debug)]
 pub(crate) enum TokenGrant {
     AuthorizationCode(CodeExchange),
+    DeviceCode {
+        client_id: String,
+        device_code: String,
+    },
     RefreshToken(TokenRefresh),
 }
 
@@ -39,6 +44,8 @@ pub(crate) enum TokenError {
     AgentNameTaken,
     #[error(transparent)]
     Database(#[from] DbErr),
+    #[error(transparent)]
+    Device(#[from] DeviceError),
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
     #[error("Invalid grant")]
@@ -82,6 +89,10 @@ pub(crate) async fn grant_tokens(
 ) -> Result<Tokens, TokenError> {
     match grant {
         TokenGrant::AuthorizationCode(input) => exchange_code(identity, database, input).await,
+        TokenGrant::DeviceCode {
+            client_id,
+            device_code,
+        } => Ok(exchange_device_code(identity, database, &client_id, &device_code).await?),
         TokenGrant::RefreshToken(input) => refresh_tokens(identity, database, input).await,
     }
 }

@@ -108,6 +108,18 @@ fn identity(config: Config, users: Arc<dyn UserStore>) -> Result<Identity> {
             Duration::from_secs(config.login_rate_window_seconds),
             Arc::new(SystemClock),
         ))
+        .device_limiter(RateLimiter::new(
+            NonZeroU32::new(config.device_rate_limit)
+                .context("device_rate_limit must be positive")?,
+            Duration::from_secs(config.device_rate_window_seconds),
+            Arc::new(SystemClock),
+        ))
+        .device_verification_limiter(RateLimiter::new(
+            NonZeroU32::new(config.device_verification_rate_limit)
+                .context("device_verification_rate_limit must be positive")?,
+            Duration::from_secs(config.device_verification_rate_window_seconds),
+            Arc::new(SystemClock),
+        ))
         .config(config)
         .build())
 }

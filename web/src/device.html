@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sign the lorebay CLI in</title>
+  <h1>Sign the lorebay CLI in</h1>
+  <p>This signs the lorebay CLI in as you on another computer.</p>
+  <p>
+    Confirm only a sign-in you started. Check that the code matches your
+    terminal.
+  </p>
+  <p id="message" role="status" aria-live="polite">
+    Sign in to review your code.
+  </p>
+  <noscript>JavaScript is required to sign in and review your code.</noscript>
+  <form id="login">
+    <p>
+      <label
+        >Username <input name="username" autocomplete="username" required
+      /></label>
+    </p>
+    <p>
+      <label
+        >Password
+        <input
+          name="password"
+          type="password"
+          autocomplete="current-password"
+          required
+      /></label>
+    </p>
+    <button type="submit">Sign in</button>
+  </form>
+  <form id="code" hidden>
+    <p>
+      <label
+        >User code
+        <input
+          name="user_code"
+          autocomplete="off"
+          spellcheck="false"
+          maxlength="9"
+          required
+      /></label>
+    </p>
+    <button type="submit">Review code</button>
+  </form>
+  <form id="consent" hidden>
+    <p>User code: <strong id="user-code"></strong></p>
+    <p>Requested at: <strong id="created-at"></strong></p>
+    <p>
+      Approve only if you started this sign-in and this code matches your
+      terminal.
+    </p>
+    <button type="submit" value="approve">Approve</button>
+    <button type="submit" value="decline">Decline</button>
+  </form>
+  <button id="cancel" type="button" hidden>Cancel and sign out</button>
+  <button id="finish" type="button" hidden>Retry sign-out</button>
+  <!-- PAGE_SCRIPT -->
+</html>

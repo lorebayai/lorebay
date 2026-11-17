@@ -27,6 +27,7 @@ async fn remove_round(database: &DatabaseConnection, unused_client_lifetime: Dur
     match domain::remove_expired_credentials(database, unused_client_lifetime).await {
         Ok(removed) => tracing::info!(
             authorization_codes = removed.authorization_codes,
+            device_sign_in_requests = removed.device_sign_in_requests,
             login_sessions = removed.login_sessions,
             agent_authorizations = removed.agent_authorizations,
             refresh_token_history = removed.refresh_token_history,

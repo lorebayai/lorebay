@@ -33,8 +33,9 @@ async fn get_authorization_server_metadata_returns_endpoints_under_public_url() 
             "authorization_endpoint": "https://lorebay.test:8443/oauth/authorize",
             "token_endpoint": "https://lorebay.test:8443/oauth/token",
             "registration_endpoint": "https://lorebay.test:8443/oauth/register",
+            "device_authorization_endpoint": "https://lorebay.test:8443/oauth/device",
             "response_types_supported": ["code"],
-            "grant_types_supported": ["authorization_code", "refresh_token"],
+            "grant_types_supported": ["authorization_code", "refresh_token", "urn:ietf:params:oauth:grant-type:device_code"],
             "code_challenge_methods_supported": ["S256"],
             "token_endpoint_auth_methods_supported": ["none"],
             "authorization_response_iss_parameter_supported": true

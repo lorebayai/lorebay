@@ -3,6 +3,7 @@ pub(crate) mod account;
 pub(crate) mod agents;
 pub(crate) mod authorization;
 pub(crate) mod caller;
+pub(crate) mod device_sign_in;
 pub(crate) mod login_session;
 pub(crate) mod oauth_token;
 pub(crate) mod pagination;

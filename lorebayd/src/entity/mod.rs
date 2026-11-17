@@ -3,6 +3,7 @@
 pub mod account;
 pub mod agent_authorization;
 pub mod artifact;
+pub mod device_sign_in_request;
 pub mod knowledge;
 pub mod knowledge_version;
 pub mod login_session;

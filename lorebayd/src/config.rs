@@ -43,6 +43,18 @@ pub struct Config {
     pub registration_redirect_uri_max_bytes: usize,
     #[builder(default = DEFAULT_REGISTRATION_BODY_LIMIT_BYTES)]
     pub registration_body_limit_bytes: usize,
+    #[builder(default = DEFAULT_DEVICE_REQUEST_LIFETIME_SECONDS)]
+    pub device_request_lifetime_seconds: u64,
+    #[builder(default = DEFAULT_DEVICE_POLL_INTERVAL_SECONDS)]
+    pub device_poll_interval_seconds: u64,
+    #[builder(default = DEFAULT_DEVICE_RATE_LIMIT)]
+    pub device_rate_limit: u32,
+    #[builder(default = DEFAULT_DEVICE_RATE_WINDOW_SECONDS)]
+    pub device_rate_window_seconds: u64,
+    #[builder(default = DEFAULT_DEVICE_VERIFICATION_RATE_LIMIT)]
+    pub device_verification_rate_limit: u32,
+    #[builder(default = DEFAULT_DEVICE_VERIFICATION_RATE_WINDOW_SECONDS)]
+    pub device_verification_rate_window_seconds: u64,
     #[builder(default = LoggingConfig::default())]
     pub logging: LoggingConfig,
 }
@@ -118,8 +130,49 @@ impl Config {
                 "must be greater than zero",
             ));
         }
+        self.validate_device()?;
         self.validate_registration()?;
         self.logging.validate()
+    }
+
+    fn validate_device(&self) -> Result<(), ConfigError> {
+        for (key, value) in [
+            (
+                "device_request_lifetime_seconds",
+                self.device_request_lifetime_seconds,
+            ),
+            (
+                "device_poll_interval_seconds",
+                self.device_poll_interval_seconds,
+            ),
+            (
+                "device_rate_window_seconds",
+                self.device_rate_window_seconds,
+            ),
+            (
+                "device_verification_rate_window_seconds",
+                self.device_verification_rate_window_seconds,
+            ),
+        ] {
+            if !(1..=MAX_DURATION_SECONDS).contains(&value) {
+                return Err(ConfigError::invalid(
+                    key,
+                    "must be between 1 and 315360000 seconds",
+                ));
+            }
+        }
+        for (key, value) in [
+            ("device_rate_limit", self.device_rate_limit),
+            (
+                "device_verification_rate_limit",
+                self.device_verification_rate_limit,
+            ),
+        ] {
+            if value == 0 {
+                return Err(ConfigError::invalid(key, "must be positive"));
+            }
+        }
+        Ok(())
     }
 
     fn validate_registration(&self) -> Result<(), ConfigError> {
@@ -207,3 +260,9 @@ const DEFAULT_REGISTRATION_CLIENT_NAME_MAX_BYTES: usize = 256;
 const DEFAULT_REGISTRATION_REDIRECT_URI_LIMIT: usize = 4;
 const DEFAULT_REGISTRATION_REDIRECT_URI_MAX_BYTES: usize = 2048;
 const DEFAULT_REGISTRATION_BODY_LIMIT_BYTES: usize = 65_536;
+const DEFAULT_DEVICE_REQUEST_LIFETIME_SECONDS: u64 = 600;
+const DEFAULT_DEVICE_POLL_INTERVAL_SECONDS: u64 = 5;
+const DEFAULT_DEVICE_RATE_LIMIT: u32 = 10;
+const DEFAULT_DEVICE_RATE_WINDOW_SECONDS: u64 = 60;
+const DEFAULT_DEVICE_VERIFICATION_RATE_LIMIT: u32 = 10;
+const DEFAULT_DEVICE_VERIFICATION_RATE_WINDOW_SECONDS: u64 = 60;

@@ -17,6 +17,8 @@ pub struct Model {
 pub enum Relation {
     #[sea_orm(has_many = "super::agent_authorization::Entity")]
     AgentAuthorization,
+    #[sea_orm(has_many = "super::device_sign_in_request::Entity")]
+    DeviceSignInRequest,
     #[sea_orm(has_many = "super::knowledge_version::Entity")]
     KnowledgeVersion,
     #[sea_orm(has_many = "super::login_session::Entity")]
@@ -32,6 +34,12 @@ pub enum Relation {
 impl Related<super::agent_authorization::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::AgentAuthorization.def()
+    }
+}
+
+impl Related<super::device_sign_in_request::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::DeviceSignInRequest.def()
     }
 }
 
