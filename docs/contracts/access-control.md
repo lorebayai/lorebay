@@ -61,6 +61,7 @@ except where the table says otherwise.
 | Sign-in | Log in, refresh the login session, log out | Yes | Not applicable |
 | Authorization | Read an authorization request, submit the decision on it | Yes | No |
 | Authorization | List own agents, revoke one | Yes | No |
+| Device sign-in request | Read a request, submit the decision on it | Yes | No |
 | User | List the users in the users file | Yes | No |
 | Space | List own spaces, read one | Yes | Yes |
 | Space | Create | Yes | No |

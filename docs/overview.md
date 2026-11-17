@@ -33,5 +33,7 @@ built, and the contracts its users, APIs and agents rely on. Terms follow the
   agents call.
 - [Web API](contracts/web-api.md): paths, credentials and conventions of
   `/api/v1`.
+- [CLI](contracts/cli.md): the `lorebay` commands, browser and device sign-in,
+  credentials, output and exit codes.
 - [Agent skill](contracts/agent-skill.md): the rules the skill gives agents,
   and what Lorebay does when they are broken.

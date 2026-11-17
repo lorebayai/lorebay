@@ -41,7 +41,10 @@ POST /api/v1/spaces/{space}/proposals/{key}/approve
 ```
 
 - **OAuth endpoints are outside `/api/v1`**, at the standard locations:
-  metadata, registration, authorize and token.
+  metadata, registration, authorize, device authorization and token. The
+  authorization server metadata names the device authorization endpoint and
+  its grant; device sign-in follows
+  [Identity](../architecture/identity.md#5-sign-in).
 - **Artifact file URLs are outside `/api/v1`.** They are short-lived URLs
   that point at `lorebayd` with a local directory, and at S3 with S3.
 - **Health checks are outside `/api/v1`** and need no credential. `/healthz`
@@ -55,8 +58,9 @@ POST /api/v1/spaces/{space}/proposals/{key}/approve
   header: a login session's for a person, an agent authorization's for an
   agent or external program. See
   [Identity](../architecture/identity.md#4-credentials).
-- **Sign-in and client registration are rate limited by address.** A call
-  over the limit is refused, and the caller may try again after a wait. See
+- **Sign-in, device authorization and client registration are rate limited
+  by address.** A call over the limit is refused, and the caller may try
+  again after a wait. See
   Identity, on [sign-in](../architecture/identity.md#5-sign-in) and on
   [registration](../architecture/identity.md#6-agent-authorization).
 - **Every list is paginated** with a cursor, a default page size and a fixed

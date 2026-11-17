@@ -30,7 +30,11 @@ with it.
 `lorebay` CLI. It is the person's credential.
 
 **`lorebay`**: The command-line client. People use it for the operations
-only people perform.
+only people perform and to read a space's content.
+
+**Device sign-in request**: A short-lived request to sign the `lorebay` CLI
+in from a browser on another computer. A person confirms its short code
+before the CLI receives that person's login session.
 
 ## Agents
 

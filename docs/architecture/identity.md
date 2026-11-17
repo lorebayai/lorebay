@@ -80,11 +80,39 @@ It does not cover:
   changing anything on the agent side.
 - **Sign-in is rate limited by address.** Too many attempts from one address
   in a short time are refused, which slows password guessing.
-- **The `lorebay` CLI signs in through the browser.** The CLI is a client
+- **The `lorebay` CLI signs in through the browser.** The CLI uses a client
   built into `lorebayd`. It starts an authorization code flow with PKCE and a
   redirect to a port on the same computer; the person signs in on the page
-  and confirms, and the CLI receives a login session for that person, not an
-  agent. The CLI never sees the password.
+  and confirms, and the CLI receives a login session for that person. The CLI
+  never sees the password. What the terminal shows is in
+  [CLI](../contracts/cli.md#4-sign-in-and-credentials).
+- **Device sign-in works when the browser is on another computer.** The
+  CLI's second sign-in method is the OAuth 2.0 Device Authorization Grant
+  of [RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628). It asks for a
+  device sign-in request and shows a verification address, a short code and
+  a link carrying that code. A person opens the address in any browser,
+  signs in and confirms the code; the CLI waits for the decision by polling
+  the token endpoint. Only the built-in CLI client may use this grant. Both
+  CLI sign-in methods issue a person's login session and never create an
+  agent authorization.
+- **A device sign-in request expires soon and gives a login session once.**
+  A request may be approved or declined only once. Approval binds it to the
+  person who approved; exchanging it issues that person's login session and
+  consumes the request in one transaction. A crash leaves either an approved
+  request that can still be exchanged or an issued session with a consumed
+  request. A declined, expired or consumed request cannot issue a session.
+- **Device code issuance and short-code guesses are limited.** Asking for a
+  device sign-in request needs no credential and is rate limited by address,
+  as sign-in and client registration are. Attempts to read or decide a
+  request using a wrong short code are limited too, so the code cannot be
+  guessed through the verification page.
+- **The verification page asks the person to confirm only a sign-in they
+  started.** It says that this signs the `lorebay` CLI in on another computer,
+  shows when the request was made and asks the person to check the code,
+  including when the link carried it. Like the authorization page, it signs
+  the person in, reads the request and submits the decision through Web API
+  operations. It keeps its own login session only in memory and logs it out
+  when finished; that session is separate from the one issued to the CLI.
 - **Logging out deletes the login session.** Both of its tokens stop working.
 
 ## 6. Agent authorization
@@ -176,3 +204,5 @@ agent's next call fails.
   and public clients' refresh tokens must rotate.
 - [RFC 7591](https://datatracker.ietf.org/doc/html/rfc7591): OAuth 2.0
   Dynamic Client Registration.
+- [RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628): OAuth 2.0 Device
+  Authorization Grant, including polling, code guessing and remote phishing.
