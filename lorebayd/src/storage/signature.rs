@@ -11,6 +11,8 @@ use lorebay_base::Secret;
 use sha2::Sha256;
 use tempfile::Builder;
 
+use super::FileOperation;
+
 pub(super) fn load_key(directory: &Path) -> Result<Secret<Vec<u8>>> {
     let path = directory.join("file-url-signing.key");
     if !path.try_exists()? {
@@ -38,22 +40,46 @@ pub(super) fn load_key(directory: &Path) -> Result<Secret<Vec<u8>>> {
     Ok(Secret::from(key))
 }
 
-pub(super) fn sign(key: &[u8], location: &str, expiry: i64) -> Result<String> {
-    Ok(BASE64_URL_SAFE_NO_PAD.encode(tag(key, location, expiry)?.finalize().into_bytes()))
+pub(super) fn sign(
+    key: &[u8],
+    operation: FileOperation<'_>,
+    location: &str,
+    expiry: i64,
+) -> Result<String> {
+    Ok(BASE64_URL_SAFE_NO_PAD.encode(
+        tag(key, operation, location, expiry)?
+            .finalize()
+            .into_bytes(),
+    ))
 }
 
-pub(super) fn verify(key: &[u8], location: &str, expiry: i64, signature: &str) -> bool {
+pub(super) fn verify(
+    key: &[u8],
+    operation: FileOperation<'_>,
+    location: &str,
+    expiry: i64,
+    signature: &str,
+) -> bool {
     let Ok(signature) = BASE64_URL_SAFE_NO_PAD.decode(signature) else {
         return false;
     };
-    tag(key, location, expiry).is_ok_and(|mac| mac.verify_slice(&signature).is_ok())
+    tag(key, operation, location, expiry).is_ok_and(|mac| mac.verify_slice(&signature).is_ok())
 }
 
 const KEY_BYTES: usize = 32;
 
-fn tag(key: &[u8], location: &str, expiry: i64) -> Result<Hmac<Sha256>> {
+fn tag(
+    key: &[u8],
+    operation: FileOperation<'_>,
+    location: &str,
+    expiry: i64,
+) -> Result<Hmac<Sha256>> {
     let mut mac = Hmac::<Sha256>::new_from_slice(key)?;
-    for field in ["PUT", location, &expiry.to_string(), "If-None-Match: *"] {
+    let (method, constraint) = match operation {
+        FileOperation::Download(file_name) => ("GET", file_name),
+        FileOperation::Upload => ("PUT", "If-None-Match: *"),
+    };
+    for field in [method, location, &expiry.to_string(), constraint] {
         mac.update(&(field.len() as u64).to_be_bytes());
         mac.update(field.as_bytes());
     }

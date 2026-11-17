@@ -5,13 +5,13 @@ use typed_builder::TypedBuilder;
 
 use crate::entity::{artifact, task};
 use crate::repository::{ArtifactRepository, SpaceRepository, TaskRepository};
-use crate::storage::{FileStorage, UploadRequest};
+use crate::storage::{DownloadRequest, FileStorage, UploadRequest};
 
 use super::caller::{CallerError, VerifiedCaller};
 use super::login_session::now_millis;
 use super::{
-    NewArtifact, TaskAccessError, TaskAction, check_task, format_key, parse_key, primary_key,
-    write_transaction,
+    NewArtifact, SpaceAccessError, TASK_READ_ROLES, TaskAccessError, TaskAction, check_space,
+    check_task, format_key, parse_key, primary_key, write_transaction,
 };
 
 #[derive(Debug, Error)]
@@ -28,6 +28,8 @@ pub(crate) enum ArtifactError {
     NotFound,
     #[error("The artifact file has not been uploaded")]
     NotUploaded,
+    #[error(transparent)]
+    Space(#[from] SpaceAccessError),
 }
 
 #[derive(Clone, Debug, TypedBuilder)]
@@ -84,6 +86,28 @@ impl TryFrom<artifact::Model> for Artifact {
             )
             .build())
     }
+}
+
+pub(crate) async fn get_artifact_download_url(
+    database: &DatabaseConnection,
+    storage: &impl FileStorage,
+    caller: &VerifiedCaller,
+    space: &str,
+    key: &str,
+) -> Result<DownloadRequest, ArtifactError> {
+    let transaction = database.begin().await?;
+    let space = check_space(&transaction, caller, space, TASK_READ_ROLES).await?;
+    let number = parse_key("AR", key).ok_or(ArtifactError::NotFound)?;
+    let artifact = ArtifactRepository::builder()
+        .connection(&transaction)
+        .build()
+        .completed_by_space_number(&space.space.id, number)
+        .await?
+        .ok_or(ArtifactError::NotFound)?;
+    transaction.commit().await?;
+    Ok(storage
+        .download_url(&artifact.storage_key, &artifact.file_name)
+        .await?)
 }
 
 pub(crate) async fn register_artifact(

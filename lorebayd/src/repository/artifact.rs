@@ -12,6 +12,19 @@ pub(crate) struct ArtifactRepository<'a, C> {
 }
 
 impl<C: ConnectionTrait> ArtifactRepository<'_, C> {
+    pub async fn completed_by_space_number(
+        &self,
+        space_id: &str,
+        number: i64,
+    ) -> Result<Option<Model>, DbErr> {
+        Entity::find()
+            .filter(Column::SpaceId.eq(space_id))
+            .filter(Column::Number.eq(number))
+            .filter(Column::CompletedAt.is_not_null())
+            .one(self.connection)
+            .await
+    }
+
     pub async fn by_number(&self, task_id: &str, number: i64) -> Result<Option<Model>, DbErr> {
         Entity::find()
             .filter(Column::TaskId.eq(task_id))

@@ -62,6 +62,13 @@ impl Server {
         Self::restart_with_users(directory, &[(TEST_USERNAME, TEST_PASSWORD)]).await
     }
 
+    pub async fn restart_configured(
+        directory: TempDir,
+        configure: impl FnOnce(&mut Config),
+    ) -> Self {
+        Self::start_with(directory, &[(TEST_USERNAME, TEST_PASSWORD)], configure).await
+    }
+
     pub async fn restart_with_users(directory: TempDir, users: &[(&str, &str)]) -> Self {
         Self::start_with(directory, users, |_| {}).await
     }

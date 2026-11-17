@@ -13,9 +13,10 @@ use crate::domain::caller::VerifiedCaller;
 use crate::domain::{
     Artifact, ArtifactCompleted, ArtifactError, ArtifactFileName, ArtifactRegistered,
     ArtifactSummary, ArtifactTarget, ArtifactTextError, NewArtifact, complete_artifact,
-    register_artifact,
+    get_artifact_download_url, register_artifact,
 };
 use crate::server::ServerState;
+use crate::storage::DownloadRequest;
 
 use super::login_session::invalid_json;
 
@@ -55,6 +56,22 @@ pub(crate) struct ArtifactRegisteredResponse {
     headers: BTreeMap<String, String>,
     expires_at: i64,
     task_title: String,
+}
+
+#[derive(Clone, Debug, Serialize, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+pub(crate) struct ArtifactDownloadResponse {
+    url: Secret<String>,
+    expires_at: i64,
+}
+
+impl From<DownloadRequest> for ArtifactDownloadResponse {
+    fn from(request: DownloadRequest) -> Self {
+        Self::builder()
+            .url(request.url)
+            .expires_at(request.expires_at)
+            .build()
+    }
 }
 
 impl TryFrom<RegisterArtifactRequest> for NewArtifact {
@@ -120,8 +137,26 @@ impl From<ArtifactError> for ApiError {
             }
             ArtifactError::NotFound => Self::ArtifactNotFound,
             ArtifactError::NotUploaded => Self::ArtifactNotUploaded,
+            ArtifactError::Space(error) => error.into(),
         }
     }
+}
+
+pub(crate) async fn download_url(
+    State(state): State<ServerState>,
+    caller: VerifiedCaller,
+    path: Result<Path<(String, String)>, PathRejection>,
+) -> Result<Envelope<ArtifactDownloadResponse>, ApiError> {
+    let Path((space, key)) = path.map_err(invalid_path)?;
+    let download = get_artifact_download_url(
+        &state.database,
+        state.storage.as_ref(),
+        &caller,
+        &space,
+        &key,
+    )
+    .await?;
+    Ok(Envelope::builder().data(download).build())
 }
 
 pub(crate) async fn register(

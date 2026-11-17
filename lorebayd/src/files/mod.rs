@@ -1,23 +1,33 @@
+use std::io::Error;
+
 use axum::Json;
 use axum::Router;
+use axum::body::Body;
 use axum::extract::rejection::{PathRejection, QueryRejection};
 use axum::extract::{DefaultBodyLimit, Path, Query, Request, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
+use axum::middleware::map_response;
 use axum::response::{IntoResponse, Response};
 use axum::routing::put;
+use futures_util::stream::try_unfold;
 use lorebay_base::Secret;
 use serde::Deserialize;
 use thiserror::Error;
+use tokio::fs::File;
+use tokio::io::AsyncReadExt;
 use typed_builder::TypedBuilder;
 
 use crate::api::ProblemDetails;
 use crate::server::ServerState;
-use crate::storage::UploadError;
+use crate::storage::{FileOperation, StorageError};
+
+use headers::download_headers;
 
 pub(crate) fn router() -> Router<ServerState> {
     Router::new()
-        .route("/files/{location}", put(upload))
+        .route("/files/{location}", put(upload).get(download))
         .layer(DefaultBodyLimit::disable())
+        .layer(map_response(secure_response))
 }
 
 #[derive(Debug, Error)]
@@ -26,10 +36,12 @@ enum FileError {
     Encoding,
     #[error("The upload requires If-None-Match: *")]
     Header,
+    #[error(transparent)]
+    Internal(#[from] anyhow::Error),
     #[error("The declared content length is invalid")]
     Length,
     #[error(transparent)]
-    Upload(#[from] UploadError),
+    Storage(#[from] StorageError),
 }
 
 #[derive(Clone, Debug, Deserialize, TypedBuilder)]
@@ -40,25 +52,39 @@ struct SignatureQuery {
     signature: Secret<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+#[serde(deny_unknown_fields)]
+struct DownloadQuery {
+    expires: i64,
+    signature: Secret<String>,
+    file_name: String,
+}
+
 impl IntoResponse for FileError {
     fn into_response(self) -> Response {
         let (status, code) = match &self {
             Self::Encoding => (StatusCode::UNSUPPORTED_MEDIA_TYPE, "file.content_encoding"),
+            Self::Internal(error) => {
+                tracing::error!(%error, "artifact download failed");
+                (StatusCode::INTERNAL_SERVER_ERROR, "server.internal")
+            }
             Self::Header => (StatusCode::FORBIDDEN, "file.headers_required"),
             Self::Length => (StatusCode::BAD_REQUEST, "file.invalid_length"),
-            Self::Upload(error) => match error {
-                UploadError::AlreadyExists => {
+            Self::Storage(error) => match error {
+                StorageError::AlreadyExists => {
                     (StatusCode::PRECONDITION_FAILED, "file.already_exists")
                 }
-                UploadError::Interrupted => (StatusCode::BAD_REQUEST, "file.interrupted"),
-                UploadError::Io(error) => {
-                    tracing::error!(%error, "artifact upload failed");
+                StorageError::Interrupted => (StatusCode::BAD_REQUEST, "file.interrupted"),
+                StorageError::Io(error) => {
+                    tracing::error!(%error, "artifact file operation failed");
                     (StatusCode::INTERNAL_SERVER_ERROR, "server.internal")
                 }
-                UploadError::TooLarge => (StatusCode::PAYLOAD_TOO_LARGE, "file.too_large"),
-                UploadError::TooMany => (StatusCode::SERVICE_UNAVAILABLE, "file.upload_limit"),
-                UploadError::UrlExpired => (StatusCode::FORBIDDEN, "file.url_expired"),
-                UploadError::UrlInvalid => (StatusCode::FORBIDDEN, "file.url_invalid"),
+                StorageError::NotFound => (StatusCode::NOT_FOUND, "file.not_found"),
+                StorageError::TooLarge => (StatusCode::PAYLOAD_TOO_LARGE, "file.too_large"),
+                StorageError::TooMany => (StatusCode::SERVICE_UNAVAILABLE, "file.upload_limit"),
+                StorageError::UrlExpired => (StatusCode::FORBIDDEN, "file.url_expired"),
+                StorageError::UrlInvalid => (StatusCode::FORBIDDEN, "file.url_invalid"),
             },
         };
         let title = if status == StatusCode::INTERNAL_SERVER_ERROR {
@@ -88,17 +114,74 @@ impl IntoResponse for FileError {
     }
 }
 
+mod headers;
+
+async fn download(
+    State(state): State<ServerState>,
+    path: Result<Path<String>, PathRejection>,
+    query: Result<Query<DownloadQuery>, QueryRejection>,
+) -> Result<Response, FileError> {
+    let Path(location) = path.map_err(|_| StorageError::UrlInvalid)?;
+    let Query(query) = query.map_err(|_| StorageError::UrlInvalid)?;
+    state.storage.authorize(
+        FileOperation::Download(&query.file_name),
+        &location,
+        query.expires,
+        query.signature.expose(),
+    )?;
+    let (file, size) = state.storage.open_download(&location).await?;
+    let headers = download_headers(&query.file_name, size).map_err(anyhow::Error::from)?;
+    Ok((headers, Body::from_stream(try_unfold(file, file_chunk))).into_response())
+}
+
+async fn file_chunk(mut file: File) -> Result<Option<(Vec<u8>, File)>, Error> {
+    let mut bytes = vec![0; DOWNLOAD_CHUNK_BYTES];
+    let length = file.read(&mut bytes).await?;
+    if length == 0 {
+        return Ok(None);
+    }
+    bytes.truncate(length);
+    Ok(Some((bytes, file)))
+}
+
+async fn secure_response(mut response: Response) -> Response {
+    let headers = response.headers_mut();
+    headers.insert(
+        header::X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static("nosniff"),
+    );
+    headers.insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static("private, no-store"),
+    );
+    if headers
+        .get(header::CONTENT_TYPE)
+        .is_none_or(|value| value != "application/pdf")
+    {
+        headers.insert(
+            header::CONTENT_SECURITY_POLICY,
+            HeaderValue::from_static("sandbox"),
+        );
+    }
+    response
+}
+
+const DOWNLOAD_CHUNK_BYTES: usize = 64 * 1024;
+
 async fn upload(
     State(state): State<ServerState>,
     path: Result<Path<String>, PathRejection>,
     query: Result<Query<SignatureQuery>, QueryRejection>,
     request: Request,
 ) -> Result<StatusCode, FileError> {
-    let Path(location) = path.map_err(|_| UploadError::UrlInvalid)?;
-    let Query(query) = query.map_err(|_| UploadError::UrlInvalid)?;
-    state
-        .storage
-        .authorize(&location, query.expires, query.signature.expose())?;
+    let Path(location) = path.map_err(|_| StorageError::UrlInvalid)?;
+    let Query(query) = query.map_err(|_| StorageError::UrlInvalid)?;
+    state.storage.authorize(
+        FileOperation::Upload,
+        &location,
+        query.expires,
+        query.signature.expose(),
+    )?;
     validate_headers(request.headers(), state.storage.size_limit)?;
     let _permit = state.storage.admit()?;
     state
@@ -126,7 +209,7 @@ fn validate_headers(headers: &HeaderMap, size_limit: u64) -> Result<(), FileErro
             .and_then(|value| value.parse::<u64>().ok())
             .ok_or(FileError::Length)?;
         if length > size_limit {
-            return Err(UploadError::TooLarge.into());
+            return Err(StorageError::TooLarge.into());
         }
     }
     Ok(())

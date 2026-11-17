@@ -83,10 +83,16 @@ pub async fn completion(
     .await
 }
 
+pub fn file_url(server: &Server, url: &str) -> Url {
+    let mut url = Url::parse(url).unwrap();
+    url.set_port(Some(server.address.port())).unwrap();
+    url
+}
+
 pub async fn upload(server: &Server, registered: &Value, bytes: &'static str) -> Response {
     let mut request = server
         .client
-        .put(registered["upload_url"].as_str().unwrap())
+        .put(file_url(server, registered["upload_url"].as_str().unwrap()))
         .body(bytes);
     for (name, value) in registered["headers"].as_object().unwrap() {
         request = request.header(name, value.as_str().unwrap());
