@@ -9,6 +9,14 @@ pub(crate) fn router() -> Router<ServerState> {
         .route("/agents/{name}", delete(agents::revoke))
         .route("/spaces", get(spaces::list).post(spaces::create))
         .route("/spaces/{space}", get(spaces::read).patch(spaces::change))
+        .route("/users", get(users::list))
+        .route("/spaces/{space}/participants", get(participants::list))
+        .route(
+            "/spaces/{space}/participants/{username}",
+            post(participants::add)
+                .patch(participants::change_role)
+                .delete(participants::remove),
+        )
         .route("/authorization-request", post(authorization::read))
         .route("/authorization-decision", post(authorization::decide))
         .route(
@@ -21,4 +29,6 @@ pub(crate) fn router() -> Router<ServerState> {
 mod agents;
 mod authorization;
 mod login_session;
+mod participants;
 mod spaces;
+mod users;

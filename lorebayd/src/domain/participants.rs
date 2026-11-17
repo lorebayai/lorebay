@@ -1,0 +1,258 @@
+use sea_orm::{
+    DatabaseConnection, DatabaseTransaction, DbErr, IntoActiveModel, Set, SqliteTransactionMode,
+    TransactionOptions, TransactionTrait,
+};
+use thiserror::Error;
+use typed_builder::TypedBuilder;
+
+use crate::entity::participant;
+use crate::repository::account::AccountRepository;
+use crate::repository::participant::{ParticipantRecord, ParticipantRepository};
+
+use super::caller::{CallerError, VerifiedCaller};
+use super::login_session::now_millis;
+use super::pagination::{Page, PageOptions, decode_cursor, encode_cursor};
+use super::{SpaceAccessError, SpaceRole, check_space, primary_key};
+
+#[derive(Debug, Error)]
+pub(crate) enum ParticipantError {
+    #[error(transparent)]
+    Access(#[from] SpaceAccessError),
+    #[error("The person is already in the space")]
+    AlreadyExists,
+    #[error(transparent)]
+    Caller(#[from] CallerError),
+    #[error(transparent)]
+    Database(#[from] DbErr),
+    #[error(transparent)]
+    Internal(#[from] anyhow::Error),
+    #[error("Invalid cursor")]
+    InvalidCursor,
+    #[error("Participant not found")]
+    NotFound,
+    #[error("User not found")]
+    UserNotFound,
+}
+
+#[derive(Clone, Debug, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+pub(crate) struct Participant {
+    pub username: String,
+    pub role: SpaceRole,
+    pub agent_name: Option<String>,
+}
+
+pub(crate) async fn list_participants(
+    database: &DatabaseConnection,
+    caller: &VerifiedCaller,
+    key: &str,
+    options: PageOptions,
+) -> Result<Page<Participant>, ParticipantError> {
+    let transaction = database.begin().await?;
+    let authorized = check_space(&transaction, caller, key, READ_ROLES).await?;
+    let version = format!("participants-v1:{key}");
+    let after = options
+        .cursor
+        .map(|cursor| {
+            let value = decode_cursor(&version, caller.account_id(), &cursor)
+                .ok_or(ParticipantError::InvalidCursor)?;
+            let position: (String, String, String) =
+                serde_json::from_str(&value).map_err(|_| ParticipantError::InvalidCursor)?;
+            if position.0.is_empty()
+                || !matches!(position.1.as_str(), "human" | "agent")
+                || (position.1 == "human" && !position.2.is_empty())
+            {
+                return Err(ParticipantError::InvalidCursor);
+            }
+            Ok(position)
+        })
+        .transpose()?;
+    let mut records = ParticipantRepository::builder()
+        .connection(&transaction)
+        .build()
+        .list(&authorized.space.id, after.as_ref(), options.page_size + 1)
+        .await?;
+    let has_more = records.len() as u64 > options.page_size;
+    records.truncate(options.page_size as usize);
+    let next_cursor = records
+        .last()
+        .filter(|_| has_more)
+        .map(|record| {
+            let kind = if record.agent_name.is_some() {
+                "agent"
+            } else {
+                "human"
+            };
+            let value = serde_json::to_string(&(
+                &record.username,
+                kind,
+                record.agent_name.as_deref().unwrap_or_default(),
+            ))?;
+            Ok::<_, serde_json::Error>(encode_cursor(&version, caller.account_id(), &value))
+        })
+        .transpose()
+        .map_err(anyhow::Error::from)?;
+    let items = records
+        .into_iter()
+        .map(participant_from_record)
+        .collect::<Result<Vec<_>, _>>()?;
+    transaction.commit().await?;
+    Ok(Page::builder()
+        .items(items)
+        .next_cursor(next_cursor)
+        .build())
+}
+
+pub(crate) async fn add_participant(
+    database: &DatabaseConnection,
+    caller: &VerifiedCaller,
+    key: &str,
+    username: &str,
+    role: SpaceRole,
+) -> Result<Participant, ParticipantError> {
+    caller.person()?;
+    let transaction = write_transaction(database).await?;
+    let authorized = check_space(&transaction, caller, key, MANAGE_ROLES).await?;
+    if !matches!(role, SpaceRole::Contributor | SpaceRole::Viewer) {
+        return Err(SpaceAccessError::PermissionRequired.into());
+    }
+    let account = AccountRepository::builder()
+        .connection(&transaction)
+        .build()
+        .by_username(username)
+        .await?
+        .filter(|account| account.deleted_at.is_none())
+        .ok_or(ParticipantError::UserNotFound)?;
+    let repository = ParticipantRepository::builder()
+        .connection(&transaction)
+        .build();
+    if repository
+        .by_space_and_account(&authorized.space.id, &account.id)
+        .await?
+        .is_some()
+    {
+        return Err(ParticipantError::AlreadyExists);
+    }
+    let now = now_millis()?;
+    repository
+        .insert(participant::ActiveModel {
+            id: Set(primary_key()),
+            space_id: Set(authorized.space.id),
+            account_id: Set(account.id),
+            role: Set(role.as_str().to_owned()),
+            created_at: Set(now),
+            updated_at: Set(now),
+        })
+        .await?;
+    transaction.commit().await?;
+    Ok(Participant::builder()
+        .username(username)
+        .role(role)
+        .agent_name(None)
+        .build())
+}
+
+pub(crate) async fn change_participant_role(
+    database: &DatabaseConnection,
+    caller: &VerifiedCaller,
+    key: &str,
+    username: &str,
+    role: SpaceRole,
+) -> Result<Participant, ParticipantError> {
+    caller.person()?;
+    let transaction = write_transaction(database).await?;
+    let model = mutation_target(&transaction, caller, key, username, Some(role)).await?;
+    let mut model = model.into_active_model();
+    model.role = Set(role.as_str().to_owned());
+    model.updated_at = Set(now_millis()?);
+    ParticipantRepository::builder()
+        .connection(&transaction)
+        .build()
+        .update(model)
+        .await?;
+    transaction.commit().await?;
+    Ok(Participant::builder()
+        .username(username)
+        .role(role)
+        .agent_name(None)
+        .build())
+}
+
+pub(crate) async fn remove_participant(
+    database: &DatabaseConnection,
+    caller: &VerifiedCaller,
+    key: &str,
+    username: &str,
+) -> Result<(), ParticipantError> {
+    caller.person()?;
+    let transaction = write_transaction(database).await?;
+    let model = mutation_target(&transaction, caller, key, username, None).await?;
+    ParticipantRepository::builder()
+        .connection(&transaction)
+        .build()
+        .delete(&model.id)
+        .await?;
+    transaction.commit().await?;
+    Ok(())
+}
+
+const READ_ROLES: &[SpaceRole] = &[
+    SpaceRole::Owner,
+    SpaceRole::Admin,
+    SpaceRole::Contributor,
+    SpaceRole::Viewer,
+];
+const MANAGE_ROLES: &[SpaceRole] = &[SpaceRole::Owner, SpaceRole::Admin];
+
+fn participant_from_record(record: ParticipantRecord) -> Result<Participant, DbErr> {
+    let mut role = SpaceRole::try_from(record.role.as_str())?;
+    if record.agent_name.is_some() {
+        role = role.for_agent();
+    }
+    Ok(Participant::builder()
+        .username(record.username)
+        .role(role)
+        .agent_name(record.agent_name)
+        .build())
+}
+
+async fn mutation_target(
+    transaction: &DatabaseTransaction,
+    caller: &VerifiedCaller,
+    key: &str,
+    username: &str,
+    role: Option<SpaceRole>,
+) -> Result<participant::Model, ParticipantError> {
+    let authorized = check_space(transaction, caller, key, MANAGE_ROLES).await?;
+    let account = AccountRepository::builder()
+        .connection(transaction)
+        .build()
+        .by_username(username)
+        .await?
+        .filter(|account| account.deleted_at.is_none())
+        .ok_or(ParticipantError::NotFound)?;
+    let target = ParticipantRepository::builder()
+        .connection(transaction)
+        .build()
+        .by_space_and_account(&authorized.space.id, &account.id)
+        .await?
+        .ok_or(ParticipantError::NotFound)?;
+    let target_role = SpaceRole::try_from(target.role.as_str())?;
+    if target_role == SpaceRole::Owner
+        || role == Some(SpaceRole::Owner)
+        || (authorized.role != SpaceRole::Owner
+            && (target_role == SpaceRole::Admin || role == Some(SpaceRole::Admin)))
+    {
+        return Err(SpaceAccessError::PermissionRequired.into());
+    }
+    Ok(target)
+}
+
+async fn write_transaction(database: &DatabaseConnection) -> Result<DatabaseTransaction, DbErr> {
+    database
+        .begin_with_options(TransactionOptions {
+            sqlite_transaction_mode: Some(SqliteTransactionMode::Immediate),
+            ..Default::default()
+        })
+        .await
+}

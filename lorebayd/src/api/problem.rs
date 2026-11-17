@@ -24,6 +24,10 @@ pub(crate) enum ApiError {
     MethodNotAllowed,
     #[error("Not Found")]
     NotFound,
+    #[error("The person is already in the space")]
+    ParticipantAlreadyExists,
+    #[error("Participant not found")]
+    ParticipantNotFound,
     #[error("Payload Too Large")]
     PayloadTooLarge,
     #[error("A login session is required")]
@@ -38,6 +42,8 @@ pub(crate) enum ApiError {
     Unauthorized,
     #[error("Service Unavailable")]
     Unavailable,
+    #[error("User not found")]
+    UserNotFound,
 }
 
 #[derive(Clone, Debug, Serialize, TypedBuilder)]
@@ -69,6 +75,8 @@ impl ApiError {
             Self::InvalidQuery(_) => (StatusCode::BAD_REQUEST, "request.invalid_query"),
             Self::MethodNotAllowed => (StatusCode::METHOD_NOT_ALLOWED, "http.method_not_allowed"),
             Self::NotFound => (StatusCode::NOT_FOUND, "http.not_found"),
+            Self::ParticipantAlreadyExists => (StatusCode::CONFLICT, "participant.already_exists"),
+            Self::ParticipantNotFound => (StatusCode::NOT_FOUND, "participant.not_found"),
             Self::PayloadTooLarge => (StatusCode::PAYLOAD_TOO_LARGE, "request.body_too_large"),
             Self::PersonRequired => (StatusCode::FORBIDDEN, "auth.person_required"),
             Self::RateLimited(_) => (StatusCode::TOO_MANY_REQUESTS, "auth.rate_limited"),
@@ -76,6 +84,7 @@ impl ApiError {
             Self::SpacePermissionRequired => (StatusCode::FORBIDDEN, "space.permission_required"),
             Self::Unauthorized => (StatusCode::UNAUTHORIZED, "auth.unauthorized"),
             Self::Unavailable => (StatusCode::SERVICE_UNAVAILABLE, "server.not_ready"),
+            Self::UserNotFound => (StatusCode::NOT_FOUND, "user.not_found"),
         }
     }
 }

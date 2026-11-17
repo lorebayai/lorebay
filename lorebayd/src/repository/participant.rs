@@ -1,7 +1,20 @@
-use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, DbErr, EntityTrait, QueryFilter};
+use sea_orm::sea_query::{Cond, Expr, ExprTrait, Order, Query, SelectStatement, UnionType};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, DbErr, DeriveIden, EntityTrait,
+    FromQueryResult, QueryFilter,
+};
 use typed_builder::TypedBuilder;
 
 use crate::entity::participant::{ActiveModel, Column, Entity, Model};
+use crate::entity::{account, agent_authorization};
+
+#[derive(Clone, Debug, FromQueryResult, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+pub(crate) struct ParticipantRecord {
+    pub username: String,
+    pub role: String,
+    pub agent_name: Option<String>,
+}
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
@@ -10,6 +23,52 @@ pub(crate) struct ParticipantRepository<'a, C> {
 }
 
 impl<C: ConnectionTrait> ParticipantRepository<'_, C> {
+    pub async fn list(
+        &self,
+        space_id: &str,
+        after: Option<&(String, String, String)>,
+        limit: u64,
+    ) -> Result<Vec<ParticipantRecord>, DbErr> {
+        let mut query = Query::select();
+        query
+            .columns([Roster::Username, Roster::Role, Roster::AgentName])
+            .from_subquery(roster_query(space_id), Roster::Table);
+        if let Some((username, kind, name)) = after {
+            query.cond_where(
+                Cond::any()
+                    .add(Expr::col(Roster::Username).gt(username))
+                    .add(
+                        Cond::all()
+                            .add(Expr::col(Roster::Username).eq(username))
+                            .add(Expr::col(Roster::Kind).gt(kind)),
+                    )
+                    .add(
+                        Cond::all()
+                            .add(Expr::col(Roster::Username).eq(username))
+                            .add(Expr::col(Roster::Kind).eq(kind))
+                            .add(Expr::col(Roster::AgentName).gt(name)),
+                    ),
+            );
+        }
+        query
+            .order_by(Roster::Username, Order::Asc)
+            .order_by(Roster::Kind, Order::Asc)
+            .order_by(Roster::AgentName, Order::Asc)
+            .limit(limit);
+        ParticipantRecord::find_by_statement(self.connection.get_database_backend().build(&query))
+            .all(self.connection)
+            .await
+    }
+
+    pub async fn update(&self, model: ActiveModel) -> Result<Model, DbErr> {
+        model.update(self.connection).await
+    }
+
+    pub async fn delete(&self, id: &str) -> Result<(), DbErr> {
+        Entity::delete_by_id(id).exec(self.connection).await?;
+        Ok(())
+    }
+
     pub async fn by_space_and_account(
         &self,
         space_id: &str,
@@ -33,4 +92,56 @@ impl<C: ConnectionTrait> ParticipantRepository<'_, C> {
             .await?;
         Ok(())
     }
+}
+
+#[derive(DeriveIden)]
+enum Roster {
+    AgentName,
+    Kind,
+    Role,
+    Table,
+    Username,
+}
+
+fn roster_query(space_id: &str) -> SelectStatement {
+    let mut people = Query::select();
+    people
+        .column((account::Entity, account::Column::Username))
+        .column((Entity, Column::Role))
+        .expr_as(Expr::val(Option::<String>::None), Roster::AgentName)
+        .expr_as(Expr::val("human"), Roster::Kind)
+        .from(Entity)
+        .inner_join(
+            account::Entity,
+            Expr::col((Entity, Column::AccountId)).equals((account::Entity, account::Column::Id)),
+        )
+        .and_where(Expr::col((Entity, Column::SpaceId)).eq(space_id))
+        .and_where(Expr::col((account::Entity, account::Column::DeletedAt)).is_null());
+    let mut agents = Query::select();
+    agents
+        .column((account::Entity, account::Column::Username))
+        .column((Entity, Column::Role))
+        .expr_as(
+            Expr::col((
+                agent_authorization::Entity,
+                agent_authorization::Column::Name,
+            )),
+            Roster::AgentName,
+        )
+        .expr_as(Expr::val("agent"), Roster::Kind)
+        .from(Entity)
+        .inner_join(
+            account::Entity,
+            Expr::col((Entity, Column::AccountId)).equals((account::Entity, account::Column::Id)),
+        )
+        .inner_join(
+            agent_authorization::Entity,
+            Expr::col((Entity, Column::AccountId)).equals((
+                agent_authorization::Entity,
+                agent_authorization::Column::AccountId,
+            )),
+        )
+        .and_where(Expr::col((Entity, Column::SpaceId)).eq(space_id))
+        .and_where(Expr::col((account::Entity, account::Column::DeletedAt)).is_null());
+    people.union(UnionType::All, agents).to_owned()
 }
