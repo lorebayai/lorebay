@@ -194,6 +194,12 @@ impl Config {
                 ));
             }
         }
+        if self.orphaned_file_lifetime_seconds <= self.upload_idle_timeout_seconds {
+            return Err(ConfigError::invalid(
+                "orphaned_file_lifetime_seconds",
+                "must be longer than upload_idle_timeout_seconds",
+            ));
+        }
         Ok(())
     }
 
