@@ -15,6 +15,8 @@ pub struct Model {
     pub refresh_token_hash: String,
     pub created_at: i64,
     pub expires_at: i64,
+    #[sea_orm(column_type = "Text", nullable, unique)]
+    pub previous_refresh_token_hash: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

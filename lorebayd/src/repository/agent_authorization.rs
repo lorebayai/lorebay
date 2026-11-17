@@ -22,6 +22,14 @@ impl<C: ConnectionTrait> AgentAuthorizationRepository<'_, C> {
             .await
     }
 
+    pub async fn delete_by_previous_refresh_hash(&self, hash: &str) -> Result<u64, DbErr> {
+        Ok(Entity::delete_many()
+            .filter(Column::PreviousRefreshTokenHash.eq(hash))
+            .exec(self.connection)
+            .await?
+            .rows_affected)
+    }
+
     pub async fn by_refresh_hash(&self, hash: &str) -> Result<Option<Model>, DbErr> {
         Entity::find()
             .filter(Column::RefreshTokenHash.eq(hash))

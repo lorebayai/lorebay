@@ -142,6 +142,7 @@ One row per agent; see [Identity](identity.md#6-agent-authorization).
 | `name` | TEXT | Not null | The agent name; defaults to the client name, and the person may change it when consenting |
 | `random_id` | TEXT | Not null, unique | Names the authorization in its access tokens: 128 random bits, encoded as a string |
 | `refresh_token_hash` | TEXT | Not null, unique | |
+| `previous_refresh_token_hash` | TEXT | Nullable, unique | The hash replaced by the last refresh; null until the first refresh |
 | `refresh_expires_at` | INTEGER | Not null | |
 | `created_at` | INTEGER | Not null | When the person authorized |
 
@@ -151,9 +152,16 @@ One row per agent; see [Identity](identity.md#6-agent-authorization).
 - **Each request** verifies the access token's signature and expiry, finds
   the row by the `random_id` the token names, and checks that the account is
   not deleted. The primary key `id` never appears in a token.
-- **A refresh replaces the refresh token.** Its hash is overwritten, so the
-  old refresh token stops working, and a new access token is signed.
-  A refresh also moves `refresh_expires_at` forward.
+- **A refresh replaces the refresh token.** It moves `refresh_token_hash`
+  into `previous_refresh_token_hash`, overwriting the previously remembered
+  hash, and stores the new token's hash. A new access token is signed and
+  `refresh_expires_at` moves forward.
+- **Presenting the remembered token deletes the row.** The deletion commits
+  even though the refresh is refused, whichever `client_id` the request
+  names. All of the row's tokens then stop working, and the person authorizes
+  the agent again. The caller gets the same error as for an unknown refresh
+  token. A token replaced two or more refreshes ago is unknown and deletes
+  nothing; [Identity](identity.md#7-tokens) defines the replay rule.
 - **Revoking the authorization or deleting the account deletes the row.**
   Its access tokens then name no row and are rejected. Tasks keep the agent
   name they copied.
@@ -170,12 +178,14 @@ A person's login session, from the web pages or the `lorebay` CLI.
 | `account_id` | TEXT | Not null, foreign key to `account` | The person signed in |
 | `random_id` | TEXT | Not null, unique | Names the session in its access tokens: 128 random bits, encoded as a string |
 | `refresh_token_hash` | TEXT | Not null, unique | |
+| `previous_refresh_token_hash` | TEXT | Nullable, unique | The hash replaced by the last refresh; null until the first refresh |
 | `created_at` | INTEGER | Not null | |
 | `expires_at` | INTEGER | Not null | When the refresh token expires |
 
 - **Requests and refreshes** work as for an agent authorization; see
-  [section 5.2](#52-agent_authorization). A refresh also moves `expires_at`
-  forward.
+  [section 5.2](#52-agent_authorization). Both the Web API and the token
+  endpoint remember the replaced hash and delete the row on replay. The
+  person signs in again. A refresh also moves `expires_at` forward.
 - **A row is deleted on logout and with its account.** A background job
   removes expired rows; see
   [System architecture](system.md#6-background-jobs).
@@ -480,7 +490,7 @@ One row per knowledge entry; its content is in `knowledge_version`.
 
 ## 9. SQLite DDL
 
-The tables of sections 5 to 8, as the first migration. A table comes after
+The tables of sections 5 to 8, after all migrations. A table comes after
 the tables it references: `oauth_client` before `agent_authorization`, and
 `proposal` before `knowledge_version`.
 
@@ -511,8 +521,10 @@ CREATE TABLE agent_authorization (
   refresh_token_hash  TEXT    NOT NULL UNIQUE,
   refresh_expires_at  INTEGER NOT NULL,
   created_at          INTEGER NOT NULL,
+  previous_refresh_token_hash TEXT,
   UNIQUE (account_id, name)
 );
+CREATE UNIQUE INDEX agent_authorization_previous_refresh_token_hash ON agent_authorization (previous_refresh_token_hash);
 
 CREATE TABLE login_session (
   id                  TEXT NOT NULL PRIMARY KEY,
@@ -520,8 +532,10 @@ CREATE TABLE login_session (
   random_id           TEXT    NOT NULL UNIQUE,
   refresh_token_hash  TEXT    NOT NULL UNIQUE,
   created_at          INTEGER NOT NULL,
-  expires_at          INTEGER NOT NULL
+  expires_at          INTEGER NOT NULL,
+  previous_refresh_token_hash TEXT
 );
+CREATE UNIQUE INDEX login_session_previous_refresh_token_hash ON login_session (previous_refresh_token_hash);
 
 CREATE TABLE oauth_code (
   id              TEXT NOT NULL PRIMARY KEY,

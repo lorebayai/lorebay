@@ -103,15 +103,35 @@ pub(crate) async fn refresh(
     token: &str,
 ) -> Result<Tokens, LoginError> {
     let transaction = begin_write(database).await?;
-    let repository = LoginSessionRepository::builder()
+    let hash = token_hash(token);
+    let deleted = LoginSessionRepository::builder()
         .connection(&transaction)
+        .build()
+        .delete_by_previous_refresh_hash(&hash)
+        .await?;
+    if deleted > 0 {
+        transaction.commit().await?;
+        return Err(LoginError::Unauthorized);
+    }
+    let tokens = rotate_refresh(identity, &transaction, &hash).await?;
+    transaction.commit().await?;
+    Ok(tokens)
+}
+
+pub(crate) async fn rotate_refresh(
+    identity: &Identity,
+    transaction: &DatabaseTransaction,
+    hash: &str,
+) -> Result<Tokens, LoginError> {
+    let repository = LoginSessionRepository::builder()
+        .connection(transaction)
         .build();
     let session = repository
-        .by_refresh_hash(&token_hash(token))
+        .by_refresh_hash(hash)
         .await?
         .ok_or(LoginError::Unauthorized)?;
     let now = now_millis()?;
-    let username = active_username(&transaction, &session, now).await?;
+    let username = active_username(transaction, &session, now).await?;
     let refresh_token = new_refresh_token()?;
     let tokens = issue_tokens(
         identity,
@@ -124,10 +144,10 @@ pub(crate) async fn refresh(
         now,
     )?;
     let mut model: ActiveModel = session.into();
+    model.previous_refresh_token_hash = Set(Some(hash.to_owned()));
     model.refresh_token_hash = Set(token_hash(&refresh_token));
     model.expires_at = Set(session_expiry(identity, now));
     repository.update(model).await?;
-    transaction.commit().await?;
     Ok(tokens)
 }
 
@@ -205,6 +225,7 @@ pub(crate) async fn create_session(
         account_id: Set(account.id),
         random_id: Set(random_id),
         refresh_token_hash: Set(token_hash(&refresh_token)),
+        previous_refresh_token_hash: Set(None),
         created_at: Set(now),
         expires_at: Set(session_expiry(identity, now)),
     };

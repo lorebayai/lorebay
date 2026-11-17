@@ -137,8 +137,13 @@ It does not cover:
 - **Access tokens expire soon.** A client exchanges its refresh token for a
   new access token.
 - **Refresh tokens are random strings**, stored only as hashes. Each exchange
-  replaces the refresh token, so the old one stops working, and revocation
-  deletes it with its record.
+  replaces the refresh token and remembers the hash it replaced, overwriting
+  the previously remembered hash. Presenting that token again deletes the
+  login session or agent authorization, so all of its tokens stop working.
+  The person signs in or authorizes the agent again. There is no grace period
+  for a retry or concurrent refresh. A token replaced two or more refreshes
+  ago is unknown and ends nothing. Revocation deletes both hashes with the
+  record.
 
 ## 8. Authorization flow
 

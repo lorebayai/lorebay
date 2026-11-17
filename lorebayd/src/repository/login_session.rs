@@ -10,6 +10,14 @@ pub(crate) struct LoginSessionRepository<'a, C> {
 }
 
 impl<C: ConnectionTrait> LoginSessionRepository<'_, C> {
+    pub async fn delete_by_previous_refresh_hash(&self, hash: &str) -> Result<u64, DbErr> {
+        Ok(Entity::delete_many()
+            .filter(Column::PreviousRefreshTokenHash.eq(hash))
+            .exec(self.connection)
+            .await?
+            .rows_affected)
+    }
+
     pub async fn delete_expired(&self, now: i64) -> Result<u64, DbErr> {
         Ok(Entity::delete_many()
             .filter(Column::ExpiresAt.lte(now))
