@@ -11,8 +11,8 @@ use crate::domain::caller::VerifiedCaller;
 use crate::domain::pagination::{Page, PageOptions};
 use crate::domain::{
     CreatedTask, Note, NoteAdded, NoteContent, Task, TaskChanges, TaskError, TaskRead, TaskResult,
-    TaskStatus, TaskTextError, TaskTitle, add_note, change_task, create_task, list_tasks,
-    read_scratchpad, read_task,
+    TaskStatus, TaskTextError, TaskTitle, add_note, change_task, create_task, delete_note,
+    delete_task, list_tasks, read_scratchpad, read_task,
 };
 use crate::server::ServerState;
 
@@ -238,6 +238,7 @@ impl From<TaskError> for ApiError {
             }
             TaskError::InvalidCursor => invalid_query("cursor"),
             TaskError::NotFound => Self::TaskNotFound,
+            TaskError::NoteNotFound => Self::NoteNotFound,
             TaskError::Space(error) => error.into(),
         }
     }
@@ -291,6 +292,35 @@ pub(crate) async fn change(
     )
     .await?;
     Ok(Envelope::builder().data(task).build())
+}
+
+pub(crate) async fn delete(
+    State(state): State<ServerState>,
+    caller: VerifiedCaller,
+    path: Result<Path<(String, Secret<String>)>, PathRejection>,
+) -> Result<Envelope<()>, ApiError> {
+    let Path((space, task_id)) = path.map_err(invalid_path)?;
+    delete_task(&state.database, &caller, &space, task_id.expose()).await?;
+    Ok(Envelope::builder().data(()).build())
+}
+
+pub(crate) async fn remove_note(
+    State(state): State<ServerState>,
+    caller: VerifiedCaller,
+    path: Result<Path<(String, Secret<String>, String)>, PathRejection>,
+) -> Result<Envelope<()>, ApiError> {
+    let Path((space, task_id, time)) = path.map_err(invalid_path)?;
+    let time = time.parse::<i64>().map_err(|_| {
+        ApiError::InvalidPath(vec![
+            FieldError::builder()
+                .field("time")
+                .code("invalid")
+                .message("Expected an integer note time.")
+                .build(),
+        ])
+    })?;
+    delete_note(&state.database, &caller, &space, task_id.expose(), time).await?;
+    Ok(Envelope::builder().data(()).build())
 }
 
 pub(crate) async fn list(

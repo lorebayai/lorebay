@@ -37,6 +37,7 @@ pub(crate) enum TaskAction {
     Change,
     Close,
     CompleteArtifact,
+    Delete,
     RegisterArtifact,
 }
 
@@ -69,9 +70,9 @@ pub(crate) async fn check_task<C: ConnectionTrait>(
         .await?;
     let participant = participant.ok_or(TaskAccessError::NotFound)?;
     let role = SpaceRole::for_caller(&participant.role, caller)?;
-    let may_close_any =
-        matches!(action, TaskAction::Close) && matches!(role, SpaceRole::Owner | SpaceRole::Admin);
-    if task.account_id != caller.account_id() && !may_close_any {
+    let may_manage_others = matches!(action, TaskAction::Close | TaskAction::Delete)
+        && matches!(role, SpaceRole::Owner | SpaceRole::Admin);
+    if task.account_id != caller.account_id() && !may_manage_others {
         return Err(TaskAccessError::PermissionRequired);
     }
     if role == SpaceRole::Viewer {
