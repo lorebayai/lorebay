@@ -208,7 +208,7 @@ fn chosen_agent_name(
         (None, None) => Ok(None),
         (Some(default), name) => {
             let name = name.unwrap_or(default);
-            if name.trim().is_empty() {
+            if name.trim().is_empty() || matches!(name.as_str(), "." | "..") {
                 return Err(AuthorizationError::InvalidParameter("agent_name"));
             }
             Ok(Some(name))

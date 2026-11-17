@@ -3,9 +3,9 @@ use axum::extract::{Path, Query, State};
 use serde::Serialize;
 use typed_builder::TypedBuilder;
 
-use crate::api::{ApiError, Envelope, ListQuery, Meta, invalid_query};
-use crate::domain::caller::VerifiedCaller;
+use crate::api::{ApiError, Envelope, FieldError, ListQuery, Meta, invalid_query};
 use crate::domain::agents::{self, Agent, AgentError};
+use crate::domain::caller::VerifiedCaller;
 use crate::server::ServerState;
 
 #[derive(Clone, Debug, Serialize, TypedBuilder)]
@@ -63,7 +63,17 @@ pub(crate) async fn revoke(
     caller: VerifiedCaller,
     name: Result<Path<String>, PathRejection>,
 ) -> Result<Envelope<()>, ApiError> {
-    let Path(name) = name.map_err(|_| invalid_query("name"))?;
+    let Path(name) = name.map_err(invalid_name_path)?;
     agents::revoke(&state.database, &caller, &name).await?;
     Ok(Envelope::builder().data(()).build())
+}
+
+fn invalid_name_path(_error: PathRejection) -> ApiError {
+    ApiError::InvalidPath(vec![
+        FieldError::builder()
+            .field("name")
+            .code("invalid")
+            .message("Expected a valid UTF-8 agent name.")
+            .build(),
+    ])
 }

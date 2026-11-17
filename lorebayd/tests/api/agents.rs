@@ -88,10 +88,16 @@ async fn list_agents_returns_next_page_when_cursor_is_given() {
     assert_eq!(names(&after_deleted), json!(&expected[20..40]));
     let bob = bob_tokens(&server).await;
     assert_invalid_page(&server, &bob, &[("cursor", cursor)], "cursor").await;
-    for size in ["0", "101", "18446744073709551615"] {
+    for size in [
+        "0",
+        "101",
+        "18446744073709551615",
+        "text",
+        "-1",
+        "18446744073709551616",
+    ] {
         assert_invalid_page(&server, &person, &[("page_size", size)], "page_size").await;
     }
-    assert_invalid_page(&server, &person, &[("page_size", "text")], "query").await;
     for cursor in ["", "not-a-cursor", "YWdlbnRzLXYx"] {
         assert_invalid_page(&server, &person, &[("cursor", cursor)], "cursor").await;
     }
@@ -129,6 +135,40 @@ async fn revoke_agent_ends_agent_authorization() {
         "http.not_found",
     )
     .await;
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn revoke_agent_fails_when_name_is_not_utf8() {
+    let server = Server::start().await;
+    let person = server.tokens().await;
+    server.authorize_agent("Build agent").await;
+    let response = server
+        .json(
+            Method::DELETE,
+            "/api/v1/agents/%FF",
+            Value::Null,
+            person["access_token"].as_str(),
+        )
+        .await;
+    let body = assert_problem(response, StatusCode::BAD_REQUEST, "request.invalid_path").await;
+    assert_eq!(
+        body,
+        json!({"type": "about:blank", "title": "Bad Request", "status": 400,
+        "code": "request.invalid_path", "errors": [{"field": "name", "code": "invalid",
+        "message": "Expected a valid UTF-8 agent name."}]})
+    );
+    assert_eq!(
+        names(&list(&server, &person, &[]).await),
+        json!(["Build agent"])
+    );
+    assert_eq!(
+        revoke(&server, "Build agent", person["access_token"].as_str())
+            .await
+            .status(),
+        StatusCode::OK,
+    );
+    assert_eq!(names(&list(&server, &person, &[]).await), json!([]));
     server.stop().await;
 }
 
@@ -468,7 +508,11 @@ async fn assert_invalid_page(server: &Server, tokens: &Value, query: &[(&str, &s
         "request.invalid_query",
     )
     .await;
-    assert_eq!(body["errors"][0]["field"], field);
+    assert_eq!(
+        body["errors"],
+        json!([{"field": field, "code": "invalid",
+        "message": "Invalid pagination parameter."}])
+    );
 }
 
 async fn assert_invalid_refresh(server: &Server, agent: &AuthorizedAgent) {

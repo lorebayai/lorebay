@@ -16,6 +16,8 @@ pub(crate) enum ApiError {
     #[error("Bad Request")]
     InvalidBody(Vec<FieldError>),
     #[error("Bad Request")]
+    InvalidPath(Vec<FieldError>),
+    #[error("Bad Request")]
     InvalidQuery(Vec<FieldError>),
     #[error("Method Not Allowed")]
     MethodNotAllowed,
@@ -58,6 +60,7 @@ impl ApiError {
         match self {
             Self::Internal => (StatusCode::INTERNAL_SERVER_ERROR, "server.internal"),
             Self::InvalidBody(_) => (StatusCode::BAD_REQUEST, "request.invalid_body"),
+            Self::InvalidPath(_) => (StatusCode::BAD_REQUEST, "request.invalid_path"),
             Self::InvalidQuery(_) => (StatusCode::BAD_REQUEST, "request.invalid_query"),
             Self::MethodNotAllowed => (StatusCode::METHOD_NOT_ALLOWED, "http.method_not_allowed"),
             Self::NotFound => (StatusCode::NOT_FOUND, "http.not_found"),
@@ -113,7 +116,9 @@ impl IntoResponse for ApiError {
             _ => None,
         };
         let errors = match self {
-            Self::InvalidBody(errors) | Self::InvalidQuery(errors) => errors,
+            Self::InvalidBody(errors) | Self::InvalidPath(errors) | Self::InvalidQuery(errors) => {
+                errors
+            }
             _ => Vec::new(),
         };
         let problem = ProblemDetails::builder()

@@ -8,8 +8,7 @@ use super::{ApiError, FieldError};
 #[derive(Clone, Debug, Deserialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
 pub(crate) struct ListQuery {
-    #[serde(default = "default_page_size")]
-    page_size: u64,
+    page_size: Option<String>,
     cursor: Option<String>,
 }
 
@@ -17,11 +16,18 @@ impl TryFrom<ListQuery> for PageOptions {
     type Error = ApiError;
 
     fn try_from(query: ListQuery) -> Result<Self, Self::Error> {
-        if !(1..=MAX_PAGE_SIZE).contains(&query.page_size) {
+        let page_size = query
+            .page_size
+            .as_deref()
+            .map(str::parse::<u64>)
+            .transpose()
+            .map_err(|_| invalid_query("page_size"))?
+            .unwrap_or(DEFAULT_PAGE_SIZE);
+        if !(1..=MAX_PAGE_SIZE).contains(&page_size) {
             return Err(invalid_query("page_size"));
         }
         Ok(Self::builder()
-            .page_size(query.page_size)
+            .page_size(page_size)
             .cursor(query.cursor)
             .build())
     }
@@ -39,7 +45,3 @@ pub(crate) fn invalid_query(field: &str) -> ApiError {
 
 const DEFAULT_PAGE_SIZE: u64 = 20;
 const MAX_PAGE_SIZE: u64 = 100;
-
-fn default_page_size() -> u64 {
-    DEFAULT_PAGE_SIZE
-}

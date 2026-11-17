@@ -30,7 +30,9 @@ impl FromRequestParts<ServerState> for VerifiedCaller {
             .verify(token)
             .map_err(|_| ApiError::Unauthorized)?;
         match claims.kind {
-            TokenKind::AgentAuthorization => Ok(Self::Agent(verify_agent(&state.database, claims).await?)),
+            TokenKind::AgentAuthorization => {
+                Ok(Self::Agent(verify_agent(&state.database, claims).await?))
+            }
             TokenKind::LoginSession => Ok(Self::Person(
                 login_session::verify(&state.database, claims).await?,
             )),

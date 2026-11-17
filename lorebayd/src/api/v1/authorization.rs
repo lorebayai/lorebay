@@ -9,11 +9,11 @@ use typed_builder::TypedBuilder;
 use url::Url;
 
 use crate::api::{ApiError, Envelope, FieldError};
-use crate::domain::caller::VerifiedCaller;
 use crate::domain::authorization::{
     self, AgentNameConflict, AuthorizationDecision, AuthorizationDetails, AuthorizationError,
     AuthorizationInput,
 };
+use crate::domain::caller::VerifiedCaller;
 use crate::domain::{authorization_server_metadata, protected_resource_metadata};
 use crate::oauth::no_store_headers;
 use crate::server::ServerState;
