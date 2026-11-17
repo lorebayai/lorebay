@@ -8,6 +8,7 @@
   const parameters = {};
   const fields = ["client_id", "redirect_uri", "response_type", "code_challenge", "code_challenge_method", "state", "resource"];
   let accessToken;
+  let refreshToken;
   let isCli = false;
   let busy = false;
   let redirectUrl;
@@ -32,15 +33,35 @@
         consent.hidden = true;
         login.hidden = false;
       }
-      throw new Error("The request failed. Check the link or sign in again.");
+      throw Object.assign(new Error("The request failed. Check the link or sign in again."), {
+        status: response.status
+      });
     }
     return (await response.json()).data;
   }
 
   async function logout() {
     if (!accessToken) return;
-    await request("login-session", "DELETE", null);
+    try {
+      await request("login-session", "DELETE", null);
+    } catch (error) {
+      if (error.status !== 401) throw error;
+      await logoutExpiredSession();
+    }
     accessToken = undefined;
+    refreshToken = undefined;
+  }
+
+  async function logoutExpiredSession() {
+    if (!refreshToken) return;
+    try {
+      const tokens = await request("login-session/refresh", "POST", { refresh_token: refreshToken });
+      accessToken = tokens.access_token;
+      refreshToken = tokens.refresh_token;
+      await request("login-session", "DELETE", null);
+    } catch (error) {
+      if (error.status !== 401) throw error;
+    }
   }
 
   async function followRedirect() {
@@ -61,6 +82,7 @@
         username: values.get("username"), password: values.get("password")
       });
       accessToken = tokens.access_token;
+      refreshToken = tokens.refresh_token;
       login.reset();
       const details = await request("authorization-request", "POST", parameters);
       isCli = details.default_agent_name === null;
