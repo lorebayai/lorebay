@@ -13,6 +13,7 @@ use crate::repository::agent_authorization::AgentAuthorizationRepository;
 use crate::repository::oauth_code::OauthCodeRepository;
 
 use super::access::Caller;
+use super::caller::{CallerError, VerifiedCaller};
 use super::login_session::now_millis;
 use super::token::token_hash;
 use super::{authorization_server_metadata, primary_key, random_id};
@@ -38,6 +39,8 @@ pub(crate) enum AuthorizationDecision {
 pub(crate) enum AuthorizationError {
     #[error("Agent name is already taken")]
     AgentNameTaken,
+    #[error(transparent)]
+    Caller(#[from] CallerError),
     #[error(transparent)]
     Database(#[from] sea_orm::DbErr),
     #[error(transparent)]
@@ -65,19 +68,21 @@ pub(crate) struct AuthorizationDetails {
 
 pub(crate) async fn read_authorization_request(
     database: &DatabaseConnection,
-    _caller: &Caller,
+    caller: &VerifiedCaller,
     input: &AuthorizationInput,
 ) -> Result<AuthorizationDetails, AuthorizationError> {
+    caller.person()?;
     client_details(database, input).await
 }
 
 pub(crate) async fn decide_authorization(
     database: &DatabaseConnection,
-    caller: &Caller,
+    caller: &VerifiedCaller,
     input: AuthorizationInput,
     decision: AuthorizationDecision,
     public_url: &str,
 ) -> Result<String, AuthorizationError> {
+    let caller = caller.person()?;
     let transaction = database
         .begin_with_options(TransactionOptions {
             sqlite_transaction_mode: Some(SqliteTransactionMode::Immediate),

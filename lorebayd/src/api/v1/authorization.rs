@@ -9,7 +9,7 @@ use typed_builder::TypedBuilder;
 use url::Url;
 
 use crate::api::{ApiError, Envelope, FieldError};
-use crate::domain::access::Caller;
+use crate::domain::caller::VerifiedCaller;
 use crate::domain::authorization::{
     self, AgentNameConflict, AuthorizationDecision, AuthorizationDetails, AuthorizationError,
     AuthorizationInput,
@@ -85,6 +85,7 @@ impl AuthorizationRequest {
 impl From<AuthorizationError> for ApiError {
     fn from(error: AuthorizationError) -> Self {
         match error {
+            AuthorizationError::Caller(error) => error.into(),
             AuthorizationError::AgentNameTaken => Self::InvalidBody(vec![
                 FieldError::builder()
                     .field("agent_name")
@@ -103,7 +104,7 @@ impl From<AuthorizationError> for ApiError {
 
 pub(crate) async fn read(
     State(state): State<ServerState>,
-    caller: Caller,
+    caller: VerifiedCaller,
     body: Result<Json<AuthorizationRequest>, JsonRejection>,
 ) -> Result<Response, ApiError> {
     let Json(request) = body.map_err(invalid_json)?;
@@ -118,7 +119,7 @@ pub(crate) async fn read(
 
 pub(crate) async fn decide(
     State(state): State<ServerState>,
-    caller: Caller,
+    caller: VerifiedCaller,
     body: Result<Json<DecisionRequest>, JsonRejection>,
 ) -> Result<Response, ApiError> {
     let Json(request) = body.map_err(invalid_json)?;

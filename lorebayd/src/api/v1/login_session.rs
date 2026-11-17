@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 
 use crate::api::{ApiError, Envelope, FieldError};
-use crate::domain::access::Caller;
+use crate::domain::caller::VerifiedCaller;
 use crate::domain::login_session::{self, Tokens};
 use crate::server::ServerState;
 
@@ -78,7 +78,7 @@ pub(crate) async fn refresh(
 
 pub(crate) async fn log_out(
     State(state): State<ServerState>,
-    caller: Caller,
+    caller: VerifiedCaller,
 ) -> Result<Envelope<()>, ApiError> {
     login_session::log_out(&state.database, caller).await?;
     Ok(Envelope::builder().data(()).build())
