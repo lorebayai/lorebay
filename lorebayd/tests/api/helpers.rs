@@ -41,6 +41,7 @@ pub struct Settings {
 pub struct Server {
     pub client: Client,
     pub address: SocketAddr,
+    pub public_url: String,
     pub directory: TempDir,
     shutdown: Option<oneshot::Sender<()>>,
     task: Option<JoinHandle<Result<()>>>,
@@ -113,13 +114,21 @@ impl Server {
         fs::write(&users_file, serde_json::to_vec(&users).unwrap()).unwrap();
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
+        let public_url_file = directory.path().join("public-url");
+        let public_url = if public_url_file.exists() {
+            fs::read_to_string(&public_url_file).unwrap()
+        } else {
+            format!("http://{address}")
+        };
         let mut config = Config::builder()
             .listen_address(address)
             .data_directory(directory.path().join("data"))
             .users_file(Some(users_file))
-            .public_url(format!("http://{address}"))
+            .public_url(public_url)
             .build();
         configure(&mut config);
+        fs::write(public_url_file, &config.public_url).unwrap();
+        let public_url = config.public_url.clone();
         let (shutdown, stopped) = oneshot::channel();
         let task = tokio::spawn(run(config, listener, async {
             let _ = stopped.await;
@@ -131,6 +140,7 @@ impl Server {
                 .build()
                 .unwrap(),
             address,
+            public_url,
             directory,
             shutdown: Some(shutdown),
             task: Some(task),

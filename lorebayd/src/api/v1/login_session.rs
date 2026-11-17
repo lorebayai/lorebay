@@ -3,13 +3,16 @@ use std::net::SocketAddr;
 use axum::extract::State;
 use axum::extract::rejection::JsonRejection;
 use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
+use lorebay_base::Secret;
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 
 use crate::api::{ApiError, Envelope, FieldError};
 use crate::domain::caller::VerifiedCaller;
 use crate::domain::login_session::{self, Tokens};
+use crate::oauth::no_store_headers;
 use crate::server::ServerState;
 
 #[derive(Clone, Debug, Deserialize, TypedBuilder)]
@@ -17,21 +20,21 @@ use crate::server::ServerState;
 #[serde(deny_unknown_fields)]
 pub(crate) struct LoginRequest {
     username: String,
-    password: String,
+    password: Secret<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
 #[serde(deny_unknown_fields)]
 pub(crate) struct RefreshRequest {
-    refresh_token: String,
+    refresh_token: Secret<String>,
 }
 
 #[derive(Clone, Debug, Serialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
 pub(crate) struct TokenResponse {
-    access_token: String,
-    refresh_token: String,
+    access_token: Secret<String>,
+    refresh_token: Secret<String>,
     token_type: &'static str,
     expires_in: u64,
 }
@@ -50,7 +53,7 @@ impl From<Tokens> for TokenResponse {
 impl LoginRequest {
     fn validate(&self) -> Result<(), ApiError> {
         validate_field("username", &self.username)?;
-        validate_field("password", &self.password)
+        validate_field("password", self.password.expose())
     }
 }
 
@@ -58,7 +61,7 @@ pub(crate) async fn log_in(
     State(state): State<ServerState>,
     Extension(peer): Extension<SocketAddr>,
     request: Result<Json<LoginRequest>, JsonRejection>,
-) -> Result<Envelope<TokenResponse>, ApiError> {
+) -> Result<Response, ApiError> {
     let Json(request) = request.map_err(invalid_json)?;
     request.validate()?;
     let tokens = login_session::log_in(
@@ -69,18 +72,30 @@ pub(crate) async fn log_in(
         request.password,
     )
     .await?;
-    Ok(Envelope::builder().data(tokens).build())
+    Ok((
+        no_store_headers(),
+        Envelope::<TokenResponse>::builder().data(tokens).build(),
+    )
+        .into_response())
 }
 
 pub(crate) async fn refresh(
     State(state): State<ServerState>,
     request: Result<Json<RefreshRequest>, JsonRejection>,
-) -> Result<Envelope<TokenResponse>, ApiError> {
+) -> Result<Response, ApiError> {
     let Json(request) = request.map_err(invalid_json)?;
-    validate_field("refresh_token", &request.refresh_token)?;
-    let tokens =
-        login_session::refresh(&state.identity, &state.database, &request.refresh_token).await?;
-    Ok(Envelope::builder().data(tokens).build())
+    validate_field("refresh_token", request.refresh_token.expose())?;
+    let tokens = login_session::refresh(
+        &state.identity,
+        &state.database,
+        request.refresh_token.expose(),
+    )
+    .await?;
+    Ok((
+        no_store_headers(),
+        Envelope::<TokenResponse>::builder().data(tokens).build(),
+    )
+        .into_response())
 }
 
 pub(crate) async fn log_out(

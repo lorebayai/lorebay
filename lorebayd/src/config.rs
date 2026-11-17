@@ -33,6 +33,8 @@ pub struct Config {
     pub login_rate_window_seconds: u64,
     #[builder(default = DEFAULT_CREDENTIAL_CLEANUP_INTERVAL_SECONDS)]
     pub credential_cleanup_interval_seconds: u64,
+    #[builder(default = DEFAULT_UNUSED_CLIENT_LIFETIME_SECONDS)]
+    pub unused_client_lifetime_seconds: u64,
     #[builder(default = DEFAULT_REGISTRATION_CLIENT_NAME_MAX_BYTES)]
     pub registration_client_name_max_bytes: usize,
     #[builder(default = DEFAULT_REGISTRATION_REDIRECT_URI_LIMIT)]
@@ -97,6 +99,10 @@ impl Config {
             (
                 "credential_cleanup_interval_seconds",
                 self.credential_cleanup_interval_seconds,
+            ),
+            (
+                "unused_client_lifetime_seconds",
+                self.unused_client_lifetime_seconds,
             ),
         ] {
             if !(1..=MAX_DURATION_SECONDS).contains(&value) {
@@ -189,10 +195,11 @@ const DEFAULT_REFRESH_TOKEN_LIFETIME_SECONDS: u64 = 2_592_000;
 const DEFAULT_LOGIN_RATE_LIMIT: u32 = 10;
 const DEFAULT_LOGIN_RATE_WINDOW_SECONDS: u64 = 60;
 const DEFAULT_CREDENTIAL_CLEANUP_INTERVAL_SECONDS: u64 = 300;
+const DEFAULT_UNUSED_CLIENT_LIFETIME_SECONDS: u64 = 2_592_000;
 const MAX_DURATION_SECONDS: u64 = 315_360_000;
 const DEFAULT_PUBLIC_URL: &str = "http://127.0.0.1:8080";
-const DEFAULT_REGISTRATION_RATE_LIMIT: u32 = 20;
-const DEFAULT_REGISTRATION_RATE_WINDOW_SECONDS: u64 = 60;
+const DEFAULT_REGISTRATION_RATE_LIMIT: u32 = 10;
+const DEFAULT_REGISTRATION_RATE_WINDOW_SECONDS: u64 = 3600;
 const CONFIG_ENV_PREFIX: &str = "LOREBAYD";
 const DEFAULT_DATA_DIRECTORY: &str = "data";
 const DEFAULT_LISTEN_ADDRESS: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080);

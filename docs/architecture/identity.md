@@ -126,8 +126,19 @@ It does not cover:
   define. Registration is open and needs no credential, as
   [RFC 7591](https://datatracker.ietf.org/doc/html/rfc7591) allows; a
   registered client can do nothing until a person authorizes it.
-  Registration is rate limited by address, as sign-in is, so open
-  registration cannot be used to fill the database with clients.
+  Registration is limited to 10 attempts per hour per address by default.
+  A background job removes clients older than a configurable age, 30 days
+  by default, that never had an agent authorization and have no authorization
+  code waiting to be exchanged. Together these rules bound the unused
+  clients one address can leave to about 7,200. A client that ever had an
+  agent authorization is kept after that authorization ends, because a
+  harness may still use its client ID.
+- **An HTTP loopback IP redirect URI matches on any port.** Its scheme,
+  host, path and query must still match the registered URI. Every other
+  redirect URI matches exactly, including `localhost` and HTTPS URIs.
+  The token request must use the exact redirect URI of its authorization
+  request, as [RFC 8252, section 7.3](https://datatracker.ietf.org/doc/html/rfc8252#section-7.3)
+  requires.
 - **Sign-in and consent are Web API operations.** The authorization endpoint
   is a minimal page that `lorebayd` serves. The page signs the person in,
   reads the request it was opened with, shows the client and asks for

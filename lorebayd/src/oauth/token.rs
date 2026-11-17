@@ -3,6 +3,7 @@ use axum::extract::rejection::FormRejection;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Form, Json};
+use lorebay_base::Secret;
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 
@@ -18,10 +19,10 @@ use super::{AUTHORIZATION_CODE_GRANT, OAuthState, REFRESH_TOKEN_GRANT};
 pub(super) struct TokenRequest {
     grant_type: String,
     client_id: String,
-    code: Option<String>,
+    code: Option<Secret<String>>,
     redirect_uri: Option<String>,
-    code_verifier: Option<String>,
-    refresh_token: Option<String>,
+    code_verifier: Option<Secret<String>>,
+    refresh_token: Option<Secret<String>>,
     resource: Option<String>,
 }
 
@@ -36,9 +37,9 @@ impl TokenRequest {
         let client_id = required(Some(self.client_id))?;
         match self.grant_type.as_str() {
             AUTHORIZATION_CODE_GRANT => {
-                let code_verifier = required(self.code_verifier)?;
-                if !(43..=128).contains(&code_verifier.len())
-                    || !code_verifier.bytes().all(|byte| {
+                let code_verifier = required_secret(self.code_verifier)?;
+                if !(43..=128).contains(&code_verifier.expose().len())
+                    || !code_verifier.expose().bytes().all(|byte| {
                         byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~')
                     })
                 {
@@ -47,7 +48,7 @@ impl TokenRequest {
                 Ok(TokenGrant::AuthorizationCode(
                     CodeExchange::builder()
                         .client_id(client_id)
-                        .code(required(self.code)?)
+                        .code(required_secret(self.code)?)
                         .redirect_uri(required(self.redirect_uri)?)
                         .code_verifier(code_verifier)
                         .build(),
@@ -56,7 +57,7 @@ impl TokenRequest {
             REFRESH_TOKEN_GRANT => Ok(TokenGrant::RefreshToken(
                 TokenRefresh::builder()
                     .client_id(client_id)
-                    .refresh_token(required(self.refresh_token)?)
+                    .refresh_token(required_secret(self.refresh_token)?)
                     .build(),
             )),
             "" => Err(OAuthError::InvalidTokenRequest(StatusCode::BAD_REQUEST)),
@@ -85,8 +86,8 @@ pub(super) async fn token(
 #[derive(Clone, Debug, Serialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
 struct TokenResponse {
-    access_token: String,
-    refresh_token: String,
+    access_token: Secret<String>,
+    refresh_token: Secret<String>,
     token_type: &'static str,
     expires_in: u64,
 }
@@ -105,5 +106,11 @@ impl From<Tokens> for TokenResponse {
 fn required(value: Option<String>) -> Result<String, OAuthError> {
     value
         .filter(|value| !value.is_empty())
+        .ok_or(OAuthError::InvalidTokenRequest(StatusCode::BAD_REQUEST))
+}
+
+fn required_secret(value: Option<Secret<String>>) -> Result<Secret<String>, OAuthError> {
+    value
+        .filter(|value| !value.expose().is_empty())
         .ok_or(OAuthError::InvalidTokenRequest(StatusCode::BAD_REQUEST))
 }

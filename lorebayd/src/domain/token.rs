@@ -5,12 +5,13 @@ use std::path::Path;
 
 use anyhow::{Context, Result, bail};
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
+use lorebay_base::Secret;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tempfile::Builder;
 use typed_builder::TypedBuilder;
 
-use super::random_id;
+use super::{authorization_server_metadata, random_id};
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -43,18 +44,22 @@ pub(crate) struct TokenSubject<'a> {
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
 pub(crate) struct TokenSigner {
-    key: Vec<u8>,
+    key: Secret<Vec<u8>>,
+    issuer: String,
 }
 
 impl TokenSigner {
-    pub fn load(directory: &Path) -> Result<Self> {
+    pub fn load(directory: &Path, public_url: &str) -> Result<Self> {
         let path = directory.join(SIGNING_KEY_FILE);
         let key = load_key(&path)
             .with_context(|| format!("could not load signing key {}", path.display()))?;
-        Ok(Self { key })
+        Ok(Self {
+            key,
+            issuer: authorization_server_metadata(public_url).issuer,
+        })
     }
 
-    pub fn sign(&self, subject: TokenSubject<'_>, expiry: u64, now: u64) -> Result<String> {
+    pub fn sign(&self, subject: TokenSubject<'_>, expiry: u64, now: u64) -> Result<Secret<String>> {
         let claims = Claims::builder()
             .sub(subject.username)
             .sid(subject.random_id)
@@ -62,22 +67,27 @@ impl TokenSigner {
             .exp(expiry)
             .iat(now)
             .jti(random_id()?)
-            .iss(TOKEN_ISSUER)
+            .iss(self.issuer.clone())
             .aud(TOKEN_AUDIENCE)
             .build();
-        Ok(encode(
+        Ok(Secret::from(encode(
             &Header::new(Algorithm::HS256),
             &claims,
-            &EncodingKey::from_secret(&self.key)?,
-        )?)
+            &EncodingKey::from_secret(self.key.expose())?,
+        )?))
     }
 
     pub fn verify(&self, token: &str) -> Result<Claims> {
         let mut validation = Validation::new(Algorithm::HS256);
         validation.leeway = 0;
         validation.set_audience(&[TOKEN_AUDIENCE]);
-        validation.set_issuer(&[TOKEN_ISSUER]);
-        Ok(decode::<Claims>(token, &DecodingKey::from_secret(&self.key)?, &validation)?.claims)
+        validation.set_issuer(&[&self.issuer]);
+        Ok(decode::<Claims>(
+            token,
+            &DecodingKey::from_secret(self.key.expose())?,
+            &validation,
+        )?
+        .claims)
     }
 }
 
@@ -90,10 +100,9 @@ pub(crate) fn token_hash(token: &str) -> String {
 
 const SIGNING_KEY_FILE: &str = "signing.key";
 const SIGNING_KEY_BYTES: usize = 32;
-const TOKEN_ISSUER: &str = "lorebayd";
 const TOKEN_AUDIENCE: &str = "lorebay-web-api";
 
-fn load_key(path: &Path) -> Result<Vec<u8>> {
+fn load_key(path: &Path) -> Result<Secret<Vec<u8>>> {
     if !path.try_exists()? {
         create_key(path)?;
     }
@@ -104,7 +113,7 @@ fn load_key(path: &Path) -> Result<Vec<u8>> {
     if key.len() != SIGNING_KEY_BYTES {
         bail!("signing key must contain 32 bytes");
     }
-    Ok(key)
+    Ok(Secret::from(key))
 }
 
 fn create_key(path: &Path) -> Result<()> {

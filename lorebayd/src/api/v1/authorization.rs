@@ -4,6 +4,7 @@ use axum::extract::rejection::JsonRejection;
 use axum::response::{IntoResponse, Response};
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use lorebay_base::Secret;
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 use url::Url;
@@ -163,7 +164,7 @@ struct AuthorizationResponse {
 #[derive(Clone, Debug, Serialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
 struct DecisionResponse {
-    redirect_url: String,
+    redirect_url: Secret<String>,
 }
 
 impl From<AuthorizationDetails> for AuthorizationResponse {

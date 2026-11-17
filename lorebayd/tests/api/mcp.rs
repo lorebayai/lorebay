@@ -362,8 +362,8 @@ async fn assert_challenge(response: Response, server: &Server) {
     assert_eq!(
         response.headers()["www-authenticate"],
         format!(
-            "Bearer resource_metadata=\"http://{}/.well-known/oauth-protected-resource/mcp\"",
-            server.address
+            "Bearer resource_metadata=\"{}/.well-known/oauth-protected-resource/mcp\"",
+            server.public_url.trim_end_matches('/')
         )
     );
     assert!(!response.headers().contains_key(SESSION_HEADER));
@@ -375,7 +375,7 @@ async fn assert_challenge(response: Response, server: &Server) {
         .unwrap();
     assert_eq!(
         metadata["resource"],
-        format!("http://{}/mcp", server.address)
+        format!("{}/mcp", server.public_url.trim_end_matches('/'))
     );
 }
 

@@ -13,6 +13,8 @@ use rmcp::transport::streamable_http_server::session::never::NeverSessionManager
 use rmcp::transport::{StreamableHttpServerConfig, StreamableHttpService};
 use url::Url;
 
+use lorebay_base::Secret;
+
 use crate::domain::access::{AccessError, verify_agent};
 use crate::domain::{MCP_PATH, PROTECTED_RESOURCE_METADATA_PATH};
 use crate::server::ServerState;
@@ -75,11 +77,11 @@ async fn authenticate(
         .and_then(|value| value.to_str().ok())
         .and_then(|value| value.split_once(' '))
         .filter(|(scheme, _)| scheme.eq_ignore_ascii_case("Bearer"))
-        .map(|(_, token)| token);
+        .map(|(_, token)| Secret::from(token));
     let Some(token) = token else {
         return challenge(&state);
     };
-    let Ok(claims) = state.identity.signer.verify(token) else {
+    let Ok(claims) = state.identity.signer.verify(token.expose()) else {
         return challenge(&state);
     };
     let caller = match verify_agent(&state.database, claims).await {

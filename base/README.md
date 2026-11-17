@@ -11,7 +11,11 @@ Run from the repository root:
 moon run base:format
 moon run base:lint
 moon run base:build
+cargo doc -p lorebay-base --no-deps --open
 ```
+
+Use the generated `Secret<T>` API docs for `Secret::from(value)`, `expose()`,
+redacted `Debug` output and transparent serde serialization.
 
 `load_config::<T>(&ConfigSources)` requires `T` to implement `Default`,
 `Serialize` and `Deserialize`. Callers supply the file paths, environment

@@ -1,6 +1,8 @@
 use axum::extract::FromRequestParts;
 use axum::http::{header, request::Parts};
 
+use lorebay_base::Secret;
+
 use crate::domain::access::verify_agent;
 use crate::domain::caller::VerifiedCaller;
 use crate::domain::login_session;
@@ -22,12 +24,12 @@ impl FromRequestParts<ServerState> for VerifiedCaller {
             .and_then(|value| value.to_str().ok())
             .and_then(|value| value.split_once(' '))
             .filter(|(scheme, _)| scheme.eq_ignore_ascii_case("Bearer"))
-            .map(|(_, token)| token)
+            .map(|(_, token)| Secret::from(token))
             .ok_or(ApiError::Unauthorized)?;
         let claims = state
             .identity
             .signer
-            .verify(token)
+            .verify(token.expose())
             .map_err(|_| ApiError::Unauthorized)?;
         match claims.kind {
             TokenKind::AgentAuthorization => {

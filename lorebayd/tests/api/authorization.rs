@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::time::Duration;
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
@@ -6,10 +7,12 @@ use reqwest::{Method, Response, StatusCode};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use tempfile::TempDir;
+use tokio::time::{sleep, timeout};
 use url::Url;
 
 use crate::helpers::{
-    REDIRECT_URI as TOKEN_REDIRECT_URI, Server, TEST_PASSWORD, TEST_USERNAME, assert_taken,
+    PKCE_VERIFIER, REDIRECT_URI as TOKEN_REDIRECT_URI, Server, TEST_PASSWORD, TEST_USERNAME,
+    assert_taken,
 };
 
 const AGENT_NAME: &str = "Build agent";
@@ -87,13 +90,159 @@ async fn read_authorization_request_fails_when_redirect_uri_is_not_registered() 
     );
     for redirect in [
         "https://untrusted.invalid/callback",
-        "http://127.0.0.1:46138/callback?tenant=example",
+        "http://127.0.0.1:46138/other?tenant=example",
+        "http://127.0.0.1:46138/other/../callback?tenant=example",
+        "http://127.1:46138/callback?tenant=example",
+        "http://[::1]:46138/callback?tenant=example",
+        "https://127.0.0.1:46138/callback?tenant=example",
         "http://127.0.0.1:46137/callback?tenant=example&extra=1",
         "http://127.0.0.1:46137/callback?tenant=%65xample",
     ] {
         let mut input = input.clone();
         input["redirect_uri"] = json!(redirect);
         assert_rejected_by_both(&server, input, &tokens, "redirect_uri").await;
+    }
+    for (registered, requested) in [
+        (
+            "http://localhost:46137/callback",
+            "http://localhost:46138/callback",
+        ),
+        (
+            "https://127.0.0.1:46137/callback",
+            "https://127.0.0.1:46138/callback",
+        ),
+    ] {
+        let response = server
+            .json(
+                Method::POST,
+                "/oauth/register",
+                json!({"client_name": "Exact client", "redirect_uris": [registered],
+                "token_endpoint_auth_method": "none"}),
+                None,
+            )
+            .await;
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let client = response.json::<Value>().await.unwrap();
+        let input =
+            authorization_request(client["client_id"].as_str().unwrap(), requested, &server);
+        assert_rejected_by_both(&server, input, &tokens, "redirect_uri").await;
+    }
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn read_authorization_request_fails_when_unused_client_was_removed() {
+    let server = Server::configured(|config| {
+        config.credential_cleanup_interval_seconds = 1;
+        config.unused_client_lifetime_seconds = 3;
+    })
+    .await;
+    let unused = server.register_client("Unused").await;
+    let revoked = server.authorize_agent("Revoked").await;
+    let pending = server.register_client("Pending").await;
+    let person = server.tokens().await;
+    let code = server
+        .approve_code_for(&pending, None, person["access_token"].as_str().unwrap())
+        .await;
+    let response = server
+        .json(
+            Method::DELETE,
+            "/api/v1/agents/Revoked",
+            Value::Null,
+            person["access_token"].as_str(),
+        )
+        .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let input = authorization_request(&unused, TOKEN_REDIRECT_URI, &server);
+    assert_eq!(
+        operation(&server, READ_PATH, input.clone(), Some(&person))
+            .await
+            .status(),
+        StatusCode::OK
+    );
+    timeout(Duration::from_secs(15), async {
+        while operation(&server, READ_PATH, input.clone(), Some(&person))
+            .await
+            .status()
+            == StatusCode::OK
+        {
+            sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .unwrap();
+    assert_rejected_by_both(&server, input, &person, "client_id").await;
+    for client in [&revoked.client_id, &pending] {
+        let input = authorization_request(client, TOKEN_REDIRECT_URI, &server);
+        assert_eq!(
+            operation(&server, READ_PATH, input, Some(&person))
+                .await
+                .status(),
+            StatusCode::OK
+        );
+    }
+    successful_tokens(server.exchange_code(&pending, &code).await).await;
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn decide_authorization_returns_redirect_with_code_when_loopback_port_differs() {
+    let server = Server::start().await;
+    let person = server.tokens().await;
+    for (registered, requested) in [
+        (
+            REDIRECT_URI,
+            "http://127.0.0.1:46138/callback?tenant=example",
+        ),
+        (
+            "http://[::1]:46137/callback?tenant=example",
+            "http://[::1]:46138/callback?tenant=example",
+        ),
+        (
+            "http://127.0.0.1/callback",
+            "http://127.0.0.1:46139/callback",
+        ),
+        (
+            "http://[0:0:0:0:0:0:0:1]:46137/callback",
+            "http://[0:0:0:0:0:0:0:1]:46138/callback",
+        ),
+    ] {
+        let response = server
+            .json(
+                Method::POST,
+                "/oauth/register",
+                json!({"client_name": requested, "redirect_uris": [registered],
+                "token_endpoint_auth_method": "none"}),
+                None,
+            )
+            .await;
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let client = response.json::<Value>().await.unwrap();
+        let client = client["client_id"].as_str().unwrap();
+        let mut input = authorization_request(client, requested, &server);
+        assert_eq!(
+            operation(&server, READ_PATH, input.clone(), Some(&person))
+                .await
+                .status(),
+            StatusCode::OK
+        );
+        input["decision"] = json!("approve");
+        let query = decide(&server, input, &person).await;
+        let mut form = vec![
+            ("grant_type", "authorization_code"),
+            ("client_id", client),
+            ("code", query["code"].as_str()),
+            ("redirect_uri", registered),
+            ("code_verifier", PKCE_VERIFIER),
+        ];
+        let response = server.token_request(&form).await;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            response.json::<Value>().await.unwrap()["error"],
+            "invalid_grant"
+        );
+        form[3].1 = requested;
+        successful_tokens(server.token_request(&form).await).await;
     }
     server.stop().await;
 }

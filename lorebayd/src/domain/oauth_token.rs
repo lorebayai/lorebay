@@ -1,5 +1,6 @@
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use lorebay_base::Secret;
 use sea_orm::{
     ConnectionTrait, DatabaseConnection, DatabaseTransaction, DbErr, Set, SqlErr,
     SqliteTransactionMode, TransactionOptions, TransactionTrait,
@@ -12,6 +13,7 @@ use crate::entity::account::Model as Account;
 use crate::entity::agent_authorization::ActiveModel;
 use crate::entity::oauth_code::Model as Code;
 use crate::entity::{oauth_code, refresh_token_history};
+use crate::repository::OAuthClientRepository;
 use crate::repository::account::AccountRepository;
 use crate::repository::agent_authorization::AgentAuthorizationRepository;
 use crate::repository::login_session::LoginSessionRepository;
@@ -47,16 +49,16 @@ pub(crate) enum TokenError {
 #[builder(field_defaults(setter(into)))]
 pub(crate) struct CodeExchange {
     pub client_id: String,
-    pub code: String,
+    pub code: Secret<String>,
     pub redirect_uri: String,
-    pub code_verifier: String,
+    pub code_verifier: Secret<String>,
 }
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
 pub(crate) struct TokenRefresh {
     pub client_id: String,
-    pub refresh_token: String,
+    pub refresh_token: Secret<String>,
 }
 
 impl From<LoginError> for TokenError {
@@ -95,10 +97,10 @@ async fn exchange_code(
         .build();
     let now = now_millis()?;
     let code = repository
-        .by_hash(&token_hash(&input.code))
+        .by_hash(&token_hash(input.code.expose()))
         .await?
         .ok_or(TokenError::InvalidGrant)?;
-    let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(input.code_verifier.as_bytes()));
+    let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(input.code_verifier.expose().as_bytes()));
     if code.expires_at <= now
         || code.client_id != input.client_id
         || code.redirect_uri != input.redirect_uri
@@ -161,10 +163,10 @@ async fn create_agent(
     let model = ActiveModel {
         id: Set(id.clone()),
         account_id: Set(account.id),
-        client_id: Set(code.client_id),
+        client_id: Set(code.client_id.clone()),
         name: Set(code.agent_name.ok_or(TokenError::InvalidGrant)?),
         random_id: Set(random_id),
-        refresh_token_hash: Set(token_hash(&refresh_token)),
+        refresh_token_hash: Set(token_hash(refresh_token.expose())),
         refresh_expires_at: Set(session_expiry(identity, now)),
         created_at: Set(now),
     };
@@ -177,6 +179,9 @@ async fn create_agent(
             Some(SqlErr::UniqueConstraintViolation(_)) => TokenError::AgentNameTaken,
             _ => TokenError::Database(error),
         })?;
+    OAuthClientRepository::new(transaction)
+        .mark_authorized(&code.client_id, now)
+        .await?;
     Ok((id, tokens))
 }
 
@@ -184,14 +189,14 @@ async fn refresh_agent(
     identity: &Identity,
     transaction: &DatabaseTransaction,
     input: TokenRefresh,
-    hash: &str,
+    hash: &Secret<String>,
 ) -> Result<Tokens, TokenError> {
     let repository = AgentAuthorizationRepository::builder()
         .connection(transaction)
         .build();
     let now = now_millis()?;
     let authorization = repository
-        .by_refresh_hash(hash)
+        .by_refresh_hash(hash.expose())
         .await?
         .filter(|row| row.client_id == input.client_id && row.refresh_expires_at > now)
         .ok_or(TokenError::InvalidGrant)?;
@@ -212,14 +217,14 @@ async fn refresh_agent(
         .build()
         .insert(refresh_token_history::ActiveModel {
             id: Set(primary_key()),
-            token_hash: Set(hash.to_owned()),
+            token_hash: Set(hash.expose().clone()),
             agent_authorization_id: Set(Some(authorization.id.clone())),
             login_session_id: Set(None),
             expires_at: Set(authorization.refresh_expires_at),
         })
         .await?;
     let mut model: ActiveModel = authorization.into();
-    model.refresh_token_hash = Set(token_hash(&refresh_token));
+    model.refresh_token_hash = Set(token_hash(refresh_token.expose()));
     model.refresh_expires_at = Set(session_expiry(identity, now));
     repository.update(model).await?;
     Ok(tokens)
@@ -231,12 +236,12 @@ async fn refresh_tokens(
     input: TokenRefresh,
 ) -> Result<Tokens, TokenError> {
     let transaction = begin_write(database).await?;
-    let hash = token_hash(&input.refresh_token);
+    let hash = Secret::from(token_hash(input.refresh_token.expose()));
     let now = now_millis()?;
     let history = RefreshTokenHistoryRepository::builder()
         .connection(&transaction)
         .build()
-        .by_hash(&hash, now)
+        .by_hash(hash.expose(), now)
         .await?;
     if let Some(history) = history {
         if let Some(id) = history.agent_authorization_id {

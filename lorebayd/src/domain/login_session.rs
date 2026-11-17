@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
 
 use anyhow::anyhow;
-use lorebay_base::{Clock, RateLimitError, RateLimiter, SystemClock};
+use lorebay_base::{Clock, RateLimitError, RateLimiter, Secret, SystemClock};
 use sea_orm::{
     ConnectionTrait, DatabaseConnection, DatabaseTransaction, Set, SqliteTransactionMode,
     TransactionOptions, TransactionTrait,
@@ -53,8 +53,8 @@ pub(crate) struct Identity {
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
 pub(crate) struct Tokens {
-    pub access_token: String,
-    pub refresh_token: String,
+    pub access_token: Secret<String>,
+    pub refresh_token: Secret<String>,
     pub expires_in: u64,
 }
 
@@ -79,12 +79,12 @@ pub(crate) async fn log_in(
     database: &DatabaseConnection,
     address: IpAddr,
     username: String,
-    password: String,
+    password: Secret<String>,
 ) -> Result<Tokens, LoginError> {
     identity.limiter.check(address)?;
     let store = Arc::clone(&identity.user_store);
     let supplied_username = username.clone();
-    let matches = spawn_blocking(move || store.verify(&supplied_username, &password))
+    let matches = spawn_blocking(move || store.verify(&supplied_username, password.expose()))
         .await
         .map_err(|error| anyhow!(error))??;
     if !matches {
@@ -109,11 +109,11 @@ pub(crate) async fn refresh(
     token: &str,
 ) -> Result<Tokens, LoginError> {
     let transaction = begin_write(database).await?;
-    let hash = token_hash(token);
+    let hash = Secret::from(token_hash(token));
     let history = RefreshTokenHistoryRepository::builder()
         .connection(&transaction)
         .build()
-        .by_hash(&hash, now_millis()?)
+        .by_hash(hash.expose(), now_millis()?)
         .await?;
     if let Some(history) = history {
         if let Some(id) = history.agent_authorization_id {
@@ -141,13 +141,13 @@ pub(crate) async fn refresh(
 pub(crate) async fn rotate_refresh(
     identity: &Identity,
     transaction: &DatabaseTransaction,
-    hash: &str,
+    hash: &Secret<String>,
 ) -> Result<Tokens, LoginError> {
     let repository = LoginSessionRepository::builder()
         .connection(transaction)
         .build();
     let session = repository
-        .by_refresh_hash(hash)
+        .by_refresh_hash(hash.expose())
         .await?
         .ok_or(LoginError::Unauthorized)?;
     let now = now_millis()?;
@@ -168,14 +168,14 @@ pub(crate) async fn rotate_refresh(
         .build()
         .insert(refresh_token_history::ActiveModel {
             id: Set(primary_key()),
-            token_hash: Set(hash.to_owned()),
+            token_hash: Set(hash.expose().clone()),
             agent_authorization_id: Set(None),
             login_session_id: Set(Some(session.id.clone())),
             expires_at: Set(session.expires_at),
         })
         .await?;
     let mut model: ActiveModel = session.into();
-    model.refresh_token_hash = Set(token_hash(&refresh_token));
+    model.refresh_token_hash = Set(token_hash(refresh_token.expose()));
     model.expires_at = Set(session_expiry(identity, now));
     repository.update(model).await?;
     Ok(tokens)
@@ -256,7 +256,7 @@ pub(crate) async fn create_session(
         id: Set(id.clone()),
         account_id: Set(account.id),
         random_id: Set(random_id),
-        refresh_token_hash: Set(token_hash(&refresh_token)),
+        refresh_token_hash: Set(token_hash(refresh_token.expose())),
         created_at: Set(now),
         expires_at: Set(session_expiry(identity, now)),
     };
@@ -271,7 +271,7 @@ pub(crate) async fn create_session(
 pub(crate) fn issue_tokens(
     identity: &Identity,
     subject: TokenSubject<'_>,
-    refresh_token: String,
+    refresh_token: Secret<String>,
     now: i64,
 ) -> Result<Tokens, LoginError> {
     let now = (now / 1000) as u64;
@@ -283,8 +283,8 @@ pub(crate) fn issue_tokens(
         .build())
 }
 
-pub(crate) fn new_refresh_token() -> anyhow::Result<String> {
-    Ok(format!("{}{}", random_id()?, random_id()?))
+pub(crate) fn new_refresh_token() -> anyhow::Result<Secret<String>> {
+    Ok(Secret::from(format!("{}{}", random_id()?, random_id()?)))
 }
 
 pub(crate) fn session_expiry(identity: &Identity, now: i64) -> i64 {
