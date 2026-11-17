@@ -10,6 +10,7 @@ Run from the repo root:
 moon run cli:format cli:lint cli:build cli:integration
 cargo run -p lorebay-cli -- login https://lorebay.example
 cargo run -p lorebay-cli -- login https://lorebay.example --no-browser
+cargo run -p lorebay-cli -- login https://lorebay.example --device
 cargo run -p lorebay-cli -- agent list --page-size 20 --output json
 cargo run -p lorebay-cli -- agent list --cursor '<cursor>'
 cargo run -p lorebay-cli -- agent revoke 'Claude Code (home)' --yes

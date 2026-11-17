@@ -1,4 +1,5 @@
 mod agents;
+mod device;
 #[expect(
     clippy::unwrap_used,
     clippy::panic,

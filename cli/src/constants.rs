@@ -9,6 +9,7 @@ pub(crate) const CODE: &str = "code";
 pub(crate) const CODE_VERIFIER: &str = "code_verifier";
 pub(crate) const CREDENTIALS_FILE: &str = "credentials.json";
 pub(crate) const DATA: &str = "data";
+pub(crate) const DEVICE_CODE: &str = "device_code";
 pub(crate) const ERROR: &str = "error";
 pub(crate) const GRANT_TYPE: &str = "grant_type";
 pub(crate) const HUMAN_OUTPUT: &str = "human";

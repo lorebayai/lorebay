@@ -43,6 +43,12 @@ pub struct SigningIn {
     prefix: Vec<u8>,
 }
 
+pub struct DeviceSigningIn {
+    pub code: String,
+    pub link: Url,
+    login: SigningIn,
+}
+
 impl Server {
     pub async fn start() -> Self {
         Self::configured(json!({})).await
@@ -158,6 +164,50 @@ impl Server {
         .await
         .unwrap()
         .unwrap()
+    }
+
+    pub async fn device_signing_in(&self) -> DeviceSigningIn {
+        let child = self
+            .cli(&["login", &self.url, "--device", "--output", "json"])
+            .spawn()
+            .unwrap();
+        DeviceSigningIn::start(child).await
+    }
+
+    pub async fn decide_device(&self, login: &DeviceSigningIn, decision: &str) {
+        assert_eq!(
+            self.client
+                .get(login.link.clone())
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::OK
+        );
+        let person = self.person().await;
+        let read = self
+            .json(
+                Method::POST,
+                "/api/v1/device-sign-in-request",
+                json!({"user_code": login.code}),
+                person["access_token"].as_str(),
+            )
+            .await;
+        assert_eq!(read["data"]["user_code"], login.code);
+        self.json(
+            Method::POST,
+            "/api/v1/device-sign-in-decision",
+            json!({"user_code": login.code, "decision": decision}),
+            person["access_token"].as_str(),
+        )
+        .await;
+        self.json(
+            Method::DELETE,
+            LOGIN_SESSION_PATH,
+            Value::Null,
+            person["access_token"].as_str(),
+        )
+        .await;
     }
 
     pub async fn login(&self) -> Output {
@@ -314,6 +364,55 @@ impl Server {
                 .unwrap(),
         );
         assert!(ready(&self.client, &self.url, &mut self.process, &self.username).await);
+    }
+}
+
+impl DeviceSigningIn {
+    pub async fn start(mut child: Child) -> Self {
+        let mut stderr = BufReader::new(child.stderr.take().unwrap());
+        let mut lines = Vec::new();
+        for _ in 0..4 {
+            let mut line = String::new();
+            assert_ne!(
+                timeout(WAIT, stderr.read_line(&mut line))
+                    .await
+                    .unwrap()
+                    .unwrap(),
+                0
+            );
+            lines.push(line);
+        }
+        let link = Url::parse(
+            lines[0]
+                .trim()
+                .strip_prefix("Open this address to sign in: ")
+                .unwrap(),
+        )
+        .unwrap();
+        let code = lines[1]
+            .trim()
+            .strip_prefix("Enter this code: ")
+            .unwrap()
+            .to_owned();
+        let complete =
+            Url::parse(lines[2].trim().strip_prefix("Or open this link: ").unwrap()).unwrap();
+        assert!(lines[3].contains("Check that the code in the browser matches"));
+        assert_eq!(query(&complete, "user_code"), code);
+        assert_eq!(link.origin(), complete.origin());
+        Self {
+            code,
+            link: link.clone(),
+            login: SigningIn {
+                link,
+                child,
+                stderr,
+                prefix: lines.concat().into_bytes(),
+            },
+        }
+    }
+
+    pub async fn finish(self) -> Output {
+        self.login.finish().await
     }
 }
 

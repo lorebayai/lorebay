@@ -12,8 +12,8 @@ use typed_builder::TypedBuilder;
 use url::{Host, Url};
 
 use crate::constants::{
-    CLI_CONNECTION, CLI_USAGE, CLIENT_ID_FIELD, CODE, CODE_VERIFIER, ERROR, GRANT_TYPE, LOGIN_HINT,
-    LOGIN_SESSION_PATH, MESSAGE, REFRESH_TOKEN, STATUS,
+    CLI_CONNECTION, CLI_USAGE, CLIENT_ID_FIELD, CODE, CODE_VERIFIER, DEVICE_CODE, ERROR,
+    GRANT_TYPE, LOGIN_HINT, LOGIN_SESSION_PATH, MESSAGE, REFRESH_TOKEN, STATUS,
 };
 
 use crate::credentials::{Session, Store, now};
@@ -33,6 +33,7 @@ pub(crate) struct Metadata {
     pub issuer: String,
     pub authorization_endpoint: String,
     pub token_endpoint: String,
+    pub device_authorization_endpoint: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, TypedBuilder)]
@@ -80,7 +81,10 @@ impl Http {
             &metadata.issuer,
             &metadata.authorization_endpoint,
             &metadata.token_endpoint,
-        ] {
+        ]
+        .into_iter()
+        .chain(metadata.device_authorization_endpoint.iter())
+        {
             same_server(server, address)?;
         }
         Ok(metadata)
@@ -96,19 +100,10 @@ impl Http {
             .map_err(Failure::connection)?;
         let secrets: Vec<_> = form
             .iter()
-            .filter(|(key, _)| matches!(*key, CODE | CODE_VERIFIER | REFRESH_TOKEN))
+            .filter(|(key, _)| matches!(*key, CODE | CODE_VERIFIER | DEVICE_CODE | REFRESH_TOKEN))
             .map(|(_, value)| *value)
             .collect();
-        let tokens: Tokens = serde_json::from_value(decode(response, &secrets).await?)
-            .map_err(|_| invalid_response())?;
-        if tokens.access_token.expose().is_empty()
-            || tokens.refresh_token.expose().is_empty()
-            || !tokens.token_type.eq_ignore_ascii_case("bearer")
-            || tokens.expires_in == 0
-        {
-            return Err(invalid_response());
-        }
-        Ok(tokens)
+        tokens_from_value(decode(response, &secrets).await?)
     }
 
     pub async fn authorized(
@@ -269,6 +264,46 @@ pub(crate) fn session_from_tokens(
         .build()
 }
 
+pub(crate) fn tokens_from_value(value: Value) -> Result<Tokens> {
+    let tokens: Tokens = serde_json::from_value(value).map_err(|_| invalid_response())?;
+    if tokens.access_token.expose().is_empty()
+        || tokens.refresh_token.expose().is_empty()
+        || !tokens.token_type.eq_ignore_ascii_case("bearer")
+        || tokens.expires_in == 0
+    {
+        return Err(invalid_response());
+    }
+    Ok(tokens)
+}
+
+pub(crate) async fn decode(response: Response, secrets: &[&str]) -> Result<Value> {
+    let status = response.status();
+    let body = response
+        .json::<Value>()
+        .await
+        .map_err(|_| invalid_response())?;
+    decode_body(status, body, secrets)
+}
+
+pub(crate) fn decode_body(status: StatusCode, body: Value, secrets: &[&str]) -> Result<Value> {
+    if status.is_success() {
+        return Ok(body);
+    }
+    let mut body = if let Some(code) = body[ERROR].as_str() {
+        json!({(CODE): code, (MESSAGE): body["error_description"].as_str().unwrap_or("OAuth request failed.")})
+    } else {
+        body
+    };
+    if !body.is_object() || !body[CODE].is_string() {
+        return Err(invalid_response());
+    }
+    redact(&mut body, secrets);
+    if body[STATUS] == StatusCode::UNAUTHORIZED.as_u16() {
+        body[MESSAGE] = json!(LOGIN_HINT);
+    }
+    Err(Failure::server(body))
+}
+
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 async fn end_session(store: &Store, mut session: Session) -> Result<()> {
@@ -296,30 +331,6 @@ async fn end_session(store: &Store, mut session: Session) -> Result<()> {
     )
     .await?;
     Ok(())
-}
-
-async fn decode(response: Response, secrets: &[&str]) -> Result<Value> {
-    let status = response.status();
-    let body = response
-        .json::<Value>()
-        .await
-        .map_err(|_| invalid_response())?;
-    if status.is_success() {
-        return Ok(body);
-    }
-    let mut body = if let Some(code) = body[ERROR].as_str() {
-        json!({(CODE): code, (MESSAGE): body["error_description"].as_str().unwrap_or("OAuth request failed.")})
-    } else {
-        body
-    };
-    if !body.is_object() || !body[CODE].is_string() {
-        return Err(invalid_response());
-    }
-    redact(&mut body, secrets);
-    if body[STATUS] == StatusCode::UNAUTHORIZED.as_u16() {
-        body[MESSAGE] = json!(LOGIN_HINT);
-    }
-    Err(Failure::server(body))
 }
 
 fn redact(value: &mut Value, secrets: &[&str]) {
