@@ -1,6 +1,7 @@
 use thiserror::Error;
 use typed_builder::TypedBuilder;
 
+pub(crate) const KEYWORD_MAX_CHARACTERS: usize = 200;
 pub(crate) const NOTE_MAX_CHARACTERS: usize = 10_000;
 pub(crate) const RESULT_MAX_CHARACTERS: usize = 100_000;
 pub(crate) const TITLE_MAX_CHARACTERS: usize = 200;
@@ -98,8 +99,6 @@ impl TryFrom<String> for TaskKeyword {
         Ok(Self { value })
     }
 }
-
-const KEYWORD_MAX_CHARACTERS: usize = 200;
 
 fn validate_text(value: &str, maximum: usize) -> Result<(), TaskTextError> {
     if value.trim().is_empty() {

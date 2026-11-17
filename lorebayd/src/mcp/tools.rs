@@ -9,8 +9,7 @@ use crate::api::{
 use crate::domain::caller::VerifiedCaller;
 use crate::domain::pagination::Page;
 use crate::domain::{
-    NoteContent, TaskFilters, TaskTitle, add_note, change_task, create_task, list_spaces,
-    list_tasks, read_task,
+    NoteContent, TaskTitle, add_note, change_task, create_task, list_spaces, list_tasks, read_task,
 };
 use crate::server::ServerState;
 
@@ -36,18 +35,12 @@ pub(crate) async fn call(
         }
         "update_task" => update_task(state, caller, arguments).await,
         "list_tasks" => {
-            let filters = TaskFilters::builder()
-                .person(None)
-                .agent(None)
-                .status(None)
-                .own_open(false)
-                .keyword(None)
-                .build();
+            let (options, filters) = arguments.tasks()?;
             let page = list_tasks(
                 &state.database,
                 caller,
                 &arguments.string("space")?,
-                arguments.page()?,
+                options,
                 filters,
             )
             .await?;

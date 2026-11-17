@@ -8,8 +8,8 @@ pub(crate) use envelope::*;
 pub(crate) use pagination::*;
 pub(crate) use problem::*;
 pub(crate) use v1::{
-    ChangeTaskRequest, NoteAddedResponse, ReadTaskQuery, SpaceResponse, TaskResponse,
-    TaskSummaryResponse, invalid_text,
+    ChangeTaskRequest, ListTasksQuery, NoteAddedResponse, ReadTaskQuery, SpaceResponse,
+    TaskResponse, TaskSummaryResponse, invalid_text,
 };
 
 pub(crate) fn router() -> Router<ServerState> {

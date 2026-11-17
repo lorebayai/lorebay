@@ -4,7 +4,10 @@ use rmcp::model::{JsonObject, Tool, ToolAnnotations};
 use serde_json::{Value, json};
 
 use crate::api::{DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};
-use crate::domain::{NOTE_MAX_CHARACTERS, RESULT_MAX_CHARACTERS, TITLE_MAX_CHARACTERS, TaskStatus};
+use crate::domain::{
+    KEYWORD_MAX_CHARACTERS, NOTE_MAX_CHARACTERS, RESULT_MAX_CHARACTERS, TITLE_MAX_CHARACTERS,
+    TaskStatus,
+};
 
 pub(crate) fn catalog() -> &'static [Tool] {
     CATALOG.as_slice()
@@ -48,8 +51,8 @@ fn build_catalog() -> Vec<Tool> {
         ),
         tool(
             "list_tasks",
-            "List a space's tasks, newest activity first, including task_id, key, title, status, person and agent name. Follow next_cursor with cursor to read the next page.",
-            paged(json!({"space": space()})),
+            "List a space's tasks, newest activity first. Filter by person, agent, status or keyword in titles/results. own_open selects only your party's tasks that are not ended and cannot combine with person or status. Rows include task_id for writes. Repeat the same filters with cursor to read the next page.",
+            task_list_properties(),
             &["space"],
             true,
         ),
@@ -105,4 +108,13 @@ fn paged(properties: Value) -> Value {
         json!({"type":"string", "description":"Opaque next_cursor from the preceding page."}),
     );
     json!(properties)
+}
+
+fn task_list_properties() -> Value {
+    paged(json!({
+        "space":space(), "person":{"type":"string"}, "agent":{"type":"string"},
+        "status":{"type":"string", "enum":[TaskStatus::InProgress.as_str(), TaskStatus::Ended.as_str()]},
+        "own_open":{"type":"boolean", "default":false},
+        "keyword":{"type":"string", "minLength":1, "maxLength":KEYWORD_MAX_CHARACTERS}
+    }))
 }

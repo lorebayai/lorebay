@@ -5,8 +5,8 @@ use crate::server::ServerState;
 
 pub(crate) use spaces::SpaceResponse;
 pub(crate) use tasks::{
-    ChangeTaskRequest, NoteAddedResponse, ReadTaskQuery, TaskResponse, TaskSummaryResponse,
-    invalid_text,
+    ChangeTaskRequest, ListTasksQuery, NoteAddedResponse, ReadTaskQuery, TaskResponse,
+    TaskSummaryResponse, invalid_text,
 };
 
 pub(crate) fn router() -> Router<ServerState> {
