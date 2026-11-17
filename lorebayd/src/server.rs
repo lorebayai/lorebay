@@ -35,7 +35,7 @@ use crate::domain::users::FileUserStore;
 use crate::domain::{account, login_session};
 use crate::migration::Migrator;
 use crate::oauth::{self, OAuthState};
-use crate::worker;
+use crate::{mcp, worker};
 
 /// Readiness remains observable for one second before connections stop being accepted.
 const READINESS_PROPAGATION: Duration = Duration::from_secs(1);
@@ -156,7 +156,7 @@ async fn serve_until_shutdown(
         Duration::from_secs(state.identity.config.credential_cleanup_interval_seconds),
         workers_stopped,
     ));
-    let server = serve(listener, router(state.clone()), stopped);
+    let server = serve(listener, router(state.clone())?, stopped);
     tokio::pin!(server);
     tracing::info!("lorebayd ready");
     tokio::select! {
@@ -201,16 +201,18 @@ async fn finish_workers(workers: &mut JoinSet<()>) {
     }
 }
 
-fn router(state: ServerState) -> Router {
+fn router(state: ServerState) -> Result<Router> {
     let oauth = oauth::router(state.oauth.clone());
-    Router::new()
+    let mcp = mcp::router(state.clone())?;
+    Ok(Router::new()
         .route(HEALTH_PATH, get(health))
         .route(READINESS_PATH, get(readiness))
         .nest(API_PREFIX, api::router())
         .with_state(state)
         .merge(oauth)
+        .merge(mcp)
         .fallback(api::not_found)
-        .method_not_allowed_fallback(|| async { ApiError::MethodNotAllowed })
+        .method_not_allowed_fallback(|| async { ApiError::MethodNotAllowed }))
 }
 
 async fn health() -> Envelope<&'static str> {

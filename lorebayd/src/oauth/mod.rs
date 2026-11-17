@@ -12,7 +12,9 @@ use typed_builder::TypedBuilder;
 
 use crate::Config;
 use crate::domain::login_session::Identity;
-use crate::domain::{AUTHORIZATION_PATH, REGISTRATION_PATH, TOKEN_PATH};
+use crate::domain::{
+    AUTHORIZATION_PATH, PROTECTED_RESOURCE_METADATA_PATH, REGISTRATION_PATH, TOKEN_PATH,
+};
 use crate::pages;
 
 use error::OAuthError;
@@ -82,7 +84,6 @@ mod register;
 mod token;
 
 const AUTHORIZATION_METADATA_PATH: &str = "/.well-known/oauth-authorization-server";
-const PROTECTED_RESOURCE_METADATA_PATH: &str = "/.well-known/oauth-protected-resource/mcp";
 const AUTHORIZATION_CODE_GRANT: &str = "authorization_code";
 const REFRESH_TOKEN_GRANT: &str = "refresh_token";
 const CODE_RESPONSE_TYPE: &str = "code";

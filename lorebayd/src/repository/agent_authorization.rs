@@ -10,6 +10,13 @@ pub(crate) struct AgentAuthorizationRepository<'a, C> {
 }
 
 impl<C: ConnectionTrait> AgentAuthorizationRepository<'_, C> {
+    pub async fn by_random_id(&self, random_id: &str) -> Result<Option<Model>, DbErr> {
+        Entity::find()
+            .filter(Column::RandomId.eq(random_id))
+            .one(self.connection)
+            .await
+    }
+
     pub async fn by_account_and_name(
         &self,
         account_id: &str,

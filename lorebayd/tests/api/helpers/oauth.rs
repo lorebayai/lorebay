@@ -114,6 +114,18 @@ impl Server {
         database.execute(&statement).await.unwrap();
         database.close().await.unwrap();
     }
+
+    pub async fn remove_agent_authorizations(&self) {
+        let path = self.directory.path().join("data/lorebay.sqlite3");
+        let database = Database::connect(format!("sqlite://{}", path.display()))
+            .await
+            .unwrap();
+        let statement = Query::delete()
+            .from_table(Alias::new("agent_authorization"))
+            .to_owned();
+        database.execute(&statement).await.unwrap();
+        database.close().await.unwrap();
+    }
 }
 
 const PKCE_CHALLENGE: &str = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";

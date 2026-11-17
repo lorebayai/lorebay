@@ -1,6 +1,8 @@
 use typed_builder::TypedBuilder;
 
 pub(crate) const MCP_PATH: &str = "/mcp";
+pub(crate) const PROTECTED_RESOURCE_METADATA_PATH: &str =
+    "/.well-known/oauth-protected-resource/mcp";
 pub(crate) const AUTHORIZATION_PATH: &str = "/oauth/authorize";
 pub(crate) const TOKEN_PATH: &str = "/oauth/token";
 pub(crate) const REGISTRATION_PATH: &str = "/oauth/register";
