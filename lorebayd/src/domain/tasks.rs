@@ -35,6 +35,8 @@ pub(crate) enum TaskError {
     InvalidCursor,
     #[error("Task not found")]
     NotFound,
+    #[error("Note not found")]
+    NoteNotFound,
     #[error(transparent)]
     Space(#[from] SpaceAccessError),
 }
@@ -214,14 +216,17 @@ pub(crate) async fn add_note(
     )
     .await?;
     let repository = NoteRepository::builder().connection(&transaction).build();
-    let time = match repository.latest_time(&task.id).await? {
-        Some(latest) => now_millis()?.max(
-            latest
-                .checked_add(1)
-                .ok_or_else(|| DbErr::Type("Note times exhausted".into()))?,
-        ),
-        None => now_millis()?,
-    };
+    // Deleted notes must not free their times for later appends.
+    let latest = repository
+        .latest_time(&task.id)
+        .await?
+        .unwrap_or(task.last_activity_at)
+        .max(task.last_activity_at);
+    let time = now_millis()?.max(
+        latest
+            .checked_add(1)
+            .ok_or_else(|| DbErr::Type("Note times exhausted".into()))?,
+    );
     repository
         .insert(note::ActiveModel {
             id: Set(primary_key()),
@@ -296,6 +301,60 @@ pub(crate) async fn change_task(
         .artifacts(artifacts)
         .scratchpad(None)
         .build())
+}
+
+pub(crate) async fn delete_task(
+    database: &DatabaseConnection,
+    caller: &VerifiedCaller,
+    space: &str,
+    task_id: &str,
+) -> Result<(), TaskError> {
+    caller.person()?;
+    let transaction = write_transaction(database).await?;
+    let task = check_task(
+        &transaction,
+        caller,
+        task_id,
+        Some(space),
+        TaskAction::Delete,
+    )
+    .await?;
+    TaskRepository::builder()
+        .connection(&transaction)
+        .build()
+        .delete(&task.id)
+        .await?;
+    transaction.commit().await?;
+    Ok(())
+}
+
+pub(crate) async fn delete_note(
+    database: &DatabaseConnection,
+    caller: &VerifiedCaller,
+    space: &str,
+    task_id: &str,
+    time: i64,
+) -> Result<(), TaskError> {
+    caller.person()?;
+    let transaction = write_transaction(database).await?;
+    let task = check_task(
+        &transaction,
+        caller,
+        task_id,
+        Some(space),
+        TaskAction::Delete,
+    )
+    .await?;
+    let deleted = NoteRepository::builder()
+        .connection(&transaction)
+        .build()
+        .delete_by_time(&task.id, time)
+        .await?;
+    if deleted == 0 {
+        return Err(TaskError::NoteNotFound);
+    }
+    transaction.commit().await?;
+    Ok(())
 }
 
 pub(crate) async fn list_tasks(

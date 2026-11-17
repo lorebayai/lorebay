@@ -30,6 +30,8 @@ pub(crate) enum ApiError {
     MethodNotAllowed,
     #[error("Not Found")]
     NotFound,
+    #[error("Note not found")]
+    NoteNotFound,
     #[error("The person is already in the space")]
     ParticipantAlreadyExists,
     #[error("Participant not found")]
@@ -88,6 +90,7 @@ impl ApiError {
             Self::InvalidQuery(_) => (StatusCode::BAD_REQUEST, "request.invalid_query"),
             Self::MethodNotAllowed => (StatusCode::METHOD_NOT_ALLOWED, "http.method_not_allowed"),
             Self::NotFound => (StatusCode::NOT_FOUND, "http.not_found"),
+            Self::NoteNotFound => (StatusCode::NOT_FOUND, "note.not_found"),
             Self::ParticipantAlreadyExists => (StatusCode::CONFLICT, "participant.already_exists"),
             Self::ParticipantNotFound => (StatusCode::NOT_FOUND, "participant.not_found"),
             Self::PayloadTooLarge => (StatusCode::PAYLOAD_TOO_LARGE, "request.body_too_large"),

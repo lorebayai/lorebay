@@ -14,6 +14,7 @@ use helpers::*;
 pub(crate) mod helpers;
 
 mod change;
+mod deletion;
 
 #[tokio::test]
 async fn create_task_returns_task_id_and_key() {

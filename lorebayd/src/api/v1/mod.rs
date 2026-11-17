@@ -15,11 +15,15 @@ pub(crate) fn router() -> Router<ServerState> {
         )
         .route(
             "/spaces/{space}/tasks/{task}",
-            get(tasks::read).patch(tasks::change),
+            get(tasks::read).patch(tasks::change).delete(tasks::delete),
         )
         .route(
             "/spaces/{space}/tasks/{task}/notes",
             post(tasks::append_note),
+        )
+        .route(
+            "/spaces/{space}/tasks/{task}/notes/{time}",
+            delete(tasks::remove_note),
         )
         .route(
             "/spaces/{space}/tasks/{task}/scratchpad",

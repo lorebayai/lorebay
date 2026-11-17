@@ -44,4 +44,13 @@ impl<C: ConnectionTrait> NoteRepository<'_, C> {
     pub async fn insert(&self, model: ActiveModel) -> Result<Model, DbErr> {
         model.insert(self.connection).await
     }
+
+    pub async fn delete_by_time(&self, task_id: &str, time: i64) -> Result<u64, DbErr> {
+        let result = Entity::delete_many()
+            .filter(Column::TaskId.eq(task_id))
+            .filter(Column::CreatedAt.eq(time))
+            .exec(self.connection)
+            .await?;
+        Ok(result.rows_affected)
+    }
 }
