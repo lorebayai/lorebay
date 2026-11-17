@@ -800,6 +800,43 @@ async fn refresh_token_ends_login_session_when_older_replaced_cli_refresh_token_
 }
 
 #[tokio::test]
+async fn refresh_login_session_ends_agent_authorization_when_replaced_refresh_token_is_presented() {
+    let server = Server::start().await;
+    let agent = server.authorize_agent(AGENT_NAME).await;
+    let independent = server.authorize_agent("Independent agent").await;
+    assert_eq!(
+        server
+            .refresh(agent.tokens["refresh_token"].as_str().unwrap())
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let newest = refresh_twice(&server, &agent.client_id, &agent.tokens).await;
+    let unknown = server.refresh("unknown-refresh-token").await;
+    let replay = server
+        .refresh(agent.tokens["refresh_token"].as_str().unwrap())
+        .await;
+    assert_eq!(replay.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        replay.headers()["content-type"],
+        unknown.headers()["content-type"]
+    );
+    assert_eq!(
+        replay.json::<Value>().await.unwrap(),
+        unknown.json::<Value>().await.unwrap()
+    );
+    let directory = server.stop().await;
+    let server = Server::restart(directory).await;
+    assert_ended(&server, &agent.client_id, &newest).await;
+    assert_live(&server, &independent.client_id, &independent.tokens).await;
+    let code = server
+        .approve_code(&agent.client_id, Some(AGENT_NAME))
+        .await;
+    assert_tokens(server.exchange_code(&agent.client_id, &code).await).await;
+    server.stop().await;
+}
+
+#[tokio::test]
 async fn refresh_token_fails_without_ending_agent_authorization_when_replaced_refresh_token_has_expired()
  {
     let server = Server::start().await;
@@ -818,6 +855,13 @@ async fn refresh_token_fails_without_ending_agent_authorization_when_replaced_re
         "invalid_grant",
     )
     .await;
+    assert_eq!(
+        server
+            .refresh(agent.tokens["refresh_token"].as_str().unwrap())
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
     assert_live(&server, &agent.client_id, &newest).await;
     server.stop().await;
 }

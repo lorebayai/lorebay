@@ -270,9 +270,6 @@ Each refresh token replaced by a refresh of an agent authorization or login sess
   replacement, replay and expired-owner cleanup cascade to the history.
   The background job also deletes entries whose `expires_at` has passed,
   bounding history by the refresh token lifetime.
-- **Upgrade preserves the previously remembered hash.** Earlier schemas
-  did not record its original expiry, so migration uses the owner's stored
-  expiry for that one entry. Subsequent entries retain the exact token expiry.
 
 ## 6. Spaces and participants
 

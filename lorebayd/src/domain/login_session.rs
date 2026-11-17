@@ -17,6 +17,7 @@ use crate::entity::account::Model as Account;
 use crate::entity::login_session::{ActiveModel, Model};
 use crate::entity::refresh_token_history;
 use crate::repository::account::AccountRepository;
+use crate::repository::agent_authorization::AgentAuthorizationRepository;
 use crate::repository::login_session::LoginSessionRepository;
 use crate::repository::refresh_token_history::RefreshTokenHistoryRepository;
 
@@ -114,12 +115,21 @@ pub(crate) async fn refresh(
         .build()
         .by_hash(&hash, now_millis()?)
         .await?;
-    if let Some(id) = history.and_then(|row| row.login_session_id) {
-        LoginSessionRepository::builder()
-            .connection(&transaction)
-            .build()
-            .delete_by_id(&id)
-            .await?;
+    if let Some(history) = history {
+        if let Some(id) = history.agent_authorization_id {
+            AgentAuthorizationRepository::builder()
+                .connection(&transaction)
+                .build()
+                .delete_by_id(&id)
+                .await?;
+        }
+        if let Some(id) = history.login_session_id {
+            LoginSessionRepository::builder()
+                .connection(&transaction)
+                .build()
+                .delete_by_id(&id)
+                .await?;
+        }
         transaction.commit().await?;
         return Err(LoginError::Unauthorized);
     }

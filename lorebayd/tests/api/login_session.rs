@@ -55,7 +55,6 @@ async fn log_in_fails_when_password_is_wrong() {
 async fn refresh_login_session_returns_new_tokens() {
     let server = Server::start().await;
     let mut tokens = server.tokens().await;
-
     for _ in 0..2 {
         let response = server
             .refresh(tokens["refresh_token"].as_str().unwrap())
