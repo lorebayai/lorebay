@@ -6,6 +6,7 @@ mod id;
 pub(crate) mod login_session;
 mod metadata;
 mod oauth_client;
+pub(crate) mod oauth_token;
 pub(crate) mod password;
 pub(crate) mod token;
 pub(crate) mod user_store;

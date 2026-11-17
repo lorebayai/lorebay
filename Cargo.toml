@@ -5,7 +5,7 @@ members = ["base", "lorebayd"]
 [workspace.dependencies]
 anyhow = "1.0.104"
 argon2 = "0.6.0"
-axum = { version = "0.8.9", default-features = false, features = ["http1", "json", "tokio"] }
+axum = { version = "0.8.9", default-features = false, features = ["form", "http1", "json", "tokio"] }
 base64 = { version = "0.23.1", default-features = false, features = ["std"] }
 clap = { version = "4.6.7", features = ["derive"] }
 config = { version = "0.15.27", default-features = false, features = ["json"] }
@@ -15,7 +15,7 @@ hyper-util = { version = "0.1.21", features = ["service", "tokio"] }
 jsonwebtoken = { version = "12.0.0", default-features = false, features = ["rust_crypto"] }
 lorebay-base = { path = "base" }
 mise-dotenv = "2026.11.0"
-reqwest = { version = "0.13.5", default-features = false, features = ["json"] }
+reqwest = { version = "0.13.5", default-features = false, features = ["form", "json"] }
 sea-orm = { version = "2.0.4", default-features = false, features = ["macros", "runtime-tokio", "sqlx-sqlite"] }
 sea-orm-migration = { version = "2.0.4", default-features = false, features = ["runtime-tokio", "sqlx-sqlite"] }
 serde = { version = "1.0.229", features = ["derive"] }

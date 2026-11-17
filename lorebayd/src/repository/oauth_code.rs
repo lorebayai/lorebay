@@ -10,6 +10,18 @@ pub(crate) struct OauthCodeRepository<'a, C> {
 }
 
 impl<C: ConnectionTrait> OauthCodeRepository<'_, C> {
+    pub async fn by_hash(&self, hash: &str) -> Result<Option<Model>, DbErr> {
+        Entity::find()
+            .filter(Column::CodeHash.eq(hash))
+            .one(self.connection)
+            .await
+    }
+
+    pub async fn delete(&self, id: &str) -> Result<(), DbErr> {
+        Entity::delete_by_id(id).exec(self.connection).await?;
+        Ok(())
+    }
+
     pub async fn insert(&self, model: ActiveModel) -> Result<Model, DbErr> {
         model.insert(self.connection).await
     }
