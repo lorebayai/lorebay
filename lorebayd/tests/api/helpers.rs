@@ -17,6 +17,7 @@ use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use tokio::time::{sleep, timeout};
 use typed_builder::TypedBuilder;
+use url::Url;
 
 pub use oauth::*;
 
@@ -270,6 +271,38 @@ impl Server {
         assert_eq!(&interim, b"HTTP/1.1 100 Continue\r\n\r\n");
         stream
     }
+}
+
+pub async fn list_response(
+    path: &str,
+    server: &Server,
+    tokens: &Value,
+    query: &[(&str, &str)],
+) -> Response {
+    let mut url = Url::parse(&format!("http://{}{path}", server.address)).unwrap();
+    url.query_pairs_mut().extend_pairs(query.iter().copied());
+    server
+        .client
+        .get(url)
+        .bearer_auth(tokens["access_token"].as_str().unwrap())
+        .send()
+        .await
+        .unwrap()
+}
+
+pub async fn assert_problem(response: Response, status: StatusCode, code: &str) -> Value {
+    assert_eq!(response.status(), status);
+    assert_eq!(
+        response.headers()["content-type"],
+        "application/problem+json"
+    );
+    if status == StatusCode::UNAUTHORIZED {
+        assert_eq!(response.headers()["www-authenticate"], "Bearer");
+    }
+    let body = response.json::<Value>().await.unwrap();
+    assert_eq!(body["status"], status.as_u16());
+    assert_eq!(body["code"], code);
+    body
 }
 
 const POLL_INTERVAL: Duration = Duration::from_millis(10);

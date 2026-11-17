@@ -8,6 +8,7 @@ use url::Url;
 
 use crate::helpers::{
     AuthorizedAgent, REDIRECT_URI, Server, Settings, TEST_PASSWORD, TEST_TIMEOUT, TEST_USERNAME,
+    assert_problem, list_response,
 };
 
 #[tokio::test]
@@ -112,7 +113,7 @@ async fn revoke_agent_ends_agent_authorization() {
     let agent = server.authorize_agent(name).await;
     let access = agent.tokens["access_token"].as_str();
     assert_eq!(agent.tokens["expires_in"], 900);
-    assert_person_required(list_response(&server, &agent.tokens, &[]).await).await;
+    assert_person_required(list_response(AGENTS_PATH, &server, &agent.tokens, &[]).await).await;
     let response = revoke(&server, name, person["access_token"].as_str()).await;
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(
@@ -198,7 +199,7 @@ async fn revoke_agent_fails_when_agent_belongs_to_another_person() {
     assert_eq!(response.status(), StatusCode::OK);
     let tokens = response.json::<Value>().await.unwrap();
     assert_ne!(tokens["refresh_token"], agent.tokens["refresh_token"]);
-    assert_person_required(list_response(&server, &tokens, &[]).await).await;
+    assert_person_required(list_response(AGENTS_PATH, &server, &tokens, &[]).await).await;
     server.stop().await;
 }
 
@@ -207,7 +208,7 @@ async fn list_agents_fails_when_caller_is_agent() {
     let server = Server::start().await;
     let person = server.tokens().await;
     let agent = server.authorize_agent("Build agent").await;
-    assert_person_required(list_response(&server, &agent.tokens, &[]).await).await;
+    assert_person_required(list_response(AGENTS_PATH, &server, &agent.tokens, &[]).await).await;
     assert_person_required(
         revoke(
             &server,
@@ -242,7 +243,7 @@ async fn list_agents_fails_when_caller_is_agent() {
         names(&list(&server, &person, &[]).await),
         json!(["Build agent"])
     );
-    assert_person_required(list_response(&server, &agent.tokens, &[]).await).await;
+    assert_person_required(list_response(AGENTS_PATH, &server, &agent.tokens, &[]).await).await;
     server.stop().await;
 }
 
@@ -270,7 +271,7 @@ async fn list_agents_omits_agent_when_authorization_has_expired() {
     .await
     .unwrap();
     assert_problem(
-        list_response(&server, &agent.tokens, &[]).await,
+        list_response(AGENTS_PATH, &server, &agent.tokens, &[]).await,
         StatusCode::UNAUTHORIZED,
         "auth.unauthorized",
     )
@@ -285,7 +286,8 @@ async fn list_agents_omits_agent_when_authorization_has_expired() {
         names(&list(&server, &person, &[]).await),
         json!(["Build agent"])
     );
-    assert_person_required(list_response(&server, &replacement.tokens, &[]).await).await;
+    assert_person_required(list_response(AGENTS_PATH, &server, &replacement.tokens, &[]).await)
+        .await;
     server.stop().await;
 }
 
@@ -294,12 +296,12 @@ async fn call_web_api_fails_when_agent_authorization_has_expired() {
     let server = Server::start().await;
     let person = server.tokens().await;
     let agent = server.authorize_agent("Build agent").await;
-    assert_person_required(list_response(&server, &agent.tokens, &[]).await).await;
+    assert_person_required(list_response(AGENTS_PATH, &server, &agent.tokens, &[]).await).await;
     server
         .expire_oauth_credential("agent_authorization", "refresh_expires_at")
         .await;
     assert_problem(
-        list_response(&server, &agent.tokens, &[]).await,
+        list_response(AGENTS_PATH, &server, &agent.tokens, &[]).await,
         StatusCode::UNAUTHORIZED,
         "auth.unauthorized",
     )
@@ -316,7 +318,7 @@ async fn call_web_api_fails_when_agent_access_token_is_invalid() {
     let server =
         Server::start_with_settings(Settings::builder().access_seconds(2_u64).build()).await;
     let agent = server.authorize_agent("Build agent").await;
-    assert_person_required(list_response(&server, &agent.tokens, &[]).await).await;
+    assert_person_required(list_response(AGENTS_PATH, &server, &agent.tokens, &[]).await).await;
     let access = agent.tokens["access_token"].as_str().unwrap();
     let (claims, signature) = access.rsplit_once('.').unwrap();
     let first = if signature.starts_with('A') { "B" } else { "A" };
@@ -334,7 +336,7 @@ async fn call_web_api_fails_when_agent_access_token_is_invalid() {
     let server = Server::restart(directory).await;
     sleep(Duration::from_secs(3)).await;
     assert_problem(
-        list_response(&server, &agent.tokens, &[]).await,
+        list_response(AGENTS_PATH, &server, &agent.tokens, &[]).await,
         StatusCode::UNAUTHORIZED,
         "auth.unauthorized",
     )
@@ -347,7 +349,7 @@ async fn call_web_api_fails_when_agent_access_token_is_invalid() {
         .await;
     assert_eq!(response.status(), StatusCode::OK);
     let refreshed = response.json::<Value>().await.unwrap();
-    assert_person_required(list_response(&server, &refreshed, &[]).await).await;
+    assert_person_required(list_response(AGENTS_PATH, &server, &refreshed, &[]).await).await;
     server.stop().await;
 }
 
@@ -355,11 +357,11 @@ async fn call_web_api_fails_when_agent_access_token_is_invalid() {
 async fn call_web_api_fails_when_agent_account_was_removed() {
     let server = Server::start().await;
     let agent = server.authorize_agent("Build agent").await;
-    assert_person_required(list_response(&server, &agent.tokens, &[]).await).await;
+    assert_person_required(list_response(AGENTS_PATH, &server, &agent.tokens, &[]).await).await;
     let directory = server.stop().await;
     let server = Server::restart_with_users(directory, &[]).await;
     assert_problem(
-        list_response(&server, &agent.tokens, &[]).await,
+        list_response(AGENTS_PATH, &server, &agent.tokens, &[]).await,
         StatusCode::UNAUTHORIZED,
         "auth.unauthorized",
     )
@@ -370,7 +372,7 @@ async fn call_web_api_fails_when_agent_account_was_removed() {
     let person = server.tokens().await;
     assert_eq!(names(&list(&server, &person, &[]).await), json!([]));
     assert_problem(
-        list_response(&server, &agent.tokens, &[]).await,
+        list_response(AGENTS_PATH, &server, &agent.tokens, &[]).await,
         StatusCode::UNAUTHORIZED,
         "auth.unauthorized",
     )
@@ -441,20 +443,8 @@ async fn walk_pages(server: &Server, person: &Value) -> Vec<String> {
     }
 }
 
-async fn list_response(server: &Server, tokens: &Value, query: &[(&str, &str)]) -> Response {
-    let mut url = Url::parse(&format!("http://{}{AGENTS_PATH}", server.address)).unwrap();
-    url.query_pairs_mut().extend_pairs(query.iter().copied());
-    server
-        .client
-        .get(url)
-        .bearer_auth(tokens["access_token"].as_str().unwrap())
-        .send()
-        .await
-        .unwrap()
-}
-
 async fn list(server: &Server, tokens: &Value, query: &[(&str, &str)]) -> Value {
-    let response = list_response(server, tokens, query).await;
+    let response = list_response(AGENTS_PATH, server, tokens, query).await;
     assert_eq!(response.status(), StatusCode::OK);
     response.json().await.unwrap()
 }
@@ -480,21 +470,6 @@ fn names(page: &Value) -> Value {
     )
 }
 
-async fn assert_problem(response: Response, status: StatusCode, code: &str) -> Value {
-    assert_eq!(response.status(), status);
-    assert_eq!(
-        response.headers()["content-type"],
-        "application/problem+json"
-    );
-    if status == StatusCode::UNAUTHORIZED {
-        assert_eq!(response.headers()["www-authenticate"], "Bearer");
-    }
-    let body = response.json::<Value>().await.unwrap();
-    assert_eq!(body["status"], status.as_u16());
-    assert_eq!(body["code"], code);
-    body
-}
-
 async fn assert_person_required(response: Response) {
     let body = assert_problem(response, StatusCode::FORBIDDEN, "auth.person_required").await;
     assert_eq!(
@@ -506,7 +481,7 @@ async fn assert_person_required(response: Response) {
 
 async fn assert_invalid_page(server: &Server, tokens: &Value, query: &[(&str, &str)], field: &str) {
     let body = assert_problem(
-        list_response(server, tokens, query).await,
+        list_response(AGENTS_PATH, server, tokens, query).await,
         StatusCode::BAD_REQUEST,
         "request.invalid_query",
     )

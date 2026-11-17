@@ -15,8 +15,12 @@ pub(crate) use credential_cleanup::*;
 pub(crate) use id::*;
 pub(crate) use metadata::*;
 pub(crate) use oauth_client::*;
+pub(crate) use space_access::*;
+pub(crate) use spaces::*;
 
 mod credential_cleanup;
 mod id;
 mod metadata;
 mod oauth_client;
+mod space_access;
+mod spaces;
