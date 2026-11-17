@@ -23,6 +23,7 @@ pub(crate) enum AccessError {
 pub(crate) struct AgentCaller {
     pub account_id: String,
     pub authorization_id: String,
+    pub name: String,
 }
 
 #[derive(Clone, Debug, TypedBuilder)]
@@ -59,5 +60,6 @@ pub(crate) async fn verify_agent(
     Ok(AgentCaller::builder()
         .account_id(authorization.account_id)
         .authorization_id(authorization.id)
+        .name(authorization.name)
         .build())
 }

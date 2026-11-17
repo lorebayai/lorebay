@@ -11,5 +11,6 @@ mod oauth;
 mod oauth_token;
 mod participants;
 mod spaces;
+mod tasks;
 mod users;
 mod web_api;

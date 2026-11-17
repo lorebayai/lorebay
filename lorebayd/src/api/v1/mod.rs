@@ -9,6 +9,19 @@ pub(crate) fn router() -> Router<ServerState> {
         .route("/agents/{name}", delete(agents::revoke))
         .route("/spaces", get(spaces::list).post(spaces::create))
         .route("/spaces/{space}", get(spaces::read).patch(spaces::change))
+        .route(
+            "/spaces/{space}/tasks",
+            get(tasks::list).post(tasks::create),
+        )
+        .route("/spaces/{space}/tasks/{task}", get(tasks::read))
+        .route(
+            "/spaces/{space}/tasks/{task}/notes",
+            post(tasks::append_note),
+        )
+        .route(
+            "/spaces/{space}/tasks/{task}/scratchpad",
+            get(tasks::scratchpad),
+        )
         .route("/users", get(users::list))
         .route("/spaces/{space}/participants", get(participants::list))
         .route(
@@ -34,4 +47,5 @@ mod device_sign_in;
 mod login_session;
 mod participants;
 mod spaces;
+mod tasks;
 mod users;

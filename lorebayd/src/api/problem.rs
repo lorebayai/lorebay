@@ -5,13 +5,15 @@ use serde::Serialize;
 use thiserror::Error;
 use typed_builder::TypedBuilder;
 
-use crate::domain::SpaceAccessError;
 use crate::domain::access::AccessError;
 use crate::domain::caller::CallerError;
 use crate::domain::login_session::LoginError;
+use crate::domain::{SpaceAccessError, TaskAccessError};
 
 #[derive(Debug, Error)]
 pub(crate) enum ApiError {
+    #[error("An agent authorization is required")]
+    AgentRequired,
     #[error("Internal Server Error")]
     Internal,
     #[error("Bad Request")]
@@ -38,6 +40,10 @@ pub(crate) enum ApiError {
     SpaceNotFound,
     #[error("The space role does not allow this operation")]
     SpacePermissionRequired,
+    #[error("Set the task back to in progress before appending a note")]
+    TaskEnded,
+    #[error("Task not found")]
+    TaskNotFound,
     #[error("Unauthorized")]
     Unauthorized,
     #[error("Service Unavailable")]
@@ -69,6 +75,7 @@ pub(crate) struct ProblemDetails {
 impl ApiError {
     fn parts(&self) -> (StatusCode, &'static str) {
         match self {
+            Self::AgentRequired => (StatusCode::FORBIDDEN, "auth.agent_required"),
             Self::Internal => (StatusCode::INTERNAL_SERVER_ERROR, "server.internal"),
             Self::InvalidBody(_) => (StatusCode::BAD_REQUEST, "request.invalid_body"),
             Self::InvalidPath(_) => (StatusCode::BAD_REQUEST, "request.invalid_path"),
@@ -82,6 +89,8 @@ impl ApiError {
             Self::RateLimited(_) => (StatusCode::TOO_MANY_REQUESTS, "auth.rate_limited"),
             Self::SpaceNotFound => (StatusCode::NOT_FOUND, "space.not_found"),
             Self::SpacePermissionRequired => (StatusCode::FORBIDDEN, "space.permission_required"),
+            Self::TaskEnded => (StatusCode::CONFLICT, "task.ended"),
+            Self::TaskNotFound => (StatusCode::NOT_FOUND, "task.not_found"),
             Self::Unauthorized => (StatusCode::UNAUTHORIZED, "auth.unauthorized"),
             Self::Unavailable => (StatusCode::SERVICE_UNAVAILABLE, "server.not_ready"),
             Self::UserNotFound => (StatusCode::NOT_FOUND, "user.not_found"),
@@ -104,6 +113,7 @@ impl From<AccessError> for ApiError {
 impl From<CallerError> for ApiError {
     fn from(error: CallerError) -> Self {
         match error {
+            CallerError::AgentRequired => Self::AgentRequired,
             CallerError::PersonRequired => Self::PersonRequired,
         }
     }
@@ -132,6 +142,21 @@ impl From<SpaceAccessError> for ApiError {
                 tracing::error!(%error, "space access check failed");
                 Self::Internal
             }
+        }
+    }
+}
+
+impl From<TaskAccessError> for ApiError {
+    fn from(error: TaskAccessError) -> Self {
+        match error {
+            TaskAccessError::Database(error) => {
+                tracing::error!(%error, "task access check failed");
+                Self::Internal
+            }
+            TaskAccessError::Ended => Self::TaskEnded,
+            TaskAccessError::NotFound => Self::TaskNotFound,
+            TaskAccessError::PermissionRequired => Self::SpacePermissionRequired,
+            TaskAccessError::Space(error) => error.into(),
         }
     }
 }
