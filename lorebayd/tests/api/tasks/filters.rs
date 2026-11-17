@@ -1,13 +1,11 @@
 use reqwest::{Method, StatusCode};
-use sea_orm::sea_query::{Alias, Expr, ExprTrait, Query};
-use sea_orm::{ConnectionTrait, Database};
 use serde_json::{Value, json};
 
 use crate::helpers::{
     Server, assert_problem, authorize_for, create_space, list_page, list_response, login, request,
 };
 
-use super::helpers::{SPACE, TASKS, append, create, participant, setup};
+use super::helpers::{SPACE, TASKS, append, create, participant, read, setup};
 
 #[tokio::test]
 async fn list_tasks_returns_only_matching_tasks_when_filtered_by_person_agent_and_status() {
@@ -26,7 +24,7 @@ async fn list_tasks_returns_only_matching_tasks_when_filtered_by_person_agent_an
     ] {
         create(&server, tokens, SPACE, title).await;
     }
-    end_task(&server, 5).await;
+    end_task(&server, &person, 5).await;
     create_space(&server, &person, "Other space", "Excluded").await;
     create(&server, &shared, "SPACE-2", "Outside list").await;
     for tokens in [&person, &agent] {
@@ -102,7 +100,7 @@ async fn list_tasks_returns_own_party_tasks_not_ended_when_asked() {
     let task = create(&server, &second, SPACE, "Alice second").await;
     create(&server, &agent, SPACE, "Alice ended").await;
     create(&server, &other, SPACE, "Bob current").await;
-    end_task(&server, 3).await;
+    end_task(&server, &person, 3).await;
     for tokens in [&person, &agent, &second] {
         assert_keys(&server, tokens, &[("own_open", "true")], &["TK-2", "TK-1"]).await;
         assert_keys(
@@ -165,6 +163,70 @@ async fn list_tasks_matches_keyword_in_title_literally() {
     let underscore = create(&server, &agent, SPACE, "a_b").await;
     assert_ne!(space["key"], underscore["key"]);
     assert_keys(&server, &person, &[("keyword", "a_b")], &["TK-6", "TK-1"]).await;
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn list_tasks_matches_keyword_in_result() {
+    let (server, person, agent) = setup().await;
+    create(&server, &agent, SPACE, "Searchable title").await;
+    let result_task = create(&server, &agent, SPACE, "Findings").await;
+    let decoy = create(&server, &agent, SPACE, "Other work").await;
+    change(
+        &server,
+        &agent,
+        &result_task,
+        json!({"result":"# Searchable result\na_b 50% c\\d \u{4e2d}\u{6587} \u{00c9}"}),
+    )
+    .await;
+    change(&server, &agent, &decoy, json!({"result":"axb 500 cd"})).await;
+    for tokens in [&person, &agent] {
+        assert_keys(
+            &server,
+            tokens,
+            &[("keyword", "SEARCHABLE")],
+            &["TK-2", "TK-1"],
+        )
+        .await;
+        for keyword in [
+            "a_b",
+            "50%",
+            "c\\d",
+            "\u{4e2d}\u{6587}",
+            "A_B",
+            "a_b 50%",
+            "\u{00c9}",
+        ] {
+            assert_keys(&server, tokens, &[("keyword", keyword)], &["TK-2"]).await;
+        }
+        for keyword in ["a_b c\\d", "\u{00e9}"] {
+            assert_keys(&server, tokens, &[("keyword", keyword)], &[]).await;
+        }
+    }
+    assert_keys(
+        &server,
+        &agent,
+        &[
+            ("person", "alice"),
+            ("agent", "Research agent"),
+            ("status", "in progress"),
+            ("keyword", "50%"),
+        ],
+        &["TK-2"],
+    )
+    .await;
+    change(
+        &server,
+        &agent,
+        &result_task,
+        json!({"result":"Replacement"}),
+    )
+    .await;
+    assert_keys(&server, &person, &[("keyword", "a_b")], &[]).await;
+    assert_keys(&server, &person, &[("keyword", "replacement")], &["TK-2"]).await;
+    change(&server, &agent, &result_task, json!({"result":""})).await;
+    assert_keys(&server, &person, &[("keyword", "replacement")], &[]).await;
+    assert_keys(&server, &person, &[("keyword", "searchable")], &["TK-1"]).await;
     server.stop().await;
 }
 
@@ -306,19 +368,31 @@ async fn assert_query_error(server: &Server, tokens: &Value, query: &[(&str, &st
     assert_eq!(error["errors"][0]["field"], field);
 }
 
-async fn end_task(server: &Server, number: i64) {
-    let path = server.directory.path().join("data/lorebay.sqlite3");
-    let database = Database::connect(format!("sqlite://{}", path.display()))
-        .await
-        .unwrap();
-    let statement = Query::update()
-        .table(Alias::new("task"))
-        .value(Alias::new("status"), Expr::value("ended"))
-        .value(Alias::new("ended_at"), Expr::col(Alias::new("started_at")))
-        .and_where(Expr::col(Alias::new("number")).eq(number))
-        .to_owned();
-    database.execute(&statement).await.unwrap();
-    database.close().await.unwrap();
+async fn change(server: &Server, tokens: &Value, task: &Value, changes: Value) -> Value {
+    let response = request(
+        server,
+        tokens,
+        Method::PATCH,
+        &format!("{TASKS}/{}", task["task_id"].as_str().unwrap()),
+        changes,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.json::<Value>().await.unwrap();
+    assert_eq!(body["meta"], json!({}));
+    let changed = body["data"].clone();
+    assert_eq!(
+        read(server, tokens, task["key"].as_str().unwrap()).await,
+        changed
+    );
+    changed
+}
+
+async fn end_task(server: &Server, tokens: &Value, number: i64) {
+    let task = read(server, tokens, &format!("TK-{number}")).await;
+    let ended = change(server, tokens, &task, json!({"status":"ended"})).await;
+    assert_eq!(ended["status"], "ended");
+    assert!(ended["ended_at"].is_i64());
 }
 
 fn keys(page: &Value) -> Vec<&str> {
