@@ -38,6 +38,16 @@ impl Server {
 
     pub async fn approve_code(&self, client_id: &str, name: Option<&str>) -> String {
         let tokens = self.tokens().await;
+        self.approve_code_for(client_id, name, tokens["access_token"].as_str().unwrap())
+            .await
+    }
+
+    pub async fn approve_code_for(
+        &self,
+        client_id: &str,
+        name: Option<&str>,
+        person_token: &str,
+    ) -> String {
         let response = self
             .json(
                 Method::POST,
@@ -46,7 +56,7 @@ impl Server {
                     "response_type": "code", "code_challenge": PKCE_CHALLENGE,
                     "code_challenge_method": "S256", "decision": "approve",
                     "agent_name": name}),
-                tokens["access_token"].as_str(),
+                Some(person_token),
             )
             .await;
         assert_eq!(response.status(), StatusCode::OK);

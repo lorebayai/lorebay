@@ -1,13 +1,15 @@
 use axum::extract::FromRequestParts;
 use axum::http::{header, request::Parts};
 
-use crate::domain::access::Caller;
+use crate::domain::access::verify_agent;
+use crate::domain::caller::VerifiedCaller;
 use crate::domain::login_session;
+use crate::domain::token::TokenKind;
 use crate::server::ServerState;
 
 use super::ApiError;
 
-impl FromRequestParts<ServerState> for Caller {
+impl FromRequestParts<ServerState> for VerifiedCaller {
     type Rejection = ApiError;
 
     async fn from_request_parts(
@@ -27,8 +29,13 @@ impl FromRequestParts<ServerState> for Caller {
             .signer
             .verify(token)
             .map_err(|_| ApiError::Unauthorized)?;
-        login_session::verify(&state.database, claims)
-            .await
-            .map_err(ApiError::from)
+        match claims.kind {
+            TokenKind::AgentAuthorization => {
+                Ok(Self::Agent(verify_agent(&state.database, claims).await?))
+            }
+            TokenKind::LoginSession => Ok(Self::Person(
+                login_session::verify(&state.database, claims).await?,
+            )),
+        }
     }
 }
