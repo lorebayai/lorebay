@@ -27,7 +27,7 @@ pub enum Relation {
     Artifact,
     #[sea_orm(has_many = "super::knowledge::Entity")]
     Knowledge,
-    #[sea_orm(has_one = "super::participant::Entity")]
+    #[sea_orm(has_many = "super::participant::Entity")]
     Participant,
     #[sea_orm(has_many = "super::proposal::Entity")]
     Proposal,
