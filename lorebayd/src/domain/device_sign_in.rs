@@ -1,7 +1,7 @@
 use std::net::IpAddr;
 
 use anyhow::anyhow;
-use lorebay_base::RateLimitError;
+use lorebay_base::{RateLimitError, Secret};
 use sea_orm::{
     DatabaseConnection, DatabaseTransaction, DbErr, Set, SqlErr, SqliteTransactionMode,
     TransactionOptions, TransactionTrait,
@@ -58,21 +58,21 @@ pub(crate) enum DeviceError {
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
 pub(crate) struct DeviceCodes {
-    pub device_code: String,
-    pub user_code: String,
+    pub device_code: Secret<String>,
+    pub user_code: Secret<String>,
 }
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
 pub(crate) struct DeviceDetails {
-    pub user_code: String,
+    pub user_code: Secret<String>,
     pub created_at: i64,
 }
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
 pub(crate) struct DeviceVerification {
-    pub user_code: String,
+    pub user_code: Secret<String>,
     pub address: IpAddr,
 }
 
@@ -96,8 +96,8 @@ pub(crate) async fn request_device_code(
             .build();
         let model = ActiveModel {
             id: Set(primary_key()),
-            device_code_hash: Set(token_hash(&codes.device_code)),
-            user_code_hash: Set(token_hash(&normalize_user_code(&codes.user_code))),
+            device_code_hash: Set(token_hash(codes.device_code.expose())),
+            user_code_hash: Set(token_hash(normalize_user_code(&codes.user_code).expose())),
             status: Set(DeviceStatus::Pending.as_str().to_owned()),
             account_id: Set(None),
             created_at: Set(now),
@@ -133,7 +133,7 @@ pub(crate) async fn read_device_request(
     let row = DeviceSignInRequestRepository::builder()
         .connection(database)
         .build()
-        .by_user_hash(&token_hash(&normalized))
+        .by_user_hash(&token_hash(normalized.expose()))
         .await?
         .filter(|row| row.expires_at > now && row.status == DeviceStatus::Pending.as_str())
         .ok_or(DeviceError::InvalidUserCode)?;
@@ -158,7 +158,7 @@ pub(crate) async fn decide_device_request(
         .build();
     let now = now_millis()?;
     let row = repository
-        .by_user_hash(&token_hash(&normalize_user_code(&input.user_code)))
+        .by_user_hash(&token_hash(normalize_user_code(&input.user_code).expose()))
         .await?
         .filter(|row| row.expires_at > now && row.status == DeviceStatus::Pending.as_str())
         .ok_or(DeviceError::InvalidUserCode)?;
@@ -180,7 +180,7 @@ pub(crate) async fn exchange_device_code(
     identity: &Identity,
     database: &DatabaseConnection,
     client_id: &str,
-    device_code: &str,
+    device_code: &Secret<String>,
 ) -> Result<Tokens, DeviceError> {
     require_cli(client_id)?;
     let transaction = begin_write(database).await?;
@@ -188,7 +188,7 @@ pub(crate) async fn exchange_device_code(
         .connection(&transaction)
         .build();
     let row = repository
-        .by_device_hash(&token_hash(device_code))
+        .by_device_hash(&token_hash(device_code.expose()))
         .await?
         .ok_or(DeviceError::InvalidGrant)?;
     let now = now_millis()?;
@@ -292,16 +292,17 @@ fn require_cli(client_id: &str) -> Result<(), DeviceError> {
     Ok(())
 }
 
-fn normalize_user_code(code: &str) -> String {
-    code.replace('-', "").to_ascii_uppercase()
+fn normalize_user_code(code: &Secret<String>) -> Secret<String> {
+    code.expose().replace('-', "").to_ascii_uppercase().into()
 }
 
-fn display_user_code(normalized: &str) -> String {
+fn display_user_code(normalized: &Secret<String>) -> Secret<String> {
+    let normalized = normalized.expose();
     let middle = USER_CODE_LENGTH / 2;
-    format!("{}-{}", &normalized[..middle], &normalized[middle..])
+    format!("{}-{}", &normalized[..middle], &normalized[middle..]).into()
 }
 
-fn new_user_code() -> Result<String, DeviceError> {
+fn new_user_code() -> Result<Secret<String>, DeviceError> {
     let mut code = String::with_capacity(USER_CODE_LENGTH);
     while code.len() < USER_CODE_LENGTH {
         let mut byte = [0];
@@ -313,5 +314,5 @@ fn new_user_code() -> Result<String, DeviceError> {
             ));
         }
     }
-    Ok(display_user_code(&code))
+    Ok(display_user_code(&code.into()))
 }

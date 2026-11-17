@@ -33,7 +33,7 @@ pub(crate) enum TokenGrant {
     AuthorizationCode(CodeExchange),
     DeviceCode {
         client_id: String,
-        device_code: String,
+        device_code: Secret<String>,
     },
     RefreshToken(TokenRefresh),
 }

@@ -5,6 +5,7 @@ use axum::extract::rejection::FormRejection;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Form, Json};
+use lorebay_base::Secret;
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 
@@ -46,7 +47,10 @@ pub(super) async fn request(
         state.public_url.trim_end_matches('/')
     );
     let body = DeviceResponse::builder()
-        .verification_uri_complete(format!("{verification_uri}?user_code={}", codes.user_code))
+        .verification_uri_complete(format!(
+            "{verification_uri}?user_code={}",
+            codes.user_code.expose()
+        ))
         .verification_uri(verification_uri)
         .device_code(codes.device_code)
         .user_code(codes.user_code)
@@ -59,10 +63,10 @@ pub(super) async fn request(
 #[derive(Clone, Debug, Serialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
 struct DeviceResponse {
-    device_code: String,
-    user_code: String,
+    device_code: Secret<String>,
+    user_code: Secret<String>,
     verification_uri: String,
-    verification_uri_complete: String,
+    verification_uri_complete: Secret<String>,
     expires_in: u64,
     interval: u64,
 }

@@ -67,10 +67,7 @@ async fn request_device_code_fails_when_client_is_not_cli() {
     )
     .await;
     let person = server.tokens().await;
-    assert_eq!(
-        decide(&server, &codes, &person, "approve").await.status(),
-        StatusCode::OK
-    );
+    assert_decision(decide(&server, &codes, &person, "approve").await).await;
     let response = exchange(&server, CLI_CLIENT, &codes).await;
     assert_eq!(response.status(), StatusCode::OK);
     server.stop().await;
@@ -118,10 +115,7 @@ async fn exchange_device_code_returns_login_session_when_person_approved() {
             .status(),
         StatusCode::OK
     );
-    assert_eq!(
-        decide(&server, &codes, &person, "approve").await.status(),
-        StatusCode::OK
-    );
+    assert_decision(decide(&server, &codes, &person, "approve").await).await;
     assert_eq!(
         decide(&server, &codes, &person, "decline").await.status(),
         StatusCode::BAD_REQUEST
@@ -151,10 +145,7 @@ async fn exchange_device_code_fails_when_person_declined() {
     let server = Server::start().await;
     let codes = codes(&server).await;
     let person = server.tokens().await;
-    assert_eq!(
-        decide(&server, &codes, &person, "decline").await.status(),
-        StatusCode::OK
-    );
+    assert_decision(decide(&server, &codes, &person, "decline").await).await;
     assert_eq!(
         decide(&server, &codes, &person, "approve").await.status(),
         StatusCode::BAD_REQUEST
@@ -343,7 +334,10 @@ fn token(tokens: &Value) -> &str {
 }
 
 async fn assert_cli_session(server: &Server, accepted: Response, person: &Value) {
+    assert_eq!(accepted.status(), StatusCode::OK);
+    assert_eq!(accepted.headers()["cache-control"], "no-store");
     let tokens = accepted.json::<Value>().await.unwrap();
+    server.assert_token_issuer(&tokens).await;
     assert_eq!(tokens["token_type"], "Bearer");
     create_space(server, &tokens, "Device space", "CLI sign-in").await;
     let listed = request(server, &tokens, Method::GET, "/api/v1/spaces", Value::Null).await;
@@ -388,4 +382,13 @@ async fn assert_session_refresh(server: &Server, tokens: &Value) {
         "invalid_grant",
     )
     .await;
+}
+
+async fn assert_decision(response: Response) {
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["cache-control"], "no-store");
+    assert_eq!(
+        response.json::<Value>().await.unwrap(),
+        json!({"data": null, "meta": {}})
+    );
 }

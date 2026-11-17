@@ -161,6 +161,12 @@ impl Config {
                 ));
             }
         }
+        if self.device_poll_interval_seconds >= self.device_request_lifetime_seconds {
+            return Err(ConfigError::invalid(
+                "device_poll_interval_seconds",
+                "must be shorter than device_request_lifetime_seconds",
+            ));
+        }
         for (key, value) in [
             ("device_rate_limit", self.device_rate_limit),
             (

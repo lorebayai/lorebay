@@ -4,6 +4,7 @@ use axum::extract::State;
 use axum::extract::rejection::JsonRejection;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
+use lorebay_base::Secret;
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 
@@ -21,13 +22,13 @@ use super::login_session::invalid_json;
 #[derive(Clone, Debug, Deserialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
 pub(crate) struct ReadRequest {
-    user_code: String,
+    user_code: Secret<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
 pub(crate) struct DecisionRequest {
-    user_code: String,
+    user_code: Secret<String>,
     decision: Decision,
 }
 
@@ -96,7 +97,7 @@ pub(crate) async fn decide(
     .await?;
     Ok((
         no_store_headers(),
-        Envelope::<&str>::builder().data("ok").build(),
+        Envelope::<()>::builder().data(()).build(),
     )
         .into_response())
 }
@@ -111,7 +112,7 @@ enum Decision {
 #[derive(Clone, Debug, Serialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
 struct DeviceResponse {
-    user_code: String,
+    user_code: Secret<String>,
     created_at: i64,
 }
 

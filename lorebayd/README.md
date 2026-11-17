@@ -22,9 +22,9 @@ The server build, lint and test tasks run it as a dependency.
 
 Run `moon run lorebayd:generate-entities` to regenerate entities from a disposable database.
 
-```bash
-curl -X POST https://lorebay.test/oauth/device -d client_id=lorebay-cli
-```
+Open the metadata's `/oauth/authorize` endpoint with the client's authorization
+parameters to sign in and consent. The built-in CLI client ID is `lorebay-cli`;
+it accepts loopback redirects on any port and takes no agent name.
 
 `hash-password` reads a password from standard input and prints an Argon2id
 PHC hash. It removes one final line ending and starts no server.
@@ -73,7 +73,7 @@ Relative paths resolve against the working directory.
 | `registration_redirect_uri_max_bytes` | `LOREBAYD__REGISTRATION_REDIRECT_URI_MAX_BYTES` | `2048` | Positive maximum UTF-8 bytes per redirect URI |
 | `registration_body_limit_bytes` | `LOREBAYD__REGISTRATION_BODY_LIMIT_BYTES` | `65536` | Positive maximum registration request bytes; excess returns OAuth JSON 413 |
 | `device_request_lifetime_seconds` | `LOREBAYD__DEVICE_REQUEST_LIFETIME_SECONDS` | `600` | 1..315360000 seconds |
-| `device_poll_interval_seconds` | `LOREBAYD__DEVICE_POLL_INTERVAL_SECONDS` | `5` | 1..315360000 seconds |
+| `device_poll_interval_seconds` | `LOREBAYD__DEVICE_POLL_INTERVAL_SECONDS` | `5` | 1..315360000 seconds; shorter than `device_request_lifetime_seconds` |
 | `device_rate_limit` | `LOREBAYD__DEVICE_RATE_LIMIT` | `10` | Positive u32 device requests per peer IP per window |
 | `device_rate_window_seconds` | `LOREBAYD__DEVICE_RATE_WINDOW_SECONDS` | `60` | 1..315360000 seconds |
 | `device_verification_rate_limit` | `LOREBAYD__DEVICE_VERIFICATION_RATE_LIMIT` | `10` | Positive u32 read and decision attempts per peer IP per window |

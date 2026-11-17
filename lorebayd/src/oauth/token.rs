@@ -24,7 +24,7 @@ pub(super) struct TokenRequest {
     code_verifier: Option<Secret<String>>,
     refresh_token: Option<Secret<String>>,
     resource: Option<String>,
-    device_code: Option<String>,
+    device_code: Option<Secret<String>>,
 }
 
 impl TokenRequest {
@@ -57,7 +57,7 @@ impl TokenRequest {
             }
             super::DEVICE_CODE_GRANT => Ok(TokenGrant::DeviceCode {
                 client_id,
-                device_code: required(self.device_code)?,
+                device_code: required_secret(self.device_code)?,
             }),
             REFRESH_TOKEN_GRANT => Ok(TokenGrant::RefreshToken(
                 TokenRefresh::builder()
