@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 use std::env;
 use std::future::Future;
+use std::io::{self, Read, Write};
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use lorebay_base::{ConfigError, init_logging};
-use lorebayd::{Config, run};
+use lorebayd::{Config, hash_password, run};
 use tokio::net::TcpListener;
 use tokio::signal::unix::{SignalKind, signal as unix_signal};
 use typed_builder::TypedBuilder;
@@ -17,6 +18,8 @@ const CONFIG_ENV_PREFIX: &str = "LOREBAYD__";
 #[builder(field_defaults(setter(into)))]
 #[command(version, about = "Run the Lorebay server")]
 struct Args {
+    #[command(subcommand)]
+    command: Option<Command>,
     /// JSON configuration file.
     #[arg(long)]
     config: Option<PathBuf>,
@@ -25,9 +28,18 @@ struct Args {
     dotenv: Option<PathBuf>,
 }
 
+#[derive(Clone, Debug, Subcommand)]
+enum Command {
+    /// Read a password from standard input and print its Argon2id hash.
+    HashPassword,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
+    if let Some(Command::HashPassword) = args.command {
+        return print_password_hash();
+    }
     let config = Config::load(args.config, args.dotenv, configuration_environment()?)?;
     init_logging(&config.logging)?;
     let shutdown = shutdown_signal()?;
@@ -65,4 +77,19 @@ fn configuration_environment() -> Result<HashMap<String, String>, ConfigError> {
             )
         })
         .collect()
+}
+
+fn print_password_hash() -> Result<()> {
+    let mut password = String::new();
+    io::stdin()
+        .read_to_string(&mut password)
+        .context("could not read password from standard input")?;
+    if password.ends_with('\n') {
+        password.pop();
+        if password.ends_with('\r') {
+            password.pop();
+        }
+    }
+    writeln!(io::stdout().lock(), "{}", hash_password(&password)?)
+        .context("could not write password hash")
 }

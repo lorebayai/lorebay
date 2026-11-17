@@ -4,6 +4,12 @@ members = ["base", "lorebayd"]
 
 [workspace.dependencies]
 anyhow = "1.0.104"
+argon2 = "0.6.0"
+getrandom = { version = "0.4.3", features = ["std"] }
+jsonwebtoken = { version = "12.0.0", default-features = false, features = ["rust_crypto"] }
+sha2 = "0.11.1"
+serde_yaml_ng = "0.10.0"
+uuid = { version = "1.29.2", features = ["v7"] }
 axum = { version = "0.8.9", default-features = false, features = ["http1", "json", "tokio"] }
 clap = { version = "4.6.7", features = ["derive"] }
 config = { version = "0.15.27", default-features = false, features = ["json"] }

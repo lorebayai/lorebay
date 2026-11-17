@@ -1,17 +1,19 @@
 use std::future::Future;
+use std::net::{IpAddr, SocketAddr};
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use axum::Router;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
+use axum::{Extension, Router};
 use hyper::server::conn::http1;
 use hyper_util::rt::TokioIo;
 use hyper_util::service::TowerToHyperService;
+use lorebay_base::{RateLimiter, SystemClock};
 use sea_orm::{
     ConnectOptions, Database, DatabaseConnection, SqliteTransactionMode, TransactionOptions,
     TransactionTrait,
@@ -26,6 +28,10 @@ use typed_builder::TypedBuilder;
 
 use crate::Config;
 use crate::api::{self, ApiError, Envelope};
+use crate::domain::login_session::Identity;
+use crate::domain::token::TokenSigner;
+use crate::domain::users::Users;
+use crate::domain::{account, login_session};
 use crate::migration::Migrator;
 
 /// Readiness remains observable for one second before connections stop being accepted.
@@ -40,9 +46,17 @@ const DATABASE_FILE: &str = "lorebay.sqlite3";
 const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Clone, Debug, TypedBuilder)]
-struct ServerState {
-    database: DatabaseConnection,
+#[builder(field_defaults(setter(into)))]
+pub(crate) struct ServerState {
+    pub database: DatabaseConnection,
+    pub identity: Arc<Identity>,
     ready: Arc<AtomicBool>,
+}
+
+#[derive(Clone, Copy, Debug, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+pub(crate) struct PeerAddress {
+    pub address: SocketAddr,
 }
 
 /// Applies pending database migrations before serving; the caller owns binding and shutdown signals.
@@ -52,11 +66,31 @@ pub async fn run(
     shutdown: impl Future<Output = ()> + Send,
 ) -> Result<()> {
     config.validate()?;
+    let users_path = config
+        .users_file
+        .as_deref()
+        .context("users_file path is required")?;
+    let users = Users::load(users_path).await?;
     fs::create_dir_all(&config.data_directory)
         .await
         .context("could not create data_directory")?;
+    let database = open_database(&config.data_directory).await?;
+    account::sync(&database, &users, login_session::now_millis()?).await?;
+    let identity = Identity::builder()
+        .users(users)
+        .signer(TokenSigner::load(&config.data_directory)?)
+        .limiter(
+            RateLimiter::<IpAddr, _>::builder()
+                .limit(config.login_rate_limit)
+                .window(Duration::from_secs(config.login_rate_window_seconds))
+                .clock(SystemClock)
+                .build(),
+        )
+        .config(config)
+        .build();
     let state = ServerState::builder()
-        .database(open_database(&config.data_directory).await?)
+        .database(database)
+        .identity(Arc::new(identity))
         .ready(Arc::new(AtomicBool::new(true)))
         .build();
     let result = serve_until_shutdown(listener, state.clone(), shutdown).await;
@@ -137,8 +171,8 @@ fn router(state: ServerState) -> Router {
     Router::new()
         .route(HEALTH_PATH, get(health))
         .route(READINESS_PATH, get(readiness))
-        .with_state(state)
         .nest(API_PREFIX, api::router())
+        .with_state(state)
         .fallback(api::not_found)
         .method_not_allowed_fallback(|| async { ApiError::MethodNotAllowed })
 }
@@ -173,8 +207,8 @@ async fn serve(
             },
             result = listener.accept() => {
                 match result {
-                    Ok((stream, _)) => {
-                        connections.spawn(serve_connection(stream, router.clone(), stopped.clone()));
+                    Ok((stream, peer)) => {
+                        connections.spawn(serve_connection(stream, router.clone().layer(Extension(PeerAddress::builder().address(peer).build())), stopped.clone()));
                     },
                     Err(error) => {
                         tracing::error!(%error, "could not accept HTTP connection");

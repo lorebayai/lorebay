@@ -1,18 +1,44 @@
+use std::fs;
 use std::net::SocketAddr;
 use std::time::Duration;
 
 use anyhow::Result;
-use lorebayd::{Config, run};
-use reqwest::{Client, Response, StatusCode};
+use lorebayd::{Config, hash_password, run};
+use reqwest::{Client, Method, Response, StatusCode};
+use sea_orm::sea_query::{Alias, Expr, Query};
+use sea_orm::{ConnectionTrait, Database};
+use serde_json::{Value, json};
 use tempfile::TempDir;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use tokio::time::{sleep, timeout};
+use typed_builder::TypedBuilder;
 
 pub const TEST_TIMEOUT: Duration = Duration::from_secs(15);
+pub const TEST_USERNAME: &str = "alice";
+pub const TEST_PASSWORD: &str = "correct horse battery staple";
 const POLL_INTERVAL: Duration = Duration::from_millis(10);
+
+#[derive(Clone, Debug, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+pub struct Settings {
+    #[builder(default = 900)]
+    pub access_seconds: u64,
+    #[builder(default = 2_592_000)]
+    pub refresh_seconds: u64,
+    #[builder(default = 10)]
+    pub rate_limit: u32,
+    #[builder(default = 60)]
+    pub rate_window_seconds: u64,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self::builder().build()
+    }
+}
 
 pub struct Server {
     pub client: Client,
@@ -28,11 +54,38 @@ impl Server {
     }
 
     pub async fn restart(directory: TempDir) -> Self {
+        Self::restart_with_users(directory, &[(TEST_USERNAME, TEST_PASSWORD)]).await
+    }
+
+    pub async fn restart_with_users(directory: TempDir, users: &[(&str, &str)]) -> Self {
+        Self::configured(directory, users, Settings::default()).await
+    }
+
+    pub async fn start_with_settings(settings: Settings) -> Self {
+        Self::configured(
+            TempDir::new().unwrap(),
+            &[(TEST_USERNAME, TEST_PASSWORD)],
+            settings,
+        )
+        .await
+    }
+
+    async fn configured(directory: TempDir, users: &[(&str, &str)], settings: Settings) -> Self {
+        let users_file = directory.path().join("users.json");
+        let users: Vec<_> = users.iter().map(|(username, password)| {
+            json!({"username": username, "password_hash": hash_password(password).unwrap()})
+        }).collect();
+        fs::write(&users_file, serde_json::to_vec(&users).unwrap()).unwrap();
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let config = Config::builder()
             .listen_address(address)
             .data_directory(directory.path().join("data"))
+            .users_file(Some(users_file))
+            .access_token_lifetime_seconds(settings.access_seconds)
+            .refresh_token_lifetime_seconds(settings.refresh_seconds)
+            .login_rate_limit(settings.rate_limit)
+            .login_rate_window_seconds(settings.rate_window_seconds)
             .build();
         let (shutdown, stopped) = oneshot::channel();
         let task = tokio::spawn(run(config, listener, async {
@@ -59,6 +112,67 @@ impl Server {
             .send()
             .await
             .unwrap()
+    }
+
+    pub async fn json(
+        &self,
+        method: Method,
+        path: &str,
+        body: Value,
+        token: Option<&str>,
+    ) -> Response {
+        let mut request = self
+            .client
+            .request(method, format!("http://{}{path}", self.address))
+            .json(&body);
+        if let Some(token) = token {
+            request = request.bearer_auth(token);
+        }
+        request.send().await.unwrap()
+    }
+
+    pub async fn log_in(&self, username: &str, password: &str) -> Response {
+        self.json(
+            Method::POST,
+            "/api/v1/login-session",
+            json!({"username": username, "password": password}),
+            None,
+        )
+        .await
+    }
+
+    pub async fn tokens(&self) -> Value {
+        let response = self.log_in(TEST_USERNAME, TEST_PASSWORD).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        response.json::<Value>().await.unwrap()["data"].clone()
+    }
+
+    pub async fn refresh(&self, token: &str) -> Response {
+        self.json(
+            Method::POST,
+            "/api/v1/login-session/refresh",
+            json!({"refresh_token": token}),
+            None,
+        )
+        .await
+    }
+
+    pub async fn log_out(&self, token: Option<&str>) -> Response {
+        self.json(Method::DELETE, "/api/v1/login-session", Value::Null, token)
+            .await
+    }
+
+    pub async fn expire_login_sessions(&self) {
+        let path = self.directory.path().join("data/lorebay.sqlite3");
+        let database = Database::connect(format!("sqlite://{}", path.display()))
+            .await
+            .unwrap();
+        let statement = Query::update()
+            .table(Alias::new("login_session"))
+            .value(Alias::new("expires_at"), Expr::value(0_i64))
+            .to_owned();
+        database.execute(&statement).await.unwrap();
+        database.close().await.unwrap();
     }
 
     pub fn begin_shutdown(&mut self) {
