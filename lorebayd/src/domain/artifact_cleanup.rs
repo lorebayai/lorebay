@@ -11,6 +11,8 @@ use crate::storage::{FileStorage, StoredFile, StoredFileKind};
 use super::login_session::now_millis;
 use super::write_transaction;
 
+pub(crate) const ARTIFACT_CLEANUP_BATCH_SIZE: usize = 100;
+
 #[derive(Debug, Error)]
 pub(crate) enum ArtifactCleanupError {
     #[error(transparent)]
@@ -26,27 +28,21 @@ pub(crate) async fn remove_abandoned_artifacts(
 ) -> Result<u64, ArtifactCleanupError> {
     let before =
         now_millis()? - i64::try_from(lifetime.as_millis()).map_err(anyhow::Error::from)?;
-    let mut removed = 0;
-    loop {
-        let transaction = write_transaction(database).await?;
-        let repository = ArtifactRepository::builder()
-            .connection(&transaction)
-            .build();
-        let rows = repository
-            .abandoned(before, CLEANUP_BATCH_SIZE as u64)
-            .await?;
-        repository
-            .delete_ids(rows.iter().map(|row| row.id.clone()).collect())
-            .await?;
-        transaction.commit().await?;
-        removed += rows.len() as u64;
-        for row in &rows {
-            storage.delete(&row.storage_key).await?;
-        }
-        if rows.len() < CLEANUP_BATCH_SIZE {
-            return Ok(removed);
-        }
+    let transaction = write_transaction(database).await?;
+    let repository = ArtifactRepository::builder()
+        .connection(&transaction)
+        .build();
+    let rows = repository
+        .abandoned(before, ARTIFACT_CLEANUP_BATCH_SIZE as u64)
+        .await?;
+    repository
+        .delete_ids(rows.iter().map(|row| row.id.clone()).collect())
+        .await?;
+    transaction.commit().await?;
+    for row in &rows {
+        storage.delete(&row.storage_key).await?;
     }
+    Ok(rows.len() as u64)
 }
 
 pub(crate) async fn remove_orphaned_files(
@@ -55,7 +51,7 @@ pub(crate) async fn remove_orphaned_files(
     lifetime: Duration,
 ) -> Result<u64, ArtifactCleanupError> {
     let before = SystemTime::now() - lifetime;
-    let batches = storage.list().chunks(CLEANUP_BATCH_SIZE);
+    let batches = storage.list().chunks(ARTIFACT_CLEANUP_BATCH_SIZE);
     pin_mut!(batches);
     let mut removed = 0;
     while let Some(batch) = batches.next().await {
@@ -94,5 +90,3 @@ pub(crate) async fn remove_orphaned_files(
     }
     Ok(removed)
 }
-
-const CLEANUP_BATCH_SIZE: usize = 100;
