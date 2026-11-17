@@ -19,18 +19,9 @@ use crate::repository::account::AccountRepository;
 use crate::repository::login_session::LoginSessionRepository;
 
 use super::access::Caller;
-use super::token::{Claims, TokenKind, TokenSigner, token_hash};
+use super::token::{Claims, TokenKind, TokenSigner, TokenSubject, token_hash};
 use super::user_store::UserStore;
 use super::{primary_key, random_id};
-
-#[derive(Clone, Debug, TypedBuilder)]
-#[builder(field_defaults(setter(into)))]
-pub(crate) struct Identity {
-    pub user_store: Arc<dyn UserStore>,
-    pub signer: TokenSigner,
-    pub config: Config,
-    pub limiter: RateLimiter<IpAddr, SystemClock>,
-}
 
 #[derive(Debug, Error)]
 pub(crate) enum LoginError {
@@ -42,6 +33,23 @@ pub(crate) enum LoginError {
     RateLimited(u64),
     #[error("Unauthorized")]
     Unauthorized,
+}
+
+#[derive(Clone, Debug, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+pub(crate) struct Identity {
+    pub user_store: Arc<dyn UserStore>,
+    pub signer: TokenSigner,
+    pub config: Config,
+    pub limiter: RateLimiter<IpAddr, SystemClock>,
+}
+
+#[derive(Clone, Debug, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+pub(crate) struct Tokens {
+    pub access_token: String,
+    pub refresh_token: String,
+    pub expires_in: u64,
 }
 
 impl From<RateLimitError> for LoginError {
@@ -58,14 +66,6 @@ impl From<RateLimitError> for LoginError {
             }
         }
     }
-}
-
-#[derive(Clone, Debug, TypedBuilder)]
-#[builder(field_defaults(setter(into)))]
-pub(crate) struct Tokens {
-    pub access_token: String,
-    pub refresh_token: String,
-    pub expires_in: u64,
 }
 
 pub(crate) async fn log_in(
@@ -115,8 +115,11 @@ pub(crate) async fn refresh(
     let refresh_token = new_refresh_token()?;
     let tokens = issue_tokens(
         identity,
-        &username,
-        &session.random_id,
+        TokenSubject::builder()
+            .username(username.as_str())
+            .random_id(session.random_id.as_str())
+            .kind(TokenKind::LoginSession)
+            .build(),
         refresh_token.clone(),
         now,
     )?;
@@ -179,6 +182,63 @@ pub(crate) fn now_millis() -> anyhow::Result<i64> {
     )?)
 }
 
+pub(crate) async fn create_session(
+    identity: &Identity,
+    transaction: &DatabaseTransaction,
+    account: Account,
+) -> Result<Tokens, LoginError> {
+    let now = now_millis()?;
+    let random_id = random_id().map_err(anyhow::Error::from)?;
+    let refresh_token = new_refresh_token()?;
+    let tokens = issue_tokens(
+        identity,
+        TokenSubject::builder()
+            .username(account.username.as_str())
+            .random_id(random_id.as_str())
+            .kind(TokenKind::LoginSession)
+            .build(),
+        refresh_token.clone(),
+        now,
+    )?;
+    let model = ActiveModel {
+        id: Set(primary_key()),
+        account_id: Set(account.id),
+        random_id: Set(random_id),
+        refresh_token_hash: Set(token_hash(&refresh_token)),
+        created_at: Set(now),
+        expires_at: Set(session_expiry(identity, now)),
+    };
+    LoginSessionRepository::builder()
+        .connection(transaction)
+        .build()
+        .insert(model)
+        .await?;
+    Ok(tokens)
+}
+
+pub(crate) fn issue_tokens(
+    identity: &Identity,
+    subject: TokenSubject<'_>,
+    refresh_token: String,
+    now: i64,
+) -> Result<Tokens, LoginError> {
+    let now = (now / 1000) as u64;
+    let expires_in = identity.config.access_token_lifetime_seconds;
+    Ok(Tokens::builder()
+        .access_token(identity.signer.sign(subject, now + expires_in, now)?)
+        .refresh_token(refresh_token)
+        .expires_in(expires_in)
+        .build())
+}
+
+pub(crate) fn new_refresh_token() -> anyhow::Result<String> {
+    Ok(format!("{}{}", random_id()?, random_id()?))
+}
+
+pub(crate) fn session_expiry(identity: &Identity, now: i64) -> i64 {
+    now + Duration::from_secs(identity.config.refresh_token_lifetime_seconds).as_millis() as i64
+}
+
 async fn begin_write(database: &DatabaseConnection) -> Result<DatabaseTransaction, LoginError> {
     Ok(database
         .begin_with_options(TransactionOptions {
@@ -204,63 +264,4 @@ async fn active_username<C: ConnectionTrait>(
         .filter(|account| account.deleted_at.is_none())
         .ok_or(LoginError::Unauthorized)?;
     Ok(account.username)
-}
-
-async fn create_session(
-    identity: &Identity,
-    transaction: &DatabaseTransaction,
-    account: Account,
-) -> Result<Tokens, LoginError> {
-    let now = now_millis()?;
-    let random_id = random_id().map_err(anyhow::Error::from)?;
-    let refresh_token = new_refresh_token()?;
-    let tokens = issue_tokens(
-        identity,
-        &account.username,
-        &random_id,
-        refresh_token.clone(),
-        now,
-    )?;
-    let model = ActiveModel {
-        id: Set(primary_key()),
-        account_id: Set(account.id),
-        random_id: Set(random_id),
-        refresh_token_hash: Set(token_hash(&refresh_token)),
-        created_at: Set(now),
-        expires_at: Set(session_expiry(identity, now)),
-    };
-    LoginSessionRepository::builder()
-        .connection(transaction)
-        .build()
-        .insert(model)
-        .await?;
-    Ok(tokens)
-}
-
-fn issue_tokens(
-    identity: &Identity,
-    username: &str,
-    session: &str,
-    refresh_token: String,
-    now: i64,
-) -> Result<Tokens, LoginError> {
-    let now = (now / 1000) as u64;
-    let expires_in = identity.config.access_token_lifetime_seconds;
-    Ok(Tokens::builder()
-        .access_token(
-            identity
-                .signer
-                .sign(username, session, now + expires_in, now)?,
-        )
-        .refresh_token(refresh_token)
-        .expires_in(expires_in)
-        .build())
-}
-
-fn new_refresh_token() -> anyhow::Result<String> {
-    Ok(format!("{}{}", random_id()?, random_id()?))
-}
-
-fn session_expiry(identity: &Identity, now: i64) -> i64 {
-    now + Duration::from_secs(identity.config.refresh_token_lifetime_seconds).as_millis() as i64
 }

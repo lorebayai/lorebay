@@ -12,10 +12,12 @@ use typed_builder::TypedBuilder;
 
 use super::random_id;
 
-const SIGNING_KEY_FILE: &str = "signing.key";
-const SIGNING_KEY_BYTES: usize = 32;
-const TOKEN_ISSUER: &str = "lorebayd";
-const TOKEN_AUDIENCE: &str = "lorebay-web-api";
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum TokenKind {
+    AgentAuthorization,
+    LoginSession,
+}
 
 #[derive(Clone, Debug, Deserialize, Serialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
@@ -30,11 +32,12 @@ pub(crate) struct Claims {
     pub aud: String,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum TokenKind {
-    AgentAuthorization,
-    LoginSession,
+#[derive(Clone, Debug, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+pub(crate) struct TokenSubject<'a> {
+    pub username: &'a str,
+    pub random_id: &'a str,
+    pub kind: TokenKind,
 }
 
 #[derive(Clone, Debug, TypedBuilder)]
@@ -51,11 +54,11 @@ impl TokenSigner {
         Ok(Self { key })
     }
 
-    pub fn sign(&self, username: &str, session: &str, expiry: u64, now: u64) -> Result<String> {
+    pub fn sign(&self, subject: TokenSubject<'_>, expiry: u64, now: u64) -> Result<String> {
         let claims = Claims::builder()
-            .sub(username)
-            .sid(session)
-            .kind(TokenKind::LoginSession)
+            .sub(subject.username)
+            .sid(subject.random_id)
+            .kind(subject.kind)
             .exp(expiry)
             .iat(now)
             .jti(random_id()?)
@@ -84,6 +87,11 @@ pub(crate) fn token_hash(token: &str) -> String {
         .map(|byte| format!("{byte:02x}"))
         .collect()
 }
+
+const SIGNING_KEY_FILE: &str = "signing.key";
+const SIGNING_KEY_BYTES: usize = 32;
+const TOKEN_ISSUER: &str = "lorebayd";
+const TOKEN_AUDIENCE: &str = "lorebay-web-api";
 
 fn load_key(path: &Path) -> Result<Vec<u8>> {
     if !path.try_exists()? {

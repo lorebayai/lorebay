@@ -1,7 +1,7 @@
-use sea_orm::{ColumnTrait, ConnectionTrait, DbErr, EntityTrait, QueryFilter};
+use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, DbErr, EntityTrait, QueryFilter};
 use typed_builder::TypedBuilder;
 
-use crate::entity::agent_authorization::{Column, Entity};
+use crate::entity::agent_authorization::{ActiveModel, Column, Entity, Model};
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
@@ -10,6 +10,21 @@ pub(crate) struct AgentAuthorizationRepository<'a, C> {
 }
 
 impl<C: ConnectionTrait> AgentAuthorizationRepository<'_, C> {
+    pub async fn by_refresh_hash(&self, hash: &str) -> Result<Option<Model>, DbErr> {
+        Entity::find()
+            .filter(Column::RefreshTokenHash.eq(hash))
+            .one(self.connection)
+            .await
+    }
+
+    pub async fn insert(&self, model: ActiveModel) -> Result<Model, DbErr> {
+        model.insert(self.connection).await
+    }
+
+    pub async fn update(&self, model: ActiveModel) -> Result<Model, DbErr> {
+        model.update(self.connection).await
+    }
+
     pub async fn delete_expired(&self, now: i64) -> Result<u64, DbErr> {
         Ok(Entity::delete_many()
             .filter(Column::RefreshExpiresAt.lte(now))

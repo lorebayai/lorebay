@@ -153,6 +153,7 @@ One row per agent; see [Identity](identity.md#6-agent-authorization).
   not deleted. The primary key `id` never appears in a token.
 - **A refresh replaces the refresh token.** Its hash is overwritten, so the
   old refresh token stops working, and a new access token is signed.
+  A refresh also moves `refresh_expires_at` forward.
 - **Revoking the authorization or deleting the account deletes the row.**
   Its access tokens then name no row and are rejected. Tasks keep the agent
   name they copied.
