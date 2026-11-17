@@ -1,5 +1,5 @@
 use reqwest::Method;
-use serde_json::{Value, json};
+use serde_json::Value;
 use url::{Position, Url};
 
 use crate::constants::{
@@ -13,6 +13,13 @@ use crate::http::{self, Http};
 use crate::login;
 use crate::output::{self, Outcome, Table};
 
+mod pages;
+mod participants;
+mod spaces;
+mod users;
+
+pub(super) use pages::{Listing, api_path, list_page};
+
 pub(crate) async fn run(command: Command, mode: OutputMode) -> Result<Outcome> {
     let store = Store::from_environment()?;
     match command {
@@ -23,6 +30,9 @@ pub(crate) async fn run(command: Command, mode: OutputMode) -> Result<Outcome> {
             login::login(&store, &server_url, no_browser).await?;
             Ok(Outcome::completion("Signed in."))
         }
+        Command::Participant { command } => participants::run(command, &store, mode).await,
+        Command::Space { command } => spaces::run(command, &store, mode).await,
+        Command::User { command } => users::run(command, &store, mode).await,
         Command::Logout => {
             http::logout(&store).await?;
             Ok(Outcome::completion("Signed out."))
@@ -37,12 +47,7 @@ pub(crate) async fn run(command: Command, mode: OutputMode) -> Result<Outcome> {
                 output::confirm(&name)?;
             }
             Http::new()?
-                .authorized(
-                    &store,
-                    Method::DELETE,
-                    &agent_path(&name)?,
-                    Some(&json!({})),
-                )
+                .authorized(&store, Method::DELETE, &agent_path(&name)?, None)
                 .await?;
             Ok(Outcome::completion("Agent revoked."))
         }

@@ -17,11 +17,10 @@ use crate::helpers::CREDENTIALS_FILE;
 use crate::helpers::{Server, SigningIn, WAIT, assert_success, body};
 
 #[tokio::test]
-async fn agent_revoke_repeats_json_body_when_session_refreshes_after_unauthorized() {
+async fn space_create_repeats_json_body_when_session_refreshes_after_unauthorized() {
     let mut proxy = Proxy::configured(json!({"access_token_lifetime_seconds": 2})).await;
     proxy.login().await;
     proxy.server.set_access_lifetime(900).await;
-    proxy.server.agent("Body retry agent").await;
     let mut saved = proxy.server.credentials();
     let previous_refresh = saved["refresh_token"].clone();
     saved["expires_at"] = json!(u64::MAX);
@@ -34,33 +33,57 @@ async fn agent_revoke_repeats_json_body_when_session_refreshes_after_unauthorize
     let output = proxy
         .server
         .run(&[
-            "agent",
-            "revoke",
-            "Body retry agent",
-            "--yes",
+            "space",
+            "create",
+            "--name",
+            "Retry team",
+            "--summary",
+            "Real body",
             "--output",
             "json",
         ])
         .await;
     assert_success(&output);
-    assert_eq!(body(&output), json!({"data": null, "meta": {}}));
+    let expected = json!({"data": {"key": "SPACE-1", "name": "Retry team", "summary": "Real body", "role": "owner"}, "meta": {}});
+    assert_eq!(body(&output), expected);
     let requests = proxy.requests.lock().await;
     assert_eq!(requests.len(), 2);
     for request in requests.iter() {
-        assert_eq!(request["body"], "{}");
+        assert_eq!(
+            serde_json::from_str::<Value>(request["body"].as_str().unwrap()).unwrap(),
+            json!({"name": "Retry team", "summary": "Real body"})
+        );
         assert_eq!(request["content_type"], "application/json");
     }
     assert_eq!(requests[0]["status"], 401);
-    assert_eq!(requests[1]["status"], 200);
+    assert_eq!(requests[1]["status"], 201);
     drop(requests);
     assert_eq!(proxy.refreshes.load(Ordering::SeqCst), 1);
     assert!(proxy.server.credentials()["refresh_token"] != previous_refresh);
-    let remaining = proxy
+    let shown = proxy
         .server
-        .run(&["agent", "list", "--output", "json"])
+        .run(&["space", "show", "SPACE-1", "--output", "json"])
         .await;
-    assert_success(&remaining);
-    assert_eq!(body(&remaining)["data"], json!([]));
+    assert_success(&shown);
+    assert_eq!(body(&shown), expected);
+}
+
+#[tokio::test]
+async fn agent_revoke_sends_no_request_body() {
+    let proxy = Proxy::start().await;
+    proxy.login().await;
+    proxy.server.agent("No body").await;
+    let output = proxy
+        .server
+        .run(&["agent", "revoke", "No body", "--yes", "--output", "json"])
+        .await;
+    assert_success(&output);
+    assert_eq!(body(&output), json!({"data": null, "meta": {}}));
+    let requests = proxy.requests.lock().await;
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0]["body"], "");
+    assert_eq!(requests[0]["content_type"], "");
+    assert_eq!(requests[0]["status"], 200);
 }
 
 #[tokio::test]
@@ -285,7 +308,8 @@ async fn forward(mut socket: TcpStream, state: ProxyState) -> io::Result<()> {
 }
 
 async fn record_request(requests: &Mutex<Vec<Value>>, headers: &str, body: &[u8], response: &[u8]) {
-    if headers.starts_with("DELETE /api/v1/agents/") {
+    if headers.starts_with("DELETE /api/v1/agents/") || headers.starts_with("POST /api/v1/spaces ")
+    {
         let status = String::from_utf8_lossy(response)
             .split_whitespace()
             .nth(1)

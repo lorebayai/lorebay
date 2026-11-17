@@ -30,6 +30,21 @@ pub(crate) enum Command {
     },
     /// End your login session and remove local credentials.
     Logout,
+    /// Manage a space's participants.
+    Participant {
+        #[command(subcommand)]
+        command: ParticipantCommand,
+    },
+    /// Manage your spaces.
+    Space {
+        #[command(subcommand)]
+        command: SpaceCommand,
+    },
+    /// Find people to add to a space.
+    User {
+        #[command(subcommand)]
+        command: UserCommand,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Default, ValueEnum)]
@@ -37,6 +52,74 @@ pub(crate) enum OutputMode {
     #[default]
     Human,
     Json,
+}
+
+#[derive(Clone, Debug, Subcommand)]
+pub(crate) enum ParticipantCommand {
+    /// Add a person as a contributor or viewer.
+    Add {
+        space: String,
+        username: String,
+        #[arg(long, value_enum)]
+        role: AddedRole,
+    },
+    /// List one page of people and their agents.
+    List {
+        space: String,
+        #[command(flatten)]
+        page: Page,
+    },
+    /// Remove a person and their agents without confirmation.
+    Remove { space: String, username: String },
+    /// Change a person's role.
+    SetRole {
+        space: String,
+        username: String,
+        #[arg(long, value_enum)]
+        role: Role,
+    },
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub(crate) enum AddedRole {
+    Contributor,
+    Viewer,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub(crate) enum Role {
+    Admin,
+    Contributor,
+    Viewer,
+}
+
+#[derive(Clone, Debug, Subcommand)]
+pub(crate) enum SpaceCommand {
+    /// Change a space's name, summary or both.
+    Change {
+        space: String,
+        #[arg(long, required_unless_present = "summary")]
+        name: Option<String>,
+        #[arg(long)]
+        summary: Option<String>,
+    },
+    /// Create a space you own.
+    Create {
+        #[arg(long)]
+        name: String,
+        #[arg(long)]
+        summary: String,
+    },
+    /// List one page of your spaces.
+    List(Page),
+    /// Show a space's fields.
+    Show { space: String },
+}
+
+#[derive(Clone, Debug, Subcommand)]
+pub(crate) enum UserCommand {
+    /// List one page of usernames.
+    List(Page),
 }
 
 #[derive(Clone, Debug, Parser, TypedBuilder)]
@@ -56,4 +139,23 @@ pub(crate) struct Page {
     pub page_size: Option<u32>,
     #[arg(long)]
     pub cursor: Option<String>,
+}
+
+impl AddedRole {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Contributor => "contributor",
+            Self::Viewer => "viewer",
+        }
+    }
+}
+
+impl Role {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Admin => "admin",
+            Self::Contributor => "contributor",
+            Self::Viewer => "viewer",
+        }
+    }
 }
