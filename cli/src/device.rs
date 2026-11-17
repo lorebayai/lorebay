@@ -113,17 +113,19 @@ async fn poll(http: &Http, metadata: &Metadata, request: &DeviceRequest) -> Resu
             .send()
             .await;
         let Ok(response) = response else {
-            interval = interval.saturating_mul(2);
-            delay = interval;
+            delay = delay.saturating_mul(2);
             continue;
         };
         let status = response.status();
+        if status.is_server_error() {
+            delay = delay.saturating_mul(2);
+            continue;
+        }
         let retry_after = retry_after(&response);
         let bytes = match response.bytes().await {
             Ok(bytes) => bytes,
             Err(_) => {
-                interval = interval.saturating_mul(2);
-                delay = interval;
+                delay = delay.saturating_mul(2);
                 continue;
             }
         };

@@ -231,7 +231,7 @@ async fn login_device_waits_at_slower_pace_when_server_requests_slow_down() {
 
 #[tokio::test]
 async fn login_device_retries_when_connection_is_interrupted() {
-    let proxy = Proxy::configured(json!({"device_poll_interval_seconds": 1})).await;
+    let proxy = Proxy::configured(json!({"device_poll_interval_seconds": 2})).await;
     proxy.fault.store(DEVICE_DISCONNECT, Ordering::SeqCst);
     let login = proxy.device_login().await;
     proxy.wait_for_polls(2).await;
@@ -239,8 +239,58 @@ async fn login_device_retries_when_connection_is_interrupted() {
     assert_success(&login.finish().await);
     let requests = proxy.requests.lock().await;
     assert_eq!(requests.len(), 3);
+    assert!(requests[1]["elapsed_ms"].as_u64().unwrap() >= 4000);
+    assert!((2000..3500).contains(&requests[2]["elapsed_ms"].as_u64().unwrap()));
+    assert_success(&proxy.server.run(&["agent", "list"]).await);
+}
+
+#[tokio::test]
+async fn login_device_retries_when_server_returns_errors() {
+    let proxy = Proxy::configured(json!({"device_poll_interval_seconds": 1,
+        "device_request_lifetime_seconds": 20}))
+    .await;
+    proxy.fault.store(DEVICE_UNAVAILABLE, Ordering::SeqCst);
+    let login = proxy.device_login().await;
+    proxy.wait_for_polls(3).await;
+    proxy.server.decide_device(&login, "approve").await;
+    assert_success(&login.finish().await);
+    let requests = proxy.requests.lock().await;
+    assert_eq!(requests.len(), 4);
+    assert_eq!(
+        requests
+            .iter()
+            .map(|r| r["status"].as_u64().unwrap())
+            .collect::<Vec<_>>(),
+        vec![503, 500, 400, 200]
+    );
     assert!(requests[1]["elapsed_ms"].as_u64().unwrap() >= 2000);
-    assert!(requests[2]["elapsed_ms"].as_u64().unwrap() >= 2000);
+    assert!(requests[2]["elapsed_ms"].as_u64().unwrap() >= 4000);
+    assert!((1000..2000).contains(&requests[3]["elapsed_ms"].as_u64().unwrap()));
+    assert_success(&proxy.server.run(&["agent", "list"]).await);
+}
+
+#[tokio::test]
+async fn login_device_restores_slower_pace_when_server_recovers() {
+    let proxy = Proxy::configured(json!({"device_poll_interval_seconds": 1,
+        "device_request_lifetime_seconds": 45}))
+    .await;
+    proxy.fault.store(DEVICE_SLOW_DOWN_OUTAGE, Ordering::SeqCst);
+    let login = proxy.device_login().await;
+    proxy.wait_for_polls(3).await;
+    proxy.server.decide_device(&login, "approve").await;
+    assert_success(&login.finish().await);
+    let requests = proxy.requests.lock().await;
+    assert_eq!(requests.len(), 4);
+    assert_eq!(
+        requests
+            .iter()
+            .map(|r| r["status"].as_u64().unwrap())
+            .collect::<Vec<_>>(),
+        vec![400, 503, 400, 200]
+    );
+    assert!(requests[1]["elapsed_ms"].as_u64().unwrap() >= 6000);
+    assert!(requests[2]["elapsed_ms"].as_u64().unwrap() >= 12000);
+    assert!((6000..9000).contains(&requests[3]["elapsed_ms"].as_u64().unwrap()));
     assert_success(&proxy.server.run(&["agent", "list"]).await);
 }
 
@@ -302,6 +352,10 @@ const DEVICE_RATE_LIMIT: u8 = 6;
 const DEVICE_RATE_LIMIT_AGAIN: u8 = 7;
 const DEVICE_STALL: u8 = 8;
 const CHANGE_DEVICE_METADATA: u8 = 9;
+const DEVICE_UNAVAILABLE: u8 = 10;
+const DEVICE_SERVER_ERROR: u8 = 11;
+const DEVICE_SLOW_DOWN_OUTAGE: u8 = 12;
+const DEVICE_OUTAGE_ONCE: u8 = 13;
 const HTTP_DEADLINE: Duration = Duration::from_secs(8);
 
 struct Proxy {
@@ -482,8 +536,21 @@ async fn device_response(
     body: &[u8],
     response: Vec<u8>,
 ) -> io::Result<Vec<u8>> {
-    if take_fault(&state.fault, DEVICE_SLOW_DOWN) {
+    if take_fault(&state.fault, DEVICE_SLOW_DOWN)
+        || state
+            .fault
+            .compare_exchange(
+                DEVICE_SLOW_DOWN_OUTAGE,
+                DEVICE_OUTAGE_ONCE,
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            )
+            .is_ok()
+    {
         return upstream(&state.upstream, request, body).await;
+    }
+    if let Some(response) = server_error_response(&state.fault) {
+        return Ok(response);
     }
     if take_fault(&state.fault, DEVICE_DISCONNECT) {
         return Ok(Vec::new());
@@ -507,6 +574,32 @@ async fn device_response(
         return Ok(b"HTTP/1.1 429 Too Many Requests\r\nRetry-After: 0\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_vec());
     }
     Ok(response)
+}
+
+fn server_error_response(fault: &AtomicU8) -> Option<Vec<u8>> {
+    let (status, content_type, body) = if take_fault(fault, DEVICE_UNAVAILABLE) {
+        fault.store(DEVICE_SERVER_ERROR, Ordering::SeqCst);
+        (
+            "503 Service Unavailable",
+            "text/html",
+            "<html>Temporarily unavailable</html>",
+        )
+    } else if take_fault(fault, DEVICE_SERVER_ERROR) {
+        (
+            "500 Internal Server Error",
+            "application/json",
+            "{\"error\":\"server_error\"}",
+        )
+    } else if take_fault(fault, DEVICE_OUTAGE_ONCE) {
+        (
+            "503 Service Unavailable",
+            "text/html",
+            "<html>Temporarily unavailable</html>",
+        )
+    } else {
+        return None;
+    };
+    Some(format!("HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).into_bytes())
 }
 
 fn change_response(state: &ProxyState, headers: &str, response: Vec<u8>) -> io::Result<Vec<u8>> {
