@@ -26,13 +26,6 @@ Open the metadata's `/oauth/authorize` endpoint with the client's authorization
 parameters to sign in and consent. The built-in CLI client ID is `lorebay-cli`;
 it accepts loopback redirects on any port and takes no agent name.
 
-With a login session, `GET /api/v1/agents` lists own agents by exact name in
-ascending order; `DELETE /api/v1/agents/{name}` revokes one (URL-encode the name).
-Lists take `page_size` (20 by default, 1..100) and an opaque `cursor`;
-pass `meta.next_cursor` back until it is absent. Invalid pagination returns 400
-with `request.invalid_query`. Agents on person-only operations receive 403
-with `auth.person_required`; revoked or expired credentials receive 401.
-
 `hash-password` reads a password from standard input and prints an Argon2id
 PHC hash. It removes one final line ending and starts no server.
 It accepts no password argument.
