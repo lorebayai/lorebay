@@ -35,12 +35,14 @@ use crate::domain::users::FileUserStore;
 use crate::domain::{account, login_session};
 use crate::migration::Migrator;
 use crate::oauth::{self, OAuthState};
-use crate::{mcp, worker};
+use crate::storage::LocalDirectory;
+use crate::{files, mcp, worker};
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
 pub(crate) struct ServerState {
     pub database: DatabaseConnection,
+    pub storage: Arc<LocalDirectory>,
     pub identity: Arc<Identity>,
     ready: Arc<AtomicBool>,
     oauth: OAuthState,
@@ -64,7 +66,9 @@ pub async fn run(
     let database = open_database(&config.data_directory).await?;
     account::sync(&database, users.as_ref(), login_session::now_millis()?).await?;
     let identity = Arc::new(identity(config.clone(), users)?);
+    let storage = Arc::new(LocalDirectory::open(&config).await?);
     let state = ServerState::builder()
+        .storage(storage)
         .oauth(OAuthState::new(
             &config,
             database.clone(),
@@ -224,6 +228,7 @@ fn router(state: ServerState) -> Result<Router> {
         .route(HEALTH_PATH, get(health))
         .route(READINESS_PATH, get(readiness))
         .nest(API_PREFIX, api::router())
+        .merge(files::router())
         .with_state(state)
         .merge(oauth)
         .merge(mcp)

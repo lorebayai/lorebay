@@ -16,10 +16,12 @@ mod domain;
     reason = "sea-orm-cli emits column enums in database column order"
 )]
 mod entity;
+mod files;
 mod mcp;
 mod migration;
 mod oauth;
 mod pages;
 mod repository;
 mod server;
+mod storage;
 mod worker;

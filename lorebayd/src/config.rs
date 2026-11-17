@@ -55,6 +55,12 @@ pub struct Config {
     pub device_verification_rate_limit: u32,
     #[builder(default = DEFAULT_DEVICE_VERIFICATION_RATE_WINDOW_SECONDS)]
     pub device_verification_rate_window_seconds: u64,
+    #[builder(default = DEFAULT_UPLOAD_URL_LIFETIME_SECONDS)]
+    pub upload_url_lifetime_seconds: u64,
+    #[builder(default = MAX_UPLOAD_SIZE_BYTES)]
+    pub upload_size_limit_bytes: u64,
+    #[builder(default = DEFAULT_UPLOAD_CONCURRENCY_LIMIT)]
+    pub upload_concurrency_limit: u32,
     #[builder(default = LoggingConfig::default())]
     pub logging: LoggingConfig,
 }
@@ -130,9 +136,32 @@ impl Config {
                 "must be greater than zero",
             ));
         }
+        self.validate_upload()?;
         self.validate_device()?;
         self.validate_registration()?;
         self.logging.validate()
+    }
+
+    fn validate_upload(&self) -> Result<(), ConfigError> {
+        if !(1..=MAX_DURATION_SECONDS).contains(&self.upload_url_lifetime_seconds) {
+            return Err(ConfigError::invalid(
+                "upload_url_lifetime_seconds",
+                "must be between 1 and 315360000 seconds",
+            ));
+        }
+        if !(1..=MAX_UPLOAD_SIZE_BYTES).contains(&self.upload_size_limit_bytes) {
+            return Err(ConfigError::invalid(
+                "upload_size_limit_bytes",
+                "must be between 1 and 5000000000 bytes",
+            ));
+        }
+        if self.upload_concurrency_limit == 0 {
+            return Err(ConfigError::invalid(
+                "upload_concurrency_limit",
+                "must be positive",
+            ));
+        }
+        Ok(())
     }
 
     fn validate_device(&self) -> Result<(), ConfigError> {
@@ -272,3 +301,7 @@ const DEFAULT_DEVICE_RATE_LIMIT: u32 = 10;
 const DEFAULT_DEVICE_RATE_WINDOW_SECONDS: u64 = 60;
 const DEFAULT_DEVICE_VERIFICATION_RATE_LIMIT: u32 = 10;
 const DEFAULT_DEVICE_VERIFICATION_RATE_WINDOW_SECONDS: u64 = 60;
+
+const DEFAULT_UPLOAD_URL_LIFETIME_SECONDS: u64 = 900;
+const MAX_UPLOAD_SIZE_BYTES: u64 = 5_000_000_000;
+const DEFAULT_UPLOAD_CONCURRENCY_LIMIT: u32 = 4;

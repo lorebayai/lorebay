@@ -24,6 +24,10 @@ impl<C: ConnectionTrait> SpaceRepository<'_, C> {
             .await
     }
 
+    pub async fn by_id(&self, id: &str) -> Result<Option<Model>, DbErr> {
+        Entity::find_by_id(id).one(self.connection).await
+    }
+
     pub async fn by_number(&self, number: i64) -> Result<Option<Model>, DbErr> {
         Entity::find()
             .filter(Column::Number.eq(number))
