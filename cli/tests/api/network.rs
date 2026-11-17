@@ -236,13 +236,15 @@ async fn login_device_retries_when_connection_is_interrupted() {
     let proxy = Proxy::configured(json!({"device_poll_interval_seconds": 2})).await;
     proxy.fault.store(DEVICE_DISCONNECT, Ordering::SeqCst);
     let login = proxy.device_login().await;
-    proxy.wait_for_polls(2).await;
+    proxy.wait_for_polls(3).await;
     proxy.server.decide_device(&login, "approve").await;
     assert_success(&login.finish().await);
     let requests = proxy.requests.lock().await;
-    assert_eq!(requests.len(), 3);
-    assert!(requests[1]["elapsed_ms"].as_u64().unwrap() >= 4000);
-    assert!((2000..3500).contains(&requests[2]["elapsed_ms"].as_u64().unwrap()));
+    assert!(requests[0]["status"].is_null());
+    assert_poll_order(&requests[1..], &[]);
+    assert_minimum_spacing(&requests[..1], 2000);
+    assert_minimum_spacing(&requests[1..2], 4000);
+    assert_minimum_spacing(&requests[2..], 2000);
     assert_success(&proxy.server.run(&["agent", "list"]).await);
 }
 

@@ -6,6 +6,7 @@ use serde_json::{Value, json};
 
 use crate::helpers::{
     CREDENTIALS_FILE, DeviceSigningIn, Server, assert_success, assert_usage, body,
+    reject_device_login,
 };
 
 #[tokio::test]
@@ -90,19 +91,14 @@ async fn login_device_fails_when_request_expires() {
 
 #[tokio::test]
 async fn login_device_preserves_login_session_when_new_sign_in_fails() {
-    let server = Server::configured(json!({"device_poll_interval_seconds": 1,
-        "device_request_lifetime_seconds": 3}))
-    .await;
+    let server = Server::start().await;
     server.login().await;
     let before = fs::read(server.home().join(CREDENTIALS_FILE)).unwrap();
-    let login = server.device_signing_in().await;
-    server.decide_device(&login, "decline").await;
-    assert_failure(&login.finish().await, "access_denied", "declined");
-    assert!(fs::read(server.home().join(CREDENTIALS_FILE)).unwrap() == before);
-    let login = server.device_signing_in().await;
-    assert_failure(&login.finish().await, "expired_token", "expired");
-    assert!(fs::read(server.home().join(CREDENTIALS_FILE)).unwrap() == before);
-    assert_success(&server.run(&["agent", "list"]).await);
+    for (code, message) in [("access_denied", "declined"), ("expired_token", "expired")] {
+        assert_failure(&reject_device_login(&server, code).await, code, message);
+        assert!(fs::read(server.home().join(CREDENTIALS_FILE)).unwrap() == before);
+        assert_success(&server.run(&["agent", "list"]).await);
+    }
 }
 
 #[tokio::test]
