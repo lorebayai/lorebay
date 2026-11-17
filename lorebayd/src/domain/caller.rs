@@ -4,6 +4,8 @@ use super::access::{AgentCaller, Caller};
 
 #[derive(Debug, Error)]
 pub(crate) enum CallerError {
+    #[error("An agent authorization is required")]
+    AgentRequired,
     #[error("A login session is required")]
     PersonRequired,
 }
@@ -15,6 +17,13 @@ pub(crate) enum VerifiedCaller {
 }
 
 impl VerifiedCaller {
+    pub fn agent(&self) -> Result<&AgentCaller, CallerError> {
+        match self {
+            Self::Agent(caller) => Ok(caller),
+            Self::Person(_) => Err(CallerError::AgentRequired),
+        }
+    }
+
     pub fn account_id(&self) -> &str {
         match self {
             Self::Agent(caller) => &caller.account_id,

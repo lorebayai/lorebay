@@ -1,0 +1,65 @@
+use thiserror::Error;
+use typed_builder::TypedBuilder;
+
+#[derive(Debug, Error)]
+pub(crate) enum TaskTextError {
+    #[error("Must not be empty.")]
+    Empty,
+    #[error("Must be at most {0} characters.")]
+    TooLong(usize),
+}
+
+#[derive(Clone, Debug, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+pub(crate) struct TaskTitle {
+    value: String,
+}
+
+#[derive(Clone, Debug, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+pub(crate) struct NoteContent {
+    value: String,
+}
+
+impl TryFrom<String> for TaskTitle {
+    type Error = TaskTextError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        validate_text(&value, TITLE_MAX_CHARACTERS)?;
+        Ok(Self { value })
+    }
+}
+
+impl From<TaskTitle> for String {
+    fn from(title: TaskTitle) -> Self {
+        title.value
+    }
+}
+
+impl TryFrom<String> for NoteContent {
+    type Error = TaskTextError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        validate_text(&value, NOTE_MAX_CHARACTERS)?;
+        Ok(Self { value })
+    }
+}
+
+impl From<NoteContent> for String {
+    fn from(note: NoteContent) -> Self {
+        note.value
+    }
+}
+
+const NOTE_MAX_CHARACTERS: usize = 10_000;
+const TITLE_MAX_CHARACTERS: usize = 200;
+
+fn validate_text(value: &str, maximum: usize) -> Result<(), TaskTextError> {
+    if value.trim().is_empty() {
+        return Err(TaskTextError::Empty);
+    }
+    if value.chars().count() > maximum {
+        return Err(TaskTextError::TooLong(maximum));
+    }
+    Ok(())
+}

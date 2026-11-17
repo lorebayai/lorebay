@@ -20,6 +20,9 @@ pub(crate) use oauth_client::*;
 pub(crate) use participants::*;
 pub(crate) use space_access::*;
 pub(crate) use spaces::*;
+pub(crate) use task_access::*;
+pub(crate) use task_input::*;
+pub(crate) use tasks::*;
 pub(crate) use user_directory::*;
 
 mod credential_cleanup;
@@ -30,4 +33,7 @@ mod oauth_client;
 mod participants;
 mod space_access;
 mod spaces;
+mod task_access;
+mod task_input;
+mod tasks;
 mod user_directory;
