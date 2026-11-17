@@ -81,6 +81,10 @@ Relative paths resolve against the working directory.
 | `upload_url_lifetime_seconds` | `LOREBAYD__UPLOAD_URL_LIFETIME_SECONDS` | `900` | 1..315360000 seconds |
 | `upload_size_limit_bytes` | `LOREBAYD__UPLOAD_SIZE_LIMIT_BYTES` | `5000000000` | 1..5000000000 bytes |
 | `upload_concurrency_limit` | `LOREBAYD__UPLOAD_CONCURRENCY_LIMIT` | `4` | Positive u32 concurrent uploads |
+| `upload_idle_timeout_seconds` | `LOREBAYD__UPLOAD_IDLE_TIMEOUT_SECONDS` | `30` | 1..315360000 seconds without an upload chunk |
+| `artifact_cleanup_interval_seconds` | `LOREBAYD__ARTIFACT_CLEANUP_INTERVAL_SECONDS` | `3600` | 1..315360000 seconds; both artifact cleanup jobs |
+| `abandoned_artifact_lifetime_seconds` | `LOREBAYD__ABANDONED_ARTIFACT_LIFETIME_SECONDS` | `86400` | 1..315360000 seconds; longer than `upload_url_lifetime_seconds` |
+| `orphaned_file_lifetime_seconds` | `LOREBAYD__ORPHANED_FILE_LIFETIME_SECONDS` | `86400` | 1..315360000 seconds; longer than `upload_url_lifetime_seconds` |
 | `logging.level` | `LOREBAYD__LOGGING__LEVEL` | `info` | `off`, `error`, `warn`, `info`, `debug`, `trace` |
 
 Set `public_url` to the origin clients reach, including through a TLS proxy

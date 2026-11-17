@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 use std::io::{Error, ErrorKind};
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, bail};
 use futures_util::{Stream, StreamExt};
@@ -12,14 +12,18 @@ use thiserror::Error;
 use tokio::fs::{self, File};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
+use tokio::time::timeout;
 use typed_builder::TypedBuilder;
 use url::Url;
 use uuid::Uuid;
 
 use crate::Config;
 
+use super::listing::{list_files, storage_directory};
 use super::signature::{load_key, sign, verify};
-use super::{DownloadRequest, FileOperation, FileStorage, UploadRequest};
+use super::{
+    DownloadRequest, FileOperation, FileStorage, StoredFile, StoredFileKind, UploadRequest,
+};
 
 #[derive(Debug, Error)]
 pub(crate) enum StorageError {
@@ -51,6 +55,7 @@ pub(crate) struct LocalDirectory {
     lifetime_millis: i64,
     pub size_limit: u64,
     slots: Arc<Semaphore>,
+    idle_timeout: Duration,
 }
 
 impl LocalDirectory {
@@ -59,6 +64,8 @@ impl LocalDirectory {
         let temporary = config.data_directory.join("uploads");
         fs::create_dir_all(&files).await?;
         fs::create_dir_all(&temporary).await?;
+        storage_directory(&files).await?;
+        storage_directory(&temporary).await?;
         File::open(&config.data_directory).await?.sync_all().await?;
         Ok(Self::builder()
             .files(files)
@@ -67,6 +74,7 @@ impl LocalDirectory {
             .origin(config.public_url.trim_end_matches('/'))
             .lifetime_millis(i64::try_from(config.upload_url_lifetime_seconds)? * 1000)
             .size_limit(config.upload_size_limit_bytes)
+            .idle_timeout(Duration::from_secs(config.upload_idle_timeout_seconds))
             .slots(Arc::new(Semaphore::new(
                 config.upload_concurrency_limit as usize,
             )))
@@ -133,7 +141,10 @@ impl LocalDirectory {
         let (file, path) = temporary.into_parts();
         let mut file = File::from_std(file);
         let mut size = 0u64;
-        while let Some(chunk) = stream.next().await {
+        while let Some(chunk) = timeout(self.idle_timeout, stream.next())
+            .await
+            .map_err(|_| StorageError::Interrupted)?
+        {
             let chunk = chunk.map_err(|_| StorageError::Interrupted)?;
             let bytes = chunk.as_ref();
             size = size
@@ -226,7 +237,39 @@ impl FileStorage for LocalDirectory {
         }
     }
 
+    fn list(&self) -> impl Stream<Item = Result<StoredFile>> + Send {
+        list_files(self.files.clone(), self.temporary.clone())
+    }
+
+    async fn delete_listed(&self, file: &StoredFile) -> Result<bool> {
+        let directory = match file.kind {
+            StoredFileKind::Artifact => &self.files,
+            StoredFileKind::Temporary => &self.temporary,
+        };
+        storage_directory(directory).await?;
+        let mut components = Path::new(&file.name).components();
+        if !matches!(components.next(), Some(Component::Normal(_))) || components.next().is_some() {
+            bail!("invalid listed storage file name");
+        }
+        let path = directory.join(&file.name);
+        let metadata = match fs::symlink_metadata(&path).await {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(false),
+            Err(error) => return Err(error.into()),
+        };
+        if !metadata.is_file() || metadata.modified()? != file.modified {
+            return Ok(false);
+        }
+        match fs::remove_file(path).await {
+            Ok(()) => File::open(directory).await?.sync_all().await?,
+            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(false),
+            Err(error) => return Err(error.into()),
+        }
+        Ok(true)
+    }
+
     async fn delete(&self, location: &str) -> Result<()> {
+        storage_directory(&self.files).await?;
         match fs::remove_file(self.resolve(location)?).await {
             Ok(()) => File::open(&self.files).await?.sync_all().await?,
             Err(error) if error.kind() == ErrorKind::NotFound => {}

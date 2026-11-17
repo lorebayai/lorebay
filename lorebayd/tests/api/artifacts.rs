@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use reqwest::{Method, StatusCode};
 use serde_json::{Value, json};
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::task::yield_now;
 use tokio::time::{sleep, timeout};
 use url::Url;
@@ -616,4 +616,122 @@ async fn assert_refusals(
         code,
     )
     .await;
+}
+
+#[tokio::test]
+async fn complete_artifact_fails_with_not_found_when_registration_was_abandoned() {
+    let server = Server::configured(|config| config.artifact_cleanup_interval_seconds = 1).await;
+    let (person, agent, task) = prepare(&server).await;
+    let abandoned = register(&server, &agent, &task).await;
+    let completed = register(&server, &agent, &task).await;
+    upload_ok(&server, &abandoned, "Abandoned file").await;
+    upload_ok(&server, &completed, "Complete file").await;
+    assert_eq!(
+        complete(&server, &agent, &task, "AR-2").await.status(),
+        StatusCode::OK
+    );
+    assert_problem(
+        upload(&server, &abandoned, "Retry").await,
+        StatusCode::PRECONDITION_FAILED,
+        "file.already_exists",
+    )
+    .await;
+    age_registration(&server, "AR-2").await;
+    age_registration(&server, "AR-1").await;
+    timeout(TEST_TIMEOUT, async {
+        loop {
+            let response = upload(&server, &abandoned, "Retry").await;
+            if response.status() == StatusCode::PRECONDITION_FAILED {
+                sleep(Duration::from_millis(20)).await;
+                continue;
+            }
+            assert_eq!(response.status(), StatusCode::CREATED);
+            break;
+        }
+    })
+    .await
+    .unwrap();
+    assert_problem(
+        complete(&server, &agent, &task, "AR-1").await,
+        StatusCode::NOT_FOUND,
+        "artifact.not_found",
+    )
+    .await;
+    let fresh = register(&server, &agent, &task).await;
+    assert_eq!(fresh["key"], "AR-3");
+    upload_ok(&server, &fresh, "Fresh file").await;
+    assert_eq!(
+        complete(&server, &agent, &task, "AR-3").await.status(),
+        StatusCode::OK
+    );
+    let read_back = read(&server, &person, "TK-1").await;
+    assert_eq!(
+        read_back["artifacts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|artifact| artifact["key"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        ["AR-2", "AR-3"]
+    );
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn upload_file_releases_slot_when_upload_stalls() {
+    let server = Server::configured(|config| {
+        config.upload_concurrency_limit = 1;
+        config.upload_idle_timeout_seconds = 3;
+    })
+    .await;
+    let (_, agent, task) = prepare(&server).await;
+    let first = register(&server, &agent, &task).await;
+    let second = register(&server, &agent, &task).await;
+    let mut stalled = raw_upload(
+        &server,
+        first["upload_url"].as_str().unwrap(),
+        "Content-Length: 4\r\nConnection: close\r\n",
+    )
+    .await;
+    assert!(
+        read_headers(&mut stalled)
+            .await
+            .starts_with("HTTP/1.1 100 Continue")
+    );
+    stalled.write_all(b"a").await.unwrap();
+    assert_problem(
+        upload(&server, &second, "next").await,
+        StatusCode::SERVICE_UNAVAILABLE,
+        "file.upload_limit",
+    )
+    .await;
+    let mut response = String::new();
+    timeout(TEST_TIMEOUT, stalled.read_to_string(&mut response))
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(response.starts_with("HTTP/1.1 400"));
+    assert!(response.contains("application/problem+json"));
+    assert_eq!(
+        serde_json::from_str::<Value>(response.split_once("\r\n\r\n").unwrap().1).unwrap()["code"],
+        "file.interrupted"
+    );
+    upload_ok(&server, &second, "next").await;
+    upload_ok(&server, &first, "done").await;
+    assert_eq!(
+        complete(&server, &agent, &task, "AR-1").await.status(),
+        StatusCode::OK
+    );
+    assert_eq!(
+        complete(&server, &agent, &task, "AR-2").await.status(),
+        StatusCode::OK
+    );
+    assert_eq!(
+        read(&server, &agent, "TK-1").await["artifacts"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    server.stop().await;
 }
