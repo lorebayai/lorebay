@@ -60,8 +60,8 @@ It does not cover:
 In the table, `<space>` is a space key, `<task>` a task key, `<task-id>` a
 task ID, `<entry>` a knowledge entry's name or key, `<version>` a version
 returned by its history, `<artifact>` an artifact key, `<proposal>` a
-proposal key, and `<note>` the opaque note identifier returned in the
-Scratchpad, never an internal primary key.
+proposal key, and `<note>` the note's time as the Scratchpad shows it.
+Note times are strictly increasing within a task.
 `<name>` in an agent command is the person's agent name, quoted when it
 contains spaces. Optional arguments appear in brackets. List rows follow
 [section 6](#6-lists); all output follows [section 5](#5-output-and-failures).
@@ -84,7 +84,7 @@ contains spaces. Optional arguments appear in brackets. List rows follow
 | `participant remove <space> <username>` | Remove a participant | Removal result |
 | `task list <space> [--person <username>] [--agent <name>] [--status <status>] [--keyword <text>]` | List tasks | Task keys, titles, statuses, people, agent names and last activity times |
 | `task show <space> <task>` | Read a task | Task fields, including its task ID, result and completed artifact list |
-| `task scratchpad <space> <task>` | Read a task's Scratchpad | One page of notes, with their identifiers and times, in time order |
+| `task scratchpad <space> <task>` | Read a task's Scratchpad | One page of notes, with their times, in time order |
 | `task close <space> <task-id>` | Change a task, setting only its status to `ended` | Updated task |
 | `task delete <space> <task-id>` | Delete a task | Deletion result |
 | `note delete <space> <task-id> <note>` | Delete a note | Deletion result |
