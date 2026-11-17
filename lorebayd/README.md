@@ -26,10 +26,6 @@ Open the metadata's `/oauth/authorize` endpoint with the client's authorization
 parameters to sign in and consent. The built-in CLI client ID is `lorebay-cli`;
 it accepts loopback redirects on any port and takes no agent name.
 
-Agents connect to `/mcp` with their OAuth access token. The endpoint serves an
-empty tool list over Streamable HTTP, accepts MCP 2025-03-26 through 2026-07-28,
-and keeps no protocol session.
-
 `hash-password` reads a password from standard input and prints an Argon2id
 PHC hash. It removes one final line ending and starts no server.
 It accepts no password argument.
