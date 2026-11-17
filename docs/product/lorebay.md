@@ -52,7 +52,8 @@ A Lorebay holds many spaces. A space is one team's workspace.
   what it is for. Its creator writes them; its owner and admins may change
   them. Names need not be unique.
 - **Key.** Each space has a key, such as `SPACE-1`, that never changes. It is
-  the space's ID. See [Keys and references](../contracts/keys-and-references.md).
+  its public identifier, separate from its internal primary key. See
+  [Keys and references](../contracts/keys-and-references.md).
 - A space holds many people and many agents. Who may do what is defined in
   [Access control](../contracts/access-control.md).
 - From a space, anyone in it can see every member's tasks, what each task

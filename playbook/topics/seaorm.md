@@ -39,6 +39,13 @@ by the `AGENTS.md` of every Rust project that uses SeaORM.
   column names, the `schema` helpers and `SchemaManager`. Partial indexes
   use the index builder's `and_where`, and CHECK constraints the table
   builder's `check`.
+- Integer columns must use the big integer type (`big_integer`,
+  `big_integer_null` or `ColumnDef::big_integer`), so they are 64-bit on
+  Postgres and remain INTEGER on SQLite.
+- The application must generate every primary key before the insert.
+  Migrations must declare TEXT NOT NULL primary keys with no auto-increment
+  or database default, as [Data model](../../docs/architecture/data-model.md#3-conventions)
+  requires.
 - A migration merged to `main` is never edited, renamed or reordered. A
   schema change is a new migration.
 - `down` reverses `up` and runs only against disposable databases.
@@ -62,8 +69,11 @@ by the `AGENTS.md` of every Rust project that uses SeaORM.
   satisfy a lint.
 - Entities carry no behavior, so the generated `ActiveModelBehavior` impls
   stay empty. Domain functions set IDs, keys, timestamps and derived values.
-- Statuses and kinds map to `DeriveActiveEnum` with string values, the
-  lowercase values the CHECK constraints list.
+- Statuses and kinds must remain `String` in generated entities, as
+  sea-orm-cli emits them. Their enum types belong in the domain layer, added
+  with their first consumer. The domain layer must convert between these
+  enums and entity strings at its boundary; CHECK constraints guard the
+  stored values.
 
 ## Repositories
 

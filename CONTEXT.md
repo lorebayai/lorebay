@@ -78,9 +78,16 @@ takes effect only when a person approves it.
 
 ## Identifiers
 
+**Primary key**: An application-generated UUIDv7 stored as canonical lowercase,
+hyphenated text. It identifies an internal row and can break ordering ties;
+it never defines business order or appears in a token or an API.
+
 **Key**: A short identifier with a type prefix, such as `TK-12`, shown to
 people and used in references. Keys of tasks, knowledge entries, artifacts
 and proposals count up per space; space keys count up across the Lorebay.
+
+**Space number**: The permanent, Lorebay-wide number in a space key, such as
+the 1 in `SPACE-1`. It is separate from the space's primary key.
 
 **Task ID**: A random string that identifies a task in calls that write into
 it. It is not a key.

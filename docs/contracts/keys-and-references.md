@@ -28,7 +28,8 @@ It does not cover showing an object which other objects reference it.
   Each space counts from 1, and a deleted key is never reused. Pages show
   keys.
 - **A space's key**, such as `SPACE-1`, counts up across the whole Lorebay.
-  It is the space's ID and never changes, even when the space is renamed.
+  Its number is separate from the internal primary key. The key never
+  changes or gets reused, even when the space is renamed.
 - **Objects to read may be named by key**, such as `TK-12` in `get_task` or
   `KN-3` in `read_knowledge`, resolved in the space the call names. Web API
   paths accept keys too, such as `/api/v1/spaces/SPACE-1/tasks/TK-12`,
