@@ -29,7 +29,7 @@ pub(crate) fn router(state: ServerState) -> Result<Router> {
     let config = StreamableHttpServerConfig::default()
         .with_legacy_session_mode(false)
         .with_json_response(true)
-        .with_allowed_hosts([url.authority()])
+        .disable_allowed_hosts()
         .with_allowed_origins([origin]);
     let transport = StreamableHttpService::new(
         || Ok(McpServer),

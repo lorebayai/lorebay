@@ -254,6 +254,27 @@ async fn call_mcp_fails_when_token_signature_is_invalid() {
 }
 
 #[tokio::test]
+async fn call_mcp_succeeds_when_proxy_rewrites_host() {
+    let server = Server::start().await;
+    let agent = server.authorize_agent("MCP agent").await;
+    let response = server
+        .client
+        .post(format!("http://{}/mcp", server.address))
+        .bearer_auth(agent.tokens["access_token"].as_str().unwrap())
+        .header("host", "lorebay.test:8080")
+        .header("origin", format!("http://{}", server.address))
+        .header("accept", ACCEPT_TYPES)
+        .header(VERSION_HEADER, NEWEST_VERSION)
+        .header("mcp-method", "tools/list")
+        .json(&request_body("tools/list", NEWEST_VERSION))
+        .send()
+        .await
+        .unwrap();
+    assert_empty_tools(NEWEST_VERSION, response).await;
+    server.stop().await;
+}
+
+#[tokio::test]
 async fn call_mcp_fails_when_origin_differs_from_public_url() {
     let server = Server::start().await;
     let agent = server.authorize_agent("MCP agent").await;
