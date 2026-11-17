@@ -5,6 +5,7 @@
   "type": "module",
   "devDependencies": {
     "eslint": "catalog:",
+    "prettier": "catalog:",
     "typescript": "catalog:",
     "typescript-eslint": "catalog:"
   }

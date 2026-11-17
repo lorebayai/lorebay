@@ -1,7 +1,18 @@
 language: 'rust'
 layer: 'application'
 
+dependsOn:
+  - web
+
 tasks:
+  build:
+    deps: ['web:build']
+  lint:
+    deps: ['web:build']
+  test:
+    deps: ['web:build']
+  integration:
+    deps: ['web:build']
   generate-entities:
     command: 'bash lorebayd/scripts/generate-entities.sh'
     options:

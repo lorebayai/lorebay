@@ -5,6 +5,8 @@
 - The web pages are one Next.js project in `web/`, built into static files
   that the `lorebayd` executable embeds
   ([System architecture](../../docs/architecture/system.md#5-technology)).
+- Until the first designed page, `web/` holds plain TypeScript pages built
+  to static files.
 - A package must be named `@lorebay/<folder>`, and its `package.json` must
   set `"private": true` and `"type": "module"`. Its folder is listed in the
   `packages` of `pnpm-workspace.yaml`.
