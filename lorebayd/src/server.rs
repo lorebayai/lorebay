@@ -37,17 +37,6 @@ use crate::migration::Migrator;
 use crate::oauth::{self, OAuthState};
 use crate::{mcp, worker};
 
-/// Readiness remains observable for one second before connections stop being accepted.
-const READINESS_PROPAGATION: Duration = Duration::from_secs(1);
-/// Total shutdown budget, including readiness propagation, measured from the signal.
-const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
-const HEALTH_PATH: &str = "/healthz";
-const READINESS_PATH: &str = "/readyz";
-const API_PREFIX: &str = "/api/v1";
-const ACCEPT_RETRY_DELAY: Duration = Duration::from_millis(100);
-const DATABASE_FILE: &str = "lorebay.sqlite3";
-const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(5);
-
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
 pub(crate) struct ServerState {
@@ -93,6 +82,17 @@ pub async fn run(
         .context("could not close database")?;
     result
 }
+
+/// Readiness remains observable for one second before connections stop being accepted.
+const READINESS_PROPAGATION: Duration = Duration::from_secs(1);
+/// Total shutdown budget, including readiness propagation, measured from the signal.
+const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
+const HEALTH_PATH: &str = "/healthz";
+const READINESS_PATH: &str = "/readyz";
+const API_PREFIX: &str = "/api/v1";
+const ACCEPT_RETRY_DELAY: Duration = Duration::from_millis(100);
+const DATABASE_FILE: &str = "lorebay.sqlite3";
+const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
 fn identity(config: Config, users: Arc<dyn UserStore>) -> Result<Identity> {
     let limit =

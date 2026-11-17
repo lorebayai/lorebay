@@ -30,14 +30,6 @@ pub(super) struct RegistrationRequest {
     token_endpoint_auth_method: String,
 }
 
-#[derive(Clone, Debug, Serialize, TypedBuilder)]
-#[builder(field_defaults(setter(into)))]
-struct RegistrationResponse {
-    client_id: String,
-    #[serde(flatten)]
-    metadata: RegistrationRequest,
-}
-
 pub(super) struct RegistrationAttempt;
 
 impl FromRequestParts<OAuthState> for RegistrationAttempt {
@@ -124,6 +116,14 @@ pub(super) async fn register(
         .metadata(metadata)
         .build();
     Ok((StatusCode::CREATED, no_store_headers(), Json(body)).into_response())
+}
+
+#[derive(Clone, Debug, Serialize, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+struct RegistrationResponse {
+    client_id: String,
+    #[serde(flatten)]
+    metadata: RegistrationRequest,
 }
 
 fn valid_redirect_uri(value: &str) -> bool {

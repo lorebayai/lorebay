@@ -1,5 +1,9 @@
 //! The Lorebay server.
 
+pub use config::Config;
+pub use domain::password::hash_password;
+pub use server::run;
+
 mod api;
 mod config;
 mod domain;
@@ -19,7 +23,3 @@ mod pages;
 mod repository;
 mod server;
 mod worker;
-
-pub use config::Config;
-pub use domain::password::hash_password;
-pub use server::run;

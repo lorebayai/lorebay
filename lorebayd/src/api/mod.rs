@@ -1,9 +1,3 @@
-mod auth;
-mod envelope;
-mod pagination;
-mod problem;
-mod v1;
-
 use crate::server::ServerState;
 use axum::Router;
 use axum::body::Bytes;
@@ -35,3 +29,9 @@ pub(crate) async fn not_found(body: Result<Bytes, BytesRejection>) -> ApiError {
         }
     }
 }
+
+mod auth;
+mod envelope;
+mod pagination;
+mod problem;
+mod v1;

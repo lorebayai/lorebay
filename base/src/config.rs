@@ -12,8 +12,6 @@ use typed_builder::TypedBuilder;
 
 use crate::dotenv::dotenv_environment;
 
-const ENV_SEPARATOR: &str = "__";
-
 #[derive(Clone, Debug, Default, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
 pub struct ConfigSources {
@@ -94,6 +92,8 @@ pub(crate) fn read_config_file(path: &Path) -> Result<String, ConfigError> {
         kind: error.kind(),
     })
 }
+
+const ENV_SEPARATOR: &str = "__";
 
 fn is_unknown_key(error: &LayerError) -> bool {
     match error {

@@ -9,8 +9,6 @@ use typed_builder::TypedBuilder;
 
 use crate::ConfigError;
 
-const DEFAULT_LOG_LEVEL: &str = "info";
-
 #[derive(Clone, Debug, Deserialize, Serialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
 #[serde(deny_unknown_fields)]
@@ -59,3 +57,5 @@ pub fn init_logging(config: &LoggingConfig) -> Result<(), LoggingError> {
         .try_init()
         .map_err(|_| LoggingError::Install)
 }
+
+const DEFAULT_LOG_LEVEL: &str = "info";

@@ -47,6 +47,13 @@ impl From<Tokens> for TokenResponse {
     }
 }
 
+impl LoginRequest {
+    fn validate(&self) -> Result<(), ApiError> {
+        validate_field("username", &self.username)?;
+        validate_field("password", &self.password)
+    }
+}
+
 pub(crate) async fn log_in(
     State(state): State<ServerState>,
     Extension(peer): Extension<SocketAddr>,
@@ -84,11 +91,17 @@ pub(crate) async fn log_out(
     Ok(Envelope::builder().data(()).build())
 }
 
-impl LoginRequest {
-    fn validate(&self) -> Result<(), ApiError> {
-        validate_field("username", &self.username)?;
-        validate_field("password", &self.password)
+pub(super) fn invalid_json(error: JsonRejection) -> ApiError {
+    if error.status() == StatusCode::PAYLOAD_TOO_LARGE {
+        return ApiError::PayloadTooLarge;
     }
+    ApiError::InvalidBody(vec![
+        FieldError::builder()
+            .field("body")
+            .code("invalid")
+            .message("Expected a JSON object with the required string fields.")
+            .build(),
+    ])
 }
 
 fn validate_field(field: &str, value: &str) -> Result<(), ApiError> {
@@ -102,17 +115,4 @@ fn validate_field(field: &str, value: &str) -> Result<(), ApiError> {
         ]));
     }
     Ok(())
-}
-
-pub(super) fn invalid_json(error: JsonRejection) -> ApiError {
-    if error.status() == StatusCode::PAYLOAD_TOO_LARGE {
-        return ApiError::PayloadTooLarge;
-    }
-    ApiError::InvalidBody(vec![
-        FieldError::builder()
-            .field("body")
-            .code("invalid")
-            .message("Expected a JSON object with the required string fields.")
-            .build(),
-    ])
 }
