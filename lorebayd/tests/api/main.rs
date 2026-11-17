@@ -1,6 +1,7 @@
 #![cfg(test)]
 
 mod authorization;
+mod authorization_names;
 mod health;
 mod helpers;
 mod login_session;

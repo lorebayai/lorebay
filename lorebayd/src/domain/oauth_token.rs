@@ -106,6 +106,13 @@ async fn exchange_code(
         return Err(TokenError::InvalidGrant);
     }
     let account = active_account(&transaction, &code.account_id).await?;
+    if let Some(id) = &code.replaces_authorization_id {
+        AgentAuthorizationRepository::builder()
+            .connection(&transaction)
+            .build()
+            .delete(id, &code.account_id)
+            .await?;
+    }
     repository.delete(&code.id).await?;
     let tokens = if code.client_id == CLI_CLIENT_ID {
         login_session::create_session(identity, &transaction, account).await?

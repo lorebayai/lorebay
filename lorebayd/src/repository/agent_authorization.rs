@@ -10,6 +10,18 @@ pub(crate) struct AgentAuthorizationRepository<'a, C> {
 }
 
 impl<C: ConnectionTrait> AgentAuthorizationRepository<'_, C> {
+    pub async fn by_account_and_name(
+        &self,
+        account_id: &str,
+        name: &str,
+    ) -> Result<Option<Model>, DbErr> {
+        Entity::find()
+            .filter(Column::AccountId.eq(account_id))
+            .filter(Column::Name.eq(name))
+            .one(self.connection)
+            .await
+    }
+
     pub async fn by_refresh_hash(&self, hash: &str) -> Result<Option<Model>, DbErr> {
         Entity::find()
             .filter(Column::RefreshTokenHash.eq(hash))
@@ -23,6 +35,14 @@ impl<C: ConnectionTrait> AgentAuthorizationRepository<'_, C> {
 
     pub async fn update(&self, model: ActiveModel) -> Result<Model, DbErr> {
         model.update(self.connection).await
+    }
+
+    pub async fn delete(&self, id: &str, account_id: &str) -> Result<u64, DbErr> {
+        Ok(Entity::delete_by_id(id)
+            .filter(Column::AccountId.eq(account_id))
+            .exec(self.connection)
+            .await?
+            .rows_affected)
     }
 
     pub async fn delete_expired(&self, now: i64) -> Result<u64, DbErr> {

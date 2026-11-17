@@ -11,7 +11,8 @@ use url::Url;
 use crate::api::{ApiError, Envelope, FieldError};
 use crate::domain::access::Caller;
 use crate::domain::authorization::{
-    self, AuthorizationDecision, AuthorizationDetails, AuthorizationError, AuthorizationInput,
+    self, AgentNameConflict, AuthorizationDecision, AuthorizationDetails, AuthorizationError,
+    AuthorizationInput,
 };
 use crate::domain::{authorization_server_metadata, protected_resource_metadata};
 use crate::oauth::no_store_headers;
@@ -38,6 +39,8 @@ pub(crate) struct DecisionRequest {
     authorization: AuthorizationRequest,
     decision: Decision,
     agent_name: Option<String>,
+    #[serde(default)]
+    replace_existing: bool,
 }
 
 impl AuthorizationRequest {
@@ -82,6 +85,13 @@ impl AuthorizationRequest {
 impl From<AuthorizationError> for ApiError {
     fn from(error: AuthorizationError) -> Self {
         match error {
+            AuthorizationError::AgentNameTaken => Self::InvalidBody(vec![
+                FieldError::builder()
+                    .field("agent_name")
+                    .code("taken")
+                    .message("You already have an agent with this name.")
+                    .build(),
+            ]),
             AuthorizationError::InvalidParameter(field) => invalid_parameter(field),
             error => {
                 tracing::error!(%error, "authorization operation failed");
@@ -115,7 +125,14 @@ pub(crate) async fn decide(
     let public_url = &state.identity.config.public_url;
     let input = request.authorization.validate(public_url)?;
     let decision = match request.decision {
-        Decision::Approve => AuthorizationDecision::Approve(request.agent_name),
+        Decision::Approve => AuthorizationDecision::Approve {
+            agent_name: request.agent_name,
+            conflict: if request.replace_existing {
+                AgentNameConflict::Replace
+            } else {
+                AgentNameConflict::Reject
+            },
+        },
         Decision::Decline => AuthorizationDecision::Decline,
     };
     let redirect =
