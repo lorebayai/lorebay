@@ -25,6 +25,14 @@ pub(crate) fn router() -> Router<ServerState> {
             "/spaces/{space}/tasks/{task}/scratchpad",
             get(tasks::scratchpad),
         )
+        .route(
+            "/spaces/{space}/tasks/{task}/artifacts",
+            post(artifacts::register),
+        )
+        .route(
+            "/spaces/{space}/tasks/{task}/artifacts/{key}/complete",
+            post(artifacts::complete),
+        )
         .route("/users", get(users::list))
         .route("/spaces/{space}/participants", get(participants::list))
         .route(
@@ -45,6 +53,7 @@ pub(crate) fn router() -> Router<ServerState> {
 }
 
 mod agents;
+mod artifacts;
 mod authorization;
 mod device_sign_in;
 mod login_session;

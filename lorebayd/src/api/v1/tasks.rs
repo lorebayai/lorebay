@@ -16,6 +16,7 @@ use crate::domain::{
 };
 use crate::server::ServerState;
 
+use super::artifacts::ArtifactResponse;
 use super::login_session::invalid_json;
 
 #[derive(Clone, Debug, Deserialize, TypedBuilder)]
@@ -81,7 +82,7 @@ pub(crate) struct TaskResponse {
     result: String,
     started_at: i64,
     ended_at: Option<i64>,
-    artifacts: Vec<()>,
+    artifacts: Vec<ArtifactResponse>,
     #[serde(skip_serializing_if = "Option::is_none")]
     scratchpad: Option<Envelope<Vec<NoteResponse>>>,
 }
@@ -197,7 +198,12 @@ impl From<TaskRead> for TaskResponse {
             .started_at(read.task.started_at)
             .ended_at(read.task.ended_at)
             .summary(read.task)
-            .artifacts(Vec::new())
+            .artifacts(
+                read.artifacts
+                    .into_iter()
+                    .map(ArtifactResponse::from)
+                    .collect::<Vec<_>>(),
+            )
             .scratchpad(read.scratchpad.map(note_page))
             .build()
     }
@@ -284,9 +290,7 @@ pub(crate) async fn change(
         request.try_into()?,
     )
     .await?;
-    Ok(Envelope::builder()
-        .data(TaskRead::builder().task(task).scratchpad(None).build())
-        .build())
+    Ok(Envelope::builder().data(task).build())
 }
 
 pub(crate) async fn list(

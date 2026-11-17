@@ -8,14 +8,16 @@ use typed_builder::TypedBuilder;
 
 use crate::entity::{account, note, task};
 use crate::repository::account::AccountRepository;
-use crate::repository::{NoteRepository, SpaceRepository, TaskAfter, TaskRepository};
+use crate::repository::{
+    ArtifactRepository, NoteRepository, SpaceRepository, TaskAfter, TaskRepository,
+};
 
 use super::caller::{CallerError, VerifiedCaller};
 use super::login_session::now_millis;
 use super::pagination::{Page, PageOptions, decode_cursor, encode_cursor};
 use super::{
-    NoteContent, SpaceAccessError, TASK_READ_ROLES, TASK_WRITE_ROLES, TaskAccessError, TaskAction,
-    TaskResult, TaskTitle, check_space, check_task, format_key, parse_key, primary_key,
+    Artifact, NoteContent, SpaceAccessError, TASK_READ_ROLES, TASK_WRITE_ROLES, TaskAccessError,
+    TaskAction, TaskResult, TaskTitle, check_space, check_task, format_key, parse_key, primary_key,
     random_task_id,
 };
 
@@ -92,6 +94,7 @@ pub(crate) struct TaskChanges {
 pub(crate) struct TaskRead {
     pub task: Task,
     pub scratchpad: Option<Page<Note>>,
+    pub artifacts: Vec<Artifact>,
 }
 
 impl TaskStatus {
@@ -245,7 +248,7 @@ pub(crate) async fn change_task(
     path_space: Option<&str>,
     task_id: &str,
     changes: TaskChanges,
-) -> Result<Task, TaskError> {
+) -> Result<TaskRead, TaskError> {
     let transaction = write_transaction(database).await?;
     let action = if changes.title.is_none()
         && changes.result.is_none()
@@ -285,9 +288,14 @@ pub(crate) async fn change_task(
         .build()
         .update(model)
         .await?;
+    let artifacts = completed_artifacts(&transaction, &task.id).await?;
     let task = Task::try_from((task, account))?;
     transaction.commit().await?;
-    Ok(task)
+    Ok(TaskRead::builder()
+        .task(task)
+        .artifacts(artifacts)
+        .scratchpad(None)
+        .build())
 }
 
 pub(crate) async fn list_tasks(
@@ -338,9 +346,14 @@ pub(crate) async fn read_task(
         Some(options) => Some(note_page(&transaction, caller, &record.0, space, options).await?),
         None => None,
     };
+    let artifacts = completed_artifacts(&transaction, &record.0.id).await?;
     let task = Task::try_from(record)?;
     transaction.commit().await?;
-    Ok(TaskRead::builder().task(task).scratchpad(notes).build())
+    Ok(TaskRead::builder()
+        .task(task)
+        .scratchpad(notes)
+        .artifacts(artifacts)
+        .build())
 }
 
 pub(crate) async fn read_scratchpad(
@@ -357,13 +370,29 @@ pub(crate) async fn read_scratchpad(
     Ok(page)
 }
 
-async fn write_transaction(database: &DatabaseConnection) -> Result<DatabaseTransaction, DbErr> {
+pub(crate) async fn write_transaction(
+    database: &DatabaseConnection,
+) -> Result<DatabaseTransaction, DbErr> {
     database
         .begin_with_options(TransactionOptions {
             sqlite_transaction_mode: Some(SqliteTransactionMode::Immediate),
             ..Default::default()
         })
         .await
+}
+
+async fn completed_artifacts(
+    transaction: &DatabaseTransaction,
+    task_id: &str,
+) -> Result<Vec<Artifact>, DbErr> {
+    ArtifactRepository::builder()
+        .connection(transaction)
+        .build()
+        .completed(task_id)
+        .await?
+        .into_iter()
+        .map(Artifact::try_from)
+        .collect()
 }
 
 async fn task_by_key(

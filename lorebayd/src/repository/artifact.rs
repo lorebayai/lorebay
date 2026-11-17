@@ -1,0 +1,39 @@
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, DbErr, EntityTrait, QueryFilter, QueryOrder,
+};
+use typed_builder::TypedBuilder;
+
+use crate::entity::artifact::{ActiveModel, Column, Entity, Model};
+
+#[derive(Clone, Debug, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+pub(crate) struct ArtifactRepository<'a, C> {
+    pub connection: &'a C,
+}
+
+impl<C: ConnectionTrait> ArtifactRepository<'_, C> {
+    pub async fn by_number(&self, task_id: &str, number: i64) -> Result<Option<Model>, DbErr> {
+        Entity::find()
+            .filter(Column::TaskId.eq(task_id))
+            .filter(Column::Number.eq(number))
+            .one(self.connection)
+            .await
+    }
+
+    pub async fn completed(&self, task_id: &str) -> Result<Vec<Model>, DbErr> {
+        Entity::find()
+            .filter(Column::TaskId.eq(task_id))
+            .filter(Column::CompletedAt.is_not_null())
+            .order_by_asc(Column::Number)
+            .all(self.connection)
+            .await
+    }
+
+    pub async fn insert(&self, model: ActiveModel) -> Result<Model, DbErr> {
+        model.insert(self.connection).await
+    }
+
+    pub async fn update(&self, model: ActiveModel) -> Result<Model, DbErr> {
+        model.update(self.connection).await
+    }
+}

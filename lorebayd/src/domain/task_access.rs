@@ -21,8 +21,8 @@ pub(crate) const TASK_WRITE_ROLES: &[SpaceRole] =
 pub(crate) enum TaskAccessError {
     #[error(transparent)]
     Database(#[from] DbErr),
-    #[error("Set the task back to in progress before appending a note")]
-    Ended,
+    #[error("Set the task back to in progress before {0}")]
+    Ended(&'static str),
     #[error("Task not found")]
     NotFound,
     #[error("The space role does not allow this operation")]
@@ -36,6 +36,8 @@ pub(crate) enum TaskAction {
     AppendNote,
     Change,
     Close,
+    CompleteArtifact,
+    RegisterArtifact,
 }
 
 pub(crate) async fn check_task<C: ConnectionTrait>(
@@ -75,8 +77,11 @@ pub(crate) async fn check_task<C: ConnectionTrait>(
     if role == SpaceRole::Viewer {
         return Err(TaskAccessError::PermissionRequired);
     }
-    if matches!(action, TaskAction::AppendNote) && task.status == "ended" {
-        return Err(TaskAccessError::Ended);
+    match (action, task.status.as_str()) {
+        (TaskAction::AppendNote, "ended") => Err(TaskAccessError::Ended("appending a note")),
+        (TaskAction::RegisterArtifact, "ended") => {
+            Err(TaskAccessError::Ended("registering an artifact"))
+        }
+        _ => Ok(task),
     }
-    Ok(task)
 }

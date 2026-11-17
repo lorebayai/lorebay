@@ -11,8 +11,9 @@ use crate::helpers::{
 
 use helpers::*;
 
+pub(crate) mod helpers;
+
 mod change;
-mod helpers;
 
 #[tokio::test]
 async fn create_task_returns_task_id_and_key() {

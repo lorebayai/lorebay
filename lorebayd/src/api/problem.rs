@@ -14,6 +14,10 @@ use crate::domain::{SpaceAccessError, TaskAccessError};
 pub(crate) enum ApiError {
     #[error("An agent authorization is required")]
     AgentRequired,
+    #[error("Artifact not found")]
+    ArtifactNotFound,
+    #[error("The artifact file has not been uploaded")]
+    ArtifactNotUploaded,
     #[error("Internal Server Error")]
     Internal,
     #[error("Bad Request")]
@@ -40,8 +44,8 @@ pub(crate) enum ApiError {
     SpaceNotFound,
     #[error("The space role does not allow this operation")]
     SpacePermissionRequired,
-    #[error("Set the task back to in progress before appending a note")]
-    TaskEnded,
+    #[error("Set the task back to in progress before {0}")]
+    TaskEnded(&'static str),
     #[error("Task not found")]
     TaskNotFound,
     #[error("Unauthorized")]
@@ -76,6 +80,8 @@ impl ApiError {
     fn parts(&self) -> (StatusCode, &'static str) {
         match self {
             Self::AgentRequired => (StatusCode::FORBIDDEN, "auth.agent_required"),
+            Self::ArtifactNotFound => (StatusCode::NOT_FOUND, "artifact.not_found"),
+            Self::ArtifactNotUploaded => (StatusCode::CONFLICT, "artifact.not_uploaded"),
             Self::Internal => (StatusCode::INTERNAL_SERVER_ERROR, "server.internal"),
             Self::InvalidBody(_) => (StatusCode::BAD_REQUEST, "request.invalid_body"),
             Self::InvalidPath(_) => (StatusCode::BAD_REQUEST, "request.invalid_path"),
@@ -89,7 +95,7 @@ impl ApiError {
             Self::RateLimited(_) => (StatusCode::TOO_MANY_REQUESTS, "auth.rate_limited"),
             Self::SpaceNotFound => (StatusCode::NOT_FOUND, "space.not_found"),
             Self::SpacePermissionRequired => (StatusCode::FORBIDDEN, "space.permission_required"),
-            Self::TaskEnded => (StatusCode::CONFLICT, "task.ended"),
+            Self::TaskEnded(_) => (StatusCode::CONFLICT, "task.ended"),
             Self::TaskNotFound => (StatusCode::NOT_FOUND, "task.not_found"),
             Self::Unauthorized => (StatusCode::UNAUTHORIZED, "auth.unauthorized"),
             Self::Unavailable => (StatusCode::SERVICE_UNAVAILABLE, "server.not_ready"),
@@ -153,7 +159,7 @@ impl From<TaskAccessError> for ApiError {
                 tracing::error!(%error, "task access check failed");
                 Self::Internal
             }
-            TaskAccessError::Ended => Self::TaskEnded,
+            TaskAccessError::Ended(operation) => Self::TaskEnded(operation),
             TaskAccessError::NotFound => Self::TaskNotFound,
             TaskAccessError::PermissionRequired => Self::SpacePermissionRequired,
             TaskAccessError::Space(error) => error.into(),

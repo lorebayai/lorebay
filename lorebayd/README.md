@@ -78,6 +78,9 @@ Relative paths resolve against the working directory.
 | `device_rate_window_seconds` | `LOREBAYD__DEVICE_RATE_WINDOW_SECONDS` | `60` | 1..315360000 seconds |
 | `device_verification_rate_limit` | `LOREBAYD__DEVICE_VERIFICATION_RATE_LIMIT` | `10` | Positive u32 read and decision attempts per peer IP per window |
 | `device_verification_rate_window_seconds` | `LOREBAYD__DEVICE_VERIFICATION_RATE_WINDOW_SECONDS` | `60` | 1..315360000 seconds |
+| `upload_url_lifetime_seconds` | `LOREBAYD__UPLOAD_URL_LIFETIME_SECONDS` | `900` | 1..315360000 seconds |
+| `upload_size_limit_bytes` | `LOREBAYD__UPLOAD_SIZE_LIMIT_BYTES` | `5000000000` | 1..5000000000 bytes |
+| `upload_concurrency_limit` | `LOREBAYD__UPLOAD_CONCURRENCY_LIMIT` | `4` | Positive u32 concurrent uploads |
 | `logging.level` | `LOREBAYD__LOGGING__LEVEL` | `info` | `off`, `error`, `warn`, `info`, `debug`, `trace` |
 
 Set `public_url` to the origin clients reach, including through a TLS proxy
