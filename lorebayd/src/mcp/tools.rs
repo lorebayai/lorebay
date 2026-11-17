@@ -9,7 +9,8 @@ use crate::api::{
 use crate::domain::caller::VerifiedCaller;
 use crate::domain::pagination::Page;
 use crate::domain::{
-    NoteContent, TaskFilters, TaskTitle, add_note, create_task, list_spaces, list_tasks, read_task,
+    NoteContent, TaskFilters, TaskTitle, add_note, change_task, create_task, list_spaces,
+    list_tasks, read_task,
 };
 use crate::server::ServerState;
 
@@ -33,6 +34,7 @@ pub(crate) async fn call(
                 create_task(&state.database, caller, &arguments.string("space")?, title).await?;
             Ok(json!({"key":task.key, "task_id":task.task_id, "task_title":task.task_title}))
         }
+        "update_task" => update_task(state, caller, arguments).await,
         "list_tasks" => {
             let filters = TaskFilters::builder()
                 .person(None)
@@ -84,6 +86,25 @@ pub(crate) fn error_result(error: ApiError) -> CallToolResult {
     CallToolResult::structured_error(json!({
         "code":problem.code, "message":problem.title, "errors":problem.errors,
     }))
+}
+
+async fn update_task(
+    state: &ServerState,
+    caller: &VerifiedCaller,
+    arguments: Arguments,
+) -> Result<Value, ApiError> {
+    let task = change_task(
+        &state.database,
+        caller,
+        None,
+        &arguments.string("task_id")?,
+        arguments.changes()?,
+    )
+    .await?;
+    let task_title = task.task.title.clone();
+    let mut response = value(TaskResponse::from(task))?;
+    response["task_title"] = json!(task_title);
+    Ok(response)
 }
 
 fn page_response<T, R: From<T>>(page: Page<T>) -> Envelope<Vec<R>> {

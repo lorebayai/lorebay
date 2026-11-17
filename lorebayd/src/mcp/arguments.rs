@@ -2,7 +2,8 @@ use rmcp::model::{JsonObject, Tool};
 use serde_json::Value;
 use typed_builder::TypedBuilder;
 
-use crate::api::{ApiError, ListQuery, ReadTaskQuery, invalid_query};
+use crate::api::{ApiError, ChangeTaskRequest, ListQuery, ReadTaskQuery, invalid_query};
+use crate::domain::TaskChanges;
 use crate::domain::pagination::PageOptions;
 
 #[derive(Clone, Debug, TypedBuilder)]
@@ -72,6 +73,22 @@ impl Arguments {
             .cursor(self.cursor())
             .build()
             .scratchpad()
+    }
+
+    pub fn changes(&self) -> Result<TaskChanges, ApiError> {
+        ChangeTaskRequest::builder()
+            .title(self.optional_string("title"))
+            .status(self.optional_string("status"))
+            .result(self.optional_string("result"))
+            .build()
+            .try_into()
+    }
+
+    fn optional_string(&self, name: &str) -> Option<String> {
+        self.values
+            .get(name)
+            .and_then(Value::as_str)
+            .map(str::to_owned)
     }
 
     fn page_size(&self) -> Option<String> {

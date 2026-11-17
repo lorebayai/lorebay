@@ -8,6 +8,8 @@ use super::{
     ACCEPT_TYPES, NEWEST_VERSION, SESSION_HEADER, VERSION_HEADER, notify_initialized, request_body,
 };
 
+mod update;
+
 #[tokio::test]
 async fn call_create_task_fails_with_error_result_when_argument_is_unknown() {
     let (server, person, agent) = tasks::setup().await;

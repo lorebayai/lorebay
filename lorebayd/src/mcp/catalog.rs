@@ -4,7 +4,7 @@ use rmcp::model::{JsonObject, Tool, ToolAnnotations};
 use serde_json::{Value, json};
 
 use crate::api::{DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};
-use crate::domain::{NOTE_MAX_CHARACTERS, TITLE_MAX_CHARACTERS};
+use crate::domain::{NOTE_MAX_CHARACTERS, RESULT_MAX_CHARACTERS, TITLE_MAX_CHARACTERS, TaskStatus};
 
 pub(crate) fn catalog() -> &'static [Tool] {
     CATALOG.as_slice()
@@ -27,6 +27,24 @@ fn build_catalog() -> Vec<Tool> {
             json!({"space": space(), "title": {"type":"string", "minLength":1, "maxLength":TITLE_MAX_CHARACTERS}}),
             &["space", "title"],
             false,
+        ),
+        tool(
+            "update_task",
+            "Change a task using task_id, not a task key. Provide at least one of title, status or result. Reopen with status in progress; result replaces the whole Markdown result and an empty string clears it. Returns the updated task and its title.",
+            json!({
+                "task_id":{"type":"string"},
+                "title":{"type":"string", "minLength":1, "maxLength":TITLE_MAX_CHARACTERS},
+                "status":{"type":"string", "enum":[TaskStatus::InProgress.as_str(), TaskStatus::Ended.as_str()]},
+                "result":{"type":"string", "maxLength":RESULT_MAX_CHARACTERS}
+            }),
+            &["task_id"],
+            false,
+        )
+        .with_annotations(
+            ToolAnnotations::new()
+                .read_only(false)
+                .destructive(true)
+                .open_world(false),
         ),
         tool(
             "list_tasks",

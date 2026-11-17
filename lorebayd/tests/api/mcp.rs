@@ -26,7 +26,7 @@ async fn call_mcp_fails_with_authorization_challenge_when_token_is_missing() {
 }
 
 #[tokio::test]
-async fn list_tools_returns_five_tools_in_fixed_order() {
+async fn list_tools_returns_six_tools_in_fixed_order() {
     let server = Server::start().await;
     let agent = server.authorize_agent("MCP agent").await;
     let token = agent.tokens["access_token"].as_str().unwrap();
@@ -393,6 +393,7 @@ async fn assert_tools(version: &str, response: Response) {
     let expected = [
         ("list_spaces", true),
         ("create_task", false),
+        ("update_task", false),
         ("list_tasks", true),
         ("get_task", true),
         ("add_note", false),
