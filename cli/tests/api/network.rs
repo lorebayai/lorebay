@@ -3,19 +3,22 @@ use std::io;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+use httpdate::fmt_http_date;
 
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
 use tokio::task::{JoinHandle, JoinSet};
-use tokio::time::{sleep, timeout};
+use tokio::time::{Instant, sleep, timeout};
 use typed_builder::TypedBuilder;
 
 use crate::helpers::CREDENTIALS_FILE;
 use crate::helpers::{
-    Server, SigningIn, WAIT, assert_success, assert_usage, body, create, path_commands,
+    DeviceSigningIn, Server, SigningIn, WAIT, assert_success, assert_usage, body, create,
+    path_commands,
 };
 
 #[tokio::test]
@@ -207,9 +210,161 @@ async fn login_refuses_metadata_endpoint_on_another_server() {
     assert!(!proxy.server.home().join(CREDENTIALS_FILE).exists());
 }
 
+#[tokio::test]
+async fn login_device_waits_at_slower_pace_when_server_requests_slow_down() {
+    let proxy = Proxy::configured(json!({"device_poll_interval_seconds": 1,
+        "device_request_lifetime_seconds": 25}))
+    .await;
+    proxy.fault.store(DEVICE_SLOW_DOWN, Ordering::SeqCst);
+    let login = proxy.device_login().await;
+    proxy.wait_for_polls(2).await;
+    proxy.server.decide_device(&login, "approve").await;
+    assert_success(&login.finish().await);
+    let requests = proxy.requests.lock().await;
+    assert_eq!(requests.len(), 3);
+    assert!(requests[0]["elapsed_ms"].as_u64().unwrap() >= 1000);
+    assert_eq!(requests[0]["status"], 400);
+    assert_eq!(requests[1]["status"], 400);
+    assert_eq!(requests[2]["status"], 200);
+    assert!(requests[1]["elapsed_ms"].as_u64().unwrap() >= 6000);
+    assert!(requests[2]["elapsed_ms"].as_u64().unwrap() >= 6000);
+    assert_success(&proxy.server.run(&["agent", "list"]).await);
+}
+
+#[tokio::test]
+async fn login_device_retries_when_connection_is_interrupted() {
+    let proxy = Proxy::configured(json!({"device_poll_interval_seconds": 2})).await;
+    proxy.fault.store(DEVICE_DISCONNECT, Ordering::SeqCst);
+    let login = proxy.device_login().await;
+    proxy.wait_for_polls(2).await;
+    proxy.server.decide_device(&login, "approve").await;
+    assert_success(&login.finish().await);
+    let requests = proxy.requests.lock().await;
+    assert_eq!(requests.len(), 3);
+    assert!(requests[1]["elapsed_ms"].as_u64().unwrap() >= 4000);
+    assert!((2000..3500).contains(&requests[2]["elapsed_ms"].as_u64().unwrap()));
+    assert_success(&proxy.server.run(&["agent", "list"]).await);
+}
+
+#[tokio::test]
+async fn login_device_retries_when_server_returns_errors() {
+    let proxy = Proxy::configured(json!({"device_poll_interval_seconds": 1,
+        "device_request_lifetime_seconds": 20}))
+    .await;
+    proxy.fault.store(DEVICE_UNAVAILABLE, Ordering::SeqCst);
+    let login = proxy.device_login().await;
+    proxy.wait_for_polls(3).await;
+    proxy.server.decide_device(&login, "approve").await;
+    assert_success(&login.finish().await);
+    let requests = proxy.requests.lock().await;
+    assert_poll_order(&requests, &[503, 500]);
+    assert_minimum_spacing(&requests[1..2], 2000);
+    assert_minimum_spacing(&requests[2..3], 4000);
+    assert_minimum_spacing(&requests[3..], 1000);
+    assert_success(&proxy.server.run(&["agent", "list"]).await);
+}
+
+#[tokio::test]
+async fn login_device_restores_slower_pace_when_server_recovers() {
+    let proxy = Proxy::configured(json!({"device_poll_interval_seconds": 1,
+        "device_request_lifetime_seconds": 45}))
+    .await;
+    proxy.fault.store(DEVICE_SLOW_DOWN_OUTAGE, Ordering::SeqCst);
+    let login = proxy.device_login().await;
+    proxy.wait_for_polls(3).await;
+    proxy.server.decide_device(&login, "approve").await;
+    assert_success(&login.finish().await);
+    let requests = proxy.requests.lock().await;
+    assert_eq!(requests.len(), 4);
+    assert_eq!(
+        requests
+            .iter()
+            .map(|r| r["status"].as_u64().unwrap())
+            .collect::<Vec<_>>(),
+        vec![400, 503, 400, 200]
+    );
+    assert!(requests[1]["elapsed_ms"].as_u64().unwrap() >= 6000);
+    assert!(requests[2]["elapsed_ms"].as_u64().unwrap() >= 12000);
+    assert!((6000..9000).contains(&requests[3]["elapsed_ms"].as_u64().unwrap()));
+    assert_success(&proxy.server.run(&["agent", "list"]).await);
+}
+
+#[tokio::test]
+async fn login_device_retries_at_server_pace_when_rate_limited() {
+    let proxy = Proxy::configured(json!({"device_poll_interval_seconds": 1})).await;
+    proxy.fault.store(DEVICE_RATE_LIMIT, Ordering::SeqCst);
+    let login = proxy.device_login().await;
+    proxy.wait_for_polls(3).await;
+    proxy.server.decide_device(&login, "approve").await;
+    assert_success(&login.finish().await);
+    let requests = proxy.requests.lock().await;
+    assert_poll_order(&requests, &[429, 429]);
+    assert_minimum_spacing(&requests[1..2], 2000);
+    assert_minimum_spacing(&requests[2..], 1000);
+    assert_success(&proxy.server.run(&["agent", "list"]).await);
+}
+
+#[tokio::test]
+async fn login_device_waits_until_date_when_rate_limited() {
+    let proxy = Proxy::configured(json!({"device_poll_interval_seconds": 1})).await;
+    proxy.fault.store(DEVICE_RATE_LIMIT_DATE, Ordering::SeqCst);
+    let login = proxy.device_login().await;
+    proxy.wait_for_polls(3).await;
+    proxy.server.decide_device(&login, "approve").await;
+    assert_success(&login.finish().await);
+    let requests = proxy.requests.lock().await;
+    assert_poll_order(&requests, &[429, 429]);
+    assert_minimum_spacing(&requests[1..2], 2000);
+    assert_minimum_spacing(&requests[2..], 1000);
+    assert_success(&proxy.server.run(&["agent", "list"]).await);
+}
+
+#[tokio::test]
+async fn login_device_stops_at_expiry_when_token_request_does_not_return() {
+    let proxy = Proxy::configured(json!({"device_poll_interval_seconds": 1,
+        "device_request_lifetime_seconds": 3}))
+    .await;
+    proxy.fault.store(DEVICE_STALL, Ordering::SeqCst);
+    let started = Instant::now();
+    let login = proxy.device_login().await;
+    let output = login.finish().await;
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("expired_token"));
+    assert!(started.elapsed() < HTTP_DEADLINE);
+    assert!(!proxy.server.home().join(CREDENTIALS_FILE).exists());
+}
+
+#[tokio::test]
+async fn login_device_refuses_metadata_endpoint_on_another_server() {
+    let proxy = Proxy::start().await;
+    proxy.fault.store(CHANGE_DEVICE_METADATA, Ordering::SeqCst);
+    let output = proxy
+        .server
+        .run(&["login", &proxy.url, "--device", "--output", "json"])
+        .await;
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty());
+    assert!(!String::from_utf8_lossy(&output.stderr).contains("Open this address"));
+    assert!(!proxy.server.home().join(CREDENTIALS_FILE).exists());
+}
+
 const CHANGE_METADATA: u8 = 1;
 const LOSE_REFRESH: u8 = 2;
 const REDIRECT_CALL: u8 = 3;
+const DEVICE_SLOW_DOWN: u8 = 4;
+const DEVICE_DISCONNECT: u8 = 5;
+const DEVICE_RATE_LIMIT: u8 = 6;
+const DEVICE_RATE_LIMIT_AGAIN: u8 = 7;
+const DEVICE_STALL: u8 = 8;
+const CHANGE_DEVICE_METADATA: u8 = 9;
+const DEVICE_UNAVAILABLE: u8 = 10;
+const DEVICE_SERVER_ERROR: u8 = 11;
+const DEVICE_SLOW_DOWN_OUTAGE: u8 = 12;
+const DEVICE_OUTAGE_ONCE: u8 = 13;
+const DEVICE_RATE_LIMIT_DATE: u8 = 14;
+const DEVICE_RATE_LIMIT_PAST_DATE: u8 = 15;
+const HTTP_DEADLINE: Duration = Duration::from_secs(8);
 
 struct Proxy {
     server: Server,
@@ -230,6 +385,7 @@ struct ProxyState {
     refreshes: Arc<AtomicUsize>,
     requests: Arc<Mutex<Vec<Value>>>,
     redirect_path: PathBuf,
+    last_poll: Arc<Mutex<Option<Instant>>>,
 }
 
 impl Drop for Proxy {
@@ -263,6 +419,7 @@ impl Proxy {
             .refreshes(refreshes.clone())
             .requests(requests.clone())
             .redirect_path(server.directory.path().join("redirect"))
+            .last_poll(Arc::new(Mutex::new(None)))
             .build();
         let task = tokio::spawn(async move {
             let mut connections = JoinSet::new();
@@ -289,6 +446,33 @@ impl Proxy {
 
     #[expect(
         clippy::unwrap_used,
+        reason = "The scenario requires its CLI process to start."
+    )]
+    async fn device_login(&self) -> DeviceSigningIn {
+        let child = self
+            .server
+            .cli(&["login", &self.url, "--device", "--output", "json"])
+            .spawn()
+            .unwrap();
+        DeviceSigningIn::start(child).await
+    }
+
+    #[expect(
+        clippy::unwrap_used,
+        reason = "The scenario must observe polling before its deadline."
+    )]
+    async fn wait_for_polls(&self, count: usize) {
+        timeout(WAIT, async {
+            while self.requests.lock().await.len() < count {
+                sleep(Duration::from_millis(25)).await;
+            }
+        })
+        .await
+        .unwrap();
+    }
+
+    #[expect(
+        clippy::unwrap_used,
         reason = "The scenario fails immediately when its CLI cannot start."
     )]
     async fn login(&self) {
@@ -303,61 +487,198 @@ impl Proxy {
     }
 }
 
+fn assert_poll_order(requests: &[Value], prefix: &[u16]) {
+    assert!(requests.len() >= prefix.len() + 2);
+    for (request, status) in requests.iter().zip(prefix) {
+        assert_eq!(request["status"], *status);
+    }
+    for request in &requests[prefix.len()..requests.len() - 1] {
+        assert_eq!(request["status"], 400);
+    }
+    assert_eq!(requests[requests.len() - 1]["status"], 200);
+}
+
+fn assert_minimum_spacing(requests: &[Value], milliseconds: u64) {
+    for request in requests {
+        assert!(
+            request["elapsed_ms"]
+                .as_u64()
+                .is_some_and(|elapsed| elapsed >= milliseconds),
+            "Poll spacing {} ms is below {milliseconds} ms",
+            request["elapsed_ms"]
+        );
+    }
+}
+
 async fn forward(mut socket: TcpStream, state: ProxyState) -> io::Result<()> {
-    let ProxyState {
-        upstream,
-        fault,
-        calls,
-        refreshes,
-        requests,
-        redirect_path,
-    } = state;
-    let (mut request, headers, body) = read_request(&mut socket).await?;
-    calls.fetch_add(1, Ordering::SeqCst);
+    let (request, headers, body) = read_request(&mut socket).await?;
+    state.calls.fetch_add(1, Ordering::SeqCst);
     let refresh =
         headers.starts_with("POST /oauth/token ") && body.starts_with(b"grant_type=refresh_token");
     if refresh {
-        refreshes.fetch_add(1, Ordering::SeqCst);
+        state.refreshes.fetch_add(1, Ordering::SeqCst);
     }
-    let mut target = TcpStream::connect(upstream.trim_start_matches("http://")).await?;
-    request.truncate(request.len() - 2);
+    let device = headers.starts_with("POST /oauth/token ") && body.starts_with(b"grant_type=urn");
+    let started = Instant::now();
+    if headers.starts_with("POST /oauth/device ") {
+        *state.last_poll.lock().await = Some(started);
+    }
+    let response = upstream(&state.upstream, &request, &body).await?;
+    let response = if device {
+        device_response(&state, &request, &body, response).await?
+    } else {
+        change_response(&state, &headers, response)?
+    };
+    record_request(&state.requests, &headers, &body, &response).await;
+    if device {
+        let mut last = state.last_poll.lock().await;
+        let elapsed = last.map(|last| started.duration_since(last).as_millis());
+        *last = Some(started);
+        let status = String::from_utf8_lossy(&response)
+            .split_whitespace()
+            .nth(1)
+            .and_then(|value| value.parse::<u16>().ok());
+        state
+            .requests
+            .lock()
+            .await
+            .push(json!({"status": status, "elapsed_ms": elapsed}));
+    }
+    if refresh && take_fault(&state.fault, LOSE_REFRESH) {
+        return Ok(());
+    }
+    socket.write_all(&response).await
+}
+
+async fn upstream(address: &str, request: &[u8], body: &[u8]) -> io::Result<Vec<u8>> {
+    let mut target = TcpStream::connect(address.trim_start_matches("http://")).await?;
+    let mut request = request[..request.len() - 2].to_vec();
     request.extend_from_slice(b"Connection: close\r\n\r\n");
-    request.extend_from_slice(&body);
+    request.extend_from_slice(body);
     target.write_all(&request).await?;
     let mut response = Vec::new();
     target.read_to_end(&mut response).await?;
-    record_request(&requests, &headers, &body, &response).await;
-    if refresh
-        && fault
-            .compare_exchange(LOSE_REFRESH, 0, Ordering::SeqCst, Ordering::SeqCst)
+    Ok(response)
+}
+
+async fn device_response(
+    state: &ProxyState,
+    request: &[u8],
+    body: &[u8],
+    response: Vec<u8>,
+) -> io::Result<Vec<u8>> {
+    if take_fault(&state.fault, DEVICE_SLOW_DOWN)
+        || state
+            .fault
+            .compare_exchange(
+                DEVICE_SLOW_DOWN_OUTAGE,
+                DEVICE_OUTAGE_ONCE,
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            )
             .is_ok()
     {
-        return Ok(());
+        return upstream(&state.upstream, request, body).await;
     }
-    if headers.starts_with("GET /api/v1/agents")
-        && fault
-            .compare_exchange(REDIRECT_CALL, 0, Ordering::SeqCst, Ordering::SeqCst)
-            .is_ok()
+    if let Some(response) = dated_rate_limit_response(&state.fault) {
+        return Ok(response);
+    }
+    if let Some(response) = server_error_response(&state.fault) {
+        return Ok(response);
+    }
+    if take_fault(&state.fault, DEVICE_DISCONNECT) {
+        return Ok(Vec::new());
+    }
+    if take_fault(&state.fault, DEVICE_STALL) {
+        sleep(WAIT).await;
+    }
+    if state
+        .fault
+        .compare_exchange(
+            DEVICE_RATE_LIMIT,
+            DEVICE_RATE_LIMIT_AGAIN,
+            Ordering::SeqCst,
+            Ordering::SeqCst,
+        )
+        .is_ok()
     {
-        let location = fs::read_to_string(redirect_path)?;
-        response = format!("HTTP/1.1 302 Found\r\nLocation: {location}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").into_bytes();
+        return Ok(b"HTTP/1.1 429 Too Many Requests\r\nRetry-After: 2\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_vec());
     }
-    if headers.starts_with("GET /.well-known/")
-        && fault
-            .compare_exchange(CHANGE_METADATA, 0, Ordering::SeqCst, Ordering::SeqCst)
-            .is_ok()
-    {
-        let start = response
-            .windows(4)
-            .position(|bytes| bytes == b"\r\n\r\n")
-            .unwrap_or(response.len());
-        let mut metadata: Value =
-            serde_json::from_slice(&response[start.saturating_add(4).min(response.len())..])?;
-        metadata["token_endpoint"] = json!("http://127.0.0.1:1/oauth/token");
-        let body = metadata.to_string();
-        response = format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).into_bytes();
+    if take_fault(&state.fault, DEVICE_RATE_LIMIT_AGAIN) {
+        return Ok(b"HTTP/1.1 429 Too Many Requests\r\nRetry-After: 0\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_vec());
     }
-    socket.write_all(&response).await
+    Ok(response)
+}
+
+fn dated_rate_limit_response(fault: &AtomicU8) -> Option<Vec<u8>> {
+    let deadline = if take_fault(fault, DEVICE_RATE_LIMIT_DATE) {
+        fault.store(DEVICE_RATE_LIMIT_PAST_DATE, Ordering::SeqCst);
+        SystemTime::now() + Duration::from_secs(3)
+    } else if take_fault(fault, DEVICE_RATE_LIMIT_PAST_DATE) {
+        UNIX_EPOCH
+    } else {
+        return None;
+    };
+    let date = fmt_http_date(deadline);
+    Some(format!("HTTP/1.1 429 Too Many Requests\r\nRetry-After: {date}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").into_bytes())
+}
+
+fn server_error_response(fault: &AtomicU8) -> Option<Vec<u8>> {
+    let (status, content_type, body) = if take_fault(fault, DEVICE_UNAVAILABLE) {
+        fault.store(DEVICE_SERVER_ERROR, Ordering::SeqCst);
+        (
+            "503 Service Unavailable",
+            "text/html",
+            "<html>Temporarily unavailable</html>",
+        )
+    } else if take_fault(fault, DEVICE_SERVER_ERROR) {
+        (
+            "500 Internal Server Error",
+            "application/json",
+            "{\"error\":\"server_error\"}",
+        )
+    } else if take_fault(fault, DEVICE_OUTAGE_ONCE) {
+        (
+            "503 Service Unavailable",
+            "text/html",
+            "<html>Temporarily unavailable</html>",
+        )
+    } else {
+        return None;
+    };
+    Some(format!("HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).into_bytes())
+}
+
+fn change_response(state: &ProxyState, headers: &str, response: Vec<u8>) -> io::Result<Vec<u8>> {
+    if headers.starts_with("GET /api/v1/agents") && take_fault(&state.fault, REDIRECT_CALL) {
+        let location = fs::read_to_string(&state.redirect_path)?;
+        return Ok(format!("HTTP/1.1 302 Found\r\nLocation: {location}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").into_bytes());
+    }
+    if !headers.starts_with("GET /.well-known/") {
+        return Ok(response);
+    }
+    let field = if take_fault(&state.fault, CHANGE_METADATA) {
+        "token_endpoint"
+    } else if take_fault(&state.fault, CHANGE_DEVICE_METADATA) {
+        "device_authorization_endpoint"
+    } else {
+        return Ok(response);
+    };
+    let start = response
+        .windows(4)
+        .position(|bytes| bytes == b"\r\n\r\n")
+        .unwrap_or(response.len());
+    let mut metadata: Value =
+        serde_json::from_slice(&response[start.saturating_add(4).min(response.len())..])?;
+    metadata[field] = json!("http://127.0.0.1:1/oauth/device");
+    let body = metadata.to_string();
+    Ok(format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).into_bytes())
+}
+
+fn take_fault(fault: &AtomicU8, value: u8) -> bool {
+    fault
+        .compare_exchange(value, 0, Ordering::SeqCst, Ordering::SeqCst)
+        .is_ok()
 }
 
 async fn record_request(requests: &Mutex<Vec<Value>>, headers: &str, body: &[u8], response: &[u8]) {

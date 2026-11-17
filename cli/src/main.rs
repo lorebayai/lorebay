@@ -13,6 +13,7 @@ mod args;
 mod commands;
 mod constants;
 mod credentials;
+mod device;
 mod error;
 mod http;
 mod login;

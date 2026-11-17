@@ -8,6 +8,7 @@ use crate::constants::{
 
 use crate::args::{AgentCommand, Command, OutputMode, Page};
 use crate::credentials::Store;
+use crate::device;
 use crate::error::{Failure, Result};
 use crate::http::{self, Http};
 use crate::login;
@@ -26,8 +27,13 @@ pub(crate) async fn run(command: Command, mode: OutputMode) -> Result<Outcome> {
         Command::Login {
             server_url,
             no_browser,
+            device,
         } => {
-            login::login(&store, &server_url, no_browser).await?;
+            if device {
+                device::login(&store, &server_url).await?;
+            } else {
+                login::login(&store, &server_url, no_browser).await?;
+            }
             Ok(Outcome::completion("Signed in."))
         }
         Command::Participant { command } => participants::run(command, &store, mode).await,

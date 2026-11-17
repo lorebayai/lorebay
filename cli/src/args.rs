@@ -22,11 +22,13 @@ pub(crate) enum Command {
         #[command(subcommand)]
         command: AgentCommand,
     },
-    /// Sign in through your browser.
+    /// Sign in through a browser on this or another computer.
     Login {
         server_url: String,
         #[arg(long)]
         no_browser: bool,
+        #[arg(long, conflicts_with = "no_browser")]
+        device: bool,
     },
     /// End your login session and remove local credentials.
     Logout,
