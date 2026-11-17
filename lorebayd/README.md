@@ -53,6 +53,7 @@ Relative paths resolve against the working directory.
 | `refresh_token_lifetime_seconds` | `LOREBAYD__REFRESH_TOKEN_LIFETIME_SECONDS` | `2592000` | 1..315360000 seconds; renewed on refresh |
 | `login_rate_limit` | `LOREBAYD__LOGIN_RATE_LIMIT` | `10` | Positive u32 attempts per peer IP per window |
 | `login_rate_window_seconds` | `LOREBAYD__LOGIN_RATE_WINDOW_SECONDS` | `60` | 1..315360000 seconds |
+| `credential_cleanup_interval_seconds` | `LOREBAYD__CREDENTIAL_CLEANUP_INTERVAL_SECONDS` | `300` | 1..315360000 seconds |
 | `registration_rate_limit` | `LOREBAYD__REGISTRATION_RATE_LIMIT` | `20` | Positive u32 attempts per peer IP per window |
 | `registration_rate_window_seconds` | `LOREBAYD__REGISTRATION_RATE_WINDOW_SECONDS` | `60` | Positive fixed window in seconds |
 | `registration_client_name_max_bytes` | `LOREBAYD__REGISTRATION_CLIENT_NAME_MAX_BYTES` | `256` | Positive maximum UTF-8 bytes in a client name |

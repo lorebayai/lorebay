@@ -122,6 +122,8 @@ It does not cover:
 - **Revoking an authorization deletes its record.** People see the agents
   they authorized and can revoke any of them. A task keeps the agent name
   copied when it was created, so the name survives revocation.
+- **An expired authorization is removed by a background job.** Its agent
+  leaves the person's list of agents, and its name can be used again.
 
 ## 7. Tokens
 
