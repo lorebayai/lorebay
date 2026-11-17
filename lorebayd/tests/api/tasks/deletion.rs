@@ -17,6 +17,7 @@ async fn delete_task_removes_task_and_scratchpad() {
     let agent = authorize_for(&server, &person, "Bob agent").await;
     let task = create(&server, &agent, SPACE, "Mistaken task").await;
     let note = append(&server, &agent, &task, "Mistaken note").await;
+    let artifact = prepare_artifacts(&server, &agent, &task).await;
     let id = task["task_id"].as_str().unwrap();
     assert_eq!(
         scratchpad(&server, &person, "TK-1").await[0]["time"],
@@ -55,6 +56,12 @@ async fn delete_task_removes_task_and_scratchpad() {
     assert_eq!(next["key"], "TK-2");
     assert_ne!(next["task_id"], task["task_id"]);
     assert_eq!(scratchpad(&server, &person, "TK-2").await, json!([]));
+    assert_problem(
+        upload_artifact(&server, &artifact).await,
+        StatusCode::PRECONDITION_FAILED,
+        "file.already_exists",
+    )
+    .await;
     server.stop().await;
 }
 
@@ -289,6 +296,56 @@ async fn update_result(server: &Server, tokens: &Value, id: &str) {
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
+}
+
+async fn prepare_artifacts(server: &Server, agent: &Value, task: &Value) -> Value {
+    let completed = register_artifact(server, agent, task).await;
+    register_artifact(server, agent, task).await;
+    assert_eq!(
+        upload_artifact(server, &completed).await.status(),
+        StatusCode::CREATED
+    );
+    let response = request(
+        server,
+        agent,
+        Method::POST,
+        &format!(
+            "{TASKS}/{}/artifacts/{}/complete",
+            task["task_id"].as_str().unwrap(),
+            completed["key"].as_str().unwrap()
+        ),
+        Value::Null,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let shown = read(server, agent, task["key"].as_str().unwrap()).await;
+    assert_eq!(shown["artifacts"].as_array().unwrap().len(), 1);
+    assert_eq!(shown["artifacts"][0]["key"], completed["key"]);
+    completed
+}
+
+async fn register_artifact(server: &Server, agent: &Value, task: &Value) -> Value {
+    let response = request(
+        server,
+        agent,
+        Method::POST,
+        &format!("{TASKS}/{}/artifacts", task["task_id"].as_str().unwrap()),
+        json!({"file_name":"retained.txt", "summary":"Retained task file"}),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::CREATED);
+    response.json::<Value>().await.unwrap()["data"].clone()
+}
+
+async fn upload_artifact(server: &Server, artifact: &Value) -> Response {
+    let mut request = server
+        .client
+        .put(artifact["upload_url"].as_str().unwrap())
+        .body("Retained task file");
+    for (name, value) in artifact["headers"].as_object().unwrap() {
+        request = request.header(name, value.as_str().unwrap());
+    }
+    request.send().await.unwrap()
 }
 
 async fn remove(
