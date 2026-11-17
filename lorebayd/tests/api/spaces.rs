@@ -1,0 +1,426 @@
+use reqwest::{Method, Response, StatusCode};
+use serde_json::{Value, json};
+use tempfile::TempDir;
+use url::Url;
+
+use crate::helpers::{Server, TEST_PASSWORD, TEST_USERNAME};
+
+#[tokio::test]
+async fn create_space_makes_creator_owner() {
+    let server = Server::start().await;
+    let person = server.tokens().await;
+    for number in 1..=2 {
+        let space = create(&server, &person, "Research").await;
+        let expected = json!({"key": format!("SPACE-{number}"), "name": "Research",
+            "summary": "Shared research", "role": "owner"});
+        assert_eq!(space, expected);
+        assert_eq!(
+            read(&server, &person, space["key"].as_str().unwrap()).await,
+            expected
+        );
+    }
+    let (third, fourth) = tokio::join!(
+        create(&server, &person, "Concurrent A"),
+        create(&server, &person, "Concurrent B"),
+    );
+    let mut keys = [
+        third["key"].as_str().unwrap(),
+        fourth["key"].as_str().unwrap(),
+    ];
+    keys.sort_unstable();
+    assert_eq!(keys, ["SPACE-3", "SPACE-4"]);
+    let directory = server.stop().await;
+    let server = Server::restart(directory).await;
+    let person = server.tokens().await;
+    assert_eq!(
+        create(&server, &person, "After restart").await["key"],
+        "SPACE-5"
+    );
+    assert_eq!(read(&server, &person, "SPACE-1").await["role"], "owner");
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn create_space_fails_when_caller_is_agent() {
+    let server = Server::start().await;
+    let person = server.tokens().await;
+    let space = create(&server, &person, "Research").await;
+    let agent = server.authorize_agent("Research agent").await;
+    let refusal = problem(
+        request(
+            &server,
+            &agent.tokens,
+            Method::POST,
+            SPACES_PATH,
+            json!({"name": "Forbidden", "summary": "Forbidden"}),
+        )
+        .await,
+        StatusCode::FORBIDDEN,
+        "auth.person_required",
+    )
+    .await;
+    for key in ["SPACE-1", "SPACE-999", "invalid"] {
+        assert_eq!(
+            problem(
+                request(
+                    &server,
+                    &agent.tokens,
+                    Method::PATCH,
+                    &format!("{SPACES_PATH}/{key}"),
+                    json!({"name": "Forbidden"})
+                )
+                .await,
+                StatusCode::FORBIDDEN,
+                "auth.person_required",
+            )
+            .await,
+            refusal
+        );
+    }
+    assert_eq!(read(&server, &person, "SPACE-1").await, space);
+    assert_eq!(
+        list(&server, &person, &[]).await["data"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn create_space_fails_when_name_is_empty() {
+    let server = Server::start().await;
+    let person = server.tokens().await;
+    for body in [
+        json!({"name": "", "summary": "Summary"}),
+        json!({"name": "   ", "summary": "Summary"}),
+        json!({"name": "Name", "summary": ""}),
+        json!({"summary": "Summary"}),
+        json!({"name": "Name"}),
+        json!({"name": "a".repeat(257), "summary": "Summary"}),
+        json!({"name": "Name", "summary": "a".repeat(4097)}),
+    ] {
+        problem(
+            request(&server, &person, Method::POST, SPACES_PATH, body).await,
+            StatusCode::BAD_REQUEST,
+            "request.invalid_body",
+        )
+        .await;
+    }
+    assert_eq!(list(&server, &person, &[]).await["data"], json!([]));
+    let response = request(
+        &server,
+        &person,
+        Method::POST,
+        SPACES_PATH,
+        json!({"name": "a".repeat(256), "summary": "a".repeat(4096)}),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let original = response.json::<Value>().await.unwrap()["data"].clone();
+    assert_eq!(original["key"], "SPACE-1");
+    for body in [
+        json!({}),
+        json!({"name": ""}),
+        json!({"summary": ""}),
+        json!({"name": null}),
+        json!({"summary": "a".repeat(4097)}),
+        json!({"name": "a".repeat(257)}),
+    ] {
+        problem(
+            request(
+                &server,
+                &person,
+                Method::PATCH,
+                "/api/v1/spaces/SPACE-1",
+                body,
+            )
+            .await,
+            StatusCode::BAD_REQUEST,
+            "request.invalid_body",
+        )
+        .await;
+        assert_eq!(read(&server, &person, "SPACE-1").await, original);
+    }
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn list_spaces_returns_only_spaces_caller_is_in() {
+    let server = two_people().await;
+    let alice = server.tokens().await;
+    let bob = bob_tokens(&server).await;
+    assert_eq!(
+        list(&server, &alice, &[]).await,
+        json!({"data": [], "meta": {}})
+    );
+    create(&server, &bob, "Bob only").await;
+    let mut expected = Vec::new();
+    for number in 2..=23 {
+        expected.push(create(&server, &alice, &format!("Space {number}")).await);
+    }
+    let agent = server.authorize_agent("Research agent").await;
+    assert_eq!(walk_spaces(&server, &alice).await, expected);
+    let expected_agent: Vec<_> = expected
+        .into_iter()
+        .map(|mut space| {
+            space["role"] = json!("contributor");
+            space
+        })
+        .collect();
+    assert_eq!(walk_spaces(&server, &agent.tokens).await, expected_agent);
+    assert_eq!(
+        read(&server, &agent.tokens, "SPACE-2").await,
+        expected_agent[0]
+    );
+    let bob_spaces = list(&server, &bob, &[]).await;
+    assert_eq!(bob_spaces["data"].as_array().unwrap().len(), 1);
+    assert_eq!(bob_spaces["data"][0]["key"], "SPACE-1");
+    assert_eq!(
+        list(&server, &alice, &[]).await["data"]
+            .as_array()
+            .unwrap()
+            .len(),
+        20
+    );
+    assert_eq!(
+        list(&server, &alice, &[("page_size", "100")]).await["data"]
+            .as_array()
+            .unwrap()
+            .len(),
+        22
+    );
+    assert_invalid_pagination(&server, &alice, &bob).await;
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn read_space_fails_when_caller_is_not_in_space() {
+    let server = two_people().await;
+    let alice = server.tokens().await;
+    let bob = bob_tokens(&server).await;
+    let original = create(&server, &bob, "Bob only").await;
+    let agent = server.authorize_agent("Research agent").await;
+    let mut refusal = None;
+    for tokens in [&alice, &agent.tokens] {
+        for key in ["SPACE-1", "SPACE-999", "SPACE-0", "SPACE-01", "invalid"] {
+            let body = problem(
+                request(
+                    &server,
+                    tokens,
+                    Method::GET,
+                    &format!("{SPACES_PATH}/{key}"),
+                    Value::Null,
+                )
+                .await,
+                StatusCode::NOT_FOUND,
+                "space.not_found",
+            )
+            .await;
+            if let Some(expected) = &refusal {
+                assert_eq!(&body, expected);
+            } else {
+                refusal = Some(body);
+            }
+            let (status, code) = if tokens == &alice {
+                (StatusCode::NOT_FOUND, "space.not_found")
+            } else {
+                (StatusCode::FORBIDDEN, "auth.person_required")
+            };
+            let changed = problem(
+                request(
+                    &server,
+                    tokens,
+                    Method::PATCH,
+                    &format!("{SPACES_PATH}/{key}"),
+                    json!({"name": "Forbidden"}),
+                )
+                .await,
+                status,
+                code,
+            )
+            .await;
+            if tokens == &alice {
+                assert_eq!(&changed, refusal.as_ref().unwrap());
+            }
+        }
+    }
+    assert_eq!(read(&server, &bob, "SPACE-1").await, original);
+    assert_eq!(list(&server, &alice, &[]).await["data"], json!([]));
+    assert_eq!(list(&server, &agent.tokens, &[]).await["data"], json!([]));
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn change_space_updates_name_and_summary_when_caller_is_owner() {
+    let server = Server::start().await;
+    let person = server.tokens().await;
+    create(&server, &person, "Research").await;
+    let mut expected = json!({"key": "SPACE-1", "name": "Research",
+        "summary": "Shared research", "role": "owner"});
+    for changes in [
+        json!({"name": "New name"}),
+        json!({"summary": "New summary"}),
+        json!({"name": "Final name", "summary": "Final summary"}),
+    ] {
+        for (field, value) in changes.as_object().unwrap() {
+            expected[field] = value.clone();
+        }
+        let response = request(
+            &server,
+            &person,
+            Method::PATCH,
+            "/api/v1/spaces/SPACE-1",
+            changes,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.json::<Value>().await.unwrap(),
+            json!({"data": expected, "meta": {}})
+        );
+        assert_eq!(read(&server, &person, "SPACE-1").await, expected);
+    }
+    assert_eq!(list(&server, &person, &[]).await["data"], json!([expected]));
+    server.stop().await;
+}
+
+const SPACES_PATH: &str = "/api/v1/spaces";
+
+async fn two_people() -> Server {
+    Server::restart_with_users(
+        TempDir::new().unwrap(),
+        &[(TEST_USERNAME, TEST_PASSWORD), ("bob", TEST_PASSWORD)],
+    )
+    .await
+}
+
+async fn bob_tokens(server: &Server) -> Value {
+    let response = server.log_in("bob", TEST_PASSWORD).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    response.json::<Value>().await.unwrap()["data"].clone()
+}
+
+async fn request(
+    server: &Server,
+    tokens: &Value,
+    method: Method,
+    path: &str,
+    body: Value,
+) -> Response {
+    server
+        .json(
+            method,
+            path,
+            body,
+            Some(tokens["access_token"].as_str().unwrap()),
+        )
+        .await
+}
+
+async fn create(server: &Server, tokens: &Value, name: &str) -> Value {
+    let response = request(
+        server,
+        tokens,
+        Method::POST,
+        SPACES_PATH,
+        json!({"name": name, "summary": "Shared research"}),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let body = response.json::<Value>().await.unwrap();
+    assert_eq!(body["meta"], json!({}));
+    body["data"].clone()
+}
+
+async fn read(server: &Server, tokens: &Value, key: &str) -> Value {
+    let response = request(
+        server,
+        tokens,
+        Method::GET,
+        &format!("{SPACES_PATH}/{key}"),
+        Value::Null,
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    response.json::<Value>().await.unwrap()["data"].clone()
+}
+
+async fn list(server: &Server, tokens: &Value, query: &[(&str, &str)]) -> Value {
+    let response = list_response(server, tokens, query).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    response.json().await.unwrap()
+}
+
+async fn list_response(server: &Server, tokens: &Value, query: &[(&str, &str)]) -> Response {
+    let mut url = Url::parse(&format!("http://{}{SPACES_PATH}", server.address)).unwrap();
+    url.query_pairs_mut().extend_pairs(query.iter().copied());
+    server
+        .client
+        .get(url)
+        .bearer_auth(tokens["access_token"].as_str().unwrap())
+        .send()
+        .await
+        .unwrap()
+}
+
+async fn walk_spaces(server: &Server, tokens: &Value) -> Vec<Value> {
+    let mut result = Vec::new();
+    let mut cursor: Option<String> = None;
+    loop {
+        let mut query = vec![("page_size", "7")];
+        if let Some(cursor) = &cursor {
+            query.push(("cursor", cursor));
+        }
+        let page = list(server, tokens, &query).await;
+        let items = page["data"].as_array().unwrap();
+        assert!(items.len() <= 7);
+        result.extend(items.iter().cloned());
+        match page["meta"]["next_cursor"].as_str() {
+            Some(next) => {
+                assert_eq!(items.len(), 7);
+                assert_ne!(cursor.as_deref(), Some(next));
+                assert!(result.len() <= 22);
+                cursor = Some(next.to_owned());
+            }
+            None => break,
+        }
+    }
+    result
+}
+
+async fn assert_invalid_pagination(server: &Server, alice: &Value, bob: &Value) {
+    let page = list(server, alice, &[("page_size", "1")]).await;
+    let cursor = page["meta"]["next_cursor"].as_str().unwrap();
+    problem(
+        list_response(server, bob, &[("cursor", cursor)]).await,
+        StatusCode::BAD_REQUEST,
+        "request.invalid_query",
+    )
+    .await;
+    for query in [
+        [("page_size", "0")],
+        [("page_size", "101")],
+        [("cursor", "invalid")],
+    ] {
+        problem(
+            list_response(server, alice, &query).await,
+            StatusCode::BAD_REQUEST,
+            "request.invalid_query",
+        )
+        .await;
+    }
+}
+
+async fn problem(response: Response, status: StatusCode, code: &str) -> Value {
+    assert_eq!(response.status(), status);
+    assert_eq!(
+        response.headers()["content-type"],
+        "application/problem+json"
+    );
+    let body = response.json::<Value>().await.unwrap();
+    assert_eq!(body["code"], code);
+    assert_eq!(body["status"], status.as_u16());
+    body
+}

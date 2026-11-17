@@ -8,4 +8,5 @@ mod login_session;
 mod mcp;
 mod oauth;
 mod oauth_token;
+mod spaces;
 mod web_api;

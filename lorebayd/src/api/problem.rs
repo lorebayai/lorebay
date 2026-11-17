@@ -5,6 +5,7 @@ use serde::Serialize;
 use thiserror::Error;
 use typed_builder::TypedBuilder;
 
+use crate::domain::SpaceAccessError;
 use crate::domain::access::AccessError;
 use crate::domain::caller::CallerError;
 use crate::domain::login_session::LoginError;
@@ -29,6 +30,10 @@ pub(crate) enum ApiError {
     PersonRequired,
     #[error("Too Many Requests")]
     RateLimited(u64),
+    #[error("Space not found")]
+    SpaceNotFound,
+    #[error("The space role does not allow this operation")]
+    SpacePermissionRequired,
     #[error("Unauthorized")]
     Unauthorized,
     #[error("Service Unavailable")]
@@ -67,6 +72,8 @@ impl ApiError {
             Self::PayloadTooLarge => (StatusCode::PAYLOAD_TOO_LARGE, "request.body_too_large"),
             Self::PersonRequired => (StatusCode::FORBIDDEN, "auth.person_required"),
             Self::RateLimited(_) => (StatusCode::TOO_MANY_REQUESTS, "auth.rate_limited"),
+            Self::SpaceNotFound => (StatusCode::NOT_FOUND, "space.not_found"),
+            Self::SpacePermissionRequired => (StatusCode::FORBIDDEN, "space.permission_required"),
             Self::Unauthorized => (StatusCode::UNAUTHORIZED, "auth.unauthorized"),
             Self::Unavailable => (StatusCode::SERVICE_UNAVAILABLE, "server.not_ready"),
         }
@@ -101,6 +108,19 @@ impl From<LoginError> for ApiError {
             LoginError::Unauthorized => Self::Unauthorized,
             error => {
                 tracing::error!(%error, "login session operation failed");
+                Self::Internal
+            }
+        }
+    }
+}
+
+impl From<SpaceAccessError> for ApiError {
+    fn from(error: SpaceAccessError) -> Self {
+        match error {
+            SpaceAccessError::NotFound => Self::SpaceNotFound,
+            SpaceAccessError::PermissionRequired => Self::SpacePermissionRequired,
+            error @ SpaceAccessError::Database(_) => {
+                tracing::error!(%error, "space access check failed");
                 Self::Internal
             }
         }

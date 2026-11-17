@@ -7,6 +7,8 @@ pub(crate) fn router() -> Router<ServerState> {
     Router::new()
         .route("/agents", get(agents::list))
         .route("/agents/{name}", delete(agents::revoke))
+        .route("/spaces", get(spaces::list).post(spaces::create))
+        .route("/spaces/{space}", get(spaces::read).patch(spaces::change))
         .route("/authorization-request", post(authorization::read))
         .route("/authorization-decision", post(authorization::decide))
         .route(
@@ -19,3 +21,4 @@ pub(crate) fn router() -> Router<ServerState> {
 mod agents;
 mod authorization;
 mod login_session;
+mod spaces;
