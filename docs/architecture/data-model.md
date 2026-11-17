@@ -391,7 +391,8 @@ computer; see [Identity](identity.md#5-sign-in).
 | `last_activity_at` | INTEGER | Not null | Equal to `started_at` at creation; set to the current time on each note, artifact or result update |
 
 - **A task names its agent by the copied name**, not by a reference to the
-  authorization. Filtering by agent matches `(account_id, agent_name)`.
+  authorization. Filtering by agent matches `(account_id, agent_name)` with
+  a person filter, or `agent_name` across every person without one.
   Agent names are unique per person, so the filter still works after the
   authorization is revoked, and an agent authorized again under the same
   name is filtered together with its earlier tasks.

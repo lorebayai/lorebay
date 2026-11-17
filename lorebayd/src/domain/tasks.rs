@@ -9,7 +9,7 @@ use typed_builder::TypedBuilder;
 use crate::entity::{account, note, task};
 use crate::repository::account::AccountRepository;
 use crate::repository::{
-    ArtifactRepository, NoteRepository, SpaceRepository, TaskAfter, TaskRepository,
+    ArtifactRepository, NoteRepository, SpaceRepository, TaskAfter, TaskListFilter, TaskRepository,
 };
 
 use super::caller::{CallerError, VerifiedCaller};
@@ -17,8 +17,8 @@ use super::login_session::now_millis;
 use super::pagination::{Page, PageOptions, decode_cursor, encode_cursor};
 use super::{
     Artifact, NoteContent, SpaceAccessError, TASK_READ_ROLES, TASK_WRITE_ROLES, TaskAccessError,
-    TaskAction, TaskResult, TaskTitle, check_space, check_task, format_key, parse_key, primary_key,
-    random_task_id,
+    TaskAction, TaskFilterError, TaskFilters, TaskKeyword, TaskResult, TaskTitle, check_space,
+    check_task, format_key, parse_key, primary_key, random_task_id,
 };
 
 #[derive(Debug, Error)]
@@ -29,6 +29,8 @@ pub(crate) enum TaskError {
     Caller(#[from] CallerError),
     #[error(transparent)]
     Database(#[from] DbErr),
+    #[error(transparent)]
+    Filter(#[from] TaskFilterError),
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
     #[error("Invalid cursor")]
@@ -363,15 +365,35 @@ pub(crate) async fn list_tasks(
     caller: &VerifiedCaller,
     space: &str,
     options: PageOptions,
+    filters: TaskFilters,
 ) -> Result<Page<Task>, TaskError> {
+    filters.validate()?;
     let transaction = database.begin().await?;
     let authorized = check_space(&transaction, caller, space, TASK_READ_ROLES).await?;
-    let version = format!("tasks-v1:{space}");
+    let version = filters.cursor_version(space).map_err(anyhow::Error::from)?;
     let after = task_position(&options, &version, caller.account_id())?;
+    let filter = TaskListFilter::builder()
+        .person(filters.person.as_deref())
+        .account_id(filters.own_open.then(|| caller.account_id()))
+        .agent(filters.agent.as_deref())
+        .status(
+            filters
+                .own_open
+                .then_some(TaskStatus::InProgress)
+                .or(filters.status)
+                .map(TaskStatus::as_str),
+        )
+        .keyword(filters.keyword.as_ref().map(TaskKeyword::as_str))
+        .build();
     let mut records = TaskRepository::builder()
         .connection(&transaction)
         .build()
-        .list(&authorized.space.id, after.as_ref(), options.page_size + 1)
+        .list(
+            &authorized.space.id,
+            &filter,
+            after.as_ref(),
+            options.page_size + 1,
+        )
         .await?;
     let has_more = records.len() as u64 > options.page_size;
     records.truncate(options.page_size as usize);

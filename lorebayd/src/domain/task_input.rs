@@ -27,6 +27,12 @@ pub(crate) struct NoteContent {
     value: String,
 }
 
+#[derive(Clone, Debug, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+pub(crate) struct TaskKeyword {
+    value: String,
+}
+
 impl TryFrom<String> for TaskTitle {
     type Error = TaskTextError;
 
@@ -74,6 +80,22 @@ impl From<NoteContent> for String {
     }
 }
 
+impl TaskKeyword {
+    pub fn as_str(&self) -> &str {
+        &self.value
+    }
+}
+
+impl TryFrom<String> for TaskKeyword {
+    type Error = TaskTextError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        validate_text(&value, KEYWORD_MAX_CHARACTERS)?;
+        Ok(Self { value })
+    }
+}
+
+const KEYWORD_MAX_CHARACTERS: usize = 200;
 const NOTE_MAX_CHARACTERS: usize = 10_000;
 const RESULT_MAX_CHARACTERS: usize = 100_000;
 const TITLE_MAX_CHARACTERS: usize = 200;
