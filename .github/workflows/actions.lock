@@ -3,6 +3,9 @@
 # Docs: https://gh.io/actions-lockfile
 version: 'v0.0.3'
 workflows:
+    '.github/workflows/manual.yml':
+        - 'actions/checkout@v7.0.1'
+        - 'moonrepo/setup-toolchain@v0.6.4'
     '.github/workflows/pull-request.yml':
         - 'actions/checkout@v7.0.1'
         - 'moonrepo/setup-toolchain@v0.6.4'

@@ -1,0 +1,37 @@
+name: Manual CI
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: [self-hosted, linux, x64, lorebay]
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+      - name: Setup Moon
+        uses: moonrepo/setup-toolchain@v0.6.4
+        with:
+          moon-version: 2.6.5
+      - name: Install Rust Toolchain
+        run: rustup toolchain install --no-self-update
+      - name: Run Moon CI
+        run: moon ci
+      - name: Install Lock Extension
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh extension install github/gh-actions-lock --pin v0.4.1
+      - name: Verify Action Lockfile
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh actions-lock --verify
