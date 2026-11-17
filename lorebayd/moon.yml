@@ -14,6 +14,7 @@ tasks:
   integration:
     deps: ['web:build']
   generate-entities:
+    deps: ['web:build']
     command: 'bash lorebayd/scripts/generate-entities.sh'
     options:
       cache: false
