@@ -7,6 +7,7 @@ use thiserror::Error;
 use typed_builder::TypedBuilder;
 
 use crate::domain::OAuthClientError;
+use crate::domain::oauth_token::TokenError;
 
 #[derive(Debug, Error)]
 pub(super) enum OAuthError {
@@ -14,14 +15,34 @@ pub(super) enum OAuthError {
     Internal,
     #[error("invalid client metadata")]
     InvalidClientMetadata,
+    #[error("invalid authorization grant")]
+    InvalidGrant,
     #[error("invalid redirect URI")]
     InvalidRedirectUri,
     #[error("invalid registration request")]
     InvalidRequest(StatusCode),
+    #[error("invalid resource")]
+    InvalidTarget,
+    #[error("invalid token request")]
+    InvalidTokenRequest(StatusCode),
     #[error("method not allowed")]
     MethodNotAllowed,
     #[error("registration rate limit exceeded")]
     RateLimited(u64),
+    #[error("unsupported grant type")]
+    UnsupportedGrantType,
+}
+
+impl From<TokenError> for OAuthError {
+    fn from(error: TokenError) -> Self {
+        match error {
+            TokenError::AgentNameTaken | TokenError::InvalidGrant => Self::InvalidGrant,
+            error => {
+                tracing::error!(%error, "OAuth token operation failed");
+                Self::Internal
+            }
+        }
+    }
 }
 
 impl From<OAuthClientError> for OAuthError {
@@ -48,9 +69,9 @@ impl From<RateLimitError> for OAuthError {
     }
 }
 
-impl IntoResponse for OAuthError {
-    fn into_response(self) -> Response {
-        let (status, code, description) = match self {
+impl OAuthError {
+    fn details(&self) -> (StatusCode, &'static str, &'static str) {
+        match *self {
             Self::Internal => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "server_error",
@@ -66,10 +87,25 @@ impl IntoResponse for OAuthError {
                 "invalid_redirect_uri",
                 "Redirect URIs must use HTTPS or HTTP on loopback, without credentials or fragments.",
             ),
+            Self::InvalidGrant => (
+                StatusCode::BAD_REQUEST,
+                "invalid_grant",
+                "The authorization grant is invalid, expired or belongs to another client.",
+            ),
             Self::InvalidRequest(status) => (
                 status,
                 "invalid_client_metadata",
                 "Expected a JSON client registration object.",
+            ),
+            Self::InvalidTarget => (
+                StatusCode::BAD_REQUEST,
+                "invalid_target",
+                "The resource must be the MCP endpoint URL or the public URL.",
+            ),
+            Self::InvalidTokenRequest(status) => (
+                status,
+                "invalid_request",
+                "Expected a form-encoded token request with the required parameters.",
             ),
             Self::MethodNotAllowed => (
                 StatusCode::METHOD_NOT_ALLOWED,
@@ -81,7 +117,18 @@ impl IntoResponse for OAuthError {
                 "slow_down",
                 "Too many registration attempts; retry after the indicated wait.",
             ),
-        };
+            Self::UnsupportedGrantType => (
+                StatusCode::BAD_REQUEST,
+                "unsupported_grant_type",
+                "The grant type is not supported.",
+            ),
+        }
+    }
+}
+
+impl IntoResponse for OAuthError {
+    fn into_response(self) -> Response {
+        let (status, code, description) = self.details();
         let body = ErrorResponse::builder()
             .error(code)
             .error_description(description)

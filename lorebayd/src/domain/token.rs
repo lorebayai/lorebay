@@ -39,6 +39,14 @@ pub(crate) enum TokenKind {
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
+pub(crate) struct TokenSubject<'a> {
+    pub username: &'a str,
+    pub random_id: &'a str,
+    pub kind: TokenKind,
+}
+
+#[derive(Clone, Debug, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
 pub(crate) struct TokenSigner {
     key: Vec<u8>,
 }
@@ -51,11 +59,11 @@ impl TokenSigner {
         Ok(Self { key })
     }
 
-    pub fn sign(&self, username: &str, session: &str, expiry: u64, now: u64) -> Result<String> {
+    pub fn sign(&self, subject: TokenSubject<'_>, expiry: u64, now: u64) -> Result<String> {
         let claims = Claims::builder()
-            .sub(username)
-            .sid(session)
-            .kind(TokenKind::LoginSession)
+            .sub(subject.username)
+            .sid(subject.random_id)
+            .kind(subject.kind)
             .exp(expiry)
             .iat(now)
             .jti(random_id()?)

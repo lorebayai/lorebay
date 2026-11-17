@@ -19,7 +19,7 @@ use crate::repository::account::AccountRepository;
 use crate::repository::login_session::LoginSessionRepository;
 
 use super::access::Caller;
-use super::token::{Claims, TokenKind, TokenSigner, token_hash};
+use super::token::{Claims, TokenKind, TokenSigner, TokenSubject, token_hash};
 use super::user_store::UserStore;
 use super::{primary_key, random_id};
 
@@ -115,8 +115,11 @@ pub(crate) async fn refresh(
     let refresh_token = new_refresh_token()?;
     let tokens = issue_tokens(
         identity,
-        &username,
-        &session.random_id,
+        TokenSubject::builder()
+            .username(username.as_str())
+            .random_id(session.random_id.as_str())
+            .kind(TokenKind::LoginSession)
+            .build(),
         refresh_token.clone(),
         now,
     )?;
@@ -206,7 +209,7 @@ async fn active_username<C: ConnectionTrait>(
     Ok(account.username)
 }
 
-async fn create_session(
+pub(crate) async fn create_session(
     identity: &Identity,
     transaction: &DatabaseTransaction,
     account: Account,
@@ -216,8 +219,11 @@ async fn create_session(
     let refresh_token = new_refresh_token()?;
     let tokens = issue_tokens(
         identity,
-        &account.username,
-        &random_id,
+        TokenSubject::builder()
+            .username(account.username.as_str())
+            .random_id(random_id.as_str())
+            .kind(TokenKind::LoginSession)
+            .build(),
         refresh_token.clone(),
         now,
     )?;
@@ -237,30 +243,25 @@ async fn create_session(
     Ok(tokens)
 }
 
-fn issue_tokens(
+pub(crate) fn issue_tokens(
     identity: &Identity,
-    username: &str,
-    session: &str,
+    subject: TokenSubject<'_>,
     refresh_token: String,
     now: i64,
 ) -> Result<Tokens, LoginError> {
     let now = (now / 1000) as u64;
     let expires_in = identity.config.access_token_lifetime_seconds;
     Ok(Tokens::builder()
-        .access_token(
-            identity
-                .signer
-                .sign(username, session, now + expires_in, now)?,
-        )
+        .access_token(identity.signer.sign(subject, now + expires_in, now)?)
         .refresh_token(refresh_token)
         .expires_in(expires_in)
         .build())
 }
 
-fn new_refresh_token() -> anyhow::Result<String> {
+pub(crate) fn new_refresh_token() -> anyhow::Result<String> {
     Ok(format!("{}{}", random_id()?, random_id()?))
 }
 
-fn session_expiry(identity: &Identity, now: i64) -> i64 {
+pub(crate) fn session_expiry(identity: &Identity, now: i64) -> i64 {
     now + Duration::from_secs(identity.config.refresh_token_lifetime_seconds).as_millis() as i64
 }

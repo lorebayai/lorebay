@@ -74,9 +74,14 @@ pub async fn run(
         .context("could not create data_directory")?;
     let database = open_database(&config.data_directory).await?;
     account::sync(&database, users.as_ref(), login_session::now_millis()?).await?;
+    let identity = Arc::new(identity(config.clone(), users)?);
     let state = ServerState::builder()
-        .oauth(OAuthState::new(&config, database.clone())?)
-        .identity(Arc::new(identity(config, users)?))
+        .oauth(OAuthState::new(
+            &config,
+            database.clone(),
+            identity.clone(),
+        )?)
+        .identity(identity)
         .database(database)
         .ready(Arc::new(AtomicBool::new(true)))
         .build();

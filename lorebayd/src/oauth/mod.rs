@@ -1,6 +1,7 @@
 mod error;
 mod metadata;
 mod register;
+mod token;
 
 use std::net::IpAddr;
 use std::num::NonZeroU32;
@@ -15,7 +16,8 @@ use sea_orm::DatabaseConnection;
 use typed_builder::TypedBuilder;
 
 use crate::Config;
-use crate::domain::{AUTHORIZATION_PATH, REGISTRATION_PATH};
+use crate::domain::login_session::Identity;
+use crate::domain::{AUTHORIZATION_PATH, REGISTRATION_PATH, TOKEN_PATH};
 use crate::pages;
 
 use error::OAuthError;
@@ -33,6 +35,7 @@ const PKCE_METHOD: &str = "S256";
 #[builder(field_defaults(setter(into)))]
 pub(crate) struct OAuthState {
     database: DatabaseConnection,
+    identity: Arc<Identity>,
     public_url: String,
     registration_limiter: RateLimiter<IpAddr, SystemClock>,
     registration_limits: RegistrationLimits,
@@ -60,12 +63,17 @@ impl From<&Config> for RegistrationLimits {
 }
 
 impl OAuthState {
-    pub(crate) fn new(config: &Config, database: DatabaseConnection) -> Result<Self, ConfigError> {
+    pub(crate) fn new(
+        config: &Config,
+        database: DatabaseConnection,
+        identity: Arc<Identity>,
+    ) -> Result<Self, ConfigError> {
         let limit = NonZeroU32::new(config.registration_rate_limit)
             .ok_or_else(|| ConfigError::invalid("registration_rate_limit", "must be positive"))?;
         let clock = Arc::new(SystemClock);
         Ok(Self::builder()
             .database(database)
+            .identity(identity)
             .public_url(config.public_url.clone())
             .registration_limits(RegistrationLimits::from(config))
             .registration_limiter(RateLimiter::new(
@@ -81,6 +89,7 @@ impl OAuthState {
 pub(crate) fn router(state: OAuthState) -> Router {
     Router::new()
         .route(AUTHORIZATION_PATH, get(pages::authorization))
+        .route(TOKEN_PATH, post(token::token))
         .route(
             AUTHORIZATION_METADATA_PATH,
             get(metadata::authorization_server),
