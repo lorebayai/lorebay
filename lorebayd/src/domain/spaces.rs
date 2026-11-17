@@ -1,5 +1,3 @@
-use base64::Engine;
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use sea_orm::{
     DatabaseConnection, DatabaseTransaction, DbErr, IntoActiveModel, Set, SqlErr,
     SqliteTransactionMode, TransactionOptions, TransactionTrait,
@@ -13,8 +11,7 @@ use crate::repository::participant::ParticipantRepository;
 
 use super::caller::{CallerError, VerifiedCaller};
 use super::login_session::now_millis;
-use super::pagination::{Page, PageOptions};
-use super::token::token_hash;
+use super::pagination::{Page, PageOptions, decode_cursor, encode_cursor};
 use super::{AuthorizedSpace, SpaceAccessError, SpaceRole, check_space, primary_key};
 
 #[derive(Debug, Error)]
@@ -29,6 +26,13 @@ pub(crate) enum SpaceError {
     Internal(#[from] anyhow::Error),
     #[error("Invalid cursor")]
     InvalidCursor,
+}
+
+#[derive(Clone, Debug, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+pub(crate) struct NewSpace {
+    pub name: String,
+    pub summary: String,
 }
 
 #[derive(Clone, Debug, TypedBuilder)]
@@ -61,14 +65,13 @@ impl From<AuthorizedSpace> for Space {
 pub(crate) async fn create_space(
     database: &DatabaseConnection,
     caller: &VerifiedCaller,
-    name: String,
-    summary: String,
+    input: NewSpace,
 ) -> Result<Space, SpaceError> {
     caller.person()?;
     let mut retries = NUMBER_CONFLICT_RETRIES;
     loop {
         let transaction = write_transaction(database).await?;
-        match insert_space(&transaction, caller, &name, &summary).await {
+        match insert_space(&transaction, caller, &input).await {
             Ok(space) => {
                 transaction.commit().await?;
                 return Ok(space.into());
@@ -92,7 +95,12 @@ pub(crate) async fn list_spaces(
 ) -> Result<Page<Space>, SpaceError> {
     let after = options
         .cursor
-        .map(|cursor| decode_cursor(&cursor, caller.account_id()))
+        .map(|cursor| {
+            decode_cursor(CURSOR_VERSION, caller.account_id(), &cursor)
+                .and_then(|number| number.parse::<i64>().ok())
+                .filter(|number| *number > 0)
+                .ok_or(SpaceError::InvalidCursor)
+        })
         .transpose()?
         .unwrap_or(0);
     let mut records = SpaceRepository::builder()
@@ -102,10 +110,13 @@ pub(crate) async fn list_spaces(
         .await?;
     let has_more = records.len() as u64 > options.page_size;
     records.truncate(options.page_size as usize);
-    let next_cursor = records
-        .last()
-        .filter(|_| has_more)
-        .map(|(space, _)| encode_cursor(space.number, caller.account_id()));
+    let next_cursor = records.last().filter(|_| has_more).map(|(space, _)| {
+        encode_cursor(
+            CURSOR_VERSION,
+            caller.account_id(),
+            &space.number.to_string(),
+        )
+    });
     let items = records
         .into_iter()
         .map(|(space, participant)| {
@@ -179,8 +190,7 @@ const CHANGE_ROLES: &[SpaceRole] = &[SpaceRole::Owner, SpaceRole::Admin];
 async fn insert_space(
     transaction: &DatabaseTransaction,
     caller: &VerifiedCaller,
-    name: &str,
-    summary: &str,
+    input: &NewSpace,
 ) -> Result<AuthorizedSpace, SpaceError> {
     let repository = SpaceRepository::builder().connection(transaction).build();
     let number = repository
@@ -194,8 +204,8 @@ async fn insert_space(
         .insert(space::ActiveModel {
             id: Set(primary_key()),
             number: Set(number),
-            name: Set(name.to_owned()),
-            summary: Set(summary.to_owned()),
+            name: Set(input.name.clone()),
+            summary: Set(input.summary.clone()),
             next_task_number: Set(1),
             next_knowledge_number: Set(1),
             next_artifact_number: Set(1),
@@ -229,28 +239,4 @@ async fn write_transaction(database: &DatabaseConnection) -> Result<DatabaseTran
             ..Default::default()
         })
         .await
-}
-
-fn encode_cursor(number: i64, account_id: &str) -> String {
-    URL_SAFE_NO_PAD.encode(format!(
-        "{CURSOR_VERSION}\n{}\n{number}",
-        token_hash(account_id)
-    ))
-}
-
-fn decode_cursor(cursor: &str, account_id: &str) -> Result<i64, SpaceError> {
-    let bytes = URL_SAFE_NO_PAD
-        .decode(cursor)
-        .map_err(|_| SpaceError::InvalidCursor)?;
-    let decoded = String::from_utf8(bytes).map_err(|_| SpaceError::InvalidCursor)?;
-    let mut parts = decoded.splitn(3, '\n');
-    if parts.next() != Some(CURSOR_VERSION) || parts.next() != Some(token_hash(account_id).as_str())
-    {
-        return Err(SpaceError::InvalidCursor);
-    }
-    parts
-        .next()
-        .and_then(|number| number.parse().ok())
-        .filter(|number| *number > 0)
-        .ok_or(SpaceError::InvalidCursor)
 }

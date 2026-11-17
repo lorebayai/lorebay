@@ -8,7 +8,7 @@ use typed_builder::TypedBuilder;
 use crate::api::{ApiError, Envelope, FieldError, ListQuery, Meta, invalid_query};
 use crate::domain::caller::VerifiedCaller;
 use crate::domain::{
-    Space, SpaceChanges, SpaceError, change_space, create_space, list_spaces, read_space,
+    NewSpace, Space, SpaceChanges, SpaceError, change_space, create_space, list_spaces, read_space,
 };
 use crate::server::ServerState;
 
@@ -41,13 +41,16 @@ pub(crate) struct SpaceResponse {
     role: &'static str,
 }
 
-impl TryFrom<CreateSpaceRequest> for (String, String) {
+impl TryFrom<CreateSpaceRequest> for NewSpace {
     type Error = ApiError;
 
     fn try_from(request: CreateSpaceRequest) -> Result<Self, Self::Error> {
         validate_field("name", &request.name, NAME_MAX_BYTES)?;
         validate_field("summary", &request.summary, SUMMARY_MAX_BYTES)?;
-        Ok((request.name, request.summary))
+        Ok(Self::builder()
+            .name(request.name)
+            .summary(request.summary)
+            .build())
     }
 }
 
@@ -106,8 +109,7 @@ pub(crate) async fn create(
     request: Result<Json<CreateSpaceRequest>, JsonRejection>,
 ) -> Result<(StatusCode, Envelope<SpaceResponse>), ApiError> {
     let Json(request) = request.map_err(invalid_json)?;
-    let (name, summary) = request.try_into()?;
-    let space = create_space(&state.database, &caller, name, summary).await?;
+    let space = create_space(&state.database, &caller, request.try_into()?).await?;
     Ok((StatusCode::CREATED, Envelope::builder().data(space).build()))
 }
 

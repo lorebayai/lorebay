@@ -1,9 +1,8 @@
 use reqwest::{Method, Response, StatusCode};
 use serde_json::{Value, json};
 use tempfile::TempDir;
-use url::Url;
 
-use crate::helpers::{Server, TEST_PASSWORD, TEST_USERNAME};
+use crate::helpers::{Server, TEST_PASSWORD, TEST_USERNAME, assert_problem, list_response};
 
 #[tokio::test]
 async fn create_space_makes_creator_owner() {
@@ -46,7 +45,7 @@ async fn create_space_fails_when_caller_is_agent() {
     let person = server.tokens().await;
     let space = create(&server, &person, "Research").await;
     let agent = server.authorize_agent("Research agent").await;
-    let refusal = problem(
+    let refusal = assert_problem(
         request(
             &server,
             &agent.tokens,
@@ -61,7 +60,7 @@ async fn create_space_fails_when_caller_is_agent() {
     .await;
     for key in ["SPACE-1", "SPACE-999", "invalid"] {
         assert_eq!(
-            problem(
+            assert_problem(
                 request(
                     &server,
                     &agent.tokens,
@@ -101,7 +100,7 @@ async fn create_space_fails_when_name_is_empty() {
         json!({"name": "a".repeat(257), "summary": "Summary"}),
         json!({"name": "Name", "summary": "a".repeat(4097)}),
     ] {
-        problem(
+        assert_problem(
             request(&server, &person, Method::POST, SPACES_PATH, body).await,
             StatusCode::BAD_REQUEST,
             "request.invalid_body",
@@ -128,7 +127,7 @@ async fn create_space_fails_when_name_is_empty() {
         json!({"summary": "a".repeat(4097)}),
         json!({"name": "a".repeat(257)}),
     ] {
-        problem(
+        assert_problem(
             request(
                 &server,
                 &person,
@@ -205,7 +204,7 @@ async fn read_space_fails_when_caller_is_not_in_space() {
     let mut refusal = None;
     for tokens in [&alice, &agent.tokens] {
         for key in ["SPACE-1", "SPACE-999", "SPACE-0", "SPACE-01", "invalid"] {
-            let body = problem(
+            let body = assert_problem(
                 request(
                     &server,
                     tokens,
@@ -228,7 +227,7 @@ async fn read_space_fails_when_caller_is_not_in_space() {
             } else {
                 (StatusCode::FORBIDDEN, "auth.person_required")
             };
-            let changed = problem(
+            let changed = assert_problem(
                 request(
                     &server,
                     tokens,
@@ -348,21 +347,9 @@ async fn read(server: &Server, tokens: &Value, key: &str) -> Value {
 }
 
 async fn list(server: &Server, tokens: &Value, query: &[(&str, &str)]) -> Value {
-    let response = list_response(server, tokens, query).await;
+    let response = list_response(SPACES_PATH, server, tokens, query).await;
     assert_eq!(response.status(), StatusCode::OK);
     response.json().await.unwrap()
-}
-
-async fn list_response(server: &Server, tokens: &Value, query: &[(&str, &str)]) -> Response {
-    let mut url = Url::parse(&format!("http://{}{SPACES_PATH}", server.address)).unwrap();
-    url.query_pairs_mut().extend_pairs(query.iter().copied());
-    server
-        .client
-        .get(url)
-        .bearer_auth(tokens["access_token"].as_str().unwrap())
-        .send()
-        .await
-        .unwrap()
 }
 
 async fn walk_spaces(server: &Server, tokens: &Value) -> Vec<Value> {
@@ -393,8 +380,8 @@ async fn walk_spaces(server: &Server, tokens: &Value) -> Vec<Value> {
 async fn assert_invalid_pagination(server: &Server, alice: &Value, bob: &Value) {
     let page = list(server, alice, &[("page_size", "1")]).await;
     let cursor = page["meta"]["next_cursor"].as_str().unwrap();
-    problem(
-        list_response(server, bob, &[("cursor", cursor)]).await,
+    assert_problem(
+        list_response(SPACES_PATH, server, bob, &[("cursor", cursor)]).await,
         StatusCode::BAD_REQUEST,
         "request.invalid_query",
     )
@@ -404,23 +391,11 @@ async fn assert_invalid_pagination(server: &Server, alice: &Value, bob: &Value) 
         [("page_size", "101")],
         [("cursor", "invalid")],
     ] {
-        problem(
-            list_response(server, alice, &query).await,
+        assert_problem(
+            list_response(SPACES_PATH, server, alice, &query).await,
             StatusCode::BAD_REQUEST,
             "request.invalid_query",
         )
         .await;
     }
-}
-
-async fn problem(response: Response, status: StatusCode, code: &str) -> Value {
-    assert_eq!(response.status(), status);
-    assert_eq!(
-        response.headers()["content-type"],
-        "application/problem+json"
-    );
-    let body = response.json::<Value>().await.unwrap();
-    assert_eq!(body["code"], code);
-    assert_eq!(body["status"], status.as_u16());
-    body
 }
