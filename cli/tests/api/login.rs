@@ -149,6 +149,8 @@ async fn help_and_usage_use_documented_exit_codes() {
         vec!["task", "list", "--help"],
         vec!["task", "show", "--help"],
         vec!["task", "close", "--help"],
+        vec!["task", "delete", "--help"],
+        vec!["note", "delete", "--help"],
         vec!["task", "scratchpad", "--help"],
     ] {
         let output = server.run(&arguments).await;
@@ -165,6 +167,8 @@ async fn help_and_usage_use_documented_exit_codes() {
         vec!["task", "list"],
         vec!["task", "show", "SPACE-1"],
         vec!["task", "close", "SPACE-1"],
+        vec!["task", "delete", "SPACE-1"],
+        vec!["note", "delete", "SPACE-1", "task-id"],
         vec!["task", "scratchpad", "SPACE-1"],
     ] {
         let output = server.run(&arguments).await;

@@ -14,9 +14,13 @@ use tokio::time::{Instant, sleep, timeout};
 use url::Url;
 
 mod device;
+mod task_deletion;
+mod task_filters;
 mod tasks;
 mod team;
 pub use device::*;
+pub use task_deletion::*;
+pub use task_filters::*;
 pub use tasks::*;
 pub use team::*;
 
@@ -300,6 +304,10 @@ impl Server {
     }
 
     pub async fn agent(&self, name: &str) -> Value {
+        self.agent_as(name, &self.username).await
+    }
+
+    pub async fn agent_as(&self, name: &str, username: &str) -> Value {
         let client = self
             .json(
                 Method::POST,
@@ -309,7 +317,7 @@ impl Server {
                 None,
             )
             .await;
-        let person = self.person().await;
+        let person = self.person_as(username).await;
         let body = self
             .json(
                 Method::POST,

@@ -18,6 +18,8 @@ pub(crate) struct Listing {
     pub columns: Vec<&'static str>,
     pub fields: Vec<&'static str>,
     #[builder(default = Vec::new())]
+    pub query: Vec<(&'static str, String)>,
+    #[builder(default = Vec::new())]
     pub multiline_columns: Vec<usize>,
 }
 
@@ -49,6 +51,9 @@ pub(crate) async fn list_page(
     let mut url = Url::parse(API_ROOT)
         .map_err(|_| Failure::local(CLI_USAGE, "Could not construct the list path."))?;
     url.set_path(&listing.path);
+    for (name, value) in &listing.query {
+        url.query_pairs_mut().append_pair(name, value);
+    }
     if let Some(size) = page.page_size {
         url.query_pairs_mut()
             .append_pair("page_size", &size.to_string());

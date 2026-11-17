@@ -14,12 +14,15 @@ use crate::http::{self, Http};
 use crate::login;
 use crate::output::{self, Outcome, Table};
 
+mod deletion;
+mod notes;
 mod pages;
 mod participants;
 mod spaces;
 mod tasks;
 mod users;
 
+pub(super) use deletion::delete;
 pub(super) use pages::{Listing, api_path, display_value, list_page};
 
 pub(crate) async fn run(command: Command, mode: OutputMode) -> Result<Outcome> {
@@ -38,6 +41,7 @@ pub(crate) async fn run(command: Command, mode: OutputMode) -> Result<Outcome> {
             Ok(Outcome::completion("Signed in."))
         }
         Command::Participant { command } => participants::run(command, &store, mode).await,
+        Command::Note { command } => notes::run(command, &store).await,
         Command::Space { command } => spaces::run(command, &store, mode).await,
         Command::Task { command } => tasks::run(command, &store, mode).await,
         Command::User { command } => users::run(command, &store, mode).await,
