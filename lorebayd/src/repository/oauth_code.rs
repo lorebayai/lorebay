@@ -10,6 +10,14 @@ pub(crate) struct OauthCodeRepository<'a, C> {
 }
 
 impl<C: ConnectionTrait> OauthCodeRepository<'_, C> {
+    pub async fn delete_expired(&self, now: i64) -> Result<u64, DbErr> {
+        Ok(Entity::delete_many()
+            .filter(Column::ExpiresAt.lte(now))
+            .exec(self.connection)
+            .await?
+            .rows_affected)
+    }
+
     pub async fn delete_by_accounts(&self, ids: &[String]) -> Result<(), DbErr> {
         Entity::delete_many()
             .filter(Column::AccountId.is_in(ids.iter().cloned()))

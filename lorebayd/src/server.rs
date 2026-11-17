@@ -35,6 +35,7 @@ use crate::domain::users::FileUserStore;
 use crate::domain::{account, login_session};
 use crate::migration::Migrator;
 use crate::oauth::{self, OAuthState};
+use crate::worker;
 
 /// Readiness remains observable for one second before connections stop being accepted.
 const READINESS_PROPAGATION: Duration = Duration::from_secs(1);
@@ -143,29 +144,56 @@ async fn serve_until_shutdown(
     shutdown: impl Future<Output = ()> + Send,
 ) -> Result<()> {
     let (stop, stopped) = watch::channel(false);
+    let (stop_workers, workers_stopped) = watch::channel(false);
+    let mut workers = JoinSet::new();
+    workers.spawn(worker::remove_expired_credentials(
+        state.database.clone(),
+        Duration::from_secs(state.identity.config.credential_cleanup_interval_seconds),
+        workers_stopped,
+    ));
     let server = serve(listener, router(state.clone()), stopped);
     tokio::pin!(server);
     tracing::info!("lorebayd ready");
     tokio::select! {
-        result = &mut server => return result,
+        biased;
         () = shutdown => {},
+        result = &mut server => return result,
     }
+    let _ = stop_workers.send(true);
     state.ready.store(false, Ordering::Release);
     tracing::info!("shutdown begun; readiness disabled");
     let drain = async {
-        tokio::select! {
-            result = &mut server => return result,
-            () = sleep(READINESS_PROPAGATION) => {},
-        }
-        let _ = stop.send(true);
-        server.await
+        let drain_server = async {
+            tokio::select! {
+                result = &mut server => return result,
+                () = sleep(READINESS_PROPAGATION) => {},
+            }
+            let _ = stop.send(true);
+            server.await
+        };
+        let (result, ()) = tokio::join!(drain_server, finish_workers(&mut workers));
+        result
     };
     match timeout(SHUTDOWN_TIMEOUT, drain).await {
         Ok(result) => result?,
-        Err(_) => tracing::warn!("shutdown deadline reached; closing remaining connections"),
+        Err(_) => {
+            tracing::warn!("shutdown deadline reached; closing remaining connections and workers");
+            workers.abort_all();
+            finish_workers(&mut workers).await;
+        }
     }
     tracing::info!("lorebayd stopped");
     Ok(())
+}
+
+async fn finish_workers(workers: &mut JoinSet<()>) {
+    while let Some(result) = workers.join_next().await {
+        if let Err(error) = result
+            && !error.is_cancelled()
+        {
+            tracing::error!(%error, "background job task failed");
+        }
+    }
 }
 
 fn router(state: ServerState) -> Router {

@@ -156,6 +156,8 @@ One row per agent; see [Identity](identity.md#6-agent-authorization).
 - **Revoking the authorization or deleting the account deletes the row.**
   Its access tokens then name no row and are rejected. Tasks keep the agent
   name they copied.
+- **A background job removes rows whose refresh token has expired**; see
+  [System architecture](system.md#6-background-jobs).
 
 ### 5.3 `login_session`
 

@@ -1,7 +1,7 @@
 # lorebay-base
 
 Shared Rust primitives for Lorebay crates: layered configuration, structured
-logging and the `Clock` trait for injecting time into consumers.
+logging, the `Clock` trait for injecting time, and periodic background jobs.
 
 ## Usage
 
@@ -33,6 +33,12 @@ exhaustion it returns the remaining wait. `IpAddr` keys preserve IPv4 addresses
 (including mapped IPv6) and group native IPv6 by /64. Clones share counters.
 Expired entries are swept at most once per window; each accessed key resets
 when its own window expires. Counters are in memory. Consumers validate tunables.
+
+`run_job(interval, shutdown, round)` runs an async closure serially at a
+positive `Duration` interval, starting after one interval. Missed ticks are
+skipped. Shutdown takes priority over a tick and lets the active round finish
+before returning. The caller owns spawning, error reporting and the shutdown
+deadline; dropping the runner cancels its active round.
 
 ## Configuration
 
