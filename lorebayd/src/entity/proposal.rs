@@ -5,13 +5,15 @@ use sea_orm::entity::prelude::*;
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel)]
 #[sea_orm(table_name = "proposal")]
 pub struct Model {
-    #[sea_orm(primary_key, auto_increment = false)]
-    pub id: i64,
-    pub space_id: i64,
+    #[sea_orm(primary_key, auto_increment = false, column_type = "Text")]
+    pub id: String,
+    #[sea_orm(column_type = "Text")]
+    pub space_id: String,
     pub number: i64,
     #[sea_orm(column_type = "Text")]
     pub kind: String,
-    pub knowledge_id: Option<i64>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub knowledge_id: Option<String>,
     pub base_version: Option<i64>,
     #[sea_orm(column_type = "Text", nullable)]
     pub new_name: Option<String>,
@@ -19,13 +21,16 @@ pub struct Model {
     pub new_summary: Option<String>,
     #[sea_orm(column_type = "Text", nullable)]
     pub new_content: Option<String>,
-    pub proposer_account_id: i64,
+    #[sea_orm(column_type = "Text")]
+    pub proposer_account_id: String,
     #[sea_orm(column_type = "Text", nullable)]
     pub proposer_agent_name: Option<String>,
-    pub from_task_id: Option<i64>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub from_task_id: Option<String>,
     #[sea_orm(column_type = "Text")]
     pub status: String,
-    pub decided_by: Option<i64>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub decided_by: Option<String>,
     pub decided_at: Option<i64>,
     #[sea_orm(column_type = "Text", nullable)]
     pub reject_reason: Option<String>,

@@ -5,11 +5,12 @@ use sea_orm::entity::prelude::*;
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel)]
 #[sea_orm(table_name = "oauth_code")]
 pub struct Model {
-    #[sea_orm(primary_key, auto_increment = false)]
-    pub id: i64,
+    #[sea_orm(primary_key, auto_increment = false, column_type = "Text")]
+    pub id: String,
     #[sea_orm(column_type = "Text", unique)]
     pub code_hash: String,
-    pub account_id: i64,
+    #[sea_orm(column_type = "Text")]
+    pub account_id: String,
     #[sea_orm(column_type = "Text")]
     pub client_id: String,
     #[sea_orm(column_type = "Text")]
@@ -18,7 +19,8 @@ pub struct Model {
     pub code_challenge: String,
     #[sea_orm(column_type = "Text", nullable)]
     pub agent_name: Option<String>,
-    pub replaces_authorization_id: Option<i64>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub replaces_authorization_id: Option<String>,
     pub created_at: i64,
     pub expires_at: i64,
 }

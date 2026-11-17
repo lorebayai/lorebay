@@ -5,10 +5,12 @@ use sea_orm::entity::prelude::*;
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel)]
 #[sea_orm(table_name = "artifact")]
 pub struct Model {
-    #[sea_orm(primary_key, auto_increment = false)]
-    pub id: i64,
-    pub space_id: i64,
-    pub task_id: i64,
+    #[sea_orm(primary_key, auto_increment = false, column_type = "Text")]
+    pub id: String,
+    #[sea_orm(column_type = "Text")]
+    pub space_id: String,
+    #[sea_orm(column_type = "Text")]
+    pub task_id: String,
     pub number: i64,
     #[sea_orm(column_type = "Text")]
     pub file_name: String,

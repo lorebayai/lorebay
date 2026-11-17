@@ -12,7 +12,7 @@
 > Participant rows hold only people. An agent's spaces and role are derived
 > from its person on every request, never stored.
 >
-> Integer row IDs never leave `lorebayd`. Callers see keys and task IDs.
+> Primary keys never leave `lorebayd`. Callers see keys and random task IDs.
 
 ## 1. Purpose
 
@@ -38,16 +38,25 @@ It does not cover:
   reserved in Postgres, so the tables are `account` and
   `agent_authorization`. The latter also tells an agent's credential apart
   from a person's login session.
-- **Types are only INTEGER and TEXT**, so the same definitions carry over to
-  Postgres, where INTEGER becomes BIGINT and AUTOINCREMENT an identity
-  column.
+- **Types are only INTEGER and TEXT.** Primary keys and their foreign keys
+  are TEXT on both SQLite and Postgres. Times, numbers, sizes and versions
+  remain INTEGER, declared with the big integer type so Postgres uses
+  BIGINT.
 - **Times are UTC milliseconds**, in columns ending in `_at`. A yes-or-no
   fact is a nullable time, never a flag: an empty `deleted_at` means not
   deleted.
-- **Every table has an integer primary key `id`**, used only inside
-  `lorebayd`. The APIs use the space key, such as `SPACE-1`, the other keys,
-  such as `TK-12`, and task IDs. A space is the exception: the number in
-  `SPACE-1` is its `id`.
+- **The application generates every primary key `id` before the insert.**
+  It is a UUIDv7 stored as canonical lowercase, hyphenated text: 36
+  characters with hexadecimal groups of 8, 4, 4, 4 and 12 digits, version 7
+  and the RFC variant. Every primary key is NOT NULL and has no database
+  generation or default.
+- **Primary keys identify internal rows and break ordering ties.** They
+  never define the business order and never appear in a token or an API.
+  Calls use public keys, such as `SPACE-1` and `TK-12`, and random task IDs.
+  A space's key uses its separate `number`, never its primary key.
+- **Random IDs remain separate from primary keys.** The task, login session
+  and agent authorization keep their 128-random-bit `random_id` columns.
+  A UUIDv7's timestamp and fewer random bits cannot replace those values.
 - **Keys.** A table whose rows have keys has a `number` column, unique
   together with `space_id`. The table fixes the prefix: `TK` for `task`, `KN`
   for `knowledge`, `AR` for `artifact` and `PP` for `proposal`. Numbers come
@@ -106,7 +115,7 @@ A mirror of the users file, synced at startup.
 
 | Column | Type | Constraints | Meaning |
 | --- | --- | --- | --- |
-| `id` | INTEGER | Primary key | |
+| `id` | TEXT | Primary key, not null | |
 | `username` | TEXT | Not null, unique | The username in the users file |
 | `deleted_at` | INTEGER | Nullable | When the username was removed from the file; empty while it is there |
 | `created_at` | INTEGER | Not null | When the first sync added it |
@@ -127,8 +136,8 @@ One row per agent; see [Identity](identity.md#6-agent-authorization).
 
 | Column | Type | Constraints | Meaning |
 | --- | --- | --- | --- |
-| `id` | INTEGER | Primary key | |
-| `account_id` | INTEGER | Not null, foreign key to `account` | The person who authorized |
+| `id` | TEXT | Primary key, not null | |
+| `account_id` | TEXT | Not null, foreign key to `account` | The person who authorized |
 | `client_id` | TEXT | Not null, foreign key to `oauth_client` | The registered client |
 | `name` | TEXT | Not null | The agent name; defaults to the client name, and the person may change it when consenting |
 | `random_id` | TEXT | Not null, unique | Names the authorization in its access tokens: 128 random bits, encoded as a string |
@@ -141,7 +150,7 @@ One row per agent; see [Identity](identity.md#6-agent-authorization).
   Replacing an agent of the same name is in [section 5.4](#54-oauth_code).
 - **Each request** verifies the access token's signature and expiry, finds
   the row by the `random_id` the token names, and checks that the account is
-  not deleted. The integer `id` never appears in a token.
+  not deleted. The primary key `id` never appears in a token.
 - **A refresh replaces the refresh token.** Its hash is overwritten, so the
   old refresh token stops working, and a new access token is signed.
 - **Revoking the authorization or deleting the account deletes the row.**
@@ -154,8 +163,8 @@ A person's login session, from the web pages or the `lorebay` CLI.
 
 | Column | Type | Constraints | Meaning |
 | --- | --- | --- | --- |
-| `id` | INTEGER | Primary key | |
-| `account_id` | INTEGER | Not null, foreign key to `account` | The person signed in |
+| `id` | TEXT | Primary key, not null | |
+| `account_id` | TEXT | Not null, foreign key to `account` | The person signed in |
 | `random_id` | TEXT | Not null, unique | Names the session in its access tokens: 128 random bits, encoded as a string |
 | `refresh_token_hash` | TEXT | Not null, unique | |
 | `created_at` | INTEGER | Not null | |
@@ -174,14 +183,14 @@ An authorization code, usable once.
 
 | Column | Type | Constraints | Meaning |
 | --- | --- | --- | --- |
-| `id` | INTEGER | Primary key | |
+| `id` | TEXT | Primary key, not null | |
 | `code_hash` | TEXT | Not null, unique | |
-| `account_id` | INTEGER | Not null, foreign key to `account` | The person who signed in and consented |
+| `account_id` | TEXT | Not null, foreign key to `account` | The person who signed in and consented |
 | `client_id` | TEXT | Not null | The registered client, or the built-in `lorebay` CLI client |
 | `redirect_uri` | TEXT | Not null | Must match when the code is exchanged |
 | `code_challenge` | TEXT | Not null | The PKCE S256 challenge |
 | `agent_name` | TEXT | Nullable | The agent name the person chose when consenting; empty for a code issued to the `lorebay` CLI |
-| `replaces_authorization_id` | INTEGER | Nullable, foreign key to `agent_authorization`, set null on delete | The authorization to replace, when the name was taken and the person chose to replace it |
+| `replaces_authorization_id` | TEXT | Nullable, foreign key to `agent_authorization`, set null on delete | The authorization to replace, when the name was taken and the person chose to replace it |
 | `created_at` | INTEGER | Not null | |
 | `expires_at` | INTEGER | Not null | |
 
@@ -201,7 +210,7 @@ The clients registered through Dynamic Client Registration; see
 
 | Column | Type | Constraints | Meaning |
 | --- | --- | --- | --- |
-| `id` | INTEGER | Primary key | |
+| `id` | TEXT | Primary key, not null | |
 | `client_id` | TEXT | Not null, unique | Generated at registration: 128 random bits, encoded as a string |
 | `client_name` | TEXT | Not null | The client name the client registered; the default agent name at consent |
 | `metadata` | TEXT | Not null | The registration as accepted, as JSON, with its redirect URIs |
@@ -218,7 +227,8 @@ The clients registered through Dynamic Client Registration; see
 
 | Column | Type | Constraints | Meaning |
 | --- | --- | --- | --- |
-| `id` | INTEGER | Primary key, AUTOINCREMENT | The 1 in `SPACE-1`; never reused |
+| `id` | TEXT | Primary key, not null | Internal UUIDv7 |
+| `number` | INTEGER | Not null, unique | The number in `SPACE-1`; never reused |
 | `name` | TEXT | Not null | Need not be unique |
 | `summary` | TEXT | Not null | |
 | `next_task_number` | INTEGER | Not null, default 1 | The next `TK` number |
@@ -235,8 +245,16 @@ The clients registered through Dynamic Client Registration; see
 - **Taking a key.** Creating a task, knowledge entry, artifact or proposal
   increments the matching counter in the same transaction and uses the value
   before the increment. Taking the current maximum plus one would reuse the
-  keys of deleted records. Space keys count up across the Lorebay through
-  AUTOINCREMENT.
+  keys of deleted records.
+- **Space numbers are permanent and count up across the Lorebay.** Creating
+  a space takes the highest `space.number` plus one, or 1 when no space
+  exists, inside the same write transaction that creates it and its owner
+  participant. Spaces are never deleted, so a committed number is never
+  reused. The unique constraint guards concurrent allocations; a number
+  conflict rolls back and retries the entire write transaction. On SQLite
+  the transaction begins in immediate mode; Postgres must also retry a
+  serialization failure. The primary key is generated independently of the
+  number.
 - **Spaces are never deleted**, as [Lorebay](../product/lorebay.md#2-scope)
   states, so this table has no delete.
 
@@ -244,9 +262,9 @@ The clients registered through Dynamic Client Registration; see
 
 | Column | Type | Constraints | Meaning |
 | --- | --- | --- | --- |
-| `id` | INTEGER | Primary key | |
-| `space_id` | INTEGER | Not null, foreign key to `space` | |
-| `account_id` | INTEGER | Not null, foreign key to `account` | |
+| `id` | TEXT | Primary key, not null | |
+| `space_id` | TEXT | Not null, foreign key to `space` | |
+| `account_id` | TEXT | Not null, foreign key to `account` | |
 | `role` | TEXT | Not null | `owner`, `admin`, `contributor` or `viewer` |
 | `created_at` | INTEGER | Not null | When the person joined |
 | `updated_at` | INTEGER | Not null | When the role last changed |
@@ -269,11 +287,11 @@ The clients registered through Dynamic Client Registration; see
 
 | Column | Type | Constraints | Meaning |
 | --- | --- | --- | --- |
-| `id` | INTEGER | Primary key | |
-| `space_id` | INTEGER | Not null, foreign key to `space` | |
+| `id` | TEXT | Primary key, not null | |
+| `space_id` | TEXT | Not null, foreign key to `space` | |
 | `number` | INTEGER | Not null | The `TK` number; `(space_id, number)` is unique |
 | `random_id` | TEXT | Not null, unique | The task ID: 128 random bits, encoded as a string |
-| `account_id` | INTEGER | Not null, foreign key to `account` | Whose task it is |
+| `account_id` | TEXT | Not null, foreign key to `account` | Whose task it is |
 | `agent_name` | TEXT | Not null | Copied from the authorization at creation |
 | `title` | TEXT | Not null | |
 | `status` | TEXT | Not null | `in progress` or `ended` |
@@ -305,8 +323,8 @@ The clients registered through Dynamic Client Registration; see
 
 | Column | Type | Constraints | Meaning |
 | --- | --- | --- | --- |
-| `id` | INTEGER | Primary key | |
-| `task_id` | INTEGER | Not null, foreign key to `task`, cascades on delete | |
+| `id` | TEXT | Primary key, not null | |
+| `task_id` | TEXT | Not null, foreign key to `task`, cascades on delete | |
 | `content` | TEXT | Not null | Markdown |
 | `created_at` | INTEGER | Not null | The note's time |
 
@@ -319,9 +337,9 @@ The clients registered through Dynamic Client Registration; see
 
 | Column | Type | Constraints | Meaning |
 | --- | --- | --- | --- |
-| `id` | INTEGER | Primary key | |
-| `space_id` | INTEGER | Not null, foreign key to `space` | The same as its task's space |
-| `task_id` | INTEGER | Not null; `(task_id, space_id)` is a foreign key to `task`, cascades on delete | |
+| `id` | TEXT | Primary key, not null | |
+| `space_id` | TEXT | Not null, foreign key to `space` | The same as its task's space |
+| `task_id` | TEXT | Not null; `(task_id, space_id)` is a foreign key to `task`, cascades on delete | |
 | `number` | INTEGER | Not null | The `AR` number; `(space_id, number)` is unique |
 | `file_name` | TEXT | Not null | |
 | `summary` | TEXT | Not null | |
@@ -352,8 +370,8 @@ One row per knowledge entry; its content is in `knowledge_version`.
 
 | Column | Type | Constraints | Meaning |
 | --- | --- | --- | --- |
-| `id` | INTEGER | Primary key | |
-| `space_id` | INTEGER | Not null, foreign key to `space` | |
+| `id` | TEXT | Primary key, not null | |
+| `space_id` | TEXT | Not null, foreign key to `space` | |
 | `number` | INTEGER | Not null | The `KN` number; `(space_id, number)` is unique |
 | `name` | TEXT | Not null | As written, and shown that way |
 | `name_key` | TEXT | Not null | `name` in lowercase; `(space_id, name_key)` is unique |
@@ -386,14 +404,14 @@ One row per knowledge entry; its content is in `knowledge_version`.
 
 | Column | Type | Constraints | Meaning |
 | --- | --- | --- | --- |
-| `id` | INTEGER | Primary key | |
-| `knowledge_id` | INTEGER | Not null, foreign key to `knowledge` | |
+| `id` | TEXT | Primary key, not null | |
+| `knowledge_id` | TEXT | Not null, foreign key to `knowledge` | |
 | `version` | INTEGER | Not null | Counts from 1 for each entry; `(knowledge_id, version)` is unique |
 | `kind` | TEXT | Not null | `content`, a version with content, or `deletion`, the version that deletes the entry |
 | `content` | TEXT | Nullable | Set for a `content` version, empty for a `deletion` |
 | `summary` | TEXT | Nullable | The same |
-| `applied_by` | INTEGER | Not null, foreign key to `account` | Who made it take effect: the person who changed the entry directly, or who approved the proposal |
-| `proposal_id` | INTEGER | Nullable, foreign key to `proposal` | The source proposal; empty for a direct change |
+| `applied_by` | TEXT | Not null, foreign key to `account` | Who made it take effect: the person who changed the entry directly, or who approved the proposal |
+| `proposal_id` | TEXT | Nullable, foreign key to `proposal` | The source proposal; empty for a direct change |
 | `created_at` | INTEGER | Not null | |
 
 - **Versions are only added.** Creating, changing, deleting and rolling back
@@ -410,20 +428,20 @@ One row per knowledge entry; its content is in `knowledge_version`.
 
 | Column | Type | Constraints | Meaning |
 | --- | --- | --- | --- |
-| `id` | INTEGER | Primary key | |
-| `space_id` | INTEGER | Not null, foreign key to `space` | |
+| `id` | TEXT | Primary key, not null | |
+| `space_id` | TEXT | Not null, foreign key to `space` | |
 | `number` | INTEGER | Not null | The `PP` number; `(space_id, number)` is unique |
 | `kind` | TEXT | Not null | `create`, `change` or `delete` |
-| `knowledge_id` | INTEGER | Nullable, foreign key to `knowledge` | Set on submission for a change or a delete; for a create, set on approval to the entry it created or restored |
+| `knowledge_id` | TEXT | Nullable, foreign key to `knowledge` | Set on submission for a change or a delete; for a create, set on approval to the entry it created or restored |
 | `base_version` | INTEGER | Nullable | For a change or a delete, the entry's latest version on submission |
 | `new_name` | TEXT | Nullable | Required for a create; for a change, set only to rename |
 | `new_summary` | TEXT | Nullable | Required for a create; for a change, set only to change it |
 | `new_content` | TEXT | Nullable | The same |
-| `proposer_account_id` | INTEGER | Not null, foreign key to `account` | Who proposed |
+| `proposer_account_id` | TEXT | Not null, foreign key to `account` | Who proposed |
 | `proposer_agent_name` | TEXT | Nullable | The agent name, copied, when an agent proposed; empty when a person proposed on the web |
-| `from_task_id` | INTEGER | Nullable, foreign key to `task`, set null on delete | The source task; empty for a proposal made on the web, or once the task is deleted |
+| `from_task_id` | TEXT | Nullable, foreign key to `task`, set null on delete | The source task; empty for a proposal made on the web, or once the task is deleted |
 | `status` | TEXT | Not null | `pending`, `approved` or `rejected` |
-| `decided_by` | INTEGER | Nullable, foreign key to `account` | Who approved or rejected it |
+| `decided_by` | TEXT | Nullable, foreign key to `account` | Who approved or rejected it |
 | `decided_at` | INTEGER | Nullable | |
 | `reject_reason` | TEXT | Nullable | Required when rejected |
 | `created_at` | INTEGER | Not null | |
@@ -466,14 +484,14 @@ the tables it references: `oauth_client` before `agent_authorization`, and
 -- Every connection turns on foreign key checks: PRAGMA foreign_keys = ON;
 
 CREATE TABLE account (
-  id          INTEGER PRIMARY KEY,
+  id          TEXT NOT NULL PRIMARY KEY,
   username    TEXT    NOT NULL UNIQUE,
   deleted_at  INTEGER,
   created_at  INTEGER NOT NULL
 );
 
 CREATE TABLE oauth_client (
-  id           INTEGER PRIMARY KEY,
+  id           TEXT NOT NULL PRIMARY KEY,
   client_id    TEXT    NOT NULL UNIQUE,
   client_name  TEXT    NOT NULL,
   metadata     TEXT    NOT NULL,
@@ -481,8 +499,8 @@ CREATE TABLE oauth_client (
 );
 
 CREATE TABLE agent_authorization (
-  id                  INTEGER PRIMARY KEY,
-  account_id          INTEGER NOT NULL REFERENCES account (id),
+  id                  TEXT NOT NULL PRIMARY KEY,
+  account_id          TEXT NOT NULL REFERENCES account (id),
   client_id           TEXT    NOT NULL REFERENCES oauth_client (client_id),
   name                TEXT    NOT NULL,
   random_id           TEXT    NOT NULL UNIQUE,
@@ -493,8 +511,8 @@ CREATE TABLE agent_authorization (
 );
 
 CREATE TABLE login_session (
-  id                  INTEGER PRIMARY KEY,
-  account_id          INTEGER NOT NULL REFERENCES account (id),
+  id                  TEXT NOT NULL PRIMARY KEY,
+  account_id          TEXT NOT NULL REFERENCES account (id),
   random_id           TEXT    NOT NULL UNIQUE,
   refresh_token_hash  TEXT    NOT NULL UNIQUE,
   created_at          INTEGER NOT NULL,
@@ -502,20 +520,21 @@ CREATE TABLE login_session (
 );
 
 CREATE TABLE oauth_code (
-  id              INTEGER PRIMARY KEY,
+  id              TEXT NOT NULL PRIMARY KEY,
   code_hash       TEXT    NOT NULL UNIQUE,
-  account_id      INTEGER NOT NULL REFERENCES account (id),
+  account_id      TEXT NOT NULL REFERENCES account (id),
   client_id       TEXT    NOT NULL,
   redirect_uri    TEXT    NOT NULL,
   code_challenge  TEXT    NOT NULL,
   agent_name      TEXT,
-  replaces_authorization_id  INTEGER REFERENCES agent_authorization (id) ON DELETE SET NULL,
+  replaces_authorization_id  TEXT REFERENCES agent_authorization (id) ON DELETE SET NULL,
   created_at      INTEGER NOT NULL,
   expires_at      INTEGER NOT NULL
 );
 
 CREATE TABLE space (
-  id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+  id                     TEXT NOT NULL PRIMARY KEY,
+  number                 INTEGER NOT NULL UNIQUE,
   name                   TEXT    NOT NULL,
   summary                TEXT    NOT NULL,
   next_task_number       INTEGER NOT NULL DEFAULT 1,
@@ -527,9 +546,9 @@ CREATE TABLE space (
 );
 
 CREATE TABLE participant (
-  id          INTEGER PRIMARY KEY,
-  space_id    INTEGER NOT NULL REFERENCES space (id),
-  account_id  INTEGER NOT NULL REFERENCES account (id),
+  id          TEXT NOT NULL PRIMARY KEY,
+  space_id    TEXT NOT NULL REFERENCES space (id),
+  account_id  TEXT NOT NULL REFERENCES account (id),
   role        TEXT    NOT NULL CHECK (role IN ('owner', 'admin', 'contributor', 'viewer')),
   created_at  INTEGER NOT NULL,
   updated_at  INTEGER NOT NULL,
@@ -539,11 +558,11 @@ CREATE UNIQUE INDEX participant_one_owner ON participant (space_id) WHERE role =
 CREATE INDEX participant_account ON participant (account_id);
 
 CREATE TABLE task (
-  id                INTEGER PRIMARY KEY,
-  space_id          INTEGER NOT NULL REFERENCES space (id),
+  id                TEXT NOT NULL PRIMARY KEY,
+  space_id          TEXT NOT NULL REFERENCES space (id),
   number            INTEGER NOT NULL,
   random_id         TEXT    NOT NULL UNIQUE,
-  account_id        INTEGER NOT NULL REFERENCES account (id),
+  account_id        TEXT NOT NULL REFERENCES account (id),
   agent_name        TEXT    NOT NULL,
   title             TEXT    NOT NULL,
   status            TEXT    NOT NULL CHECK (status IN ('in progress', 'ended')),
@@ -559,17 +578,17 @@ CREATE INDEX task_space_activity ON task (space_id, last_activity_at);
 CREATE INDEX task_space_account ON task (space_id, account_id, status);
 
 CREATE TABLE note (
-  id          INTEGER PRIMARY KEY,
-  task_id     INTEGER NOT NULL REFERENCES task (id) ON DELETE CASCADE,
+  id          TEXT NOT NULL PRIMARY KEY,
+  task_id     TEXT NOT NULL REFERENCES task (id) ON DELETE CASCADE,
   content     TEXT    NOT NULL,
   created_at  INTEGER NOT NULL
 );
 CREATE INDEX note_task_time ON note (task_id, created_at);
 
 CREATE TABLE artifact (
-  id            INTEGER PRIMARY KEY,
-  space_id      INTEGER NOT NULL REFERENCES space (id),
-  task_id       INTEGER NOT NULL,
+  id            TEXT NOT NULL PRIMARY KEY,
+  space_id      TEXT NOT NULL REFERENCES space (id),
+  task_id       TEXT NOT NULL,
   number        INTEGER NOT NULL,
   file_name     TEXT    NOT NULL,
   summary       TEXT    NOT NULL,
@@ -584,8 +603,8 @@ CREATE TABLE artifact (
 CREATE INDEX artifact_task ON artifact (task_id);
 
 CREATE TABLE knowledge (
-  id              INTEGER PRIMARY KEY,
-  space_id        INTEGER NOT NULL REFERENCES space (id),
+  id              TEXT NOT NULL PRIMARY KEY,
+  space_id        TEXT NOT NULL REFERENCES space (id),
   number          INTEGER NOT NULL,
   name            TEXT    NOT NULL,
   name_key        TEXT    NOT NULL,
@@ -598,20 +617,20 @@ CREATE TABLE knowledge (
 );
 
 CREATE TABLE proposal (
-  id                   INTEGER PRIMARY KEY,
-  space_id             INTEGER NOT NULL REFERENCES space (id),
+  id                   TEXT NOT NULL PRIMARY KEY,
+  space_id             TEXT NOT NULL REFERENCES space (id),
   number               INTEGER NOT NULL,
   kind                 TEXT    NOT NULL CHECK (kind IN ('create', 'change', 'delete')),
-  knowledge_id         INTEGER REFERENCES knowledge (id),
+  knowledge_id         TEXT REFERENCES knowledge (id),
   base_version         INTEGER,
   new_name             TEXT,
   new_summary          TEXT,
   new_content          TEXT,
-  proposer_account_id  INTEGER NOT NULL REFERENCES account (id),
+  proposer_account_id  TEXT NOT NULL REFERENCES account (id),
   proposer_agent_name  TEXT,
-  from_task_id         INTEGER REFERENCES task (id) ON DELETE SET NULL,
+  from_task_id         TEXT REFERENCES task (id) ON DELETE SET NULL,
   status               TEXT    NOT NULL CHECK (status IN ('pending', 'approved', 'rejected')),
-  decided_by           INTEGER REFERENCES account (id),
+  decided_by           TEXT REFERENCES account (id),
   decided_at           INTEGER,
   reject_reason        TEXT,
   created_at           INTEGER NOT NULL,
@@ -634,14 +653,14 @@ CREATE INDEX proposal_space_status ON proposal (space_id, status, created_at);
 CREATE INDEX proposal_knowledge ON proposal (knowledge_id);
 
 CREATE TABLE knowledge_version (
-  id            INTEGER PRIMARY KEY,
-  knowledge_id  INTEGER NOT NULL REFERENCES knowledge (id),
+  id            TEXT NOT NULL PRIMARY KEY,
+  knowledge_id  TEXT NOT NULL REFERENCES knowledge (id),
   version       INTEGER NOT NULL,
   kind          TEXT    NOT NULL CHECK (kind IN ('content', 'deletion')),
   content       TEXT,
   summary       TEXT,
-  applied_by    INTEGER NOT NULL REFERENCES account (id),
-  proposal_id   INTEGER REFERENCES proposal (id),
+  applied_by    TEXT NOT NULL REFERENCES account (id),
+  proposal_id   TEXT REFERENCES proposal (id),
   created_at    INTEGER NOT NULL,
   UNIQUE (knowledge_id, version),
   CHECK (

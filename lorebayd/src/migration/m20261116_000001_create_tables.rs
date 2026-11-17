@@ -57,7 +57,7 @@ impl MigrationTrait for Migration {
 fn account() -> TableCreateStatement {
     Table::create()
         .table(Account::Table)
-        .col(ColumnDef::new(Account::Id).big_integer().primary_key())
+        .col(text(Account::Id).primary_key())
         .col(text_uniq(Account::Username))
         .col(big_integer_null(Account::DeletedAt))
         .col(big_integer(Account::CreatedAt))
@@ -67,7 +67,7 @@ fn account() -> TableCreateStatement {
 fn oauth_client() -> TableCreateStatement {
     Table::create()
         .table(OauthClient::Table)
-        .col(ColumnDef::new(OauthClient::Id).big_integer().primary_key())
+        .col(text(OauthClient::Id).primary_key())
         .col(text_uniq(OauthClient::ClientId))
         .col(text(OauthClient::ClientName))
         .col(text(OauthClient::Metadata))
@@ -78,12 +78,8 @@ fn oauth_client() -> TableCreateStatement {
 fn agent_authorization() -> TableCreateStatement {
     Table::create()
         .table(AgentAuthorization::Table)
-        .col(
-            ColumnDef::new(AgentAuthorization::Id)
-                .big_integer()
-                .primary_key(),
-        )
-        .col(big_integer(AgentAuthorization::AccountId))
+        .col(text(AgentAuthorization::Id).primary_key())
+        .col(text(AgentAuthorization::AccountId))
         .col(text(AgentAuthorization::ClientId))
         .col(text(AgentAuthorization::Name))
         .col(text_uniq(AgentAuthorization::RandomId))
@@ -112,8 +108,8 @@ fn agent_authorization() -> TableCreateStatement {
 fn login_session() -> TableCreateStatement {
     Table::create()
         .table(LoginSession::Table)
-        .col(ColumnDef::new(LoginSession::Id).big_integer().primary_key())
-        .col(big_integer(LoginSession::AccountId))
+        .col(text(LoginSession::Id).primary_key())
+        .col(text(LoginSession::AccountId))
         .col(text_uniq(LoginSession::RandomId))
         .col(text_uniq(LoginSession::RefreshTokenHash))
         .col(big_integer(LoginSession::CreatedAt))
@@ -129,14 +125,14 @@ fn login_session() -> TableCreateStatement {
 fn oauth_code() -> TableCreateStatement {
     Table::create()
         .table(OauthCode::Table)
-        .col(ColumnDef::new(OauthCode::Id).big_integer().primary_key())
+        .col(text(OauthCode::Id).primary_key())
         .col(text_uniq(OauthCode::CodeHash))
-        .col(big_integer(OauthCode::AccountId))
+        .col(text(OauthCode::AccountId))
         .col(text(OauthCode::ClientId))
         .col(text(OauthCode::RedirectUri))
         .col(text(OauthCode::CodeChallenge))
         .col(text_null(OauthCode::AgentName))
-        .col(big_integer_null(OauthCode::ReplacesAuthorizationId))
+        .col(text_null(OauthCode::ReplacesAuthorizationId))
         .col(big_integer(OauthCode::CreatedAt))
         .col(big_integer(OauthCode::ExpiresAt))
         .foreign_key(
@@ -156,12 +152,8 @@ fn oauth_code() -> TableCreateStatement {
 fn space() -> TableCreateStatement {
     Table::create()
         .table(Space::Table)
-        .col(
-            ColumnDef::new(Space::Id)
-                .big_integer()
-                .primary_key()
-                .auto_increment(),
-        )
+        .col(text(Space::Id).primary_key())
+        .col(big_integer(Space::Number).unique_key())
         .col(text(Space::Name))
         .col(text(Space::Summary))
         .col(big_integer(Space::NextTaskNumber).default(1))
@@ -176,9 +168,9 @@ fn space() -> TableCreateStatement {
 fn participant() -> TableCreateStatement {
     Table::create()
         .table(Participant::Table)
-        .col(ColumnDef::new(Participant::Id).big_integer().primary_key())
-        .col(big_integer(Participant::SpaceId))
-        .col(big_integer(Participant::AccountId))
+        .col(text(Participant::Id).primary_key())
+        .col(text(Participant::SpaceId))
+        .col(text(Participant::AccountId))
         .col(text(Participant::Role))
         .col(big_integer(Participant::CreatedAt))
         .col(big_integer(Participant::UpdatedAt))
@@ -205,11 +197,11 @@ fn participant() -> TableCreateStatement {
 fn task() -> TableCreateStatement {
     Table::create()
         .table(Task::Table)
-        .col(ColumnDef::new(Task::Id).big_integer().primary_key())
-        .col(big_integer(Task::SpaceId))
+        .col(text(Task::Id).primary_key())
+        .col(text(Task::SpaceId))
         .col(big_integer(Task::Number))
         .col(text_uniq(Task::RandomId))
-        .col(big_integer(Task::AccountId))
+        .col(text(Task::AccountId))
         .col(text(Task::AgentName))
         .col(text(Task::Title))
         .col(text(Task::Status))
@@ -246,8 +238,8 @@ fn task() -> TableCreateStatement {
 fn note() -> TableCreateStatement {
     Table::create()
         .table(Note::Table)
-        .col(ColumnDef::new(Note::Id).big_integer().primary_key())
-        .col(big_integer(Note::TaskId))
+        .col(text(Note::Id).primary_key())
+        .col(text(Note::TaskId))
         .col(text(Note::Content))
         .col(big_integer(Note::CreatedAt))
         .foreign_key(
@@ -262,9 +254,9 @@ fn note() -> TableCreateStatement {
 fn artifact() -> TableCreateStatement {
     Table::create()
         .table(Artifact::Table)
-        .col(ColumnDef::new(Artifact::Id).big_integer().primary_key())
-        .col(big_integer(Artifact::SpaceId))
-        .col(big_integer(Artifact::TaskId))
+        .col(text(Artifact::Id).primary_key())
+        .col(text(Artifact::SpaceId))
+        .col(text(Artifact::TaskId))
         .col(big_integer(Artifact::Number))
         .col(text(Artifact::FileName))
         .col(text(Artifact::Summary))
@@ -300,8 +292,8 @@ fn artifact() -> TableCreateStatement {
 fn knowledge() -> TableCreateStatement {
     Table::create()
         .table(Knowledge::Table)
-        .col(ColumnDef::new(Knowledge::Id).big_integer().primary_key())
-        .col(big_integer(Knowledge::SpaceId))
+        .col(text(Knowledge::Id).primary_key())
+        .col(text(Knowledge::SpaceId))
         .col(big_integer(Knowledge::Number))
         .col(text(Knowledge::Name))
         .col(text(Knowledge::NameKey))
@@ -332,20 +324,20 @@ fn knowledge() -> TableCreateStatement {
 fn proposal() -> TableCreateStatement {
     let mut table = Table::create()
         .table(Proposal::Table)
-        .col(ColumnDef::new(Proposal::Id).big_integer().primary_key())
-        .col(big_integer(Proposal::SpaceId))
+        .col(text(Proposal::Id).primary_key())
+        .col(text(Proposal::SpaceId))
         .col(big_integer(Proposal::Number))
         .col(text(Proposal::Kind))
-        .col(big_integer_null(Proposal::KnowledgeId))
+        .col(text_null(Proposal::KnowledgeId))
         .col(big_integer_null(Proposal::BaseVersion))
         .col(text_null(Proposal::NewName))
         .col(text_null(Proposal::NewSummary))
         .col(text_null(Proposal::NewContent))
-        .col(big_integer(Proposal::ProposerAccountId))
+        .col(text(Proposal::ProposerAccountId))
         .col(text_null(Proposal::ProposerAgentName))
-        .col(big_integer_null(Proposal::FromTaskId))
+        .col(text_null(Proposal::FromTaskId))
         .col(text(Proposal::Status))
-        .col(big_integer_null(Proposal::DecidedBy))
+        .col(text_null(Proposal::DecidedBy))
         .col(big_integer_null(Proposal::DecidedAt))
         .col(text_null(Proposal::RejectReason))
         .col(big_integer(Proposal::CreatedAt))
@@ -454,18 +446,14 @@ fn proposal_kind() -> Condition {
 fn knowledge_version() -> TableCreateStatement {
     Table::create()
         .table(KnowledgeVersion::Table)
-        .col(
-            ColumnDef::new(KnowledgeVersion::Id)
-                .big_integer()
-                .primary_key(),
-        )
-        .col(big_integer(KnowledgeVersion::KnowledgeId))
+        .col(text(KnowledgeVersion::Id).primary_key())
+        .col(text(KnowledgeVersion::KnowledgeId))
         .col(big_integer(KnowledgeVersion::Version))
         .col(text(KnowledgeVersion::Kind))
         .col(text_null(KnowledgeVersion::Content))
         .col(text_null(KnowledgeVersion::Summary))
-        .col(big_integer(KnowledgeVersion::AppliedBy))
-        .col(big_integer_null(KnowledgeVersion::ProposalId))
+        .col(text(KnowledgeVersion::AppliedBy))
+        .col(text_null(KnowledgeVersion::ProposalId))
         .col(big_integer(KnowledgeVersion::CreatedAt))
         .index(
             Index::create()
@@ -716,6 +704,7 @@ enum Space {
     NextKnowledgeNumber,
     NextProposalNumber,
     NextTaskNumber,
+    Number,
     Summary,
     Table,
     UpdatedAt,

@@ -42,6 +42,10 @@ by the `AGENTS.md` of every Rust project that uses SeaORM.
 - Integer columns must use the big integer type (`big_integer`,
   `big_integer_null` or `ColumnDef::big_integer`), so they are 64-bit on
   Postgres and remain INTEGER on SQLite.
+- The application must generate every primary key before the insert.
+  Migrations must declare TEXT NOT NULL primary keys with no auto-increment
+  or database default, as [Data model](../../docs/architecture/data-model.md#3-conventions)
+  requires.
 - A migration merged to `main` is never edited, renamed or reordered. A
   schema change is a new migration.
 - `down` reverses `up` and runs only against disposable databases.
