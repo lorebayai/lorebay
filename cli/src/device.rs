@@ -1,5 +1,6 @@
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
+use httpdate::parse_http_date;
 use lorebay_base::Secret;
 use reqwest::header::RETRY_AFTER;
 use reqwest::{Response, StatusCode};
@@ -161,8 +162,18 @@ fn retry_after(response: &Response) -> Duration {
         .headers()
         .get(RETRY_AFTER)
         .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.parse::<u64>().ok())
-        .map(Duration::from_secs)
+        .and_then(|value| {
+            value
+                .parse::<u64>()
+                .ok()
+                .map(Duration::from_secs)
+                .or_else(|| {
+                    parse_http_date(value)
+                        .ok()?
+                        .duration_since(SystemTime::now())
+                        .ok()
+                })
+        })
         .unwrap_or_default()
 }
 

@@ -3,7 +3,9 @@ use std::io;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+use httpdate::fmt_http_date;
 
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -314,6 +316,29 @@ async fn login_device_retries_at_server_pace_when_rate_limited() {
 }
 
 #[tokio::test]
+async fn login_device_waits_until_date_when_rate_limited() {
+    let proxy = Proxy::configured(json!({"device_poll_interval_seconds": 1})).await;
+    proxy.fault.store(DEVICE_RATE_LIMIT_DATE, Ordering::SeqCst);
+    let login = proxy.device_login().await;
+    proxy.wait_for_polls(3).await;
+    proxy.server.decide_device(&login, "approve").await;
+    assert_success(&login.finish().await);
+    let requests = proxy.requests.lock().await;
+    assert_eq!(requests.len(), 4);
+    assert_eq!(
+        requests
+            .iter()
+            .map(|r| r["status"].as_u64().unwrap())
+            .collect::<Vec<_>>(),
+        vec![429, 429, 400, 200]
+    );
+    assert!(requests[1]["elapsed_ms"].as_u64().unwrap() >= 2000);
+    assert!((1000..2000).contains(&requests[2]["elapsed_ms"].as_u64().unwrap()));
+    assert!((1000..2000).contains(&requests[3]["elapsed_ms"].as_u64().unwrap()));
+    assert_success(&proxy.server.run(&["agent", "list"]).await);
+}
+
+#[tokio::test]
 async fn login_device_stops_at_expiry_when_token_request_does_not_return() {
     let proxy = Proxy::configured(json!({"device_poll_interval_seconds": 1,
         "device_request_lifetime_seconds": 3}))
@@ -356,6 +381,8 @@ const DEVICE_UNAVAILABLE: u8 = 10;
 const DEVICE_SERVER_ERROR: u8 = 11;
 const DEVICE_SLOW_DOWN_OUTAGE: u8 = 12;
 const DEVICE_OUTAGE_ONCE: u8 = 13;
+const DEVICE_RATE_LIMIT_DATE: u8 = 14;
+const DEVICE_RATE_LIMIT_PAST_DATE: u8 = 15;
 const HTTP_DEADLINE: Duration = Duration::from_secs(8);
 
 struct Proxy {
@@ -549,6 +576,9 @@ async fn device_response(
     {
         return upstream(&state.upstream, request, body).await;
     }
+    if let Some(response) = dated_rate_limit_response(&state.fault) {
+        return Ok(response);
+    }
     if let Some(response) = server_error_response(&state.fault) {
         return Ok(response);
     }
@@ -574,6 +604,19 @@ async fn device_response(
         return Ok(b"HTTP/1.1 429 Too Many Requests\r\nRetry-After: 0\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_vec());
     }
     Ok(response)
+}
+
+fn dated_rate_limit_response(fault: &AtomicU8) -> Option<Vec<u8>> {
+    let deadline = if take_fault(fault, DEVICE_RATE_LIMIT_DATE) {
+        fault.store(DEVICE_RATE_LIMIT_PAST_DATE, Ordering::SeqCst);
+        SystemTime::now() + Duration::from_secs(3)
+    } else if take_fault(fault, DEVICE_RATE_LIMIT_PAST_DATE) {
+        UNIX_EPOCH
+    } else {
+        return None;
+    };
+    let date = fmt_http_date(deadline);
+    Some(format!("HTTP/1.1 429 Too Many Requests\r\nRetry-After: {date}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").into_bytes())
 }
 
 fn server_error_response(fault: &AtomicU8) -> Option<Vec<u8>> {
