@@ -28,7 +28,8 @@ operation through that API, subject to the scope below.
 
 This doc covers commands, sign-in from a terminal, stored credentials,
 output, pagination, deletion confirmation and exit codes. The CLI is a
-separate executable from `lorebayd`.
+separate executable from `lorebayd`. For personal access tokens, see
+[Identity](../architecture/identity.md#2-scope).
 
 It does not cover:
 
@@ -37,7 +38,6 @@ It does not cover:
   these belong to the pages `lorebayd` serves;
 - changing a task's title or result, or setting it back to `in progress`:
   agents do these; the CLI can close a task;
-- signing in with a personal access token;
 - rendering Markdown;
 - updating the CLI itself.
 
@@ -76,11 +76,11 @@ contains spaces. Optional arguments appear in brackets. List rows follow
 | `space list` | List own spaces | Space keys, names, summaries and the person's roles |
 | `space create --name <name> --summary <summary>` | Create a space | Created space: key, name, summary and role |
 | `space show <space>` | Read a space | Space key, name, summary and role |
-| `space rename <space> [--name <name>] [--summary <summary>]` | Change a space's name and summary | Updated space, in the same form as `space show` |
+| `space change <space> [--name <name>] [--summary <summary>]` | Change a space's name and summary | Updated space, in the same form as `space show` |
 | `user list` | List the users in the users file | Usernames |
 | `participant list <space>` | List a space's participants | Human usernames and agent names, with each agent's person, and their types and roles |
 | `participant add <space> <username> --role <role>` | Add a participant | Added participant |
-| `participant set-role <space> <username> <role>` | Change a participant's role | Updated participant |
+| `participant set-role <space> <username> --role <role>` | Change a participant's role | Updated participant |
 | `participant remove <space> <username>` | Remove a participant | Removal result |
 | `task list <space> [--person <username>] [--agent <name>] [--status <status>] [--keyword <text>]` | List tasks | Task keys, titles, statuses, people, agent names and last activity times |
 | `task show <space> <task>` | Read a task | Task fields, including its task ID, result and completed artifact list |
@@ -106,7 +106,7 @@ contains spaces. Optional arguments appear in brackets. List rows follow
 | `proposal approve <space> <proposal>` | Approve a proposal | Decided proposal |
 | `proposal reject <space> <proposal> --reason <reason>` | Reject a proposal, including withdrawing one's own party's | Decided proposal |
 
-- **An update requires a field to change.** `space rename`, `knowledge
+- **An update requires a field to change.** `space change`, `knowledge
   change` and `proposal change` require at least one of their optional
   fields; omitted fields are unchanged. Proposal inputs and version behavior
   follow [Knowledge](knowledge.md#3-knowledge-entries).
@@ -191,15 +191,15 @@ contains spaces. Optional arguments appear in brackets. List rows follow
   sign-in links, the short code meant for the person, and next-page hints.
   Output mode is explicit and does not change when a stream is redirected.
 - **A failure prints one line and no success data.** In `human`, use the Web
-  API error's message when present, with line breaks and other control
-  characters escaped. In `json`, print one object with the Web API error's
-  fields, preserving its `code`; a login hint goes in an added `message`
-  field. OAuth failures use the OAuth error code as `code` and its description
-  as `message`. Local failures use `code` and `message`: `cli.usage`,
+  API error's `title`, followed by each field error's `message`, with line
+  breaks and other control characters escaped. In `json`, print one object
+  with the Web API error's fields, preserving its `code`; a login hint goes
+  in an added `message` field. OAuth failures use the OAuth error code as
+  `code` and its description as `message`. Local failures use `code` and
+  `message`: `cli.usage`,
   `cli.login_required`, `cli.connection`, `cli.credentials`, `cli.timeout`
   or `cli.cancelled`, as appropriate. A missing or ended login session also
-  gives the `lorebay login` hint, in that same line. An API error with no
-  message uses its title. No error includes a token.
+  gives the `lorebay login` hint, in that same line. No error includes a token.
 - **Server text cannot control the terminal.** In `human`, escape control
   characters in all server-supplied fields, prompts, hints and error text,
   including terminal escape sequences, except that multiline text keeps
@@ -237,13 +237,14 @@ Exit codes:
 ## 7. Deletion confirmation
 
 - **A deleting command needs an explicit yes.** This covers `task delete`,
-  `note delete`, `artifact delete`, `knowledge delete`, `participant remove`
-  and `agent revoke`. Before sending the operation it names the target on
-  standard error and accepts only `y` or `yes`, ignoring case. An empty
+  `note delete`, `artifact delete`, `knowledge delete` and `agent revoke`.
+  Before sending the operation it names the target on standard error and
+  accepts only `y` or `yes`, ignoring case. An empty
   answer, end of input or any other answer cancels the operation. When input
   is not a terminal, the CLI does not read it and treats it as no. Nothing
   is deleted, and cancellation exits 1.
 - **`--yes` skips the question.** It is accepted on these deleting commands
-  in both output modes. Logout is an explicit sign-out and needs no further
-  confirmation. `proposal delete` submits a proposal rather than deleting
+  in both output modes. `participant remove` runs without a confirmation
+  prompt. Logout is an explicit sign-out and needs no further confirmation.
+  `proposal delete` submits a proposal rather than deleting
   an entry; it follows [Knowledge](knowledge.md#4-proposals).
