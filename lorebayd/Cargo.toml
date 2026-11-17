@@ -19,6 +19,7 @@ hyper-util.workspace = true
 hyper.workspace = true
 jsonwebtoken.workspace = true
 lorebay-base.workspace = true
+rmcp.workspace = true
 sea-orm-migration.workspace = true
 sea-orm.workspace = true
 serde.workspace = true
