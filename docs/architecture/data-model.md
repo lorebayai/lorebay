@@ -240,11 +240,21 @@ The clients registered through Dynamic Client Registration; see
 | `client_name` | TEXT | Not null | The client name the client registered; the default agent name at consent |
 | `metadata` | TEXT | Not null | The registration as accepted, as JSON, with its redirect URIs |
 | `created_at` | INTEGER | Not null | |
+| `first_authorized_at` | INTEGER | Nullable | When the first agent authorization was issued; null means never authorized |
 
 - **Authorization looks the client up by `client_id`** and checks the
   `redirect_uri` against the registered ones.
-- **Rows are never deleted or changed.** An `agent_authorization` row names
-  its client, and a client registers again to change its metadata.
+- **The first successful authorization is remembered permanently.** The code
+  exchange sets `first_authorized_at` in the transaction that creates the
+  agent authorization, only when it is null. Revocation, replacement and
+  expiry never clear it. When upgrading, clients with an agent authorization
+  take the earliest authorization's `created_at`.
+- **Only unused clients are deleted.** The background job removes a client
+  older than `unused_client_lifetime_seconds` only when
+  `first_authorized_at` is null and no unexpired, unexchanged authorization
+  code names it.
+  A client that ever had an agent authorization is kept. Registration metadata
+  is immutable; a client registers again to change it.
 
 ### 5.6 `refresh_token_history`
 
@@ -542,11 +552,12 @@ CREATE TABLE account (
 );
 
 CREATE TABLE oauth_client (
-  id           TEXT NOT NULL PRIMARY KEY,
-  client_id    TEXT    NOT NULL UNIQUE,
-  client_name  TEXT    NOT NULL,
-  metadata     TEXT    NOT NULL,
-  created_at   INTEGER NOT NULL
+  id                   TEXT NOT NULL PRIMARY KEY,
+  client_id            TEXT    NOT NULL UNIQUE,
+  client_name          TEXT    NOT NULL,
+  metadata             TEXT    NOT NULL,
+  created_at           INTEGER NOT NULL,
+  first_authorized_at  INTEGER
 );
 
 CREATE TABLE agent_authorization (

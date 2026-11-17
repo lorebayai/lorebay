@@ -1,3 +1,6 @@
+use std::net::IpAddr;
+
+use lorebay_base::Secret;
 use sea_orm::{
     ConnectionTrait, DatabaseConnection, Set, SqliteTransactionMode, TransactionOptions,
     TransactionTrait,
@@ -81,7 +84,7 @@ pub(crate) async fn decide_authorization(
     input: AuthorizationInput,
     decision: AuthorizationDecision,
     public_url: &str,
-) -> Result<String, AuthorizationError> {
+) -> Result<Secret<String>, AuthorizationError> {
     let caller = caller.person()?;
     let transaction = database
         .begin_with_options(TransactionOptions {
@@ -99,7 +102,7 @@ pub(crate) async fn decide_authorization(
             let code = issue_code(&transaction, caller, &input, agent_name, conflict).await?;
             ("code", code)
         }
-        AuthorizationDecision::Decline => ("error", "access_denied".to_owned()),
+        AuthorizationDecision::Decline => ("error", Secret::from("access_denied".to_owned())),
     };
     let redirect = redirect_url(&input, public_url, response)?;
     transaction.commit().await?;
@@ -120,7 +123,7 @@ async fn issue_code<C: ConnectionTrait>(
     input: &AuthorizationInput,
     agent_name: Option<String>,
     conflict: AgentNameConflict,
-) -> Result<String, AuthorizationError> {
+) -> Result<Secret<String>, AuthorizationError> {
     let existing = if let Some(name) = &agent_name {
         AgentAuthorizationRepository::builder()
             .connection(connection)
@@ -134,11 +137,11 @@ async fn issue_code<C: ConnectionTrait>(
         (Some(_), AgentNameConflict::Reject) => return Err(AuthorizationError::AgentNameTaken),
         (existing, _) => existing.map(|authorization| authorization.id),
     };
-    let code = random_id().map_err(anyhow::Error::from)?;
+    let code = Secret::from(random_id().map_err(anyhow::Error::from)?);
     let now = now_millis()?;
     let model = ActiveModel {
         id: Set(primary_key()),
-        code_hash: Set(token_hash(&code)),
+        code_hash: Set(token_hash(code.expose())),
         account_id: Set(caller.account_id.clone()),
         client_id: Set(input.client_id.clone()),
         redirect_uri: Set(input.redirect_uri.clone()),
@@ -177,7 +180,11 @@ async fn client_details<C: ConnectionTrait>(
             .ok_or(AuthorizationError::InvalidParameter("client_id"))?;
         let metadata: RegisteredRedirects =
             serde_json::from_str(&client.metadata).map_err(anyhow::Error::from)?;
-        if !metadata.redirect_uris.contains(&input.redirect_uri) {
+        if !metadata
+            .redirect_uris
+            .iter()
+            .any(|registered| redirect_matches(registered, &input.redirect_uri))
+        {
             return Err(AuthorizationError::InvalidParameter("redirect_uri"));
         }
         Some(client.client_name)
@@ -203,6 +210,42 @@ fn loopback_redirect(url: &Url) -> bool {
         && url.fragment().is_none()
 }
 
+fn redirect_matches(registered: &str, requested: &str) -> bool {
+    if registered == requested {
+        return true;
+    }
+    match (loopback_parts(registered), loopback_parts(requested)) {
+        (Some(registered), Some(requested)) => registered == requested,
+        _ => false,
+    }
+}
+
+fn loopback_parts(uri: &str) -> Option<(&str, &str, &str)> {
+    let (scheme, tail) = uri.split_once("://")?;
+    if !scheme.eq_ignore_ascii_case("http") {
+        return None;
+    }
+    let end = tail.find(['/', '?', '#']).unwrap_or(tail.len());
+    let (authority, suffix) = tail.split_at(end);
+    let host_end = if authority.starts_with('[') {
+        authority.find(']')? + 1
+    } else {
+        authority.find(':').unwrap_or(authority.len())
+    };
+    let (host, port) = authority.split_at(host_end);
+    let literal = host
+        .strip_prefix('[')
+        .and_then(|host| host.strip_suffix(']'))
+        .unwrap_or(host);
+    if !literal.parse::<IpAddr>().ok()?.is_loopback() {
+        return None;
+    }
+    if !port.is_empty() {
+        port.strip_prefix(':')?.parse::<u16>().ok()?;
+    }
+    Some((scheme, host, suffix))
+}
+
 fn chosen_agent_name(
     details: AuthorizationDetails,
     name: Option<String>,
@@ -223,8 +266,8 @@ fn chosen_agent_name(
 fn redirect_url(
     input: &AuthorizationInput,
     public_url: &str,
-    response: (&str, String),
-) -> Result<String, AuthorizationError> {
+    response: (&str, Secret<String>),
+) -> Result<Secret<String>, AuthorizationError> {
     let mut redirect = Url::parse(&input.redirect_uri)
         .map_err(|_| AuthorizationError::InvalidParameter("redirect_uri"))?;
     let query: Vec<_> = redirect
@@ -235,11 +278,11 @@ fn redirect_url(
     redirect.set_query(None);
     let mut parameters = redirect.query_pairs_mut();
     parameters.extend_pairs(query);
-    parameters.append_pair(response.0, &response.1);
+    parameters.append_pair(response.0, response.1.expose());
     if let Some(state) = &input.state {
         parameters.append_pair("state", state);
     }
     parameters.append_pair("iss", &authorization_server_metadata(public_url).issuer);
     drop(parameters);
-    Ok(redirect.into())
+    Ok(Secret::from(String::from(redirect)))
 }

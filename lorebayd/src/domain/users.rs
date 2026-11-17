@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use anyhow::{Context, Result, anyhow, bail};
+use lorebay_base::Secret;
 use serde::Deserialize;
 use serde_path_to_error::{Error as PathError, Segment};
 use serde_yaml_ng::{Deserializer, Value};
@@ -14,8 +15,8 @@ use super::user_store::UserStore;
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
 pub(crate) struct FileUserStore {
-    hashes: BTreeMap<String, String>,
-    dummy_hash: String,
+    hashes: BTreeMap<String, Secret<String>>,
+    dummy_hash: Secret<String>,
 }
 
 impl UserStore for FileUserStore {
@@ -25,7 +26,7 @@ impl UserStore for FileUserStore {
 
     fn verify(&self, username: &str, password: &str) -> Result<bool> {
         let hash = self.hashes.get(username).unwrap_or(&self.dummy_hash);
-        let matches = verify_password(password, hash)?;
+        let matches = verify_password(password, hash.expose())?;
         Ok(matches && self.hashes.contains_key(username))
     }
 }
@@ -49,7 +50,8 @@ impl FileUserStore {
         for (index, user) in users.into_iter().enumerate() {
             let context = format!("entry {} (username {:?})", index + 1, user.username);
             validate_username(&user.username).with_context(|| context.clone())?;
-            let current = validate_hash(&user.password_hash).with_context(|| context.clone())?;
+            let current =
+                validate_hash(user.password_hash.expose()).with_context(|| context.clone())?;
             if parameters
                 .as_ref()
                 .is_some_and(|expected| expected != &current)
@@ -77,7 +79,7 @@ impl FileUserStore {
 #[serde(deny_unknown_fields)]
 struct User {
     username: String,
-    password_hash: String,
+    password_hash: Secret<String>,
 }
 
 fn validate_username(username: &str) -> Result<()> {

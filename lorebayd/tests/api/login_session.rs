@@ -11,9 +11,11 @@ async fn log_in_returns_access_and_refresh_tokens_when_password_matches() {
     let server = Server::start().await;
     let response = server.log_in(TEST_USERNAME, TEST_PASSWORD).await;
     assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()["cache-control"], "no-store");
     let body: Value = response.json().await.unwrap();
     assert_eq!(body["meta"], json!({}));
     let tokens = &body["data"];
+    server.assert_token_issuer(tokens).await;
     let access = tokens["access_token"].as_str().unwrap();
     assert_eq!(access.split('.').count(), 3);
     assert_eq!(tokens["refresh_token"].as_str().unwrap().len(), 44);
@@ -53,16 +55,21 @@ async fn log_in_fails_when_password_is_wrong() {
 
 #[tokio::test]
 async fn refresh_login_session_returns_new_tokens() {
-    let server = Server::start().await;
+    let server = Server::configured(|config| {
+        config.public_url = "https://lorebay.test:8443/".to_owned();
+    })
+    .await;
     let mut tokens = server.tokens().await;
     for _ in 0..2 {
         let response = server
             .refresh(tokens["refresh_token"].as_str().unwrap())
             .await;
         assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()["cache-control"], "no-store");
         let body: Value = response.json().await.unwrap();
         assert_eq!(body["meta"], json!({}));
         let new = &body["data"];
+        server.assert_token_issuer(new).await;
         assert_ne!(new["access_token"], tokens["access_token"]);
         assert_ne!(new["refresh_token"], tokens["refresh_token"]);
         tokens = new.clone();

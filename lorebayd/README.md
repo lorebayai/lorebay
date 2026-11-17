@@ -65,8 +65,9 @@ Relative paths resolve against the working directory.
 | `login_rate_limit` | `LOREBAYD__LOGIN_RATE_LIMIT` | `10` | Positive u32 attempts per peer IP per window |
 | `login_rate_window_seconds` | `LOREBAYD__LOGIN_RATE_WINDOW_SECONDS` | `60` | 1..315360000 seconds |
 | `credential_cleanup_interval_seconds` | `LOREBAYD__CREDENTIAL_CLEANUP_INTERVAL_SECONDS` | `300` | 1..315360000 seconds |
-| `registration_rate_limit` | `LOREBAYD__REGISTRATION_RATE_LIMIT` | `20` | Positive u32 attempts per peer IP per window |
-| `registration_rate_window_seconds` | `LOREBAYD__REGISTRATION_RATE_WINDOW_SECONDS` | `60` | Positive fixed window in seconds |
+| `unused_client_lifetime_seconds` | `LOREBAYD__UNUSED_CLIENT_LIFETIME_SECONDS` | `2592000` | 1..315360000 seconds |
+| `registration_rate_limit` | `LOREBAYD__REGISTRATION_RATE_LIMIT` | `10` | Positive u32 attempts per peer IP per window |
+| `registration_rate_window_seconds` | `LOREBAYD__REGISTRATION_RATE_WINDOW_SECONDS` | `3600` | Positive fixed window in seconds |
 | `registration_client_name_max_bytes` | `LOREBAYD__REGISTRATION_CLIENT_NAME_MAX_BYTES` | `256` | Positive maximum UTF-8 bytes in a client name |
 | `registration_redirect_uri_limit` | `LOREBAYD__REGISTRATION_REDIRECT_URI_LIMIT` | `4` | Positive maximum redirect URI count |
 | `registration_redirect_uri_max_bytes` | `LOREBAYD__REGISTRATION_REDIRECT_URI_MAX_BYTES` | `2048` | Positive maximum UTF-8 bytes per redirect URI |

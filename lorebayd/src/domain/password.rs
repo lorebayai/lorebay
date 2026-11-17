@@ -3,12 +3,13 @@ use argon2::password_hash::{
     Error as PasswordError, PasswordHasher, PasswordVerifier, phc::PasswordHash,
 };
 use argon2::{Argon2, Params};
+use lorebay_base::Secret;
 
 /// Produces an Argon2id PHC string with a fresh random salt.
-pub fn hash_password(password: &str) -> Result<String> {
+pub fn hash_password(password: &str) -> Result<Secret<String>> {
     Argon2::default()
         .hash_password(password.as_bytes())
-        .map(|hash| hash.to_string())
+        .map(|hash| Secret::from(hash.to_string()))
         .map_err(|_| anyhow!("could not hash password"))
 }
 

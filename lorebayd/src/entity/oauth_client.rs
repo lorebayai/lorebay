@@ -14,6 +14,7 @@ pub struct Model {
     #[sea_orm(column_type = "Text")]
     pub metadata: String,
     pub created_at: i64,
+    pub first_authorized_at: Option<i64>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

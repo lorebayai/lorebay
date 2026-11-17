@@ -1,3 +1,5 @@
+use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use reqwest::{Method, Response, StatusCode};
 use sea_orm::sea_query::{Alias, Expr, Query};
 use sea_orm::{ConnectionTrait, Database};
@@ -18,6 +20,21 @@ pub struct AuthorizedAgent {
 }
 
 impl Server {
+    pub async fn assert_token_issuer(&self, tokens: &Value) {
+        let metadata = self.get("/.well-known/oauth-authorization-server").await;
+        assert_eq!(metadata.status(), StatusCode::OK);
+        let metadata = metadata.json::<Value>().await.unwrap();
+        let payload = tokens["access_token"]
+            .as_str()
+            .unwrap()
+            .split('.')
+            .nth(1)
+            .unwrap();
+        let claims: Value =
+            serde_json::from_slice(&URL_SAFE_NO_PAD.decode(payload).unwrap()).unwrap();
+        assert_eq!(claims["iss"], metadata["issuer"]);
+    }
+
     pub async fn register_client(&self, name: &str) -> String {
         let response = self
             .json(
@@ -77,7 +94,10 @@ impl Server {
             ("code", code),
             ("redirect_uri", REDIRECT_URI),
             ("code_verifier", PKCE_VERIFIER),
-            ("resource", &format!("http://{}/mcp", self.address)),
+            (
+                "resource",
+                &format!("{}/mcp", self.public_url.trim_end_matches('/')),
+            ),
         ])
         .await
     }
@@ -96,7 +116,10 @@ impl Server {
             ("grant_type", "refresh_token"),
             ("client_id", client_id),
             ("refresh_token", token),
-            ("resource", &format!("http://{}/mcp", self.address)),
+            (
+                "resource",
+                &format!("{}/mcp", self.public_url.trim_end_matches('/')),
+            ),
         ])
         .await
     }

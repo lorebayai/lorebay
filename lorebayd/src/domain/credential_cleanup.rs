@@ -1,9 +1,12 @@
+use std::time::Duration;
+
 use sea_orm::{
     DatabaseConnection, DbErr, SqliteTransactionMode, TransactionOptions, TransactionTrait,
 };
 use thiserror::Error;
 use typed_builder::TypedBuilder;
 
+use crate::repository::OAuthClientRepository;
 use crate::repository::agent_authorization::AgentAuthorizationRepository;
 use crate::repository::login_session::LoginSessionRepository;
 use crate::repository::oauth_code::OauthCodeRepository;
@@ -26,10 +29,12 @@ pub(crate) struct RemovedCredentials {
     pub login_sessions: u64,
     pub agent_authorizations: u64,
     pub refresh_token_history: u64,
+    pub unused_clients: u64,
 }
 
 pub(crate) async fn remove_expired_credentials(
     database: &DatabaseConnection,
+    unused_client_lifetime: Duration,
 ) -> Result<RemovedCredentials, CredentialCleanupError> {
     let now = now_millis()?;
     let transaction = database
@@ -64,6 +69,15 @@ pub(crate) async fn remove_expired_credentials(
                 .connection(&transaction)
                 .build()
                 .delete_expired(now)
+                .await?,
+        )
+        .unused_clients(
+            OAuthClientRepository::new(&transaction)
+                .delete_unused(
+                    now - i64::try_from(unused_client_lifetime.as_millis())
+                        .map_err(anyhow::Error::from)?,
+                    now,
+                )
                 .await?,
         )
         .build();

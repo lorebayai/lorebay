@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use lorebay_base::{ConfigError, init_logging};
+use lorebay_base::{ConfigError, Secret, init_logging};
 use lorebayd::{Config, hash_password, run};
 use tokio::net::TcpListener;
 use tokio::signal::unix::{SignalKind, signal as unix_signal};
@@ -90,6 +90,11 @@ fn print_password_hash() -> Result<()> {
             password.pop();
         }
     }
-    writeln!(io::stdout().lock(), "{}", hash_password(&password)?)
-        .context("could not write password hash")
+    let password = Secret::from(password);
+    writeln!(
+        io::stdout().lock(),
+        "{}",
+        hash_password(password.expose())?.expose()
+    )
+    .context("could not write password hash")
 }

@@ -99,7 +99,10 @@ fn identity(config: Config, users: Arc<dyn UserStore>) -> Result<Identity> {
         NonZeroU32::new(config.login_rate_limit).context("login_rate_limit must be positive")?;
     Ok(Identity::builder()
         .user_store(users)
-        .signer(TokenSigner::load(&config.data_directory)?)
+        .signer(TokenSigner::load(
+            &config.data_directory,
+            &config.public_url,
+        )?)
         .limiter(RateLimiter::new(
             limit,
             Duration::from_secs(config.login_rate_window_seconds),
@@ -154,6 +157,7 @@ async fn serve_until_shutdown(
     workers.spawn(worker::remove_expired_credentials(
         state.database.clone(),
         Duration::from_secs(state.identity.config.credential_cleanup_interval_seconds),
+        Duration::from_secs(state.identity.config.unused_client_lifetime_seconds),
         workers_stopped,
     ));
     let server = serve(listener, router(state.clone())?, stopped);

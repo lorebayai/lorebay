@@ -45,6 +45,7 @@ pub(crate) async fn register_client(
         created_at: Set(i64::try_from(
             clock.now().duration_since(UNIX_EPOCH)?.as_millis(),
         )?),
+        first_authorized_at: Set(None),
     };
     let transaction = database
         .begin_with_options(TransactionOptions {

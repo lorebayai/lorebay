@@ -21,6 +21,7 @@ async fn exchange_code_returns_access_and_refresh_tokens() {
     let client = server.register_client("Example client").await;
     let code = server.approve_code(&client, Some("Build agent")).await;
     let tokens = assert_tokens(server.exchange_code(&client, &code).await).await;
+    server.assert_token_issuer(&tokens).await;
     let claims = claims(&tokens);
     assert_eq!(claims["kind"], "agent_authorization");
     assert_eq!(claims["sub"], "alice");
@@ -319,6 +320,7 @@ async fn refresh_token_returns_new_tokens() {
         )
         .await;
         assert_ne!(refreshed["refresh_token"], tokens["refresh_token"]);
+        server.assert_token_issuer(&refreshed).await;
         assert_ne!(refreshed["access_token"], tokens["access_token"]);
         assert_eq!(claims(&refreshed)["sid"], claims(&tokens)["sid"]);
         assert_eq!(claims(&refreshed)["kind"], "agent_authorization");
