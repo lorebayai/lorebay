@@ -2,8 +2,9 @@ use reqwest::{Method, StatusCode};
 use serde_json::{Value, json};
 use tempfile::TempDir;
 
-use super::helpers::{Server, TEST_PASSWORD, assert_problem, list_response};
-use super::participants::helpers::{PARTICIPANTS, list, login, setup, walk};
+use super::helpers::{
+    Server, TEST_PASSWORD, assert_problem, create_space, list, list_response, login, walk,
+};
 
 #[tokio::test]
 async fn list_users_returns_every_username() {
@@ -20,7 +21,7 @@ async fn list_users_returns_every_username() {
         .iter()
         .map(|username| json!({"username":username}))
         .collect();
-    assert_eq!(walk(&server, &owner, USERS_PATH, "7").await, expected);
+    assert_eq!(walk(&server, &owner, USERS_PATH, "7", 99).await, expected);
     assert_eq!(
         list(&server, &owner, USERS_PATH)
             .await
@@ -39,7 +40,7 @@ async fn list_users_returns_every_username() {
     let server = Server::restart_with_users(directory, &[("alice", TEST_PASSWORD)]).await;
     let owner = server.tokens().await;
     assert_eq!(
-        walk(&server, &owner, USERS_PATH, "1").await,
+        walk(&server, &owner, USERS_PATH, "1", 99).await,
         vec![json!({"username":"alice"})]
     );
     server.stop().await;
@@ -47,7 +48,18 @@ async fn list_users_returns_every_username() {
 
 #[tokio::test]
 async fn list_users_fails_when_caller_is_agent() {
-    let (server, owner) = setup().await;
+    let server = Server::restart_with_users(
+        TempDir::new().unwrap(),
+        &[
+            ("alice", TEST_PASSWORD),
+            ("bob", TEST_PASSWORD),
+            ("carol", TEST_PASSWORD),
+            ("dave", TEST_PASSWORD),
+        ],
+    )
+    .await;
+    let owner = server.tokens().await;
+    create_space(&server, &owner, "Team", "Shared work").await;
     let agent = server.authorize_agent("Owner agent").await;
     assert_eq!(
         list(&server, &owner, USERS_PATH)
@@ -77,7 +89,7 @@ async fn list_users_fails_when_caller_is_agent() {
         }
     }
     assert_eq!(
-        list(&server, &owner, PARTICIPANTS)
+        list(&server, &owner, "/api/v1/spaces/SPACE-1/participants")
             .await
             .as_array()
             .unwrap()

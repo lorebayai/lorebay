@@ -185,9 +185,7 @@ impl Server {
     }
 
     pub async fn tokens(&self) -> Value {
-        let response = self.log_in(TEST_USERNAME, TEST_PASSWORD).await;
-        assert_eq!(response.status(), StatusCode::OK);
-        response.json::<Value>().await.unwrap()["data"].clone()
+        login(self, TEST_USERNAME).await
     }
 
     pub async fn refresh(&self, token: &str) -> Response {
@@ -313,6 +311,122 @@ pub async fn assert_problem(response: Response, status: StatusCode, code: &str) 
     assert_eq!(body["status"], status.as_u16());
     assert_eq!(body["code"], code);
     body
+}
+
+pub async fn login(server: &Server, username: &str) -> Value {
+    let response = server.log_in(username, TEST_PASSWORD).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    response.json::<Value>().await.unwrap()["data"].clone()
+}
+
+pub async fn request(
+    server: &Server,
+    tokens: &Value,
+    method: Method,
+    path: &str,
+    body: Value,
+) -> Response {
+    server
+        .json(
+            method,
+            path,
+            body,
+            Some(tokens["access_token"].as_str().unwrap()),
+        )
+        .await
+}
+
+pub async fn two_people() -> Server {
+    Server::restart_with_users(
+        TempDir::new().unwrap(),
+        &[(TEST_USERNAME, TEST_PASSWORD), ("bob", TEST_PASSWORD)],
+    )
+    .await
+}
+
+pub async fn create_space(server: &Server, tokens: &Value, name: &str, summary: &str) -> Value {
+    let response = request(
+        server,
+        tokens,
+        Method::POST,
+        "/api/v1/spaces",
+        json!({"name": name, "summary": summary}),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let body = response.json::<Value>().await.unwrap();
+    assert_eq!(body["meta"], json!({}));
+    body["data"].clone()
+}
+
+pub async fn authorize_for_client(
+    server: &Server,
+    client: &str,
+    name: &str,
+    person: &Value,
+) -> AuthorizedAgent {
+    let code = server
+        .approve_code_for(client, Some(name), person["access_token"].as_str().unwrap())
+        .await;
+    let response = server.exchange_code(client, &code).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    AuthorizedAgent::builder()
+        .client_id(client)
+        .tokens(response.json::<Value>().await.unwrap())
+        .build()
+}
+
+pub async fn authorize_for(server: &Server, tokens: &Value, name: &str) -> Value {
+    let client = server.register_client(name).await;
+    authorize_for_client(server, &client, name, tokens)
+        .await
+        .tokens
+}
+
+pub async fn list_page(
+    server: &Server,
+    tokens: &Value,
+    path: &str,
+    query: &[(&str, &str)],
+) -> Value {
+    let response = list_response(path, server, tokens, query).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    response.json().await.unwrap()
+}
+
+pub async fn list(server: &Server, tokens: &Value, path: &str) -> Value {
+    list_page(server, tokens, path, &[]).await["data"].clone()
+}
+
+pub async fn walk(
+    server: &Server,
+    tokens: &Value,
+    path: &str,
+    size: &str,
+    max_items: usize,
+) -> Vec<Value> {
+    let mut rows = Vec::new();
+    let mut cursor: Option<String> = None;
+    loop {
+        let mut query = vec![("page_size", size)];
+        if let Some(cursor) = &cursor {
+            query.push(("cursor", cursor));
+        }
+        let page = list_page(server, tokens, path, &query).await;
+        let items = page["data"].as_array().unwrap();
+        assert!(items.len() <= size.parse::<usize>().unwrap());
+        rows.extend(items.iter().cloned());
+        assert!(rows.len() <= max_items);
+        match page["meta"]["next_cursor"].as_str() {
+            Some(next) => {
+                assert_eq!(items.len(), size.parse::<usize>().unwrap());
+                assert_ne!(cursor.as_deref(), Some(next));
+                cursor = Some(next.to_owned());
+            }
+            None => break,
+        }
+    }
+    rows
 }
 
 const POLL_INTERVAL: Duration = Duration::from_millis(10);

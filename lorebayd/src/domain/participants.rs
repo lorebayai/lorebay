@@ -2,12 +2,13 @@ use sea_orm::{
     DatabaseConnection, DatabaseTransaction, DbErr, IntoActiveModel, Set, SqliteTransactionMode,
     TransactionOptions, TransactionTrait,
 };
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use typed_builder::TypedBuilder;
 
 use crate::entity::participant;
 use crate::repository::account::AccountRepository;
-use crate::repository::participant::{ParticipantRecord, ParticipantRepository};
+use crate::repository::participant::{ParticipantRecord, ParticipantRepository, RosterAfter};
 
 use super::caller::{CallerError, VerifiedCaller};
 use super::login_session::now_millis;
@@ -34,12 +35,59 @@ pub(crate) enum ParticipantError {
     UserNotFound,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum ParticipantKind {
+    Agent,
+    #[serde(rename = "human")]
+    Person,
+}
+
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
 pub(crate) struct Participant {
     pub username: String,
     pub role: SpaceRole,
     pub agent_name: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+pub(crate) struct RosterPosition {
+    pub username: String,
+    pub kind: ParticipantKind,
+    pub agent_name: String,
+}
+
+impl TryFrom<&str> for ParticipantKind {
+    type Error = DbErr;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "agent" => Ok(Self::Agent),
+            "human" => Ok(Self::Person),
+            _ => Err(DbErr::Type("Invalid participant kind".into())),
+        }
+    }
+}
+
+impl ParticipantKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Agent => "agent",
+            Self::Person => "human",
+        }
+    }
+}
+
+impl From<&RosterPosition> for RosterAfter {
+    fn from(position: &RosterPosition) -> Self {
+        Self::builder()
+            .username(&position.username)
+            .kind(position.kind.as_str())
+            .agent_name(&position.agent_name)
+            .build()
+    }
 }
 
 pub(crate) async fn list_participants(
@@ -50,21 +98,21 @@ pub(crate) async fn list_participants(
 ) -> Result<Page<Participant>, ParticipantError> {
     let transaction = database.begin().await?;
     let authorized = check_space(&transaction, caller, key, READ_ROLES).await?;
-    let version = format!("participants-v1:{key}");
+    let version = format!("participants-v2:{key}");
     let after = options
         .cursor
         .map(|cursor| {
             let value = decode_cursor(&version, caller.account_id(), &cursor)
                 .ok_or(ParticipantError::InvalidCursor)?;
-            let position: (String, String, String) =
+            let position: RosterPosition =
                 serde_json::from_str(&value).map_err(|_| ParticipantError::InvalidCursor)?;
-            if position.0.is_empty()
-                || !matches!(position.1.as_str(), "human" | "agent")
-                || (position.1 == "human" && !position.2.is_empty())
+            if position.username.is_empty()
+                || matches!(position.kind, ParticipantKind::Person)
+                    && !position.agent_name.is_empty()
             {
                 return Err(ParticipantError::InvalidCursor);
             }
-            Ok(position)
+            Ok(RosterAfter::from(&position))
         })
         .transpose()?;
     let mut records = ParticipantRepository::builder()
@@ -77,21 +125,8 @@ pub(crate) async fn list_participants(
     let next_cursor = records
         .last()
         .filter(|_| has_more)
-        .map(|record| {
-            let kind = if record.agent_name.is_some() {
-                "agent"
-            } else {
-                "human"
-            };
-            let value = serde_json::to_string(&(
-                &record.username,
-                kind,
-                record.agent_name.as_deref().unwrap_or_default(),
-            ))?;
-            Ok::<_, serde_json::Error>(encode_cursor(&version, caller.account_id(), &value))
-        })
-        .transpose()
-        .map_err(anyhow::Error::from)?;
+        .map(|record| roster_cursor(record, &version, caller.account_id()))
+        .transpose()?;
     let items = records
         .into_iter()
         .map(participant_from_record)
@@ -206,7 +241,10 @@ const MANAGE_ROLES: &[SpaceRole] = &[SpaceRole::Owner, SpaceRole::Admin];
 
 fn participant_from_record(record: ParticipantRecord) -> Result<Participant, DbErr> {
     let mut role = SpaceRole::try_from(record.role.as_str())?;
-    if record.agent_name.is_some() {
+    if matches!(
+        ParticipantKind::try_from(record.kind.as_str())?,
+        ParticipantKind::Agent
+    ) {
         role = role.for_agent();
     }
     Ok(Participant::builder()
@@ -214,6 +252,20 @@ fn participant_from_record(record: ParticipantRecord) -> Result<Participant, DbE
         .role(role)
         .agent_name(record.agent_name)
         .build())
+}
+
+fn roster_cursor(
+    record: &ParticipantRecord,
+    version: &str,
+    account_id: &str,
+) -> Result<String, ParticipantError> {
+    let position = RosterPosition::builder()
+        .username(&record.username)
+        .kind(ParticipantKind::try_from(record.kind.as_str())?)
+        .agent_name(record.agent_name.as_deref().unwrap_or_default())
+        .build();
+    let value = serde_json::to_string(&position).map_err(anyhow::Error::from)?;
+    Ok(encode_cursor(version, account_id, &value))
 }
 
 async fn mutation_target(

@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use typed_builder::TypedBuilder;
 use url::Url;
 
-use super::Server;
+use super::{Server, authorize_for_client};
 
 pub const REDIRECT_URI: &str = "http://127.0.0.1:46137/callback";
 pub const PKCE_VERIFIER: &str = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
@@ -126,13 +126,8 @@ impl Server {
 
     pub async fn authorize_agent(&self, name: &str) -> AuthorizedAgent {
         let client_id = self.register_client(name).await;
-        let code = self.approve_code(&client_id, Some(name)).await;
-        let response = self.exchange_code(&client_id, &code).await;
-        assert_eq!(response.status(), StatusCode::OK);
-        AuthorizedAgent::builder()
-            .client_id(client_id)
-            .tokens(response.json::<Value>().await.unwrap())
-            .build()
+        let tokens = self.tokens().await;
+        authorize_for_client(self, &client_id, name, &tokens).await
     }
 
     pub async fn expire_oauth_credential(&self, table: &str, column: &str) {

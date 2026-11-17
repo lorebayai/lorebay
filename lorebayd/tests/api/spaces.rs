@@ -1,15 +1,17 @@
-use reqwest::{Method, Response, StatusCode};
+use reqwest::{Method, StatusCode};
 use serde_json::{Value, json};
-use tempfile::TempDir;
 
-use crate::helpers::{Server, TEST_PASSWORD, TEST_USERNAME, assert_problem, list_response};
+use crate::helpers::{
+    Server, assert_problem, create_space, list_page, list_response, login, request, two_people,
+    walk,
+};
 
 #[tokio::test]
 async fn create_space_makes_creator_owner() {
     let server = Server::start().await;
     let person = server.tokens().await;
     for number in 1..=2 {
-        let space = create(&server, &person, "Research").await;
+        let space = create_space(&server, &person, "Research", "Shared research").await;
         let expected = json!({"key": format!("SPACE-{number}"), "name": "Research",
             "summary": "Shared research", "role": "owner"});
         assert_eq!(space, expected);
@@ -19,8 +21,8 @@ async fn create_space_makes_creator_owner() {
         );
     }
     let (third, fourth) = tokio::join!(
-        create(&server, &person, "Concurrent A"),
-        create(&server, &person, "Concurrent B"),
+        create_space(&server, &person, "Concurrent A", "Shared research"),
+        create_space(&server, &person, "Concurrent B", "Shared research"),
     );
     let mut keys = [
         third["key"].as_str().unwrap(),
@@ -32,7 +34,7 @@ async fn create_space_makes_creator_owner() {
     let server = Server::restart(directory).await;
     let person = server.tokens().await;
     assert_eq!(
-        create(&server, &person, "After restart").await["key"],
+        create_space(&server, &person, "After restart", "Shared research").await["key"],
         "SPACE-5"
     );
     assert_eq!(read(&server, &person, "SPACE-1").await["role"], "owner");
@@ -43,7 +45,7 @@ async fn create_space_makes_creator_owner() {
 async fn create_space_fails_when_caller_is_agent() {
     let server = Server::start().await;
     let person = server.tokens().await;
-    let space = create(&server, &person, "Research").await;
+    let space = create_space(&server, &person, "Research", "Shared research").await;
     let agent = server.authorize_agent("Research agent").await;
     let refusal = assert_problem(
         request(
@@ -78,7 +80,7 @@ async fn create_space_fails_when_caller_is_agent() {
     }
     assert_eq!(read(&server, &person, "SPACE-1").await, space);
     assert_eq!(
-        list(&server, &person, &[]).await["data"]
+        list_page(&server, &person, SPACES_PATH, &[]).await["data"]
             .as_array()
             .unwrap()
             .len(),
@@ -107,7 +109,10 @@ async fn create_space_fails_when_name_is_empty() {
         )
         .await;
     }
-    assert_eq!(list(&server, &person, &[]).await["data"], json!([]));
+    assert_eq!(
+        list_page(&server, &person, SPACES_PATH, &[]).await["data"],
+        json!([])
+    );
     let response = request(
         &server,
         &person,
@@ -149,18 +154,26 @@ async fn create_space_fails_when_name_is_empty() {
 async fn list_spaces_returns_only_spaces_caller_is_in() {
     let server = two_people().await;
     let alice = server.tokens().await;
-    let bob = bob_tokens(&server).await;
+    let bob = login(&server, "bob").await;
     assert_eq!(
-        list(&server, &alice, &[]).await,
+        list_page(&server, &alice, SPACES_PATH, &[]).await,
         json!({"data": [], "meta": {}})
     );
-    create(&server, &bob, "Bob only").await;
+    create_space(&server, &bob, "Bob only", "Shared research").await;
     let mut expected = Vec::new();
     for number in 2..=23 {
-        expected.push(create(&server, &alice, &format!("Space {number}")).await);
+        expected.push(
+            create_space(
+                &server,
+                &alice,
+                &format!("Space {number}"),
+                "Shared research",
+            )
+            .await,
+        );
     }
     let agent = server.authorize_agent("Research agent").await;
-    assert_eq!(walk_spaces(&server, &alice).await, expected);
+    assert_eq!(walk(&server, &alice, SPACES_PATH, "7", 22).await, expected);
     let expected_agent: Vec<_> = expected
         .into_iter()
         .map(|mut space| {
@@ -168,23 +181,26 @@ async fn list_spaces_returns_only_spaces_caller_is_in() {
             space
         })
         .collect();
-    assert_eq!(walk_spaces(&server, &agent.tokens).await, expected_agent);
+    assert_eq!(
+        walk(&server, &agent.tokens, SPACES_PATH, "7", 22).await,
+        expected_agent
+    );
     assert_eq!(
         read(&server, &agent.tokens, "SPACE-2").await,
         expected_agent[0]
     );
-    let bob_spaces = list(&server, &bob, &[]).await;
+    let bob_spaces = list_page(&server, &bob, SPACES_PATH, &[]).await;
     assert_eq!(bob_spaces["data"].as_array().unwrap().len(), 1);
     assert_eq!(bob_spaces["data"][0]["key"], "SPACE-1");
     assert_eq!(
-        list(&server, &alice, &[]).await["data"]
+        list_page(&server, &alice, SPACES_PATH, &[]).await["data"]
             .as_array()
             .unwrap()
             .len(),
         20
     );
     assert_eq!(
-        list(&server, &alice, &[("page_size", "100")]).await["data"]
+        list_page(&server, &alice, SPACES_PATH, &[("page_size", "100")]).await["data"]
             .as_array()
             .unwrap()
             .len(),
@@ -198,8 +214,8 @@ async fn list_spaces_returns_only_spaces_caller_is_in() {
 async fn read_space_fails_when_caller_is_not_in_space() {
     let server = two_people().await;
     let alice = server.tokens().await;
-    let bob = bob_tokens(&server).await;
-    let original = create(&server, &bob, "Bob only").await;
+    let bob = login(&server, "bob").await;
+    let original = create_space(&server, &bob, "Bob only", "Shared research").await;
     let agent = server.authorize_agent("Research agent").await;
     let mut refusal = None;
     for tokens in [&alice, &agent.tokens] {
@@ -246,8 +262,14 @@ async fn read_space_fails_when_caller_is_not_in_space() {
         }
     }
     assert_eq!(read(&server, &bob, "SPACE-1").await, original);
-    assert_eq!(list(&server, &alice, &[]).await["data"], json!([]));
-    assert_eq!(list(&server, &agent.tokens, &[]).await["data"], json!([]));
+    assert_eq!(
+        list_page(&server, &alice, SPACES_PATH, &[]).await["data"],
+        json!([])
+    );
+    assert_eq!(
+        list_page(&server, &agent.tokens, SPACES_PATH, &[]).await["data"],
+        json!([])
+    );
     server.stop().await;
 }
 
@@ -255,7 +277,7 @@ async fn read_space_fails_when_caller_is_not_in_space() {
 async fn change_space_updates_name_and_summary_when_caller_is_owner() {
     let server = Server::start().await;
     let person = server.tokens().await;
-    create(&server, &person, "Research").await;
+    create_space(&server, &person, "Research", "Shared research").await;
     let mut expected = json!({"key": "SPACE-1", "name": "Research",
         "summary": "Shared research", "role": "owner"});
     for changes in [
@@ -281,57 +303,14 @@ async fn change_space_updates_name_and_summary_when_caller_is_owner() {
         );
         assert_eq!(read(&server, &person, "SPACE-1").await, expected);
     }
-    assert_eq!(list(&server, &person, &[]).await["data"], json!([expected]));
+    assert_eq!(
+        list_page(&server, &person, SPACES_PATH, &[]).await["data"],
+        json!([expected])
+    );
     server.stop().await;
 }
 
 const SPACES_PATH: &str = "/api/v1/spaces";
-
-async fn two_people() -> Server {
-    Server::restart_with_users(
-        TempDir::new().unwrap(),
-        &[(TEST_USERNAME, TEST_PASSWORD), ("bob", TEST_PASSWORD)],
-    )
-    .await
-}
-
-async fn bob_tokens(server: &Server) -> Value {
-    let response = server.log_in("bob", TEST_PASSWORD).await;
-    assert_eq!(response.status(), StatusCode::OK);
-    response.json::<Value>().await.unwrap()["data"].clone()
-}
-
-async fn request(
-    server: &Server,
-    tokens: &Value,
-    method: Method,
-    path: &str,
-    body: Value,
-) -> Response {
-    server
-        .json(
-            method,
-            path,
-            body,
-            Some(tokens["access_token"].as_str().unwrap()),
-        )
-        .await
-}
-
-async fn create(server: &Server, tokens: &Value, name: &str) -> Value {
-    let response = request(
-        server,
-        tokens,
-        Method::POST,
-        SPACES_PATH,
-        json!({"name": name, "summary": "Shared research"}),
-    )
-    .await;
-    assert_eq!(response.status(), StatusCode::CREATED);
-    let body = response.json::<Value>().await.unwrap();
-    assert_eq!(body["meta"], json!({}));
-    body["data"].clone()
-}
 
 async fn read(server: &Server, tokens: &Value, key: &str) -> Value {
     let response = request(
@@ -346,39 +325,8 @@ async fn read(server: &Server, tokens: &Value, key: &str) -> Value {
     response.json::<Value>().await.unwrap()["data"].clone()
 }
 
-async fn list(server: &Server, tokens: &Value, query: &[(&str, &str)]) -> Value {
-    let response = list_response(SPACES_PATH, server, tokens, query).await;
-    assert_eq!(response.status(), StatusCode::OK);
-    response.json().await.unwrap()
-}
-
-async fn walk_spaces(server: &Server, tokens: &Value) -> Vec<Value> {
-    let mut result = Vec::new();
-    let mut cursor: Option<String> = None;
-    loop {
-        let mut query = vec![("page_size", "7")];
-        if let Some(cursor) = &cursor {
-            query.push(("cursor", cursor));
-        }
-        let page = list(server, tokens, &query).await;
-        let items = page["data"].as_array().unwrap();
-        assert!(items.len() <= 7);
-        result.extend(items.iter().cloned());
-        match page["meta"]["next_cursor"].as_str() {
-            Some(next) => {
-                assert_eq!(items.len(), 7);
-                assert_ne!(cursor.as_deref(), Some(next));
-                assert!(result.len() <= 22);
-                cursor = Some(next.to_owned());
-            }
-            None => break,
-        }
-    }
-    result
-}
-
 async fn assert_invalid_pagination(server: &Server, alice: &Value, bob: &Value) {
-    let page = list(server, alice, &[("page_size", "1")]).await;
+    let page = list_page(server, alice, SPACES_PATH, &[("page_size", "1")]).await;
     let cursor = page["meta"]["next_cursor"].as_str().unwrap();
     assert_problem(
         list_response(SPACES_PATH, server, bob, &[("cursor", cursor)]).await,

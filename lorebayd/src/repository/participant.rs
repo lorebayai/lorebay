@@ -14,6 +14,7 @@ pub(crate) struct ParticipantRecord {
     pub username: String,
     pub role: String,
     pub agent_name: Option<String>,
+    pub kind: String,
 }
 
 #[derive(Clone, Debug, TypedBuilder)]
@@ -22,37 +23,50 @@ pub(crate) struct ParticipantRepository<'a, C> {
     pub connection: &'a C,
 }
 
+#[derive(Clone, Debug, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+pub(crate) struct RosterAfter {
+    pub username: String,
+    pub kind: String,
+    pub agent_name: String,
+}
+
 impl<C: ConnectionTrait> ParticipantRepository<'_, C> {
     pub async fn list(
         &self,
         space_id: &str,
-        after: Option<&(String, String, String)>,
+        after: Option<&RosterAfter>,
         limit: u64,
     ) -> Result<Vec<ParticipantRecord>, DbErr> {
         let mut query = Query::select();
         query
-            .columns([Roster::Username, Roster::Role, Roster::AgentName])
+            .columns([
+                Roster::Username,
+                Roster::Role,
+                Roster::AgentName,
+                Roster::Kind,
+            ])
             .from_subquery(roster_query(space_id), Roster::Table);
-        if let Some((username, kind, name)) = after {
+        if let Some(position) = after {
             query.cond_where(
                 Cond::any()
-                    .add(Expr::col(Roster::Username).gt(username))
+                    .add(Expr::col(Roster::Username).gt(&position.username))
                     .add(
                         Cond::all()
-                            .add(Expr::col(Roster::Username).eq(username))
-                            .add(Expr::col(Roster::Kind).gt(kind)),
+                            .add(Expr::col(Roster::Username).eq(&position.username))
+                            .add(Expr::col(Roster::Kind).lt(&position.kind)),
                     )
                     .add(
                         Cond::all()
-                            .add(Expr::col(Roster::Username).eq(username))
-                            .add(Expr::col(Roster::Kind).eq(kind))
-                            .add(Expr::col(Roster::AgentName).gt(name)),
+                            .add(Expr::col(Roster::Username).eq(&position.username))
+                            .add(Expr::col(Roster::Kind).eq(&position.kind))
+                            .add(Expr::col(Roster::AgentName).gt(&position.agent_name)),
                     ),
             );
         }
         query
             .order_by(Roster::Username, Order::Asc)
-            .order_by(Roster::Kind, Order::Asc)
+            .order_by(Roster::Kind, Order::Desc)
             .order_by(Roster::AgentName, Order::Asc)
             .limit(limit);
         ParticipantRecord::find_by_statement(self.connection.get_database_backend().build(&query))

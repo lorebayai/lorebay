@@ -2,20 +2,19 @@ use std::time::Duration;
 
 use reqwest::{Method, Response, StatusCode};
 use serde_json::{Value, json};
-use tempfile::TempDir;
 use tokio::time::{sleep, timeout};
 use url::Url;
 
 use crate::helpers::{
-    AuthorizedAgent, REDIRECT_URI, Server, Settings, TEST_PASSWORD, TEST_TIMEOUT, TEST_USERNAME,
-    assert_problem, list_response,
+    AuthorizedAgent, REDIRECT_URI, Server, Settings, TEST_TIMEOUT, assert_problem,
+    authorize_for_client, list_page, list_response, login, two_people, walk,
 };
 
 #[tokio::test]
 async fn list_agents_returns_own_agents_only() {
     let server = two_people().await;
     let alice = server.tokens().await;
-    let bob = bob_tokens(&server).await;
+    let bob = login(&server, "bob").await;
     let client = server.register_client("Shared client").await;
     for (name, person) in [
         ("Shared name", &alice),
@@ -23,13 +22,13 @@ async fn list_agents_returns_own_agents_only() {
         ("Shared name", &bob),
         ("Bob only", &bob),
     ] {
-        authorize(&server, &client, name, person).await;
+        authorize_for_client(&server, &client, name, person).await;
     }
     for (person, expected) in [
         (&alice, json!(["Alice only", "Shared name"])),
         (&bob, json!(["Bob only", "Shared name"])),
     ] {
-        let page = list(&server, person, &[]).await;
+        let page = list_page(&server, person, AGENTS_PATH, &[]).await;
         assert_eq!(names(&page), expected);
         assert_eq!(page["meta"], json!({}));
         for agent in page["data"].as_array().unwrap() {
@@ -61,33 +60,41 @@ async fn list_agents_returns_next_page_when_cursor_is_given() {
     let person = server.tokens().await;
     seed_agents(&server, &person).await;
     let expected: Vec<_> = (0..101).map(|i| format!("Agent-{i:03}")).collect();
-    let first = list(&server, &person, &[]).await;
+    let first = list_page(&server, &person, AGENTS_PATH, &[]).await;
     assert_eq!(names(&first), json!(&expected[..20]));
     let cursor = first["meta"]["next_cursor"].as_str().unwrap();
     assert!(!cursor.contains("Agent-019"));
-    let second = list(&server, &person, &[("cursor", cursor)]).await;
+    let second = list_page(&server, &person, AGENTS_PATH, &[("cursor", cursor)]).await;
     assert_eq!(names(&second), json!(&expected[20..40]));
-    let largest = list(&server, &person, &[("page_size", "100")]).await;
+    let largest = list_page(&server, &person, AGENTS_PATH, &[("page_size", "100")]).await;
     assert_eq!(names(&largest), json!(&expected[..100]));
     let cursor = largest["meta"]["next_cursor"].as_str().unwrap();
-    let last = list(&server, &person, &[("cursor", cursor)]).await;
+    let last = list_page(&server, &person, AGENTS_PATH, &[("cursor", cursor)]).await;
     assert_eq!(names(&last), json!(&expected[100..]));
     assert_eq!(last["meta"], json!({}));
-    assert_eq!(walk_pages(&server, &person).await, expected);
+    assert_eq!(
+        walk(&server, &person, AGENTS_PATH, "17", 101)
+            .await
+            .into_iter()
+            .map(|agent| agent["name"].as_str().unwrap().to_owned())
+            .collect::<Vec<_>>(),
+        expected
+    );
     assert_eq!(
         revoke(&server, "Agent-019", person["access_token"].as_str())
             .await
             .status(),
         StatusCode::OK
     );
-    let after_deleted = list(
+    let after_deleted = list_page(
         &server,
         &person,
+        AGENTS_PATH,
         &[("cursor", first["meta"]["next_cursor"].as_str().unwrap())],
     )
     .await;
     assert_eq!(names(&after_deleted), json!(&expected[20..40]));
-    let bob = bob_tokens(&server).await;
+    let bob = login(&server, "bob").await;
     assert_invalid_page(&server, &bob, &[("cursor", cursor)], "cursor").await;
     for size in [
         "0",
@@ -129,7 +136,10 @@ async fn revoke_agent_ends_agent_authorization() {
     )
     .await;
     assert_invalid_refresh(&server, &agent).await;
-    assert_eq!(names(&list(&server, &person, &[]).await), json!([]));
+    assert_eq!(
+        names(&list_page(&server, &person, AGENTS_PATH, &[]).await),
+        json!([])
+    );
     assert_problem(
         revoke(&server, name, person["access_token"].as_str()).await,
         StatusCode::NOT_FOUND,
@@ -160,7 +170,7 @@ async fn revoke_agent_fails_when_name_is_not_utf8() {
         "message": "Expected a valid UTF-8 agent name."}]})
     );
     assert_eq!(
-        names(&list(&server, &person, &[]).await),
+        names(&list_page(&server, &person, AGENTS_PATH, &[]).await),
         json!(["Build agent"])
     );
     assert_eq!(
@@ -169,7 +179,10 @@ async fn revoke_agent_fails_when_name_is_not_utf8() {
             .status(),
         StatusCode::OK,
     );
-    assert_eq!(names(&list(&server, &person, &[]).await), json!([]));
+    assert_eq!(
+        names(&list_page(&server, &person, AGENTS_PATH, &[]).await),
+        json!([])
+    );
     server.stop().await;
 }
 
@@ -177,7 +190,7 @@ async fn revoke_agent_fails_when_name_is_not_utf8() {
 async fn revoke_agent_fails_when_agent_belongs_to_another_person() {
     let server = two_people().await;
     let alice = server.tokens().await;
-    let bob = bob_tokens(&server).await;
+    let bob = login(&server, "bob").await;
     let agent = server.authorize_agent("Alice only").await;
     assert_problem(
         revoke(&server, "Alice only", bob["access_token"].as_str()).await,
@@ -186,10 +199,13 @@ async fn revoke_agent_fails_when_agent_belongs_to_another_person() {
     )
     .await;
     assert_eq!(
-        names(&list(&server, &alice, &[]).await),
+        names(&list_page(&server, &alice, AGENTS_PATH, &[]).await),
         json!(["Alice only"])
     );
-    assert_eq!(names(&list(&server, &bob, &[]).await), json!([]));
+    assert_eq!(
+        names(&list_page(&server, &bob, AGENTS_PATH, &[]).await),
+        json!([])
+    );
     let response = server
         .refresh_oauth(
             &agent.client_id,
@@ -240,7 +256,7 @@ async fn list_agents_fails_when_caller_is_agent() {
     }
     assert_person_required(server.log_out(agent.tokens["access_token"].as_str()).await).await;
     assert_eq!(
-        names(&list(&server, &person, &[]).await),
+        names(&list_page(&server, &person, AGENTS_PATH, &[]).await),
         json!(["Build agent"])
     );
     assert_person_required(list_response(AGENTS_PATH, &server, &agent.tokens, &[]).await).await;
@@ -253,14 +269,14 @@ async fn list_agents_omits_agent_when_authorization_has_expired() {
     let person = server.tokens().await;
     let agent = server.authorize_agent("Build agent").await;
     assert_eq!(
-        names(&list(&server, &person, &[]).await),
+        names(&list_page(&server, &person, AGENTS_PATH, &[]).await),
         json!(["Build agent"])
     );
     server
         .expire_oauth_credential("agent_authorization", "refresh_expires_at")
         .await;
     timeout(TEST_TIMEOUT, async {
-        while !list(&server, &person, &[]).await["data"]
+        while !list_page(&server, &person, AGENTS_PATH, &[]).await["data"]
             .as_array()
             .unwrap()
             .is_empty()
@@ -277,13 +293,13 @@ async fn list_agents_omits_agent_when_authorization_has_expired() {
     )
     .await;
     assert_invalid_refresh(&server, &agent).await;
-    let replacement = authorize(&server, &agent.client_id, "Build agent", &person).await;
+    let replacement = authorize_for_client(&server, &agent.client_id, "Build agent", &person).await;
     assert_ne!(
         replacement.tokens["access_token"],
         agent.tokens["access_token"]
     );
     assert_eq!(
-        names(&list(&server, &person, &[]).await),
+        names(&list_page(&server, &person, AGENTS_PATH, &[]).await),
         json!(["Build agent"])
     );
     assert_person_required(list_response(AGENTS_PATH, &server, &replacement.tokens, &[]).await)
@@ -307,7 +323,7 @@ async fn call_web_api_fails_when_agent_authorization_has_expired() {
     )
     .await;
     assert_eq!(
-        names(&list(&server, &person, &[]).await),
+        names(&list_page(&server, &person, AGENTS_PATH, &[]).await),
         json!(["Build agent"])
     );
     server.stop().await;
@@ -370,7 +386,10 @@ async fn call_web_api_fails_when_agent_account_was_removed() {
     let directory = server.stop().await;
     let server = Server::restart(directory).await;
     let person = server.tokens().await;
-    assert_eq!(names(&list(&server, &person, &[]).await), json!([]));
+    assert_eq!(
+        names(&list_page(&server, &person, AGENTS_PATH, &[]).await),
+        json!([])
+    );
     assert_problem(
         list_response(AGENTS_PATH, &server, &agent.tokens, &[]).await,
         StatusCode::UNAUTHORIZED,
@@ -381,72 +400,13 @@ async fn call_web_api_fails_when_agent_account_was_removed() {
 }
 
 const AGENTS_PATH: &str = "/api/v1/agents";
-const BOB_USERNAME: &str = "bob";
 const PKCE_CHALLENGE: &str = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
-
-async fn two_people() -> Server {
-    Server::restart_with_users(
-        TempDir::new().unwrap(),
-        &[
-            (TEST_USERNAME, TEST_PASSWORD),
-            (BOB_USERNAME, TEST_PASSWORD),
-        ],
-    )
-    .await
-}
-
-async fn bob_tokens(server: &Server) -> Value {
-    let response = server.log_in(BOB_USERNAME, TEST_PASSWORD).await;
-    assert_eq!(response.status(), StatusCode::OK);
-    response.json::<Value>().await.unwrap()["data"].clone()
-}
-
-async fn authorize(server: &Server, client: &str, name: &str, person: &Value) -> AuthorizedAgent {
-    let code = server
-        .approve_code_for(client, Some(name), person["access_token"].as_str().unwrap())
-        .await;
-    let response = server.exchange_code(client, &code).await;
-    assert_eq!(response.status(), StatusCode::OK);
-    AuthorizedAgent::builder()
-        .client_id(client)
-        .tokens(response.json::<Value>().await.unwrap())
-        .build()
-}
 
 async fn seed_agents(server: &Server, person: &Value) {
     let client = server.register_client("Pagination client").await;
     for i in (0..101).rev() {
-        authorize(server, &client, &format!("Agent-{i:03}"), person).await;
+        authorize_for_client(server, &client, &format!("Agent-{i:03}"), person).await;
     }
-}
-
-async fn walk_pages(server: &Server, person: &Value) -> Vec<String> {
-    let mut result = Vec::new();
-    let mut cursor: Option<String> = None;
-    loop {
-        let mut query = vec![("page_size", "17")];
-        if let Some(cursor) = &cursor {
-            query.push(("cursor", cursor));
-        }
-        let page = list(server, person, &query).await;
-        result.extend(
-            page["data"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|agent| agent["name"].as_str().unwrap().to_owned()),
-        );
-        cursor = page["meta"]["next_cursor"].as_str().map(str::to_owned);
-        if cursor.is_none() {
-            return result;
-        }
-    }
-}
-
-async fn list(server: &Server, tokens: &Value, query: &[(&str, &str)]) -> Value {
-    let response = list_response(AGENTS_PATH, server, tokens, query).await;
-    assert_eq!(response.status(), StatusCode::OK);
-    response.json().await.unwrap()
 }
 
 async fn revoke(server: &Server, name: &str, token: Option<&str>) -> Response {

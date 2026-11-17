@@ -1,10 +1,12 @@
 use reqwest::{Method, StatusCode};
 use serde_json::{Value, json};
 
-use super::helpers::{Server, assert_problem, list_response};
+use super::helpers::{
+    Server, assert_problem, authorize_for, create_space, list, list_response, login, request, walk,
+};
 use helpers::*;
 
-pub(super) mod helpers;
+mod helpers;
 
 #[tokio::test]
 async fn add_participant_lets_person_and_their_agent_enter_space() {
@@ -329,9 +331,9 @@ async fn list_participants_includes_agents_with_capped_roles() {
     let agent = authorize_for(&server, &owner, "Shared agent").await;
     authorize_for(&server, &owner, "Second agent").await;
     let mut expected = vec![
+        json!({"type":"human","username":"alice","role":"owner"}),
         json!({"type":"agent","username":"alice","agent_name":"Second agent","role":"contributor"}),
         json!({"type":"agent","username":"alice","agent_name":"Shared agent","role":"contributor"}),
-        json!({"type":"human","username":"alice","role":"owner"}),
     ];
     for (username, role) in [
         ("bob", "admin"),
@@ -342,11 +344,14 @@ async fn list_participants_includes_agents_with_capped_roles() {
         change(&server, &owner, username, role).await;
         let tokens = login(&server, username).await;
         authorize_for(&server, &tokens, "Shared agent").await;
-        expected.push(json!({"type":"agent","username":username,"agent_name":"Shared agent","role":if role == "viewer" {"viewer"} else {"contributor"}}));
         expected.push(json!({"type":"human","username":username,"role":role}));
+        expected.push(json!({"type":"agent","username":username,"agent_name":"Shared agent","role":if role == "viewer" {"viewer"} else {"contributor"}}));
     }
     for size in ["1", "2", "4"] {
-        assert_eq!(walk(&server, &agent, PARTICIPANTS, size).await, expected);
+        assert_eq!(
+            walk(&server, &agent, PARTICIPANTS, size, 99).await,
+            expected
+        );
     }
     assert_eq!(list(&server, &owner, PARTICIPANTS).await, json!(expected));
     assert_roster_cursors(&server, &owner, &agent).await;
@@ -359,8 +364,8 @@ async fn list_participants_includes_agents_with_capped_roles() {
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
-    expected.remove(0);
-    assert_eq!(walk(&server, &agent, PARTICIPANTS, "2").await, expected);
+    expected.remove(1);
+    assert_eq!(walk(&server, &agent, PARTICIPANTS, "2", 99).await, expected);
     server.stop().await;
 }
 
@@ -370,7 +375,7 @@ async fn list_participants_omits_person_when_account_was_removed_from_users_file
     let bob = login(&server, "bob").await;
     let agent = authorize_for(&server, &bob, "Bob agent").await;
     add(&server, &owner, "bob", "contributor").await;
-    create_space(&server, &owner).await;
+    create_space(&server, &owner, "Team", "Shared work").await;
     let response = request(
         &server,
         &owner,
@@ -446,7 +451,7 @@ async fn assert_roster_cursors(server: &Server, owner: &Value, agent: &Value) {
         "request.invalid_query",
     )
     .await;
-    create_space(server, owner).await;
+    create_space(server, owner, "Team", "Shared work").await;
     let second_roster = list(server, owner, "/api/v1/spaces/SPACE-2/participants").await;
     assert_eq!(second_roster.as_array().unwrap().len(), 3);
     assert!(
