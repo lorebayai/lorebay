@@ -9,6 +9,21 @@ use helpers::*;
 mod helpers;
 
 #[tokio::test]
+async fn add_participant_fails_when_caller_is_agent() {
+    let (server, owner) = setup().await;
+    let agent = authorize_for(&server, &owner, "Owner agent").await;
+    let before = list(&server, &owner, PARTICIPANTS).await;
+    assert_problem(
+        mutation(&server, &agent, Method::POST, "bob", "contributor").await,
+        StatusCode::FORBIDDEN,
+        "auth.person_required",
+    )
+    .await;
+    assert_eq!(list(&server, &owner, PARTICIPANTS).await, before);
+    server.stop().await;
+}
+
+#[tokio::test]
 async fn add_participant_lets_person_and_their_agent_enter_space() {
     let (server, owner) = setup().await;
     let bob = login(&server, "bob").await;
@@ -118,6 +133,22 @@ async fn add_participant_fails_when_username_is_not_in_users_file() {
         }
     }
     assert_target_role(&server, &owner, "bob", "viewer").await;
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn change_participant_role_fails_when_caller_is_agent() {
+    let (server, owner) = setup().await;
+    let agent = authorize_for(&server, &owner, "Owner agent").await;
+    add(&server, &owner, "bob", "viewer").await;
+    let before = list(&server, &owner, PARTICIPANTS).await;
+    assert_problem(
+        mutation(&server, &agent, Method::PATCH, "bob", "contributor").await,
+        StatusCode::FORBIDDEN,
+        "auth.person_required",
+    )
+    .await;
+    assert_eq!(list(&server, &owner, PARTICIPANTS).await, before);
     server.stop().await;
 }
 
@@ -283,6 +314,22 @@ async fn remove_participant_blocks_person_and_their_agent() {
     for tokens in [&bob, &agent] {
         assert_role(&server, tokens, "viewer").await;
     }
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn remove_participant_fails_when_caller_is_agent() {
+    let (server, owner) = setup().await;
+    let agent = authorize_for(&server, &owner, "Owner agent").await;
+    add(&server, &owner, "bob", "contributor").await;
+    let before = list(&server, &owner, PARTICIPANTS).await;
+    assert_problem(
+        mutation(&server, &agent, Method::DELETE, "bob", "").await,
+        StatusCode::FORBIDDEN,
+        "auth.person_required",
+    )
+    .await;
+    assert_eq!(list(&server, &owner, PARTICIPANTS).await, before);
     server.stop().await;
 }
 
