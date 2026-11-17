@@ -11,5 +11,6 @@ pub mod oauth_client;
 pub mod oauth_code;
 pub mod participant;
 pub mod proposal;
+pub mod refresh_token_history;
 pub mod space;
 pub mod task;

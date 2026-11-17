@@ -28,6 +28,7 @@ async fn remove_round(database: &DatabaseConnection) {
             authorization_codes = removed.authorization_codes,
             login_sessions = removed.login_sessions,
             agent_authorizations = removed.agent_authorizations,
+            refresh_token_history = removed.refresh_token_history,
             "expired credential cleanup finished"
         ),
         Err(error) => tracing::error!(%error, "expired credential cleanup failed"),

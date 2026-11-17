@@ -15,8 +15,6 @@ pub struct Model {
     pub refresh_token_hash: String,
     pub created_at: i64,
     pub expires_at: i64,
-    #[sea_orm(column_type = "Text", nullable, unique)]
-    pub previous_refresh_token_hash: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -29,11 +27,27 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     Account,
+    #[sea_orm(has_many = "super::oauth_code::Entity")]
+    OauthCode,
+    #[sea_orm(has_many = "super::refresh_token_history::Entity")]
+    RefreshTokenHistory,
 }
 
 impl Related<super::account::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Account.def()
+    }
+}
+
+impl Related<super::oauth_code::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::OauthCode.def()
+    }
+}
+
+impl Related<super::refresh_token_history::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::RefreshTokenHistory.def()
     }
 }
 

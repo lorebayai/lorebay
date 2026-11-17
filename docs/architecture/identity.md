@@ -164,14 +164,23 @@ It does not cover:
   rejected, although its signature is valid and it has not expired.
 - **Access tokens expire soon.** A client exchanges its refresh token for a
   new access token.
-- **Refresh tokens are random strings**, stored only as hashes. Each exchange
-  replaces the refresh token and remembers the hash it replaced, overwriting
-  the previously remembered hash. Presenting that token again deletes the
-  login session or agent authorization, so all of its tokens stop working.
-  The person signs in or authorizes the agent again. There is no grace period
-  for a retry or concurrent refresh. A token replaced two or more refreshes
-  ago is unknown and ends nothing. Revocation deletes both hashes with the
-  record.
+- **Refresh tokens are random strings**, stored only as hashes. Each refresh
+  replaces the current token and remembers its hash until that token would
+  have expired. Presenting any remembered, unexpired token deletes its login
+  session or agent authorization, so all of its tokens stop working. The
+  person signs in or authorizes the agent again. The token alone decides,
+  whichever client the request names. Expired tokens end nothing. Deleting
+  the record removes its refresh token history.
+- **Exchanged authorization codes stay recognizable until their expiry.**
+  A second exchange with the same client, the same redirect URI and a PKCE
+  verifier matching the code's challenge deletes the login session or agent
+  authorization the first exchange produced. Any other second exchange is
+  refused and ends nothing. An expired code ends nothing, and a code whose
+  session or authorization is already gone cannot end another one.
+- **There is no grace period for a retry or concurrent exchange.** A client
+  that loses a successful response and retries with the replaced refresh
+  token, or with the code and its matching verifier, ends its own credential.
+  Replay returns the same error as an unknown token or code.
 
 ## 8. Authorization flow
 

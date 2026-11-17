@@ -17,8 +17,8 @@ impl<C: ConnectionTrait> OauthCodeRepository<'_, C> {
             .await
     }
 
-    pub async fn delete(&self, id: &str) -> Result<(), DbErr> {
-        Entity::delete_by_id(id).exec(self.connection).await?;
+    pub async fn update(&self, model: ActiveModel) -> Result<(), DbErr> {
+        model.update(self.connection).await?;
         Ok(())
     }
 
