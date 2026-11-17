@@ -10,9 +10,9 @@ use crate::api::{ApiError, Envelope, FieldError, ListQuery, Meta, invalid_query}
 use crate::domain::caller::VerifiedCaller;
 use crate::domain::pagination::{Page, PageOptions};
 use crate::domain::{
-    CreatedTask, Note, NoteAdded, NoteContent, Task, TaskChanges, TaskError, TaskRead, TaskResult,
-    TaskStatus, TaskTextError, TaskTitle, add_note, change_task, create_task, delete_note,
-    delete_task, list_tasks, read_scratchpad, read_task,
+    CreatedTask, Note, NoteAdded, NoteContent, Task, TaskChanges, TaskError, TaskFilters,
+    TaskKeyword, TaskRead, TaskResult, TaskStatus, TaskTextError, TaskTitle, add_note, change_task,
+    create_task, delete_note, delete_task, list_tasks, read_scratchpad, read_task,
 };
 use crate::server::ServerState;
 
@@ -43,6 +43,20 @@ pub(crate) struct ChangeTaskRequest {
     status: Option<String>,
     #[serde(default, deserialize_with = "present_string")]
     result: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ListTasksQuery {
+    page_size: Option<String>,
+    cursor: Option<String>,
+    person: Option<String>,
+    agent: Option<String>,
+    status: Option<String>,
+    #[serde(default)]
+    own_open: bool,
+    keyword: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, TypedBuilder)]
@@ -152,6 +166,38 @@ impl TryFrom<ChangeTaskRequest> for TaskChanges {
     }
 }
 
+impl TryFrom<ListTasksQuery> for (PageOptions, TaskFilters) {
+    type Error = ApiError;
+
+    fn try_from(query: ListTasksQuery) -> Result<Self, Self::Error> {
+        let status = query
+            .status
+            .as_deref()
+            .map(TaskStatus::try_from)
+            .transpose()
+            .map_err(|_| invalid_filter("status", "Expected in progress or ended."))?;
+        let keyword = query
+            .keyword
+            .map(TaskKeyword::try_from)
+            .transpose()
+            .map_err(|error| ApiError::InvalidQuery(vec![text_error("keyword", error)]))?;
+        let filters = TaskFilters::builder()
+            .person(query.person)
+            .agent(query.agent)
+            .status(status)
+            .own_open(query.own_open)
+            .keyword(keyword)
+            .build();
+        filters.validate().map_err(TaskError::from)?;
+        let page = ListQuery::builder()
+            .page_size(query.page_size)
+            .cursor(query.cursor)
+            .build()
+            .try_into()?;
+        Ok((page, filters))
+    }
+}
+
 impl ReadTaskQuery {
     fn scratchpad(self) -> Result<Option<PageOptions>, ApiError> {
         if !self.include_scratchpad {
@@ -236,6 +282,7 @@ impl From<TaskError> for ApiError {
                 tracing::error!(%error, "task operation failed");
                 Self::Internal
             }
+            TaskError::Filter(error) => invalid_filter(error.field(), &error.to_string()),
             TaskError::InvalidCursor => invalid_query("cursor"),
             TaskError::NotFound => Self::TaskNotFound,
             TaskError::NoteNotFound => Self::NoteNotFound,
@@ -327,11 +374,12 @@ pub(crate) async fn list(
     State(state): State<ServerState>,
     caller: VerifiedCaller,
     path: Result<Path<String>, PathRejection>,
-    query: Result<Query<ListQuery>, QueryRejection>,
+    query: Result<Query<ListTasksQuery>, QueryRejection>,
 ) -> Result<Envelope<Vec<TaskSummaryResponse>>, ApiError> {
     let Path(space) = path.map_err(invalid_path)?;
     let Query(query) = query.map_err(|_| invalid_query("query"))?;
-    let page = list_tasks(&state.database, &caller, &space, query.try_into()?).await?;
+    let (options, filters) = query.try_into()?;
+    let page = list_tasks(&state.database, &caller, &space, options, filters).await?;
     Ok(Envelope::builder()
         .data(
             page.items
@@ -380,11 +428,29 @@ fn note_page(page: Page<Note>) -> Envelope<Vec<NoteResponse>> {
 }
 
 fn invalid_text(field: &str, error: TaskTextError) -> ApiError {
+    ApiError::InvalidBody(vec![text_error(field, error)])
+}
+
+fn text_error(field: &str, error: TaskTextError) -> FieldError {
     let code = match error {
         TaskTextError::Empty => "required",
         TaskTextError::TooLong(_) => "too_long",
     };
-    invalid_field(field, code, &error.to_string())
+    FieldError::builder()
+        .field(field)
+        .code(code)
+        .message(error.to_string())
+        .build()
+}
+
+fn invalid_filter(field: &str, message: &str) -> ApiError {
+    ApiError::InvalidQuery(vec![
+        FieldError::builder()
+            .field(field)
+            .code("invalid")
+            .message(message)
+            .build(),
+    ])
 }
 
 fn invalid_field(field: &str, code: &str, message: &str) -> ApiError {
