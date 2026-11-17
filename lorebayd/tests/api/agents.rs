@@ -329,6 +329,9 @@ async fn call_web_api_fails_when_agent_access_token_is_invalid() {
         "auth.unauthorized",
     )
     .await;
+    // Refreshed tokens need the default lifetime to stay valid for the final call on slow runners.
+    let directory = server.stop().await;
+    let server = Server::restart(directory).await;
     sleep(Duration::from_secs(3)).await;
     assert_problem(
         list_response(&server, &agent.tokens, &[]).await,

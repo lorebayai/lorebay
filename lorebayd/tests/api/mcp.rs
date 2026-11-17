@@ -124,6 +124,9 @@ async fn call_mcp_fails_when_access_token_is_expired() {
         mcp_call(&server, "tools/list", NEWEST_VERSION, token).await,
     )
     .await;
+    // Refreshed tokens need the default lifetime to stay valid for the final call on slow runners.
+    let directory = server.stop().await;
+    let server = Server::restart(directory).await;
     sleep(Duration::from_secs(3)).await;
     assert_challenge(
         mcp_call(&server, "tools/list", NEWEST_VERSION, token).await,
