@@ -33,19 +33,34 @@ pub(crate) struct AuthorizedSpace {
     pub role: SpaceRole,
 }
 
-impl SpaceRole {
-    pub fn for_caller(value: &str, caller: &VerifiedCaller) -> Result<Self, DbErr> {
-        let role = match value {
+impl TryFrom<&str> for SpaceRole {
+    type Error = DbErr;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Ok(match value {
             "admin" => Self::Admin,
             "contributor" => Self::Contributor,
             "owner" => Self::Owner,
             "viewer" => Self::Viewer,
             _ => return Err(DbErr::Type("Invalid participant role".into())),
-        };
-        Ok(match (caller, role) {
-            (VerifiedCaller::Agent(_), Self::Admin | Self::Owner) => Self::Contributor,
+        })
+    }
+}
+
+impl SpaceRole {
+    pub fn for_caller(value: &str, caller: &VerifiedCaller) -> Result<Self, DbErr> {
+        let role = Self::try_from(value)?;
+        Ok(match caller {
+            VerifiedCaller::Agent(_) => role.for_agent(),
             _ => role,
         })
+    }
+
+    pub fn for_agent(self) -> Self {
+        match self {
+            Self::Admin | Self::Owner => Self::Contributor,
+            _ => self,
+        }
     }
 
     pub fn as_str(self) -> &'static str {

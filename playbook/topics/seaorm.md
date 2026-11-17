@@ -83,12 +83,13 @@ by the `AGENTS.md` of every Rust project that uses SeaORM.
 
 ## Repositories
 
-- A **repository** reads and writes one table. It is a struct borrowing a
-  connection, generic over `ConnectionTrait`, so the same methods run on the
-  pool and inside a transaction.
+- A **repository** owns one table. It is a struct borrowing a connection,
+  generic over `ConnectionTrait`, so the same methods run on the pool and
+  inside a transaction.
 - Repository methods take and return entity `Model`s, `ActiveModel`s and
-  plain filter values. They hold no business rule and never commit or roll
-  back.
+  plain filter values, except that a read-only listing across several
+  tables may return a projection struct defined beside the repository.
+  They hold no business rule and never commit or roll back.
 - Domain functions build `ActiveModel`s, setting keys and timestamps.
   Transports never build `ActiveModel`s.
 - `run` opens one `DatabaseConnection` per process and holds it in its

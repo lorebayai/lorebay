@@ -8,5 +8,7 @@ mod login_session;
 mod mcp;
 mod oauth;
 mod oauth_token;
+mod participants;
 mod spaces;
+mod users;
 mod web_api;

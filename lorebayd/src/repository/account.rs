@@ -1,5 +1,7 @@
 use sea_orm::sea_query::Expr;
-use sea_orm::{ColumnTrait, ConnectionTrait, DbErr, EntityTrait, QueryFilter};
+use sea_orm::{
+    ColumnTrait, ConnectionTrait, DbErr, EntityTrait, QueryFilter, QueryOrder, QuerySelect,
+};
 use typed_builder::TypedBuilder;
 
 use crate::entity::account::{ActiveModel, Column, Entity, Model};
@@ -11,6 +13,18 @@ pub(crate) struct AccountRepository<'a, C> {
 }
 
 impl<C: ConnectionTrait> AccountRepository<'_, C> {
+    pub async fn list_active(&self, after: Option<&str>, limit: u64) -> Result<Vec<Model>, DbErr> {
+        let mut query = Entity::find().filter(Column::DeletedAt.is_null());
+        if let Some(username) = after {
+            query = query.filter(Column::Username.gt(username));
+        }
+        query
+            .order_by_asc(Column::Username)
+            .limit(limit)
+            .all(self.connection)
+            .await
+    }
+
     pub async fn all(&self) -> Result<Vec<Model>, DbErr> {
         Entity::find().all(self.connection).await
     }
