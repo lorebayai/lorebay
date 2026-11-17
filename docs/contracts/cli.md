@@ -169,8 +169,13 @@ contains spaces. Optional arguments appear in brackets. List rows follow
   replacement. If the server refuses the refresh because the session ended,
   the CLI removes its credentials, asks the person to run `lorebay login`
   again and exits 4. A connection failure preserves the credentials and
-  exits 1. A command cannot wait indefinitely for another command refreshing
-  the credentials; a wait that times out exits 1 without refreshing.
+  exits 1. If a refresh's outcome is unknown, the next command retries with
+  the saved token; if the server had already replaced it, the server ends
+  that login session under [Identity](../architecture/identity.md#7-tokens),
+  and the CLI removes its credentials, asks the person to run
+  `lorebay login` and exits 4. A command cannot wait indefinitely for another
+  command refreshing the credentials; a wait that times out exits 1 without
+  refreshing.
 - **`logout` removes local credentials even when the server is unreachable.**
   It attempts the Web API logout so both tokens stop working, then removes
   the saved session. It reports when the session was not ended on the
