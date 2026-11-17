@@ -6,9 +6,6 @@ use sha2::{Digest, Sha256};
 
 use crate::oauth::no_store_headers;
 
-const DOCUMENT: &str = include_str!("authorization.html");
-const SCRIPT: &str = include_str!("authorization.js");
-
 pub(crate) async fn authorization() -> Response {
     let hash = STANDARD.encode(Sha256::digest(SCRIPT.as_bytes()));
     let policy = format!(
@@ -22,7 +19,13 @@ pub(crate) async fn authorization() -> Response {
             (header::X_CONTENT_TYPE_OPTIONS, "nosniff".to_owned()),
             (header::X_FRAME_OPTIONS, "DENY".to_owned()),
         ],
-        Html(DOCUMENT.replace("{{SCRIPT}}", SCRIPT)),
+        Html(DOCUMENT.replace(
+            "<!-- AUTHORIZATION_SCRIPT -->",
+            &format!("<script>{SCRIPT}</script>"),
+        )),
     )
         .into_response()
 }
+
+const DOCUMENT: &str = include_str!("../../../web/out/authorization.html");
+const SCRIPT: &str = include_str!("../../../web/out/authorization.js");

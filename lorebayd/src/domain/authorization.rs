@@ -17,24 +17,6 @@ use super::token::token_hash;
 use super::{authorization_server_metadata, primary_key, random_id};
 
 pub(crate) const CLI_CLIENT_ID: &str = "lorebay-cli";
-const CODE_LIFETIME_MILLIS: i64 = 300_000;
-
-#[derive(Clone, Debug, TypedBuilder)]
-#[builder(field_defaults(setter(into)))]
-pub(crate) struct AuthorizationInput {
-    pub client_id: String,
-    pub redirect_uri: String,
-    pub code_challenge: String,
-    pub state: Option<String>,
-}
-
-#[derive(Clone, Debug, TypedBuilder)]
-#[builder(field_defaults(setter(into)))]
-pub(crate) struct AuthorizationDetails {
-    pub client_name: String,
-    pub redirect_host: String,
-    pub default_agent_name: Option<String>,
-}
 
 #[derive(Clone, Debug)]
 pub(crate) enum AuthorizationDecision {
@@ -52,10 +34,21 @@ pub(crate) enum AuthorizationError {
     InvalidParameter(&'static str),
 }
 
-#[derive(Clone, Debug, Deserialize, TypedBuilder)]
+#[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
-struct RegisteredRedirects {
-    redirect_uris: Vec<String>,
+pub(crate) struct AuthorizationInput {
+    pub client_id: String,
+    pub redirect_uri: String,
+    pub code_challenge: String,
+    pub state: Option<String>,
+}
+
+#[derive(Clone, Debug, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+pub(crate) struct AuthorizationDetails {
+    pub client_name: String,
+    pub redirect_host: String,
+    pub default_agent_name: Option<String>,
 }
 
 pub(crate) async fn read_authorization_request(
@@ -109,6 +102,14 @@ pub(crate) async fn decide_authorization(
     let redirect = redirect_url(&input, public_url, response)?;
     transaction.commit().await?;
     Ok(redirect)
+}
+
+const CODE_LIFETIME_MILLIS: i64 = 300_000;
+
+#[derive(Clone, Debug, Deserialize, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+struct RegisteredRedirects {
+    redirect_uris: Vec<String>,
 }
 
 async fn client_details<C: ConnectionTrait>(

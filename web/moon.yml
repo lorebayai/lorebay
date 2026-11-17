@@ -1,0 +1,14 @@
+language: "typescript"
+layer: "library"
+
+tasks:
+  build:
+    toolchains: ["javascript", "node", "typescript"]
+    script: |
+      set -e
+      tsc --project tsconfig.build.json
+      cp src/authorization.html out/authorization.html
+    inputs:
+      - "@group(typescript)"
+    outputs:
+      - "out"
