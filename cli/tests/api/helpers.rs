@@ -13,6 +13,8 @@ use tokio::process::{Child, ChildStderr, Command};
 use tokio::time::{Instant, sleep, timeout};
 use url::Url;
 
+mod device;
+pub use device::*;
 mod team;
 pub use team::*;
 
