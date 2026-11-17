@@ -44,6 +44,10 @@ pub(crate) fn router() -> Router<ServerState> {
             post(artifacts::register),
         )
         .route(
+            "/spaces/{space}/tasks/{task}/artifacts/{key}",
+            delete(artifacts::delete),
+        )
+        .route(
             "/spaces/{space}/tasks/{task}/artifacts/{key}/complete",
             post(artifacts::complete),
         )

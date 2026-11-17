@@ -13,7 +13,7 @@ use crate::domain::caller::VerifiedCaller;
 use crate::domain::{
     Artifact, ArtifactCompleted, ArtifactError, ArtifactFileName, ArtifactRegistered,
     ArtifactSummary, ArtifactTarget, ArtifactTextError, NewArtifact, complete_artifact,
-    get_artifact_download_url, register_artifact,
+    delete_artifact, get_artifact_download_url, register_artifact,
 };
 use crate::server::ServerState;
 use crate::storage::DownloadRequest;
@@ -204,6 +204,27 @@ pub(crate) async fn complete(
     )
     .await?;
     Ok(Envelope::builder().data(artifact).build())
+}
+
+pub(crate) async fn delete(
+    State(state): State<ServerState>,
+    caller: VerifiedCaller,
+    path: Result<Path<(String, Secret<String>, String)>, PathRejection>,
+) -> Result<Envelope<()>, ApiError> {
+    let Path((space, task_id, key)) = path.map_err(invalid_path)?;
+    let target = ArtifactTarget::builder()
+        .path_space(Some(space.as_str()))
+        .task_id(&task_id)
+        .build();
+    delete_artifact(
+        &state.database,
+        state.storage.as_ref(),
+        &caller,
+        target,
+        &key,
+    )
+    .await?;
+    Ok(Envelope::builder().data(()).build())
 }
 
 fn invalid_text(field: &str, error: ArtifactTextError) -> ApiError {

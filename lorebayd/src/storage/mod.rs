@@ -15,10 +15,6 @@ pub(crate) trait FileStorage: Send + Sync {
     ) -> impl Future<Output = Result<DownloadRequest>> + Send;
     fn upload_url(&self, location: &str) -> impl Future<Output = Result<UploadRequest>> + Send;
     fn size(&self, location: &str) -> impl Future<Output = Result<Option<u64>>> + Send;
-    #[expect(
-        dead_code,
-        reason = "Artifact deletion and cleanup use this storage operation in the following issues"
-    )]
     fn delete(&self, location: &str) -> impl Future<Output = Result<()>> + Send;
 }
 

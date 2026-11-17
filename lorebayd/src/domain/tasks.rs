@@ -11,6 +11,7 @@ use crate::repository::account::AccountRepository;
 use crate::repository::{
     ArtifactRepository, NoteRepository, SpaceRepository, TaskAfter, TaskListFilter, TaskRepository,
 };
+use crate::storage::FileStorage;
 
 use super::caller::{CallerError, VerifiedCaller};
 use super::login_session::now_millis;
@@ -18,7 +19,7 @@ use super::pagination::{Page, PageOptions, decode_cursor, encode_cursor};
 use super::{
     Artifact, NoteContent, SpaceAccessError, TASK_READ_ROLES, TASK_WRITE_ROLES, TaskAccessError,
     TaskAction, TaskFilterError, TaskFilters, TaskKeyword, TaskResult, TaskTitle, check_space,
-    check_task, format_key, parse_key, primary_key, random_task_id,
+    check_task, delete_artifact_files, format_key, parse_key, primary_key, random_task_id,
 };
 
 #[derive(Debug, Error)]
@@ -310,6 +311,7 @@ pub(crate) async fn change_task(
 
 pub(crate) async fn delete_task(
     database: &DatabaseConnection,
+    storage: &impl FileStorage,
     caller: &VerifiedCaller,
     space: &str,
     task_id: &str,
@@ -324,12 +326,18 @@ pub(crate) async fn delete_task(
         TaskAction::Delete,
     )
     .await?;
+    let locations = ArtifactRepository::builder()
+        .connection(&transaction)
+        .build()
+        .storage_keys(&task.id)
+        .await?;
     TaskRepository::builder()
         .connection(&transaction)
         .build()
         .delete(&task.id)
         .await?;
     transaction.commit().await?;
+    delete_artifact_files(storage, locations).await;
     Ok(())
 }
 
