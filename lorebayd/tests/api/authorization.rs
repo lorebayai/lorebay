@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use url::Url;
 
-use crate::helpers::Server;
+use crate::helpers::{REDIRECT_URI as TOKEN_REDIRECT_URI, Server};
 
 const READ_PATH: &str = "/api/v1/authorization-request";
 const DECISION_PATH: &str = "/api/v1/authorization-decision";
@@ -154,6 +154,52 @@ async fn decide_authorization_returns_redirect_with_code_when_person_approves() 
         "agent_name",
     )
     .await;
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn decide_authorization_fails_when_agent_name_is_dot_segment() {
+    let server = Server::start().await;
+    let tokens = server.tokens().await;
+    for name in [".", ".."] {
+        let client = server.register_client(name).await;
+        let mut input = authorization_request(&client, TOKEN_REDIRECT_URI, &server);
+        input["decision"] = json!("approve");
+        assert_invalid(
+            operation(&server, DECISION_PATH, input.clone(), Some(&tokens)).await,
+            "agent_name",
+        )
+        .await;
+        input["agent_name"] = json!(name);
+        assert_invalid(
+            operation(&server, DECISION_PATH, input.clone(), Some(&tokens)).await,
+            "agent_name",
+        )
+        .await;
+        input["agent_name"] = json!(format!("Build {name}"));
+        let query = decide(&server, input, &tokens).await;
+        assert_eq!(
+            server.exchange_code(&client, &query["code"]).await.status(),
+            StatusCode::OK
+        );
+    }
+    let response = server
+        .json(
+            Method::GET,
+            "/api/v1/agents",
+            Value::Null,
+            tokens["access_token"].as_str(),
+        )
+        .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.json::<Value>().await.unwrap();
+    let names: Vec<_> = body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|agent| agent["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["Build .", "Build .."]);
     server.stop().await;
 }
 

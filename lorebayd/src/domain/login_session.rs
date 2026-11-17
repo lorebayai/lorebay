@@ -19,12 +19,15 @@ use crate::repository::account::AccountRepository;
 use crate::repository::login_session::LoginSessionRepository;
 
 use super::access::Caller;
+use super::caller::{CallerError, VerifiedCaller};
 use super::token::{Claims, TokenKind, TokenSigner, TokenSubject, token_hash};
 use super::user_store::UserStore;
 use super::{primary_key, random_id};
 
 #[derive(Debug, Error)]
 pub(crate) enum LoginError {
+    #[error(transparent)]
+    Caller(#[from] CallerError),
     #[error(transparent)]
     Database(#[from] sea_orm::DbErr),
     #[error(transparent)]
@@ -153,8 +156,9 @@ pub(crate) async fn rotate_refresh(
 
 pub(crate) async fn log_out(
     database: &DatabaseConnection,
-    caller: Caller,
+    caller: VerifiedCaller,
 ) -> Result<(), LoginError> {
+    let caller = caller.person()?;
     let transaction = begin_write(database).await?;
     let repository = LoginSessionRepository::builder()
         .connection(&transaction)

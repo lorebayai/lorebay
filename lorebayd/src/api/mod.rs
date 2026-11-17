@@ -1,5 +1,6 @@
 mod auth;
 mod envelope;
+mod pagination;
 mod problem;
 mod v1;
 
@@ -10,6 +11,7 @@ use axum::extract::rejection::BytesRejection;
 use axum::http::StatusCode;
 
 pub(crate) use envelope::*;
+pub(crate) use pagination::*;
 pub(crate) use problem::*;
 
 pub(crate) fn router() -> Router<ServerState> {

@@ -60,6 +60,7 @@ pub(crate) struct TokenRefresh {
 impl From<LoginError> for TokenError {
     fn from(error: LoginError) -> Self {
         match error {
+            LoginError::Caller(error) => Self::Internal(error.into()),
             LoginError::Database(error) => Self::Database(error),
             LoginError::Internal(error) => Self::Internal(error),
             LoginError::Unauthorized => Self::InvalidGrant,

@@ -1,5 +1,6 @@
 #![cfg(test)]
 
+mod agents;
 mod authorization;
 mod authorization_names;
 mod health;

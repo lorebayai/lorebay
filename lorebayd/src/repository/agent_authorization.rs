@@ -1,4 +1,7 @@
-use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, DbErr, EntityTrait, QueryFilter};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, DbErr, EntityTrait, QueryFilter, QueryOrder,
+    QuerySelect,
+};
 use typed_builder::TypedBuilder;
 
 use crate::entity::agent_authorization::{ActiveModel, Column, Entity, Model};
@@ -10,6 +13,32 @@ pub(crate) struct AgentAuthorizationRepository<'a, C> {
 }
 
 impl<C: ConnectionTrait> AgentAuthorizationRepository<'_, C> {
+    pub async fn list(
+        &self,
+        account_id: &str,
+        after: Option<&str>,
+        limit: u64,
+    ) -> Result<Vec<Model>, DbErr> {
+        let mut query = Entity::find().filter(Column::AccountId.eq(account_id));
+        if let Some(name) = after {
+            query = query.filter(Column::Name.gt(name));
+        }
+        query
+            .order_by_asc(Column::Name)
+            .limit(limit)
+            .all(self.connection)
+            .await
+    }
+
+    pub async fn delete_by_name(&self, account_id: &str, name: &str) -> Result<u64, DbErr> {
+        Ok(Entity::delete_many()
+            .filter(Column::AccountId.eq(account_id))
+            .filter(Column::Name.eq(name))
+            .exec(self.connection)
+            .await?
+            .rows_affected)
+    }
+
     pub async fn by_random_id(&self, random_id: &str) -> Result<Option<Model>, DbErr> {
         Entity::find()
             .filter(Column::RandomId.eq(random_id))
