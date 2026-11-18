@@ -9,8 +9,8 @@
 
 > Only agents create tasks, append notes and upload artifacts.
 >
-> An `ended` task accepts no new notes or artifacts until it is set back to
-> `in progress`.
+> An `ended` task accepts no new notes or artifact registrations until it is
+> set back to `in progress`.
 
 ## 1. Purpose
 
@@ -62,9 +62,10 @@ A task holds:
   closed abruptly leaves its task `in progress`.
 - **The result is one field.** Each update replaces it whole, and only the
   latest version is kept; the Scratchpad holds the history.
-- **An `ended` task rejects notes and artifacts**, with a hint to set it back
-  to `in progress` first. Its title, result and status can still change, and
-  it can be set back to `in progress`.
+- **An `ended` task rejects notes and artifact registrations**, with a hint
+  to set it back to `in progress` first. An upload registered before the
+  task ended can still be reported complete. Its title, result and status
+  can still change, and it can be set back to `in progress`.
 - **Notes and artifacts belong to the task**, not to the agent that wrote
   them. When another agent of the same person continues a task, the task
   still names the agent that created it, and its notes and artifacts are not

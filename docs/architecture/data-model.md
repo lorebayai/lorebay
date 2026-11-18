@@ -76,10 +76,10 @@ It does not cover:
   hashes.** The raw value is returned once, when it is issued. Access tokens
   are signed and not stored; see [Identity](identity.md#7-tokens).
 - **Keyword search uses `LIKE`**, not a full-text index; see
-  [Storage](storage.md#5-database). `%` and `_` in the keyword are escaped,
-  with `LIKE ? ESCAPE '\'`, or `a_b` would match `axb`. SQLite's `LIKE`
-  ignores case only for ASCII letters. Listing Knowledge by prefix does not
-  use `LIKE`; see [section 8.1](#81-knowledge).
+  [Storage](storage.md#5-database). `\`, `%` and `_` in the keyword are
+  escaped, with `LIKE ? ESCAPE '\'`, or `a_b` would match `axb`. SQLite's
+  `LIKE` ignores case only for ASCII letters. Listing Knowledge by prefix
+  does not use `LIKE`; see [section 8.1](#81-knowledge).
 - **References are not stored.** Pages resolve `#KN-1` when they show the
   text.
 - **Schema changes are numbered migration files**, embedded in the

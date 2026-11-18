@@ -112,16 +112,19 @@ except where the table says otherwise.
 
 ## 6. Space and task checks
 
-Every agent call runs these checks, through MCP and the Web API alike.
+Every call runs these checks, through MCP and the Web API alike.
 
 A call that carries a task ID is checked in this order:
 
 1. Verify the access token, giving the person and the agent.
 2. Load the task by ID, giving its space and its person.
-3. Reject the call if the task is not the caller's party's.
-4. Look up the person's role in that space. Reject the call if the person
-   was removed, or if the person is a viewer.
-5. Reject a note or an artifact registration if the task is `ended`, with a
+3. Look up the person's role in that space. Reject the call as not found if
+   the person is not in the space, a removed person included, so a caller
+   outside a space cannot tell which tasks it holds.
+4. Reject the call if the task is not the caller's party's, unless owners
+   and admins may act on anyone's task; see [section 4](#4-permissions).
+5. Reject the call if the person is a viewer.
+6. Reject a note or an artifact registration if the task is `ended`, with a
    hint to set the task back to `in progress` first.
 
 A call that carries a space is checked in this order:

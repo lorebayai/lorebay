@@ -77,9 +77,10 @@ It does not cover:
   their files.
 - **An artifact must not exceed 5 GB**, the limit of a single S3 upload.
   Larger files would need multipart upload.
-- **Files that can run scripts are served as downloads.** Images other than
-  SVG, and PDFs, open in the browser. HTML, SVG and other files that can run
-  scripts are always served as downloads, never opened in the browser. An
+- **Only a fixed list of file types opens in the browser.** PNG, JPEG, GIF
+  and WebP images and PDFs open in the browser, with a content type Lorebay
+  chooses from the file name's extension. Every other file, HTML and SVG
+  included, is served as a download, never opened in the browser. An
   uploaded HTML file therefore can never run inside Lorebay's pages with the
   person's login session. Both backends follow this rule.
 
