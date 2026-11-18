@@ -150,10 +150,10 @@ in its own subfolder and named `lorebay-spaces-<subfolder>`:
   which declares SeaORM and its migration crate with no driver feature. A
   consumer in another repository takes a git dependency on one commit.
 - **Three dependencies are public.** The public API exposes SeaORM's
-  connections, transactions and query statements, the `http` request
-  headers, and the axum router of the MCP layer. A consumer uses
-  semver-compatible releases of SeaORM, `http` and axum, which Cargo then
-  unifies; every other dependency of the library is private.
+  connections and transactions, the `http` request headers, and the axum
+  router of the MCP layer. A consumer uses semver-compatible releases of
+  SeaORM, `http` and axum, which Cargo then unifies; every other dependency
+  of the library is private.
 
 ## 5. Public API
 
@@ -251,25 +251,50 @@ Every implementation:
 ### 6.3 Space roles
 
 **A person's role in a space, and the person's memberships in a scope.**
+The product keeps memberships wherever it likes: in the library's database,
+in its own, or in a directory it asks. The library sees them only through
+two methods, and no database type, query or table crosses the interface.
 
-- **The role** is one of the four, or none. The library caps an agent's
-  role at contributor itself.
-- **Read or write.** The library says whether the check belongs to a read
-  or a write. On a write the implementation may lock what it reads and hold
-  the lock until the commit. It takes its locks when the library asks,
-  which is before the library locks any of its own rows
-  ([section 13](#13-concurrent-writers)).
-- **Memberships are a query, not a list.** The interface returns a query
-  that yields the space ID and the role of each of the person's memberships
-  in the scope. The library embeds it in its own statement, joins it with
-  the spaces, sorts by space number and limits to one page, so listing one
-  page reads at most one page of rows, however many spaces the person is in.
-  A method that returns memberships by page was rejected: the product would
-  have to read the library's space numbers to page in their order. Fetching
-  roles for batches of spaces was rejected too: a person in few of many
-  spaces would make one page scan them all. The query form requires the
-  product to keep memberships in the library's database, which locking them
-  on writes requires already.
+| Method | Takes | Answers |
+| --- | --- | --- |
+| Role | The operation handle, the person, the space | One of the four roles, or none |
+| Memberships | The operation handle, the person, the scope, the last space number already listed, a limit | Up to the limit of the person's memberships in the scope with a higher space number, in increasing space number: each a space ID, its number and the role |
+
+- **The operation handle** is the library's own type. It says whether the
+  call belongs to a read or a write, and carries the operation's
+  transaction or the read connection, per
+  [section 7.2](#72-interfaces-inside-an-operation). An implementation that
+  keeps memberships in the library's database reads through it and never
+  takes another connection; one that keeps them elsewhere ignores it.
+- **The library caps an agent's role** at contributor itself.
+- **On a write the implementation may lock** what it reads and hold the
+  lock until the commit, through the handle's transaction. The library asks
+  for the role before it locks any of its own rows
+  ([section 13](#13-concurrent-writers)), so the product's locks always come
+  first.
+- **Memberships come in space-number order.** The product gives every space
+  its number ([section 8](#8-scope-and-space-numbers)) and a number never
+  changes, so the product can keep it with each membership and answer in
+  that order. Listing one page of spaces takes two steps: the library asks
+  for one more membership than the page size, after the cursor's number,
+  then loads those spaces in one statement and drops any that is missing or
+  belongs to another owner. One more membership than the page tells whether
+  another page follows; the next cursor is the number of the last membership
+  on the page. A page therefore reads at most one page of memberships and
+  one page of spaces, however many spaces the person is in. A dropped
+  membership makes a page short, never wrong.
+- **Every implementation** answers memberships only inside the scope, in
+  strictly increasing space number, and never more than the limit. It
+  answers a role and the memberships from the same record, so a space
+  listed with a role gives the same role when the person opens it.
+
+**The cost is accepted.** A single statement that joins the memberships
+with the spaces would read one page in one step, but it would make every
+product keep its memberships in the library's database. Two steps cost one
+more round trip per page, and each membership must carry its space's
+number, which Lorebay keeps on its membership rows. Fetching roles for
+batches of the library's spaces instead was rejected: a person in few of
+many spaces would make one page scan them all.
 
 ### 6.4 Database
 
@@ -390,7 +415,7 @@ is called outside it, never another connection:
 | Interface | Called | Gets |
 | --- | --- | --- |
 | Caller | Before the operation | The request's headers |
-| Space roles | In the permission check | The write's transaction, or the read connection |
+| Space roles | In the permission check, and when listing spaces | The operation handle: the write's transaction, or the read connection |
 | Person names | When a result shows people, or a filter names one | The write's transaction, or the read connection |
 | Database | To begin, commit or abandon | |
 | File storage | Before or after the transaction | |
@@ -426,7 +451,7 @@ Both rounds are safe to run again.
   the space, directly or through the task, compares the space's owner with
   the scope, and answers a space of another owner, and anything in it, as
   not found, before it asks for the role. Listing spaces passes the scope
-  to the memberships query and returns only spaces of that owner.
+  to the memberships method and returns only spaces of that owner.
 - **A product gives each new space its number.** The library checks that
   the number is unused, refuses it otherwise, and derives the key in the
   fixed format, such as `SPACE-1`. The product keeps numbers unique and
@@ -453,8 +478,9 @@ Both rounds are safe to run again.
   upload is what holds on a backend that cannot, and when the limit was
   lowered after the upload.
 - **A download URL may outlive its content.** A URL issued before its
-  content was deleted may work until it expires or the file is gone. Lorebay serves its own file URLs and checks
-  the record on every download, through the library's read.
+  content was deleted may work until it expires or the file is gone.
+  Lorebay serves its own file URLs and checks the record on every download,
+  through the library's read.
 - **Inline or attachment is the library's choice.** It works out the
   content type from the file name and serves only the configured types
   inline; every other file is an attachment.
@@ -541,7 +567,7 @@ first statement, so writes run one at a time; on Postgres a write locks
 each row it reads and then writes, in the read. Code that runs on both does
 both.
 
-- **Locks are taken in one order:** a product's rows, through the roles
+- **Locks are taken in one order:** a product's locks, through the roles
   interface, then a task, a proposal, a knowledge entry, a space, and an
   artifact. No write locks an earlier kind after a later one, so two writes
   never wait on each other in a cycle.
