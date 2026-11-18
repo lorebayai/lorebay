@@ -1,9 +1,13 @@
 use lorebay_base::Secret;
 use serde_json::Value;
 
-use crate::api::{ApiError, ArtifactCompletedResponse, ArtifactRegisteredResponse};
+use crate::api::{
+    ApiError, ArtifactCompletedResponse, ArtifactDownloadResponse, ArtifactRegisteredResponse,
+};
 use crate::domain::caller::VerifiedCaller;
-use crate::domain::{ArtifactTarget, complete_artifact, register_artifact};
+use crate::domain::{
+    ArtifactTarget, complete_artifact, get_artifact_download_url, register_artifact,
+};
 use crate::server::ServerState;
 
 use super::{Arguments, value};
@@ -46,4 +50,20 @@ pub(crate) async fn complete(
     )
     .await?;
     value(ArtifactCompletedResponse::from(completed))
+}
+
+pub(crate) async fn download(
+    state: &ServerState,
+    caller: &VerifiedCaller,
+    arguments: Arguments,
+) -> Result<Value, ApiError> {
+    let download = get_artifact_download_url(
+        &state.database,
+        state.storage.as_ref(),
+        caller,
+        &arguments.string("space")?,
+        &arguments.string("key")?,
+    )
+    .await?;
+    value(ArtifactDownloadResponse::from(download))
 }

@@ -2,7 +2,7 @@ use reqwest::{Method, Response, StatusCode};
 use serde_json::{Value, json};
 
 use crate::artifacts::helpers::{complete, registration};
-use crate::helpers::{Server, authorize_for, login};
+use crate::helpers::{Server, authorize_for, create_space, list_response, login};
 use crate::tasks::helpers::{self as tasks, SPACE};
 
 use super::{NEWEST_VERSION, call, call_error, call_version, initialize};
@@ -326,6 +326,127 @@ async fn call_create_artifact_fails_with_reopen_hint_when_task_is_ended() {
     )
     .await;
     assert_eq!(register(&server, &agent, &task).await["key"], "AR-2");
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn call_get_artifact_url_returns_url_that_serves_file() {
+    let (server, person, agent) = tasks::setup().await;
+    let task = tasks::create(&server, &agent, SPACE, "Shared artifact").await;
+    let registered = register(&server, &agent, &task).await;
+    assert_eq!(
+        upload(&server, &registered, "Download bytes\0")
+            .await
+            .status(),
+        StatusCode::CREATED
+    );
+    call(
+        &server,
+        &agent,
+        "complete_artifact",
+        json!({
+            "task_id":task["task_id"], "key":registered["key"]
+        }),
+    )
+    .await;
+    let bob = login(&server, "bob").await;
+    tasks::participant(&server, &person, Method::POST, "viewer").await;
+    let reader = authorize_for(&server, &bob, "Artifact reader").await;
+    let before = tasks::read(&server, &person, "TK-1").await;
+    for version in [NEWEST_VERSION, "2025-03-26", "2025-06-18", "2025-11-25"] {
+        if version != NEWEST_VERSION {
+            initialize(&server, &reader, version).await;
+        }
+        let download = call_version(
+            &server,
+            &reader,
+            "get_artifact_url",
+            json!({
+                "space":SPACE, "key":registered["key"]
+            }),
+            version,
+        )
+        .await;
+        assert!(download["expires_at"].as_i64().unwrap() > 0);
+        assert!(
+            download["url"]
+                .as_str()
+                .unwrap()
+                .starts_with(&format!("{}/files/", server.public_url))
+        );
+        let response = server
+            .client
+            .get(download["url"].as_str().unwrap())
+            .send()
+            .await
+            .map_err(|_| "download request failed")
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.bytes().await.unwrap(), "Download bytes\0");
+    }
+    assert_eq!(read_task(&server, &reader, &task).await, before);
+    assert_eq!(tasks::read(&server, &person, "TK-1").await, before);
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn call_get_artifact_url_fails_when_artifact_is_not_readable() {
+    let (server, person, agent) = tasks::setup().await;
+    let task = tasks::create(&server, &agent, SPACE, "Pending artifact").await;
+    let registered = register(&server, &agent, &task).await;
+    create_space(&server, &person, "Other", "Other space").await;
+    for (space, key) in [
+        (SPACE, "AR-1"),
+        (SPACE, "AR-999"),
+        (SPACE, "TK-1"),
+        ("SPACE-2", "AR-1"),
+    ] {
+        let error = call_error(
+            &server,
+            &agent,
+            "get_artifact_url",
+            json!({"space":space, "key":key}),
+        )
+        .await;
+        assert_eq!(error["code"], "artifact.not_found");
+        let response = list_response(
+            &format!("/api/v1/spaces/{space}/artifacts/{key}/url"),
+            &server,
+            &agent,
+            &[],
+        )
+        .await;
+        assert_problem_matches(error, response).await;
+    }
+    let bob = login(&server, "bob").await;
+    let outsider = authorize_for(&server, &bob, "Outsider").await;
+    assert_eq!(
+        call_error(
+            &server,
+            &outsider,
+            "get_artifact_url",
+            json!({
+                "space":SPACE, "key":registered["key"]
+            })
+        )
+        .await["code"],
+        "space.not_found"
+    );
+    for arguments in [
+        json!({"key":"AR-1"}),
+        json!({"space":SPACE}),
+        json!({"space":SPACE, "key":null}),
+        json!({"space":false, "key":"AR-1"}),
+        json!({"space":SPACE, "key":"AR-1", "task_id":task["task_id"]}),
+    ] {
+        let error = call_error(&server, &agent, "get_artifact_url", arguments).await;
+        assert_eq!(error["code"], "request.invalid_body");
+        assert!(!error["errors"].as_array().unwrap().is_empty());
+    }
+    assert_eq!(
+        read_task(&server, &agent, &task).await["artifacts"],
+        json!([])
+    );
     server.stop().await;
 }
 

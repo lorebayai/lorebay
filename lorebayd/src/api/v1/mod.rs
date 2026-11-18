@@ -4,7 +4,8 @@ use axum::routing::{delete, get, post};
 use crate::server::ServerState;
 
 pub(crate) use artifacts::{
-    ArtifactCompletedResponse, ArtifactRegisteredResponse, RegisterArtifactRequest,
+    ArtifactCompletedResponse, ArtifactDownloadResponse, ArtifactRegisteredResponse,
+    RegisterArtifactRequest,
 };
 pub(crate) use spaces::SpaceResponse;
 pub(crate) use tasks::{

@@ -74,6 +74,7 @@ fn build_catalog() -> Vec<Tool> {
         ),
         create_artifact(),
         complete_artifact(),
+        get_artifact_url(),
     ]
 }
 
@@ -142,5 +143,15 @@ fn complete_artifact() -> Tool {
         json!({"task_id":{"type":"string"}, "key":{"type":"string"}}),
         &["task_id", "key"],
         false,
+    )
+}
+
+fn get_artifact_url() -> Tool {
+    tool(
+        "get_artifact_url",
+        "Get a short-lived download URL and its expiry for a completed artifact in a space, using its key such as AR-1. Everyone in the space can read its artifacts. Download the file over HTTP GET using the returned url; files never pass through MCP.",
+        json!({"space":space(), "key":{"type":"string"}}),
+        &["space", "key"],
+        true,
     )
 }
