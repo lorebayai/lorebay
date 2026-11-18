@@ -9,24 +9,37 @@ change in the repo.
 | --- | --- | --- |
 | `README.md` | The repo root and every project folder | Orientation: what it is, how to use it |
 | `AGENTS.md`, with a `CLAUDE.md` symlink | The repo root and folders with their own agent rules | Rules for agents working in that folder |
-| Design docs | `docs/`, by topic | The current product and system design |
-| Glossary | `CONTEXT.md` at the repo root | Canonical domain terms |
+| Design docs | `docs/` for Lorebay and `spaces/docs/` for the library, by topic | The current product and system design |
+| Glossary | `CONTEXT.md` at the repo root for Lorebay, `spaces/CONTEXT.md` for the library | Canonical domain terms |
 | `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md` | The repo root | How outside contributors propose changes, report vulnerabilities and behave |
 | Issue forms and the pull request template | `.github/` | What a new issue or pull request asks for |
 | Playbook fragments | `playbook/` | Conventions shared by several folders |
 | Drafts, plans, reviews | `docs/superpowers/` and `.superpowers/` (gitignored) | Local working files |
 
-A **project folder** is a top-level folder, or a test suite under `tests/`,
-with its own manifest (`Cargo.toml` or `package.json`), such as `lorebayd/`.
+A **project folder** is a top-level folder, a crate folder under `spaces/`,
+or a test suite under `tests/`, with its own manifest (`Cargo.toml` or
+`package.json`), such as `lorebayd/`.
 
 - Each fact has one home. Link to it instead of copying it.
-- Write in American English, using the terms in
-  [CONTEXT.md](../../CONTEXT.md) exactly.
+- Write in American English, using the terms of the folder's glossary
+  exactly.
 - Committed docs describe the current state. History lives in git and pull
   requests.
 - A change that makes a doc wrong fixes that doc in the same pull request.
 - Never commit, or link to, files in `docs/superpowers/` or `.superpowers/`.
-- Design docs follow [docs/AGENTS.md](../../docs/AGENTS.md).
+- Design docs follow [design-docs.md](../topics/design-docs.md) and the
+  `AGENTS.md` of their docs folder.
+
+### The library's folder
+
+`spaces/` holds the library that Lorebay builds on, with its crates, its
+design docs and its glossary. It is a second home for design docs, under
+the same rules, plus one:
+
+- Nothing in `spaces/` depends on or links to `lorebayd/`, `cli/`, `web/`,
+  `base/` or the root `docs/`. The root Cargo workspace settings, the
+  playbook and the toolchain stay shared, so an `AGENTS.md` there may import
+  a playbook fragment and a doc may link to one.
 
 ## READMEs
 
