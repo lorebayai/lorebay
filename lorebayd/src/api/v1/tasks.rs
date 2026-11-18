@@ -199,7 +199,7 @@ impl TryFrom<ListTasksQuery> for (PageOptions, TaskFilters) {
 }
 
 impl ReadTaskQuery {
-    fn scratchpad(self) -> Result<Option<PageOptions>, ApiError> {
+    pub(crate) fn scratchpad(self) -> Result<Option<PageOptions>, ApiError> {
         if !self.include_scratchpad {
             if self.page_size.is_some() {
                 return Err(invalid_query("page_size"));
@@ -415,6 +415,10 @@ pub(crate) async fn scratchpad(
     Ok(note_page(page))
 }
 
+pub(crate) fn invalid_text(field: &str, error: TaskTextError) -> ApiError {
+    ApiError::InvalidBody(vec![text_error(field, error)])
+}
+
 fn note_page(page: Page<Note>) -> Envelope<Vec<NoteResponse>> {
     Envelope::builder()
         .data(
@@ -425,10 +429,6 @@ fn note_page(page: Page<Note>) -> Envelope<Vec<NoteResponse>> {
         )
         .meta(Meta::builder().next_cursor(page.next_cursor).build())
         .build()
-}
-
-fn invalid_text(field: &str, error: TaskTextError) -> ApiError {
-    ApiError::InvalidBody(vec![text_error(field, error)])
 }
 
 fn text_error(field: &str, error: TaskTextError) -> FieldError {

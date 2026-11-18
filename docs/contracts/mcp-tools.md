@@ -57,8 +57,8 @@ It does not cover:
 | `list_proposals` | Space | Lists proposals, filtered by status | List proposals |
 | `get_proposal` | Space | Reads one proposal: content, status, rejection reason | Read a proposal |
 
-- **Lists are paginated.** `list_tasks`, `list_knowledge`, `list_proposals`
-  and the Scratchpad in `get_task` return pages, so no call puts an
+- **Lists are paginated.** `list_spaces`, `list_tasks`, `list_knowledge`,
+  `list_proposals` and the Scratchpad in `get_task` return pages, so no call puts an
   unbounded result into the model's context. Paging follows
   [Web API](web-api.md#4-conventions).
 - **`create_artifact` returns an object, not a bare URL**, so multipart

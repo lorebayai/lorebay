@@ -6,6 +6,8 @@ use tokio::time::sleep;
 
 use crate::helpers::{Server, Settings};
 
+mod tools;
+
 #[tokio::test]
 async fn call_mcp_fails_with_authorization_challenge_when_token_is_missing() {
     let server = Server::start().await;
@@ -24,7 +26,7 @@ async fn call_mcp_fails_with_authorization_challenge_when_token_is_missing() {
 }
 
 #[tokio::test]
-async fn list_tools_returns_empty_list_when_protocol_version_is_newest() {
+async fn list_tools_returns_six_tools_in_fixed_order() {
     let server = Server::start().await;
     let agent = server.authorize_agent("MCP agent").await;
     let token = agent.tokens["access_token"].as_str().unwrap();
@@ -42,7 +44,7 @@ async fn list_tools_returns_empty_list_when_protocol_version_is_newest() {
         body["result"]["_meta"]["io.modelcontextprotocol/serverInfo"]["name"],
         "lorebayd"
     );
-    assert_empty_tools(
+    assert_tools(
         NEWEST_VERSION,
         mcp_call(&server, "tools/list", NEWEST_VERSION, token).await,
     )
@@ -73,7 +75,7 @@ async fn initialize_succeeds_without_session_when_protocol_version_is_older() {
         assert_eq!(body["result"]["protocolVersion"], version);
         assert_eq!(body["result"]["capabilities"]["tools"], json!({}));
         notify_initialized(&server, version, token).await;
-        assert_empty_tools(
+        assert_tools(
             version,
             mcp_call(&server, "tools/list", version, token).await,
         )
@@ -119,7 +121,7 @@ async fn call_mcp_fails_when_access_token_is_expired() {
         Server::start_with_settings(Settings::builder().access_seconds(2_u64).build()).await;
     let agent = server.authorize_agent("MCP agent").await;
     let token = agent.tokens["access_token"].as_str().unwrap();
-    assert_empty_tools(
+    assert_tools(
         NEWEST_VERSION,
         mcp_call(&server, "tools/list", NEWEST_VERSION, token).await,
     )
@@ -141,7 +143,7 @@ async fn call_mcp_fails_when_access_token_is_expired() {
         .await;
     assert_eq!(refreshed.status(), StatusCode::OK);
     let tokens = refreshed.json::<Value>().await.unwrap();
-    assert_empty_tools(
+    assert_tools(
         NEWEST_VERSION,
         mcp_call(
             &server,
@@ -178,7 +180,7 @@ async fn call_mcp_fails_when_account_was_removed_from_users_file() {
     let server = Server::start().await;
     let agent = server.authorize_agent("MCP agent").await;
     let token = agent.tokens["access_token"].as_str().unwrap();
-    assert_empty_tools(
+    assert_tools(
         NEWEST_VERSION,
         mcp_call(&server, "tools/list", NEWEST_VERSION, token).await,
     )
@@ -205,7 +207,7 @@ async fn call_mcp_fails_when_authorization_is_expired() {
     let server = Server::start().await;
     let agent = server.authorize_agent("MCP agent").await;
     let token = agent.tokens["access_token"].as_str().unwrap();
-    assert_empty_tools(
+    assert_tools(
         NEWEST_VERSION,
         mcp_call(&server, "tools/list", NEWEST_VERSION, token).await,
     )
@@ -226,7 +228,7 @@ async fn call_mcp_fails_when_authorization_was_removed() {
     let server = Server::start().await;
     let agent = server.authorize_agent("MCP agent").await;
     let token = agent.tokens["access_token"].as_str().unwrap();
-    assert_empty_tools(
+    assert_tools(
         NEWEST_VERSION,
         mcp_call(&server, "tools/list", NEWEST_VERSION, token).await,
     )
@@ -273,7 +275,7 @@ async fn call_mcp_succeeds_when_proxy_rewrites_host() {
         .send()
         .await
         .unwrap();
-    assert_empty_tools(NEWEST_VERSION, response).await;
+    assert_tools(NEWEST_VERSION, response).await;
     server.stop().await;
 }
 
@@ -304,7 +306,7 @@ async fn call_mcp_fails_when_origin_differs_from_public_url() {
             .unwrap();
         assert_eq!(response.status(), expected);
         if expected == StatusCode::OK {
-            assert_empty_tools(NEWEST_VERSION, response).await;
+            assert_tools(NEWEST_VERSION, response).await;
         }
     }
     server.stop().await;
@@ -379,17 +381,36 @@ async fn assert_challenge(response: Response, server: &Server) {
     );
 }
 
-async fn assert_empty_tools(version: &str, response: Response) {
+async fn assert_tools(version: &str, response: Response) {
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(response.headers()["content-type"], "application/json");
     assert!(!response.headers().contains_key(SESSION_HEADER));
-    let result = if version == NEWEST_VERSION {
-        json!({"tools": [], "resultType": "complete", "ttlMs": 0, "cacheScope": "private"})
+    let body = response.json::<Value>().await.unwrap();
+    assert_eq!(body["jsonrpc"], "2.0");
+    assert_eq!(body["id"], 1);
+    assert!(body.get("error").is_none());
+    let tools = body["result"]["tools"].as_array().unwrap();
+    let expected = [
+        ("list_spaces", true),
+        ("create_task", false),
+        ("update_task", false),
+        ("list_tasks", true),
+        ("get_task", true),
+        ("add_note", false),
+    ];
+    assert_eq!(tools.len(), expected.len());
+    for (tool, (name, read_only)) in tools.iter().zip(expected) {
+        assert_eq!(tool["name"], name);
+        assert!(!tool["description"].as_str().unwrap().is_empty());
+        assert_eq!(tool["inputSchema"]["type"], "object");
+        assert_eq!(tool["inputSchema"]["additionalProperties"], false);
+        assert_eq!(tool["annotations"]["readOnlyHint"], read_only);
+    }
+    if version == NEWEST_VERSION {
+        assert_eq!(body["result"]["resultType"], "complete");
+        assert_eq!(body["result"]["ttlMs"], 0);
+        assert_eq!(body["result"]["cacheScope"], "private");
     } else {
-        json!({"tools": []})
-    };
-    assert_eq!(
-        response.json::<Value>().await.unwrap(),
-        json!({"jsonrpc": "2.0", "id": 1, "result": result})
-    );
+        assert!(body["result"].get("resultType").is_none());
+    }
 }

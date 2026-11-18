@@ -4,20 +4,28 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use axum::Router;
 use axum::extract::{Request, State};
-use axum::http::{StatusCode, header};
+use axum::http::{StatusCode, header, request::Parts};
 use axum::middleware::{Next, from_fn_with_state};
 use axum::response::{IntoResponse, Response};
-use rmcp::ServerHandler;
-use rmcp::model::{Implementation, ProtocolVersion, ServerCapabilities, ServerConfig};
+use rmcp::model::{
+    CallToolRequestParams, CallToolResponse, CallToolResult, Implementation, ListToolsResult,
+    PaginatedRequestParams, ProtocolVersion, ServerCapabilities, ServerConfig,
+};
+use rmcp::service::RequestContext;
 use rmcp::transport::streamable_http_server::session::never::NeverSessionManager;
 use rmcp::transport::{StreamableHttpServerConfig, StreamableHttpService};
+use rmcp::{ErrorData, RoleServer, ServerHandler};
 use url::Url;
 
 use lorebay_base::Secret;
 
-use crate::domain::access::{AccessError, verify_agent};
+use crate::domain::access::{AccessError, AgentCaller, verify_agent};
+use crate::domain::caller::VerifiedCaller;
 use crate::domain::{MCP_PATH, PROTECTED_RESOURCE_METADATA_PATH};
 use crate::server::ServerState;
+
+use arguments::Arguments;
+use catalog::catalog;
 
 pub(crate) fn router(state: ServerState) -> Result<Router> {
     let url = Url::parse(&state.identity.config.public_url)?;
@@ -33,8 +41,13 @@ pub(crate) fn router(state: ServerState) -> Result<Router> {
         .with_json_response(true)
         .disable_allowed_hosts()
         .with_allowed_origins([origin]);
+    let server_state = state.clone();
     let transport = StreamableHttpService::new(
-        || Ok(McpServer),
+        move || {
+            Ok(McpServer {
+                state: server_state.clone(),
+            })
+        },
         Arc::new(NeverSessionManager::default()),
         config,
     );
@@ -52,7 +65,9 @@ const SUPPORTED_VERSIONS: &[ProtocolVersion] = &[
 ];
 
 #[derive(Clone, Debug)]
-struct McpServer;
+struct McpServer {
+    state: ServerState,
+}
 
 impl ServerHandler for McpServer {
     fn get_info(&self) -> ServerConfig {
@@ -63,6 +78,41 @@ impl ServerHandler for McpServer {
 
     fn supported_protocol_versions(&self) -> Cow<'static, [ProtocolVersion]> {
         Cow::Borrowed(SUPPORTED_VERSIONS)
+    }
+
+    async fn list_tools(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<ListToolsResult, ErrorData> {
+        Ok(ListToolsResult::with_all_items(catalog().to_vec()))
+    }
+
+    async fn call_tool(
+        &self,
+        request: CallToolRequestParams,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResponse, ErrorData> {
+        let tool = catalog()
+            .iter()
+            .find(|tool| tool.name == request.name)
+            .ok_or_else(|| ErrorData::invalid_params("Unknown tool", None))?;
+        let caller = context
+            .extensions
+            .get::<Parts>()
+            .and_then(|parts| parts.extensions.get::<AgentCaller>())
+            .cloned()
+            .map(VerifiedCaller::Agent)
+            .ok_or_else(|| ErrorData::internal_error("Request context unavailable", None))?;
+        let arguments = match Arguments::parse(tool, request.arguments) {
+            Ok(arguments) => arguments,
+            Err(error) => return Ok(tools::error_result(error).into()),
+        };
+        let result = match tools::call(&self.state, &caller, &request.name, arguments).await {
+            Ok(value) => CallToolResult::structured(value),
+            Err(error) => tools::error_result(error),
+        };
+        Ok(result.into())
     }
 }
 
@@ -120,3 +170,7 @@ fn challenge(state: &ServerState) -> Response {
     )
         .into_response()
 }
+
+mod arguments;
+mod catalog;
+mod tools;
