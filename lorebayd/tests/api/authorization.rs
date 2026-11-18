@@ -132,11 +132,7 @@ async fn read_authorization_request_fails_when_redirect_uri_is_not_registered() 
 
 #[tokio::test]
 async fn read_authorization_request_fails_when_unused_client_was_removed() {
-    let server = Server::configured(|config| {
-        config.credential_cleanup_interval_seconds = 1;
-        config.unused_client_lifetime_seconds = 3;
-    })
-    .await;
+    let server = Server::configured(|config| config.credential_cleanup_interval_seconds = 1).await;
     let unused = server.register_client("Unused").await;
     let revoked = server.authorize_agent("Revoked").await;
     let pending = server.register_client("Pending").await;
@@ -160,6 +156,9 @@ async fn read_authorization_request_fails_when_unused_client_was_removed() {
             .status(),
         StatusCode::OK
     );
+    server
+        .expire_oauth_credential("oauth_client", "created_at")
+        .await;
     timeout(Duration::from_secs(15), async {
         while operation(&server, READ_PATH, input.clone(), Some(&person))
             .await
