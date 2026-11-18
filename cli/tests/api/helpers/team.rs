@@ -143,6 +143,23 @@ pub fn assert_removal(removed: &Output, mode: &str) {
 pub fn path_commands(segment: &str) -> Vec<Vec<&str>> {
     vec![
         vec!["space", "show", segment],
+        vec!["artifact", "url", segment, "AR-1"],
+        vec!["artifact", "url", "SPACE-1", segment],
+        vec!["artifact", "delete", segment, "task-id", "AR-1", "--yes"],
+        vec!["artifact", "delete", "SPACE-1", segment, "AR-1", "--yes"],
+        vec!["artifact", "delete", "SPACE-1", "task-id", segment, "--yes"],
+        vec!["task", "list", segment],
+        vec!["task", "show", segment, "TK-1"],
+        vec!["task", "show", "SPACE-1", segment],
+        vec!["task", "close", segment, "task-id"],
+        vec!["task", "close", "SPACE-1", segment],
+        vec!["task", "delete", segment, "task-id", "--yes"],
+        vec!["task", "delete", "SPACE-1", segment, "--yes"],
+        vec!["note", "delete", segment, "task-id", "0", "--yes"],
+        vec!["note", "delete", "SPACE-1", segment, "0", "--yes"],
+        vec!["note", "delete", "SPACE-1", "task-id", segment, "--yes"],
+        vec!["task", "scratchpad", segment, "TK-1"],
+        vec!["task", "scratchpad", "SPACE-1", segment],
         vec!["space", "change", segment, "--name", "Unchanged"],
         vec!["participant", "list", segment],
         vec![

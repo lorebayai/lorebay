@@ -145,11 +145,26 @@ async fn help_and_usage_use_documented_exit_codes() {
         vec!["--help"],
         vec!["login", "--help"],
         vec!["agent", "list", "--help"],
+        vec!["artifact", "url", "--help"],
+        vec!["artifact", "delete", "--help"],
+        vec!["task", "--help"],
+        vec!["task", "list", "--help"],
+        vec!["task", "show", "--help"],
+        vec!["task", "close", "--help"],
+        vec!["task", "delete", "--help"],
+        vec!["note", "delete", "--help"],
+        vec!["task", "scratchpad", "--help"],
     ] {
         let output = server.run(&arguments).await;
         assert_success(&output);
         assert!(String::from_utf8_lossy(&output.stdout).contains("Usage:"));
         assert!(output.stderr.is_empty());
+        if arguments.starts_with(&["task", "delete"]) {
+            assert!(
+                String::from_utf8_lossy(&output.stdout)
+                    .contains("Delete a task, its notes, artifacts and their files")
+            );
+        }
     }
     for arguments in [
         vec!["login"],
@@ -157,6 +172,14 @@ async fn help_and_usage_use_documented_exit_codes() {
         vec!["--output=json", "invalid"],
         vec!["agent", "list", "--page-size", "-1", "--output=json"],
         vec!["agent", "revoke"],
+        vec!["artifact", "url", "SPACE-1"],
+        vec!["artifact", "delete", "SPACE-1", "task-id"],
+        vec!["task", "list"],
+        vec!["task", "show", "SPACE-1"],
+        vec!["task", "close", "SPACE-1"],
+        vec!["task", "delete", "SPACE-1"],
+        vec!["note", "delete", "SPACE-1", "task-id"],
+        vec!["task", "scratchpad", "SPACE-1"],
     ] {
         let output = server.run(&arguments).await;
         assert_eq!(output.status.code(), Some(2));

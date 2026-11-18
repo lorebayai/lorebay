@@ -40,6 +40,8 @@ pub(crate) struct Outcome {
 pub(crate) struct Table {
     pub columns: Vec<&'static str>,
     pub rows: Vec<Vec<String>>,
+    #[builder(default = Vec::new())]
+    pub multiline_columns: Vec<usize>,
 }
 
 impl Render for Fields {
@@ -77,7 +79,14 @@ impl Render for Table {
         let mut lines = vec![self.columns.join(COLUMN_SEPARATOR)];
         lines.extend(self.rows.iter().map(|row| {
             row.iter()
-                .map(|cell| safe(cell))
+                .enumerate()
+                .map(|(index, cell)| {
+                    if self.multiline_columns.contains(&index) {
+                        multiline(cell)
+                    } else {
+                        safe(cell)
+                    }
+                })
                 .collect::<Vec<_>>()
                 .join(COLUMN_SEPARATOR)
         }));
@@ -115,8 +124,8 @@ pub(crate) fn hint(text: &str) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn confirm(target: &str) -> Result<()> {
-    hint(&format!("Revoke agent {}? [y/N]", safe(target)))?;
+pub(crate) fn confirm(action: &str, target: &str) -> Result<()> {
+    hint(&format!("{action} {target}? [y/N]"))?;
     let mut answer = String::new();
     if io::stdin().is_terminal() {
         io::stdin().read_line(&mut answer)?;
@@ -124,14 +133,14 @@ pub(crate) fn confirm(target: &str) -> Result<()> {
     if matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
         Ok(())
     } else {
-        Err(Failure::local(CLI_CANCELLED, "Revocation cancelled."))
+        Err(Failure::local(CLI_CANCELLED, "Operation cancelled."))
     }
 }
 
 pub(crate) fn safe(text: &str) -> String {
     text.chars()
         .flat_map(|c| {
-            if c.is_control() {
+            if is_terminal_control(c) {
                 c.escape_default().collect::<Vec<_>>()
             } else {
                 vec![c]
@@ -161,11 +170,16 @@ impl Render for Completion {
 fn multiline(text: &str) -> String {
     text.chars()
         .flat_map(|c| {
-            if c.is_control() && !matches!(c, '\n' | '\t') {
+            if is_terminal_control(c) && !matches!(c, '\n' | '\t') {
                 c.escape_default().collect::<Vec<_>>()
             } else {
                 vec![c]
             }
         })
         .collect()
+}
+
+fn is_terminal_control(c: char) -> bool {
+    c.is_control()
+        || matches!(c, '\u{061c}' | '\u{200e}' | '\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{206f}')
 }

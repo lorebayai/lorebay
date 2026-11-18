@@ -16,11 +16,30 @@ pub(crate) enum AgentCommand {
 }
 
 #[derive(Clone, Debug, Subcommand)]
+pub(crate) enum ArtifactCommand {
+    /// Delete an artifact from a task named by its task ID.
+    Delete {
+        space: String,
+        task_id: String,
+        artifact: String,
+        #[arg(long)]
+        yes: bool,
+    },
+    /// Print an artifact's short-lived download URL.
+    Url { space: String, artifact: String },
+}
+
+#[derive(Clone, Debug, Subcommand)]
 pub(crate) enum Command {
     /// Manage your agents.
     Agent {
         #[command(subcommand)]
         command: AgentCommand,
+    },
+    /// Read and delete task artifacts.
+    Artifact {
+        #[command(subcommand)]
+        command: ArtifactCommand,
     },
     /// Sign in through a browser on this or another computer.
     Login {
@@ -32,6 +51,11 @@ pub(crate) enum Command {
     },
     /// End your login session and remove local credentials.
     Logout,
+    /// Delete a task's notes.
+    Note {
+        #[command(subcommand)]
+        command: NoteCommand,
+    },
     /// Manage a space's participants.
     Participant {
         #[command(subcommand)]
@@ -42,10 +66,28 @@ pub(crate) enum Command {
         #[command(subcommand)]
         command: SpaceCommand,
     },
+    /// Read and manage a space's tasks.
+    Task {
+        #[command(subcommand)]
+        command: TaskCommand,
+    },
     /// Find people to add to a space.
     User {
         #[command(subcommand)]
         command: UserCommand,
+    },
+}
+
+#[derive(Clone, Debug, Subcommand)]
+pub(crate) enum NoteCommand {
+    /// Delete a note named by the time printed in its Scratchpad.
+    Delete {
+        space: String,
+        task_id: String,
+        #[arg(allow_negative_numbers = true)]
+        note: String,
+        #[arg(long)]
+        yes: bool,
     },
 }
 
@@ -124,6 +166,43 @@ pub(crate) enum UserCommand {
     List(Page),
 }
 
+#[derive(Clone, Debug, Subcommand)]
+pub(crate) enum TaskCommand {
+    /// End a task named by its task ID.
+    Close { space: String, task_id: String },
+    /// Delete a task, its notes, artifacts and their files.
+    Delete {
+        space: String,
+        task_id: String,
+        #[arg(long)]
+        yes: bool,
+    },
+    /// List one page of tasks, newest activity first.
+    List {
+        space: String,
+        #[command(flatten)]
+        page: Page,
+        #[command(flatten)]
+        filters: TaskFilters,
+    },
+    /// Read one page of a task's notes in time order.
+    Scratchpad {
+        space: String,
+        task: String,
+        #[command(flatten)]
+        page: Page,
+    },
+    /// Show a task's fields and task ID.
+    Show { space: String, task: String },
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub(crate) enum TaskStatus {
+    Ended,
+    #[value(name = "in progress")]
+    InProgress,
+}
+
 #[derive(Clone, Debug, Parser, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
 #[command(name = "lorebay", version, about = "The Lorebay command-line client")]
@@ -141,6 +220,30 @@ pub(crate) struct Page {
     pub page_size: Option<u32>,
     #[arg(long)]
     pub cursor: Option<String>,
+}
+
+#[derive(Args, Clone, Debug, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+pub(crate) struct TaskFilters {
+    #[arg(long)]
+    pub person: Option<String>,
+    #[arg(long)]
+    pub agent: Option<String>,
+    #[arg(long, value_enum)]
+    pub status: Option<TaskStatus>,
+    #[arg(long)]
+    pub own_open: bool,
+    #[arg(long)]
+    pub keyword: Option<String>,
+}
+
+impl TaskStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Ended => "ended",
+            Self::InProgress => "in progress",
+        }
+    }
 }
 
 impl AddedRole {
