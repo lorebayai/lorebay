@@ -1,4 +1,5 @@
 mod agents;
+mod artifacts;
 mod deletion;
 mod device;
 #[expect(

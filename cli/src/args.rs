@@ -16,11 +16,22 @@ pub(crate) enum AgentCommand {
 }
 
 #[derive(Clone, Debug, Subcommand)]
+pub(crate) enum ArtifactCommand {
+    /// Print an artifact's short-lived download URL.
+    Url { space: String, artifact: String },
+}
+
+#[derive(Clone, Debug, Subcommand)]
 pub(crate) enum Command {
     /// Manage your agents.
     Agent {
         #[command(subcommand)]
         command: AgentCommand,
+    },
+    /// Get artifact download URLs.
+    Artifact {
+        #[command(subcommand)]
+        command: ArtifactCommand,
     },
     /// Sign in through a browser on this or another computer.
     Login {

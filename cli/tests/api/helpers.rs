@@ -13,11 +13,13 @@ use tokio::process::{Child, ChildStderr, Command};
 use tokio::time::{Instant, sleep, timeout};
 use url::Url;
 
+mod artifacts;
 mod device;
 mod task_deletion;
 mod task_filters;
 mod tasks;
 mod team;
+pub use artifacts::*;
 pub use device::*;
 pub use task_deletion::*;
 pub use task_filters::*;

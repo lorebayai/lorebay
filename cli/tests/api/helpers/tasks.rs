@@ -5,6 +5,8 @@ use serde_json::{Value, json};
 
 use super::{Server, create};
 
+pub const ARTIFACT_BYTES: &str = "Scenario artifact\n";
+
 pub async fn task_context() -> (Server, String, Value) {
     let server = Server::start().await;
     server.login().await;
@@ -147,8 +149,6 @@ pub async fn task_id_from_show(server: &Server, space: &str, key: &str, mode: &s
         .unwrap()
         .to_owned()
 }
-
-const ARTIFACT_BYTES: &str = "Scenario artifact\n";
 
 async fn register_task_artifact(
     server: &Server,

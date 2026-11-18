@@ -31,6 +31,7 @@ cargo run -p lorebay-cli -- task scratchpad SPACE-1 TK-1 --page-size 20
 cargo run -p lorebay-cli -- task close SPACE-1 '<task-id>'
 cargo run -p lorebay-cli -- task delete SPACE-1 '<task-id>' --yes
 cargo run -p lorebay-cli -- note delete SPACE-1 '<task-id>' '<note-time>' --yes
+cargo run -p lorebay-cli -- artifact url SPACE-1 AR-1
 cargo run -p lorebay-cli -- logout
 cargo run -p lorebay-cli -- --help
 ```
