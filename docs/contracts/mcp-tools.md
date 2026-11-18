@@ -78,15 +78,15 @@ those two operations have no tool.
 ## 5. The MCP layer
 
 The MCP layer runs inside `lorebayd` and calls the API operations directly,
-not over the network. It does three things:
+not over the network. It does two things:
 
 1. Converts tool arguments into operation arguments.
-2. Looks up the space of a call that carries a task ID.
-3. Converts the result back, adding the task's title to the result of every
+2. Converts the result back, adding the task's title to the result of every
    write.
 
 The Web API takes the same arguments from the path; MCP takes them from the
-tool arguments. From then on the checks are identical; see
+tool arguments. A call that carries a task ID passes it alone, and the task
+check finds the task's space. From then on the checks are identical; see
 [Access control](access-control.md#6-space-and-task-checks).
 
 ## 6. Wrong task IDs

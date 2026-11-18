@@ -82,7 +82,7 @@ contains spaces. Optional arguments appear in brackets. List rows follow
 | `participant add <space> <username> --role <role>` | Add a participant | Added participant |
 | `participant set-role <space> <username> --role <role>` | Change a participant's role | Updated participant |
 | `participant remove <space> <username>` | Remove a participant | Removal result |
-| `task list <space> [--person <username>] [--agent <name>] [--status <status>] [--keyword <text>]` | List tasks | Task keys, titles, statuses, people, agent names and last activity times |
+| `task list <space> [--person <username>] [--agent <name>] [--status <status>] [--keyword <text>] [--own-open]` | List tasks | Task keys, titles, statuses, people, agent names and last activity times |
 | `task show <space> <task>` | Read a task | Task fields, including its task ID, result and completed artifact list |
 | `task scratchpad <space> <task>` | Read a task's Scratchpad | One page of notes, with their times, in time order |
 | `task close <space> <task-id>` | Change a task, setting only its status to `ended` | Updated task |
@@ -118,6 +118,9 @@ contains spaces. Optional arguments appear in brackets. List rows follow
 - **Artifact lists come from `task show`.** `artifact url` returns the Web
   API's URL; the person can transfer the file with it over HTTP as
   [Tasks](tasks.md#5-artifacts) describes.
+- **`--own-open` lists only the person's own tasks that are not `ended`**,
+  as `list_tasks` does for an agent's party; see
+  [MCP tools](mcp-tools.md#6-wrong-task-ids).
 - **A contributor proposes a rollback with `proposal change`.** They read
   the chosen old version and supply its content and summary, following
   [Knowledge](knowledge.md#3-knowledge-entries). The CLI never silently
