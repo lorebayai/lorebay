@@ -18,6 +18,7 @@ use tokio::io::AsyncReadExt;
 use typed_builder::TypedBuilder;
 
 use crate::api::ProblemDetails;
+use crate::domain::{ArtifactError, check_artifact_download};
 use crate::server::ServerState;
 use crate::storage::{FileOperation, StorageError};
 
@@ -114,6 +115,15 @@ impl IntoResponse for FileError {
     }
 }
 
+impl From<ArtifactError> for FileError {
+    fn from(error: ArtifactError) -> Self {
+        match error {
+            ArtifactError::NotFound => Self::Storage(StorageError::NotFound),
+            error => Self::Internal(error.into()),
+        }
+    }
+}
+
 mod headers;
 
 async fn download(
@@ -129,6 +139,7 @@ async fn download(
         query.expires,
         query.signature.expose(),
     )?;
+    check_artifact_download(&state.database, &location).await?;
     let (file, size) = state.storage.open_download(&location).await?;
     let headers = download_headers(&query.file_name, size).map_err(anyhow::Error::from)?;
     Ok((headers, Body::from_stream(try_unfold(file, file_chunk))).into_response())

@@ -88,6 +88,19 @@ impl TryFrom<artifact::Model> for Artifact {
     }
 }
 
+pub(crate) async fn check_artifact_download(
+    database: &DatabaseConnection,
+    location: &str,
+) -> Result<(), ArtifactError> {
+    ArtifactRepository::builder()
+        .connection(database)
+        .build()
+        .completed_by_storage_key(location)
+        .await?
+        .ok_or(ArtifactError::NotFound)?;
+    Ok(())
+}
+
 pub(crate) async fn get_artifact_download_url(
     database: &DatabaseConnection,
     storage: &impl FileStorage,

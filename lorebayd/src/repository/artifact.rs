@@ -13,6 +13,14 @@ pub(crate) struct ArtifactRepository<'a, C> {
 }
 
 impl<C: ConnectionTrait> ArtifactRepository<'_, C> {
+    pub async fn completed_by_storage_key(&self, location: &str) -> Result<Option<Model>, DbErr> {
+        Entity::find()
+            .filter(Column::StorageKey.eq(location))
+            .filter(Column::CompletedAt.is_not_null())
+            .one(self.connection)
+            .await
+    }
+
     pub async fn completed_by_space_number(
         &self,
         space_id: &str,
