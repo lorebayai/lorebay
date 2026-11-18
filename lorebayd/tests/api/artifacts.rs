@@ -9,6 +9,7 @@ use url::Url;
 
 use crate::helpers::{
     Server, TEST_PASSWORD, TEST_TIMEOUT, assert_problem, authorize_for, create_space, login,
+    request,
 };
 use crate::tasks::helpers::{SPACE, append, create, participant, read, setup};
 
@@ -733,5 +734,44 @@ async fn upload_file_releases_slot_when_upload_stalls() {
             .len(),
         2
     );
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn complete_artifact_fails_when_file_exceeds_size_limit() {
+    let server = Server::start().await;
+    let (person, agent, task) = prepare(&server).await;
+    let registration = register(&server, &agent, &task).await;
+    upload_ok(&server, &registration, "12345").await;
+
+    let directory = server.stop().await;
+    let server =
+        Server::restart_configured(directory, |config| config.upload_size_limit_bytes = 4).await;
+    assert_problem(
+        complete(&server, &agent, &task, "AR-1").await,
+        StatusCode::CONFLICT,
+        "artifact.too_large",
+    )
+    .await;
+    assert_eq!(read(&server, &person, "TK-1").await["artifacts"], json!([]));
+    assert_problem(
+        request(
+            &server,
+            &person,
+            Method::GET,
+            "/api/v1/spaces/SPACE-1/artifacts/AR-1/url",
+            Value::Null,
+        )
+        .await,
+        StatusCode::NOT_FOUND,
+        "artifact.not_found",
+    )
+    .await;
+    assert_problem(
+        complete(&server, &agent, &task, "AR-1").await,
+        StatusCode::CONFLICT,
+        "artifact.not_uploaded",
+    )
+    .await;
     server.stop().await;
 }

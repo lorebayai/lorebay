@@ -1,9 +1,7 @@
 use axum::extract::FromRequestParts;
-use axum::http::{header, request::Parts};
+use axum::http::request::Parts;
 
-use lorebay_lib_types::Secret;
-
-use crate::domain::access::verify_agent;
+use crate::domain::access::{bearer, verify_agent};
 use crate::domain::caller::VerifiedCaller;
 use crate::domain::login_session;
 use crate::domain::token::TokenKind;
@@ -18,18 +16,11 @@ impl FromRequestParts<ServerState> for VerifiedCaller {
         parts: &mut Parts,
         state: &ServerState,
     ) -> Result<Self, Self::Rejection> {
-        let token = parts
-            .headers
-            .get(header::AUTHORIZATION)
-            .and_then(|value| value.to_str().ok())
-            .and_then(|value| value.split_once(' '))
-            .filter(|(scheme, _)| scheme.eq_ignore_ascii_case("Bearer"))
-            .map(|(_, token)| Secret::from(token))
-            .ok_or(ApiError::Unauthorized)?;
+        let token = bearer(&parts.headers).ok_or(ApiError::Unauthorized)?;
         let claims = state
             .identity
             .signer
-            .verify(token.expose())
+            .verify(token)
             .map_err(|_| ApiError::Unauthorized)?;
         match claims.kind {
             TokenKind::AgentAuthorization => {

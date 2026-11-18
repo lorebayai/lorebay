@@ -1,0 +1,18 @@
+[package]
+name = "lorebay-schema"
+description = "Applies migrations for entity generation."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+sea-orm = { workspace = true, features = ["sqlx-sqlite"] }
+sea-orm-migration = { workspace = true, features = ["sqlx-sqlite"] }
+tokio.workspace = true
+
+[lints]
+workspace = true

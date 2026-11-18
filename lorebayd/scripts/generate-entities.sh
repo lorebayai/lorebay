@@ -11,58 +11,31 @@ if [[ ! -x "$cli" ]] || [[ "$("$cli" --version)" != "sea-orm-cli $sea_orm_versio
     --features codegen,sqlx-sqlite,runtime-tokio --root "$repo_root/target/tools" \
     --target-dir "$repo_root/target/tools-build"
 fi
-cargo build -p lorebayd --locked --target-dir "$repo_root/target"
 
 schema_dir="$(mktemp -d "${TMPDIR:-/tmp}/lorebay-entities.XXXXXX")"
-server_pid=""
-cleanup() {
-  if [[ -n "$server_pid" ]]; then
-    kill -TERM "$server_pid" 2>/dev/null || true
-    wait "$server_pid" || true
-  fi
-  rm -rf -- "$schema_dir"
-}
-trap cleanup EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
+trap 'rm -rf -- "$schema_dir"' EXIT
+cargo run -p lorebay-schema --locked -- "$schema_dir/core.sqlite3" "$schema_dir/product.sqlite3"
 
-printf '[]\n' > "$schema_dir/users.json"
-env -i PATH="$PATH" LOREBAYD__USERS_FILE="$schema_dir/users.json" \
-  LOREBAYD__DATA_DIRECTORY="$schema_dir" LOREBAYD__LISTEN_ADDRESS=127.0.0.1:0 \
-  "$repo_root/target/debug/lorebayd" 2>"$schema_dir/server.log" &
-server_pid=$!
-for _ in {1..100}; do
-  if grep -q '"message":"lorebayd ready"' "$schema_dir/server.log"; then
-    break
-  fi
-  if ! kill -0 "$server_pid" 2>/dev/null; then
-    cat "$schema_dir/server.log" >&2
-    exit 1
-  fi
-  sleep 0.1
-done
-if ! grep -q '"message":"lorebayd ready"' "$schema_dir/server.log"; then
-  cat "$schema_dir/server.log" >&2
-  exit 1
-fi
-kill -TERM "$server_pid"
-wait "$server_pid"
-server_pid=""
-
-python3 - "$schema_dir/lorebay.sqlite3" "$schema_dir/entity-projection.sqlite3" <<'PY'
+python3 - "$schema_dir/product.sqlite3" <<'PY'
 from contextlib import closing
-from pathlib import Path
 import sqlite3
 import sys
 
-schema_uri = Path(sys.argv[1]).as_uri() + "?mode=ro"
-with closing(sqlite3.connect(schema_uri, uri=True)) as schema:
-    with closing(sqlite3.connect(sys.argv[2])) as projection:
-        schema.backup(projection)
-        for index_name in ("participant_one_owner",):
-            projection.execute(f'DROP INDEX "{index_name}"')
+with closing(sqlite3.connect(sys.argv[1])) as projection:
+    projection.execute("DROP INDEX participant_one_owner")
 PY
 
-"$cli" generate entity --compact-format --with-prelude none \
-  --database-url "sqlite://$schema_dir/entity-projection.sqlite3" --output-dir "$repo_root/lorebayd/src/entity"
-cargo fmt --all
+generate() {
+  local database="$1" destination="$2" tables="$3"
+  local output="$schema_dir/$database"
+  mkdir "$output"
+  "$cli" generate entity --compact-format --with-prelude none \
+    --database-url "sqlite://$schema_dir/$database.sqlite3" --tables "$tables" --output-dir "$output"
+  mkdir -p "$destination"
+  find "$destination" -maxdepth 1 -name '*.rs' -type f -delete
+  cp "$output/"*.rs "$destination/"
+  rustfmt --edition 2024 "$destination/mod.rs"
+}
+
+generate core lib/core/src/entity space,space_task,space_note,space_artifact,space_knowledge,space_knowledge_version,space_proposal
+generate product lorebayd/src/entity account,participant,agent_authorization,login_session,oauth_client,oauth_code,refresh_token_history,device_sign_in_request

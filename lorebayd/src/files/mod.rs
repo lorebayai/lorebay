@@ -18,9 +18,9 @@ use tokio::io::AsyncReadExt;
 use typed_builder::TypedBuilder;
 
 use crate::api::ProblemDetails;
-use crate::domain::{ArtifactError, check_artifact_download};
 use crate::server::ServerState;
 use crate::storage::{FileOperation, StorageError};
+use lorebay_lib_core::{ArtifactError, check_artifact_download};
 
 use headers::download_headers;
 
@@ -139,9 +139,9 @@ async fn download(
         query.expires,
         query.signature.expose(),
     )?;
-    check_artifact_download(&state.database, &location).await?;
+    let presentation = check_artifact_download(&state.library, &location).await?;
     let (file, size) = state.storage.open_download(&location).await?;
-    let headers = download_headers(&query.file_name, size).map_err(anyhow::Error::from)?;
+    let headers = download_headers(&presentation, size).map_err(anyhow::Error::from)?;
     Ok((headers, Body::from_stream(try_unfold(file, file_chunk))).into_response())
 }
 

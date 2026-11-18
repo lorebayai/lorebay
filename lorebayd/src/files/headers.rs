@@ -1,25 +1,15 @@
 use axum::http::header::{self, InvalidHeaderValue};
 use axum::http::{HeaderMap, HeaderValue};
 
+use lorebay_lib_core::DownloadPresentation;
+
 pub(super) fn download_headers(
-    file_name: &str,
+    presentation: &DownloadPresentation,
     size: u64,
 ) -> Result<HeaderMap, InvalidHeaderValue> {
-    let extension = file_name
-        .rsplit_once('.')
-        .map(|(_, extension)| extension.to_ascii_lowercase());
-    let content_type = match extension.as_deref() {
-        Some("gif") => "image/gif",
-        Some("jpeg" | "jpg") => "image/jpeg",
-        Some("pdf") => "application/pdf",
-        Some("png") => "image/png",
-        Some("webp") => "image/webp",
-        _ => "application/octet-stream",
-    };
-    let disposition = match content_type {
-        "application/octet-stream" => "attachment",
-        _ => "inline",
-    };
+    let disposition = presentation.disposition;
+    let content_type = presentation.content_type;
+    let file_name = &presentation.file_name;
     let file_name: String = file_name
         .chars()
         .filter(|character| !character.is_control())

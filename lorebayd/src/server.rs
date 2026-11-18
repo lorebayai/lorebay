@@ -14,6 +14,7 @@ use hyper::server::conn::http1;
 use hyper_util::rt::TokioIo;
 use hyper_util::service::TowerToHyperService;
 use lorebay_base::{RateLimiter, SystemClock};
+use lorebay_lib_core::LibraryState;
 use sea_orm::{
     ConnectOptions, Database, DatabaseConnection, SqliteTransactionMode, TransactionOptions,
     TransactionTrait,
@@ -36,7 +37,7 @@ use crate::domain::{account, login_session};
 use crate::migration::Migrator;
 use crate::oauth::{self, OAuthState};
 use crate::storage::LocalDirectory;
-use crate::{files, mcp, worker};
+use crate::{files, library, worker};
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
@@ -44,6 +45,7 @@ pub(crate) struct ServerState {
     pub database: DatabaseConnection,
     pub storage: Arc<LocalDirectory>,
     pub identity: Arc<Identity>,
+    pub library: LibraryState,
     ready: Arc<AtomicBool>,
     oauth: OAuthState,
 }
@@ -67,7 +69,9 @@ pub async fn run(
     account::sync(&database, users.as_ref(), login_session::now_millis()?).await?;
     let identity = Arc::new(identity(config.clone(), users)?);
     let storage = Arc::new(LocalDirectory::open(&config).await?);
+    let library = library::state(&config, &database, identity.clone(), storage.clone())?;
     let state = ServerState::builder()
+        .library(library)
         .storage(storage)
         .oauth(OAuthState::new(
             &config,
@@ -152,6 +156,9 @@ async fn open_database(directory: &Path) -> Result<DatabaseConnection> {
         })
         .await
         .context("could not begin database migration transaction")?;
+    lorebay_lib_core::Migrator::up(&transaction, None)
+        .await
+        .with_context(|| format!("could not migrate library database {}", path.display()))?;
     Migrator::up(&transaction, None)
         .await
         .with_context(|| format!("could not migrate database {}", path.display()))?;
@@ -214,17 +221,20 @@ fn start_workers(state: &ServerState, stopped: watch::Receiver<bool>) -> JoinSet
         Duration::from_secs(config.unused_client_lifetime_seconds),
         stopped.clone(),
     ));
+    let interval = Duration::from_secs(config.artifact_cleanup_interval_seconds);
     workers.spawn(worker::remove_abandoned_artifacts(
-        state.database.clone(),
-        state.storage.clone(),
-        Duration::from_secs(config.artifact_cleanup_interval_seconds),
-        Duration::from_secs(config.abandoned_artifact_lifetime_seconds),
+        state.library.clone(),
+        interval,
         stopped.clone(),
     ));
     workers.spawn(worker::remove_orphaned_files(
-        state.database.clone(),
+        state.library.clone(),
+        interval,
+        stopped.clone(),
+    ));
+    workers.spawn(worker::remove_temporary_uploads(
         state.storage.clone(),
-        Duration::from_secs(config.artifact_cleanup_interval_seconds),
+        interval,
         Duration::from_secs(config.orphaned_file_lifetime_seconds),
         stopped,
     ));
@@ -243,7 +253,7 @@ async fn finish_workers(workers: &mut JoinSet<()>) {
 
 fn router(state: ServerState) -> Result<Router> {
     let oauth = oauth::router(state.oauth.clone());
-    let mcp = mcp::router(state.clone())?;
+    let mcp = lorebay_lib_mcp::router(state.library.clone())?;
     Ok(Router::new()
         .route(HEALTH_PATH, get(health))
         .route(READINESS_PATH, get(readiness))

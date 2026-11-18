@@ -10,13 +10,12 @@ by the `AGENTS.md` of every Rust project that uses SeaORM.
 
 ## Dependencies
 
-- `sea-orm` takes `default-features = false` with `runtime-tokio`,
-  `sqlx-sqlite` and `macros`. `sea-orm-migration` takes
-  `default-features = false` with the same runtime and driver, which leaves
-  out its CLI.
-- A crate that implements the Postgres backend adds `sqlx-postgres` to both.
-  A crate that runs only on SQLite leaves it out, so its build carries no
-  driver it cannot use.
+- Workspace dependencies set `default-features = false` and `runtime-tokio`
+  for both crates, plus `macros` for `sea-orm`. They select no driver.
+- A crate that opens SQLite connections enables `sqlx-sqlite`. A Postgres
+  consumer enables `sqlx-postgres`. The library's `sqlite` and `postgres`
+  features activate the respective driver on both dependencies. MCP
+  forwards those features to core.
 - The tables hold only INTEGER and TEXT
   ([Data model](../../lib/docs/architecture/data-model.md#3-conventions)), so no
   `with-*` feature is needed until a column needs one.

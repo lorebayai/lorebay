@@ -1959,12 +1959,58 @@ dependencies = [
 ]
 
 [[package]]
+name = "lorebay-lib-core"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "base64 0.23.1",
+ "futures-util",
+ "getrandom 0.4.3",
+ "http",
+ "lorebay-lib-types",
+ "sea-orm",
+ "sea-orm-migration",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "typed-builder",
+ "uuid",
+]
+
+[[package]]
+name = "lorebay-lib-mcp"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "lorebay-lib-core",
+ "rmcp",
+ "serde",
+ "serde_json",
+ "tracing",
+ "typed-builder",
+ "url",
+]
+
+[[package]]
 name = "lorebay-lib-types"
 version = "0.0.0"
 dependencies = [
  "serde",
  "sha2 0.11.1",
  "typed-builder",
+]
+
+[[package]]
+name = "lorebay-schema"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "sea-orm",
+ "sea-orm-migration",
+ "tokio",
 ]
 
 [[package]]
@@ -1983,9 +2029,10 @@ dependencies = [
  "hyper-util",
  "jsonwebtoken",
  "lorebay-base",
+ "lorebay-lib-core",
+ "lorebay-lib-mcp",
  "lorebay-lib-types",
  "reqwest",
- "rmcp",
  "sea-orm",
  "sea-orm-migration",
  "serde",

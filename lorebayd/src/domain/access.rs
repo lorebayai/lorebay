@@ -1,3 +1,4 @@
+use axum::http::{HeaderMap, header};
 use sea_orm::{DatabaseConnection, DbErr, TransactionTrait};
 use thiserror::Error;
 use typed_builder::TypedBuilder;
@@ -62,4 +63,14 @@ pub(crate) async fn verify_agent(
         .authorization_id(authorization.id)
         .name(authorization.name)
         .build())
+}
+
+pub(crate) fn bearer(headers: &HeaderMap) -> Option<&str> {
+    headers
+        .get(header::AUTHORIZATION)?
+        .to_str()
+        .ok()?
+        .split_once(' ')
+        .filter(|(scheme, _)| scheme.eq_ignore_ascii_case("Bearer"))
+        .map(|(_, value)| value)
 }

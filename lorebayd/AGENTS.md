@@ -11,7 +11,7 @@ Follow these playbook fragments:
 - `lorebayd` is a library crate with a thin `src/main.rs`, so the start
   helper of its integration tests builds it through the same entry point as
   `main` ([testing.md](../playbook/topics/testing.md#black-box)).
-- The library exposes only what `main.rs` and the start helper use: the
+- The server crate exposes only what `main.rs` and the start helper use: the
   `Config` type, the entry point `run`, and the function that hashes a
   password for the users file. Every other item is `pub(crate)`.
 - `main.rs` also runs the command that produces a password hash for the
@@ -22,21 +22,21 @@ Follow these playbook fragments:
 
   ```text
   src/
-  ├── main.rs       Loads Config, starts logging, binds the listener, calls run
-  ├── lib.rs        Declares modules; re-exports the public items
-  ├── config.rs     Config
-  ├── server.rs     run and the server state
-  ├── api/          The Web API under /api/v1, sign-in and consent included
-  ├── mcp/          The MCP layer
-  ├── oauth/        The OAuth endpoints and the authorization page
-  ├── pages/        The embedded web pages
-  ├── files/        Artifact file URLs served with the local directory backend
-  ├── domain/       The API operations, one module per area
-  ├── worker/       Background jobs, one file per job
-  ├── storage/      The file storage layer and its backends
-  ├── migration/    Schema migrations (seaorm.md)
-  ├── entity/       Generated SeaORM entities (seaorm.md)
-  └── repository/   Repositories (seaorm.md)
+  |-- main.rs       Loads Config, starts logging, binds the listener, calls run
+  |-- lib.rs        Declares modules; re-exports the public items
+  |-- config.rs     Config
+  |-- server.rs     run and the server state
+  |-- api/          The Web API under /api/v1, sign-in and consent included
+  |-- library/      Lorebay's implementations of the library interfaces
+  |-- oauth/        The OAuth endpoints and the authorization page
+  |-- pages/        The embedded web pages
+  |-- files/        Artifact file URLs served with the local directory backend
+  |-- domain/       Product operations, one module per area
+  |-- worker/       Background jobs, one file per job
+  |-- storage/      The file storage layer and its backends
+  |-- migration/    Schema migrations (seaorm.md)
+  |-- entity/       Generated SeaORM entities (seaorm.md)
+  `-- repository/   Repositories (seaorm.md)
   ```
 
 ### Layers
@@ -48,29 +48,22 @@ and file storage layers.
 
 | Layer | Lives in | Owns |
 | --- | --- | --- |
-| Transport | `src/api/`, `src/mcp/`, `src/oauth/`, `src/pages/`, `src/files/` | Converting a protocol's requests into domain inputs, and domain results back |
+| Transport | `src/api/`, `src/oauth/`, `src/pages/`, `src/files/` | Converting a protocol's requests into domain inputs, and domain results back |
 | Worker | `src/worker/` | The [background jobs](../docs/architecture/system.md#6-background-jobs), calling domain functions as a transport does per request |
 | Domain | `src/domain/` | The API operations: permission checks, data rules and transactions |
 | Data | `src/repository/`, `src/entity/`, `src/migration/` | The database layer |
 | Storage | `src/storage/` | The [file storage layer](../lib/docs/architecture/storage.md#3-file-storage) |
 
-- A **domain function** performs one API operation, such as appending a
-  note. A Web API operation and the MCP tool mapped to it call the same
-  domain function ([MCP tools](../lib/docs/contracts/mcp-tools.md#5-the-mcp-layer)).
-- Domain functions must not use transport types: no axum, HTTP or MCP
-  types, and no request or response structs. They take typed inputs and the
-  verified caller, a person and, for an agent, its authorization, never a
-  raw token.
-- Domain functions check permissions, by the library's
-  [permission matrix](../lib/docs/contracts/access-control.md#4-permissions)
-  and Lorebay's [own rows](../docs/contracts/access-control.md#4-permissions),
-  and in the order of
-  [the space and task checks](../lib/docs/contracts/access-control.md#6-space-and-task-checks).
-  Transports never check permissions.
-- A domain function that writes opens one transaction, passes it to every
-  repository and helper it calls, and commits once. A helper that joins a
-  caller's transaction takes it as a parameter and never commits or rolls
-  back.
+- Web API operations on shared content call the same public core functions
+  as MCP. The embedded MCP router comes from `lorebay-lib-mcp`.
+- Product domain functions take typed inputs and verified product callers.
+  Web API handlers convert verified callers to the library's person ID,
+  optional agent name and owner scope before calling core.
+- The domain and the library check permissions for the operations they own,
+  using their respective permission matrices. Transports only translate.
+- Product-only domain functions own their transactions. Library writes and
+  composed space creation use the library's write entry with Lorebay's
+  transaction adapter. Helpers use the operation's transaction.
 
 ### Transports
 
@@ -114,7 +107,7 @@ and file storage layers.
 1. `main` loads `Config`, starts logging, binds the listen address, and
    calls `run` with a shutdown future that resolves on SIGINT or SIGTERM.
 2. `run` reads the users file, opens the database in the data directory and
-   applies pending migrations
+   applies the library then the product migration groups
    ([seaorm.md](../playbook/topics/seaorm.md#migrations)).
 3. `run` builds the server state and the routers, starts its workers, and
    serves until the shutdown future resolves.
@@ -127,6 +120,7 @@ and file storage layers.
 - The start helper calls `run` with test configuration, a listener bound to
   `127.0.0.1:0` and a shutdown future it controls.
 - The server state holds the long-lived handles, such as the database
-  connection, the file storage backend and the accounts from the users file.
+  connection, the file storage backend, the identity state and the embedded
+  library state.
   `run` builds it once and passes it to handlers, which pass what they need
   to domain functions. Nothing opens a connection per request.

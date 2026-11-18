@@ -8,32 +8,26 @@ use tokio::fs::{self, DirEntry, ReadDir};
 use super::{StoredFile, StoredFileKind};
 
 pub(super) fn list_files(
-    artifacts: PathBuf,
-    uploads: PathBuf,
+    directory: PathBuf,
+    kind: StoredFileKind,
 ) -> impl Stream<Item = Result<StoredFile>> + Send {
-    let directories = [
-        (StoredFileKind::Artifact, artifacts),
-        (StoredFileKind::Temporary, uploads),
-    ]
-    .into_iter();
     stream::try_unfold(
-        (directories, None::<(StoredFileKind, ReadDir)>),
-        async |(mut directories, mut current)| {
-            loop {
-                if let Some((kind, entries)) = &mut current
-                    && let Some(entry) = entries.next_entry().await?
-                {
-                    if let Some(file) = stored_file(entry, *kind).await? {
-                        return Ok(Some((file, (directories, current))));
-                    }
-                    continue;
+        (Some(directory), None::<ReadDir>),
+        move |(directory, entries)| async move {
+            let mut entries = match (directory, entries) {
+                (Some(directory), _) => {
+                    storage_directory(&directory).await?;
+                    fs::read_dir(directory).await?
                 }
-                let Some((kind, directory)) = directories.next() else {
-                    return Ok(None);
-                };
-                storage_directory(&directory).await?;
-                current = Some((kind, fs::read_dir(directory).await?));
+                (_, Some(entries)) => entries,
+                _ => return Ok(None),
+            };
+            while let Some(entry) = entries.next_entry().await? {
+                if let Some(file) = stored_file(entry, kind).await? {
+                    return Ok(Some((file, (None, Some(entries)))));
+                }
             }
+            Ok(None)
         },
     )
 }

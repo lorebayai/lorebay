@@ -2,11 +2,9 @@ use serde::Deserialize;
 use typed_builder::TypedBuilder;
 
 use crate::domain::pagination::PageOptions;
+use lorebay_lib_core::DEFAULT_PAGE_SIZE;
 
 use super::{ApiError, FieldError};
-
-pub(crate) const DEFAULT_PAGE_SIZE: u64 = 20;
-pub(crate) const MAX_PAGE_SIZE: u64 = 100;
 
 #[derive(Clone, Debug, Deserialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
@@ -26,13 +24,12 @@ impl TryFrom<ListQuery> for PageOptions {
             .transpose()
             .map_err(|_| invalid_query("page_size"))?
             .unwrap_or(DEFAULT_PAGE_SIZE);
-        if !(1..=MAX_PAGE_SIZE).contains(&page_size) {
-            return Err(invalid_query("page_size"));
-        }
-        Ok(Self::builder()
-            .page_size(page_size)
-            .cursor(query.cursor)
-            .build())
+        let options = Self {
+            page_size,
+            cursor: query.cursor,
+        };
+        options.validate().map_err(|_| invalid_query("page_size"))?;
+        Ok(options)
     }
 }
 

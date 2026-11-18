@@ -4,6 +4,12 @@ layer: 'application'
 dependsOn:
   - web
 
+fileGroups:
+  rust:
+    - '/lib/core/src/**/*'
+    - '/lib/mcp/src/**/*'
+    - '/lib/types/src/**/*'
+
 tasks:
   build:
     deps: ['web:build']
@@ -15,8 +21,12 @@ tasks:
   integration:
     deps: ['web:build']
   generate-entities:
-    deps: ['web:build']
     command: 'bash lorebayd/scripts/generate-entities.sh'
+    inputs:
+      - '/lorebayd/scripts/generate-entities.sh'
+      - '/schema/**/*'
+      - '/lib/core/src/migration/**/*'
+      - 'src/migration/**/*'
     options:
       cache: false
       runInCI: false

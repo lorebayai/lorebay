@@ -8,6 +8,7 @@ tasks:
     deps: ['lorebayd:build']
     inputs:
       - '/lorebayd/**/*'
+      - '/lib/**/*'
       - '/base/**/*'
       - '/web/**/*'
   test:

@@ -47,6 +47,7 @@ moon ci
 - `lorebayd/`: the Rust crate that builds the `lorebayd` executable.
 - `playbook/`: conventions for coding agents, imported from `AGENTS.md`
   files.
+- `schema/`: the migration runner for generating Rust entities.
 - `web/`: the TypeScript web pages embedded by `lorebayd`.
 
 ## Docs
