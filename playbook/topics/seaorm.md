@@ -46,8 +46,11 @@ by the `AGENTS.md` of every Rust project that uses SeaORM.
   Migrations must declare TEXT NOT NULL primary keys with no auto-increment
   or database default, as [Data model](../../docs/architecture/data-model.md#3-conventions)
   requires.
-- A migration merged to `main` is never edited, renamed or reordered. A
-  schema change is a new migration.
+- Until the first deployment whose data must be kept, a migration merged to
+  `main` may be rewritten instead of followed by a new one; a database made
+  by an earlier build is then rebuilt, not upgraded. From that deployment
+  on, a merged migration is never edited, renamed or reordered, and a schema
+  change is a new migration.
 - `down` reverses `up` and runs only against disposable databases.
 - `run` applies pending migrations before it serves any request. A failed
   migration stops startup. A deployment runs one `lorebayd`
