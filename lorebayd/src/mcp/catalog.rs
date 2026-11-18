@@ -5,8 +5,8 @@ use serde_json::{Value, json};
 
 use crate::api::{DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};
 use crate::domain::{
-    KEYWORD_MAX_CHARACTERS, NOTE_MAX_CHARACTERS, RESULT_MAX_CHARACTERS, TITLE_MAX_CHARACTERS,
-    TaskStatus,
+    ARTIFACT_FILE_NAME_MAX_BYTES, ARTIFACT_SUMMARY_MAX_CHARACTERS, KEYWORD_MAX_CHARACTERS,
+    NOTE_MAX_CHARACTERS, RESULT_MAX_CHARACTERS, TITLE_MAX_CHARACTERS, TaskStatus,
 };
 
 pub(crate) fn catalog() -> &'static [Tool] {
@@ -72,6 +72,8 @@ fn build_catalog() -> Vec<Tool> {
             &["task_id", "content"],
             false,
         ),
+        create_artifact(),
+        complete_artifact(),
     ]
 }
 
@@ -117,4 +119,28 @@ fn task_list_properties() -> Value {
         "own_open":{"type":"boolean", "default":false},
         "keyword":{"type":"string", "minLength":1, "maxLength":KEYWORD_MAX_CHARACTERS}
     }))
+}
+
+fn create_artifact() -> Tool {
+    tool(
+        "create_artifact",
+        "Register an artifact using task_id, a file name and a summary. Returns its key, upload_url, method, headers and task title. Upload the file bytes with an HTTP PUT to upload_url carrying every returned header; files never pass through MCP. HTTP 412 means the file is already in storage: call complete_artifact with the returned key. Ended tasks must be reopened before registration.",
+        json!({
+            "task_id":{"type":"string"},
+            "file_name":{"type":"string", "minLength":1, "maxLength":ARTIFACT_FILE_NAME_MAX_BYTES, "description":"Nonempty file name, at most 255 UTF-8 bytes."},
+            "summary":{"type":"string", "minLength":1, "maxLength":ARTIFACT_SUMMARY_MAX_CHARACTERS}
+        }),
+        &["task_id", "file_name", "summary"],
+        false,
+    )
+}
+
+fn complete_artifact() -> Tool {
+    tool(
+        "complete_artifact",
+        "Report an artifact upload complete using task_id and its artifact key, such as AR-1. Call after a successful upload or HTTP 412. Checks that the file is in storage and returns the artifact with its size and the current task title. Repeating completion succeeds without changing it; a registered upload may be completed after the task ends.",
+        json!({"task_id":{"type":"string"}, "key":{"type":"string"}}),
+        &["task_id", "key"],
+        false,
+    )
 }

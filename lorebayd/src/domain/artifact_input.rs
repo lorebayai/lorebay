@@ -1,6 +1,9 @@
 use thiserror::Error;
 use typed_builder::TypedBuilder;
 
+pub(crate) const ARTIFACT_FILE_NAME_MAX_BYTES: usize = 255;
+pub(crate) const ARTIFACT_SUMMARY_MAX_CHARACTERS: usize = 500;
+
 #[derive(Debug, Error)]
 pub(crate) enum ArtifactTextError {
     #[error("Must not be empty.")]
@@ -37,8 +40,10 @@ impl TryFrom<String> for ArtifactFileName {
         if value.trim().is_empty() {
             return Err(ArtifactTextError::Empty);
         }
-        if value.len() > FILE_NAME_MAX_BYTES {
-            return Err(ArtifactTextError::TooManyBytes(FILE_NAME_MAX_BYTES));
+        if value.len() > ARTIFACT_FILE_NAME_MAX_BYTES {
+            return Err(ArtifactTextError::TooManyBytes(
+                ARTIFACT_FILE_NAME_MAX_BYTES,
+            ));
         }
         Ok(Self { value })
     }
@@ -57,8 +62,10 @@ impl TryFrom<String> for ArtifactSummary {
         if value.trim().is_empty() {
             return Err(ArtifactTextError::Empty);
         }
-        if value.chars().count() > SUMMARY_MAX_CHARACTERS {
-            return Err(ArtifactTextError::TooManyCharacters(SUMMARY_MAX_CHARACTERS));
+        if value.chars().count() > ARTIFACT_SUMMARY_MAX_CHARACTERS {
+            return Err(ArtifactTextError::TooManyCharacters(
+                ARTIFACT_SUMMARY_MAX_CHARACTERS,
+            ));
         }
         Ok(Self { value })
     }
@@ -69,6 +76,3 @@ impl From<ArtifactSummary> for String {
         value.value
     }
 }
-
-const FILE_NAME_MAX_BYTES: usize = 255;
-const SUMMARY_MAX_CHARACTERS: usize = 500;

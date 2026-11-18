@@ -3,10 +3,11 @@ use serde_json::Value;
 use typed_builder::TypedBuilder;
 
 use crate::api::{
-    ApiError, ChangeTaskRequest, ListQuery, ListTasksQuery, ReadTaskQuery, invalid_query,
+    ApiError, ChangeTaskRequest, ListQuery, ListTasksQuery, ReadTaskQuery, RegisterArtifactRequest,
+    invalid_query,
 };
 use crate::domain::pagination::PageOptions;
-use crate::domain::{TaskChanges, TaskFilters};
+use crate::domain::{NewArtifact, TaskChanges, TaskFilters};
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
@@ -89,6 +90,14 @@ impl Arguments {
             .title(self.optional_string("title"))
             .status(self.optional_string("status"))
             .result(self.optional_string("result"))
+            .build()
+            .try_into()
+    }
+
+    pub fn artifact(&self) -> Result<NewArtifact, ApiError> {
+        RegisterArtifactRequest::builder()
+            .file_name(self.string("file_name")?)
+            .summary(self.string("summary")?)
             .build()
             .try_into()
     }
