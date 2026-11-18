@@ -178,7 +178,7 @@ fn task_output(body: Value) -> Outcome {
             .map(|(label, field)| {
                 let value = display_value(&body[DATA][field]);
                 if matches!(field, "title" | "result") {
-                    Field::Multiline(label, value)
+                    Field::Multiline(label, value.replace('\n', "\n  "))
                 } else {
                     Field::SingleLine(label, value)
                 }

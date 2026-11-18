@@ -45,8 +45,8 @@ async fn task_list_returns_tasks_in_activity_order() {
 #[tokio::test]
 async fn task_show_prints_result_task_id_and_artifacts() {
     let (server, space, agent) = task_context().await;
-    let title = "# Work\n- source\ttext\u{1b}[0m\r\u{7}\u{2066}";
-    let result = "# Findings\n- **Done**\tcode\u{1b}[0m\r\u{7}\u{202e}";
+    let title = "# Work\nStatus: ended\n- source\ttext\u{1b}[0m\r\u{7}\u{2066}";
+    let result = "# Findings\nTask ID: another-task\n\n- **Done**\tcode\u{1b}[0m\r\u{7}\u{202e}\n";
     let expected = task_with_artifacts(&server, &space, &agent, title, result).await;
     let shown = server
         .run(&["task", "show", &space, "TK-1", "--output", "json"])
@@ -68,7 +68,7 @@ async fn task_show_prints_result_task_id_and_artifacts() {
     assert_eq!(
         String::from_utf8(human.stdout).unwrap(),
         format!(
-            "Key: TK-1\nTask ID: {id}\nTitle: # Work\n- source\ttext\\u{{1b}}[0m\\r\\u{{7}}\\u{{2066}}\nStatus: in progress\nPerson: {}\nAgent name: Task agent\nStarted at: {started}\nEnded at: \nLast activity at: {last_activity}\nResult: # Findings\n- **Done**\tcode\\u{{1b}}[0m\\r\\u{{7}}\\u{{202e}}\nArtifacts: {artifacts}\n",
+            "Key: TK-1\nTask ID: {id}\nTitle: # Work\n  Status: ended\n  - source\ttext\\u{{1b}}[0m\\r\\u{{7}}\\u{{2066}}\nStatus: in progress\nPerson: {}\nAgent name: Task agent\nStarted at: {started}\nEnded at: \nLast activity at: {last_activity}\nResult: # Findings\n  Task ID: another-task\n  \n  - **Done**\tcode\\u{{1b}}[0m\\r\\u{{7}}\\u{{202e}}\n  \nArtifacts: {artifacts}\n",
             server.username
         )
     );
