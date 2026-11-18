@@ -31,20 +31,18 @@ pub async fn remove_abandoned_artifacts(state: &LibraryState) -> Result<u64, Art
         .map_err(anyhow::Error::from)?;
     let before = now_millis()?.saturating_sub(age);
     state
-        .run_write(
-            WriteOperation::RemoveAbandonedArtifacts,
-            None,
-            async |write| {
-                let locations = ArtifactRepository::builder()
-                    .connection(write.transaction())
-                    .build()
-                    .delete_abandoned(before, ARTIFACT_CLEANUP_BATCH_SIZE as u64)
-                    .await?;
-                let removed = locations.len() as u64;
-                write.delete.extend(locations);
-                Ok(removed)
-            },
-        )
+        .run_write(None, async |write| {
+            write.begin_operation()?;
+            let locations = ArtifactRepository::builder()
+                .connection(write.transaction())
+                .build()
+                .delete_abandoned(before, ARTIFACT_CLEANUP_BATCH_SIZE as u64)
+                .await?;
+            let removed = locations.len() as u64;
+            write.delete.extend(locations);
+            write.record(WriteOperation::RemoveAbandonedArtifacts, None);
+            Ok(removed)
+        })
         .await
 }
 

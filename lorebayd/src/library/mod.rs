@@ -14,36 +14,40 @@ pub(crate) use space_roles::{parse_role, read_role};
 
 pub(crate) const OWNER_ID: &str = "lorebay";
 
-pub(crate) fn state(
-    config: &Config,
-    database: &DatabaseConnection,
-    identity: Arc<Identity>,
-    storage: Arc<LocalDirectory>,
-) -> Result<LibraryState> {
+const MCP_SERVER_NAME: &str = "lorebayd";
+const INLINE_CONTENT_TYPES: [&str; 5] = [
+    "image/gif",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "application/pdf",
+];
+
+pub(crate) fn settings(config: &Config) -> LibrarySettings {
     let origin = config.public_url.trim_end_matches('/').to_owned();
-    let settings = LibrarySettings {
+    LibrarySettings {
         public_url: origin.clone(),
         mcp_path: MCP_PATH.to_owned(),
-        server_name: "lorebayd".to_owned(),
+        server_name: MCP_SERVER_NAME.to_owned(),
         server_version: env!("CARGO_PKG_VERSION").to_owned(),
         authorization_server: origin,
         upload_size_limit: config.upload_size_limit_bytes,
         upload_url_lifetime: Duration::from_secs(config.upload_url_lifetime_seconds),
         download_url_lifetime: Duration::from_secs(config.upload_url_lifetime_seconds),
-        inline_content_types: [
-            "image/gif",
-            "image/jpeg",
-            "image/png",
-            "image/webp",
-            "application/pdf",
-        ]
-        .map(str::to_owned)
-        .to_vec(),
+        inline_content_types: INLINE_CONTENT_TYPES.map(str::to_owned).to_vec(),
         abandoned_artifact_lifetime: Duration::from_secs(
             config.abandoned_artifact_lifetime_seconds,
         ),
         orphaned_file_lifetime: Duration::from_secs(config.orphaned_file_lifetime_seconds),
-    };
+    }
+}
+
+pub(crate) fn state(
+    settings: LibrarySettings,
+    database: &DatabaseConnection,
+    identity: Arc<Identity>,
+    storage: Arc<LocalDirectory>,
+) -> Result<LibraryState> {
     LibraryState::new(
         settings,
         LibraryInterfaces {

@@ -13,6 +13,7 @@ use lorebay_lib_core::{
     ArtifactError, CallerError as LibraryCallerError, SpaceAccessError, SpaceError,
     SpaceInputError, TaskAccessError, TaskError,
 };
+use lorebay_lib_core::{PageSizeError, TaskChangeError};
 
 #[derive(Debug, Error)]
 pub(crate) enum ApiError {
@@ -219,7 +220,7 @@ impl From<SpaceError> for ApiError {
             SpaceError::Caller(error) => error.into(),
             SpaceError::Input(error) => error.into(),
             SpaceError::InvalidCursor => invalid_query("cursor"),
-            SpaceError::InvalidPageSize => invalid_query("page_size"),
+            SpaceError::InvalidPageSize(_) => invalid_query(PageSizeError::FIELD),
             SpaceError::Database(_) | SpaceError::Internal(_) | SpaceError::NumberTaken => {
                 tracing::error!(%error, "space operation failed");
                 Self::Internal
@@ -233,6 +234,16 @@ impl From<SpaceInputError> for ApiError {
         Self::InvalidBody(vec![FieldError {
             field: error.field().to_owned(),
             code: error.field_code().to_owned(),
+            message: error.to_string(),
+        }])
+    }
+}
+
+impl From<TaskChangeError> for ApiError {
+    fn from(error: TaskChangeError) -> Self {
+        Self::InvalidBody(vec![FieldError {
+            field: TaskChangeError::FIELD.to_owned(),
+            code: TaskChangeError::FIELD_CODE.to_owned(),
             message: error.to_string(),
         }])
     }
@@ -253,12 +264,8 @@ impl From<TaskError> for ApiError {
                 message: error.to_string(),
             }]),
             TaskError::InvalidCursor => invalid_query("cursor"),
-            TaskError::InvalidPageSize => invalid_query("page_size"),
-            TaskError::NoChanges => Self::InvalidBody(vec![FieldError {
-                field: "body".to_owned(),
-                code: "required".to_owned(),
-                message: error.to_string(),
-            }]),
+            TaskError::InvalidPageSize(_) => invalid_query(PageSizeError::FIELD),
+            TaskError::NoChanges(error) => error.into(),
             TaskError::NotFound => Self::TaskNotFound,
             TaskError::NoteNotFound => Self::NoteNotFound,
             TaskError::Space(error) => error.into(),

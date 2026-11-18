@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use lorebay_lib_types::{decode_cursor, encode_cursor};
 use sea_orm::{DatabaseTransaction, DbErr, IntoActiveModel, Set};
 use serde::Serialize;
 use thiserror::Error;
@@ -7,12 +8,12 @@ use typed_builder::TypedBuilder;
 
 use crate::entity::space;
 use crate::repository::SpaceRepository;
-use crate::{Caller, LibraryState, MembershipPage, Write};
+use crate::{Caller, LibraryState, MembershipPage, Write, WriteOperation};
 
 use super::CallerError;
 use super::id::primary_key;
 use super::key::format_key;
-use super::pagination::{Page, PageOptions, decode_cursor, encode_cursor};
+use super::pagination::{Page, PageOptions, PageSizeError};
 use super::space_access::{
     AuthorizedSpace, READ_ROLES, SpaceAccessError, SpaceReference, SpaceRole, check_space,
 };
@@ -32,8 +33,8 @@ pub enum SpaceError {
     Internal(#[from] anyhow::Error),
     #[error("Invalid cursor")]
     InvalidCursor,
-    #[error("Invalid pagination parameter.")]
-    InvalidPageSize,
+    #[error(transparent)]
+    InvalidPageSize(#[from] PageSizeError),
     #[error("Space number is already in use")]
     NumberTaken,
 }
@@ -45,7 +46,7 @@ impl SpaceError {
             Self::Caller(error) => error.code(),
             Self::Database(_) | Self::Internal(_) => "server.internal",
             Self::Input(_) => "request.invalid_body",
-            Self::InvalidCursor | Self::InvalidPageSize => "request.invalid_query",
+            Self::InvalidCursor | Self::InvalidPageSize(_) => "request.invalid_query",
             Self::NumberTaken => "space.number_taken",
         }
     }
@@ -149,6 +150,7 @@ pub async fn create_space(
     number: i64,
     input: NewSpace,
 ) -> Result<(Space, SpaceReference), SpaceError> {
+    write.begin_operation()?;
     input.validate()?;
     let now = now_millis()?;
     let repository = SpaceRepository::builder()
@@ -184,7 +186,7 @@ pub async fn create_space(
         id: space.id.clone(),
         number,
     };
-    write.space_id = Some(space.id.clone());
+    write.record(WriteOperation::CreateSpace, Some(space.id.clone()));
     Ok((
         AuthorizedSpace {
             space,
@@ -200,9 +202,7 @@ pub async fn list_spaces(
     caller: &Caller,
     options: PageOptions,
 ) -> Result<Page<Space>, SpaceError> {
-    options
-        .validate()
-        .map_err(|_| SpaceError::InvalidPageSize)?;
+    options.validate()?;
     let after_number = space_position(caller, &options)?;
     state
         .run_read(async |handle| {
@@ -274,6 +274,7 @@ pub async fn change_space(
     key: &str,
     changes: SpaceChanges,
 ) -> Result<Space, SpaceError> {
+    write.begin_operation()?;
     changes.validate()?;
     caller.person()?;
     let authorized = check_space(write.state(), write.handle(), caller, key, CHANGE_ROLES).await?;
@@ -290,7 +291,7 @@ pub async fn change_space(
         .build()
         .update(model)
         .await?;
-    write.space_id = Some(space.id.clone());
+    write.record(WriteOperation::ChangeSpace, Some(space.id.clone()));
     Ok(AuthorizedSpace {
         space,
         role: authorized.role,

@@ -28,7 +28,6 @@ pub trait FileStorage: Send + Sync {
 pub struct UploadSpec<'a> {
     pub location: &'a str,
     pub lifetime: Duration,
-    pub size_limit: u64,
 }
 
 #[derive(Clone, Debug, TypedBuilder)]

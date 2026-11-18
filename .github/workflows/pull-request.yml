@@ -43,7 +43,7 @@ jobs:
       - name: Restore Cargo Cache
         uses: Swatinem/rust-cache@v2.9.3
         with:
-          shared-key: ci-linux-tests-lib-v1
+          shared-key: ci-linux-tests-lib-v2
           save-if: 'false'
       - name: Run Moon CI
         run: moon ci

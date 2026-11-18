@@ -10,18 +10,16 @@ publish.workspace = true
 
 [features]
 default = []
-postgres = ["sea-orm/sqlx-postgres", "sea-orm-migration/sqlx-postgres"]
-sqlite = ["sea-orm/sqlx-sqlite", "sea-orm-migration/sqlx-sqlite"]
+postgres = ["sea-orm/sqlx-postgres"]
+sqlite = ["sea-orm/sqlx-sqlite"]
 
 [dependencies]
 anyhow.workspace = true
-base64.workspace = true
 futures-util.workspace = true
 getrandom.workspace = true
 http.workspace = true
 lorebay-lib-types.workspace = true
 sea-orm.workspace = true
-sea-orm-migration.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
@@ -31,6 +29,8 @@ typed-builder.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+lorebay-lib-migration = { workspace = true, features = ["postgres"] }
+sea-orm-migration.workspace = true
 lorebay-lib-core = { path = ".", features = ["postgres"] }
 
 [[test]]

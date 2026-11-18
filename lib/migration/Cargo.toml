@@ -1,0 +1,27 @@
+[package]
+name = "lorebay-lib-migration"
+description = "Schema migrations for the library."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[features]
+default = []
+postgres = ["sea-orm-migration/sqlx-postgres"]
+sqlite = ["sea-orm-migration/sqlx-sqlite", "dep:anyhow", "dep:tokio"]
+
+[dependencies]
+anyhow = { workspace = true, optional = true }
+sea-orm-migration.workspace = true
+tokio = { workspace = true, optional = true }
+
+[[bin]]
+name = "prepare-library-entity-database"
+path = "src/bin/prepare-library-entity-database.rs"
+required-features = ["sqlite"]
+
+[lints]
+workspace = true

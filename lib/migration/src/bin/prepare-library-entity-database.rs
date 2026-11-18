@@ -2,30 +2,19 @@ use std::env::args_os;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use sea_orm::{ConnectOptions, Database, DatabaseConnection};
+use lorebay_lib_migration::Migrator as LibraryMigrator;
 use sea_orm_migration::MigratorTrait;
-
-#[path = "../../lib/core/src/migration/mod.rs"]
-mod core_migration;
-#[path = "../../lorebayd/src/migration/mod.rs"]
-mod product_migration;
+use sea_orm_migration::sea_orm::{ConnectOptions, Database, DatabaseConnection};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let mut arguments = args_os().skip(1);
-    let core = arguments.next().map(PathBuf::from);
-    let product = arguments.next().map(PathBuf::from);
-    let (Some(core), Some(product), None) = (core, product, arguments.next()) else {
-        anyhow::bail!("Usage: lorebay-schema <core.sqlite3> <product.sqlite3>");
+    let (Some(path), None) = (arguments.next(), arguments.next()) else {
+        anyhow::bail!("Usage: prepare-library-entity-database <database.sqlite3>");
     };
 
-    let database = open(&core).await?;
-    core_migration::Migrator::up(&database, None).await?;
-    database.close().await?;
-
-    let database = open(&product).await?;
-    core_migration::Migrator::up(&database, None).await?;
-    product_migration::Migrator::up(&database, None).await?;
+    let database = open(&PathBuf::from(path)).await?;
+    LibraryMigrator::up(&database, None).await?;
     database.close().await?;
     Ok(())
 }

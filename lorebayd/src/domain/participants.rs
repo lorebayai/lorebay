@@ -248,10 +248,7 @@ fn participant_from_record(record: ParticipantRecord) -> Result<Participant, DbE
         ParticipantKind::try_from(record.kind.as_str())?,
         ParticipantKind::Agent
     ) {
-        role = match role {
-            SpaceRole::Owner | SpaceRole::Admin => SpaceRole::Contributor,
-            role => role,
-        };
+        role = role.for_agent();
     }
     Ok(Participant::builder()
         .username(record.username)
@@ -330,9 +327,10 @@ async fn check_space(
     let role = read_role(transaction, caller.account_id(), &space.id)
         .await?
         .ok_or(SpaceAccessError::NotFound)?;
-    let role = match (caller, role) {
-        (VerifiedCaller::Agent(_), SpaceRole::Admin | SpaceRole::Owner) => SpaceRole::Contributor,
-        _ => role,
+    let role = if matches!(caller, VerifiedCaller::Agent(_)) {
+        role.for_agent()
+    } else {
+        role
     };
     if !allowed.contains(&role) {
         return Err(SpaceAccessError::PermissionRequired);

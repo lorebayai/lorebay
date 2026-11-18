@@ -1,7 +1,8 @@
 # lorebay-lib-types
 
-Shared primitives for library consumers: `Secret<T>`, whose `Debug` output
-is redacted, and `sha256_hex`, the lowercase hexadecimal SHA-256 of a string.
+Shared primitives for library consumers include the redacted `Secret<T>`,
+`sha256_hex`, the cursor codec and conversion from `SystemTime` to Unix
+milliseconds.
 The crate has no database, MCP or async dependency.
 
 ## Usage

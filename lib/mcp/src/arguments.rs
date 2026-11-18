@@ -3,8 +3,8 @@ use serde_json::Value;
 use typed_builder::TypedBuilder;
 
 use lorebay_lib_core::{
-    ArtifactFileName, ArtifactSummary, DEFAULT_PAGE_SIZE, NewArtifact, PageOptions, TaskChanges,
-    TaskFilters, TaskKeyword, TaskResult, TaskStatus, TaskTitle,
+    ArtifactFileName, ArtifactSummary, NewArtifact, PageOptions, PageSizeError, TaskChanges,
+    TaskFilters, TaskKeyword, TaskResult, TaskStatus, TaskStatusError, TaskTitle,
 };
 
 use crate::error::{ToolError, invalid_query};
@@ -64,16 +64,13 @@ impl Arguments {
     }
 
     pub fn page(&self) -> Result<PageOptions, ToolError> {
-        let input = PageOptions {
-            page_size: self
-                .values
-                .get("page_size")
-                .and_then(Value::as_u64)
-                .unwrap_or(DEFAULT_PAGE_SIZE),
-            cursor: self.cursor(),
-        };
-        input.validate().map_err(|_| invalid_query("page_size"))?;
-        Ok(input)
+        PageOptions::new(
+            self.values
+                .get(PageSizeError::FIELD)
+                .and_then(Value::as_u64),
+            self.cursor(),
+        )
+        .map_err(|_| invalid_query(PageSizeError::FIELD))
     }
 
     pub fn scratchpad(&self) -> Result<Option<PageOptions>, ToolError> {
@@ -95,26 +92,25 @@ impl Arguments {
             .map(TaskTitle::try_from)
             .transpose()
             .map_err(|error| ToolError::task_text("title", error))?;
-        let status = self
-            .status()
-            .map_err(|message| ToolError::body_field("status", "invalid", message))?;
+        let status = self.status().map_err(|error| {
+            ToolError::body_field(
+                TaskStatusError::FIELD,
+                TaskStatusError::FIELD_CODE,
+                &error.to_string(),
+            )
+        })?;
         let result = self
             .optional_string("result")
             .map(TaskResult::try_from)
             .transpose()
             .map_err(|error| ToolError::task_text("result", error))?;
-        if title.is_none() && status.is_none() && result.is_none() {
-            return Err(ToolError::body_field(
-                "body",
-                "required",
-                "Provide a title, status or result.",
-            ));
-        }
-        Ok(TaskChanges {
+        let changes = TaskChanges {
             title,
             status,
             result,
-        })
+        };
+        changes.validate()?;
+        Ok(changes)
     }
 
     pub fn artifact(&self) -> Result<NewArtifact, ToolError> {
@@ -126,9 +122,13 @@ impl Arguments {
     }
 
     pub fn tasks(&self) -> Result<(PageOptions, TaskFilters), ToolError> {
-        let status = self
-            .status()
-            .map_err(|message| ToolError::query_field("status", message))?;
+        let status = self.status().map_err(|error| {
+            ToolError::query_field(
+                TaskStatusError::FIELD,
+                TaskStatusError::FIELD_CODE,
+                &error.to_string(),
+            )
+        })?;
         let keyword = self
             .optional_string("keyword")
             .map(TaskKeyword::try_from)
@@ -141,9 +141,9 @@ impl Arguments {
             own_open: self.enabled("own_open"),
             keyword,
         };
-        filters
-            .validate()
-            .map_err(|error| ToolError::query_field(error.field(), &error.to_string()))?;
+        filters.validate().map_err(|error| {
+            ToolError::query_field(error.field(), "invalid", &error.to_string())
+        })?;
         Ok((self.page()?, filters))
     }
 
@@ -154,13 +154,12 @@ impl Arguments {
             .unwrap_or(false)
     }
 
-    fn status(&self) -> Result<Option<TaskStatus>, &'static str> {
+    fn status(&self) -> Result<Option<TaskStatus>, TaskStatusError> {
         self.values
-            .get("status")
+            .get(TaskStatusError::FIELD)
             .and_then(Value::as_str)
             .map(TaskStatus::try_from)
             .transpose()
-            .map_err(|_| "Expected in progress or ended.")
     }
 
     fn optional_string(&self, name: &str) -> Option<String> {

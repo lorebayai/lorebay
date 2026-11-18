@@ -15,6 +15,8 @@ use hyper_util::rt::TokioIo;
 use hyper_util::service::TowerToHyperService;
 use lorebay_base::{RateLimiter, SystemClock};
 use lorebay_lib_core::LibraryState;
+use lorebay_lib_migration::Migrator as LibraryMigrator;
+use lorebayd_migration::Migrator as ProductMigrator;
 use sea_orm::{
     ConnectOptions, Database, DatabaseConnection, SqliteTransactionMode, TransactionOptions,
     TransactionTrait,
@@ -34,7 +36,6 @@ use crate::domain::token::TokenSigner;
 use crate::domain::user_store::UserStore;
 use crate::domain::users::FileUserStore;
 use crate::domain::{account, login_session};
-use crate::migration::Migrator;
 use crate::oauth::{self, OAuthState};
 use crate::storage::LocalDirectory;
 use crate::{files, library, worker};
@@ -68,8 +69,9 @@ pub async fn run(
     let database = open_database(&config.data_directory).await?;
     account::sync(&database, users.as_ref(), login_session::now_millis()?).await?;
     let identity = Arc::new(identity(config.clone(), users)?);
-    let storage = Arc::new(LocalDirectory::open(&config).await?);
-    let library = library::state(&config, &database, identity.clone(), storage.clone())?;
+    let settings = library::settings(&config);
+    let storage = Arc::new(LocalDirectory::open(&config, settings.upload_size_limit).await?);
+    let library = library::state(settings, &database, identity.clone(), storage.clone())?;
     let state = ServerState::builder()
         .library(library)
         .storage(storage)
@@ -156,10 +158,10 @@ async fn open_database(directory: &Path) -> Result<DatabaseConnection> {
         })
         .await
         .context("could not begin database migration transaction")?;
-    lorebay_lib_core::Migrator::up(&transaction, None)
+    LibraryMigrator::up(&transaction, None)
         .await
         .with_context(|| format!("could not migrate library database {}", path.display()))?;
-    Migrator::up(&transaction, None)
+    ProductMigrator::up(&transaction, None)
         .await
         .with_context(|| format!("could not migrate database {}", path.display()))?;
     transaction

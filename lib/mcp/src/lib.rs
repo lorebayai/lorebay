@@ -16,6 +16,8 @@ use rmcp::service::RequestContext;
 use rmcp::transport::streamable_http_server::session::never::NeverSessionManager;
 use rmcp::transport::{StreamableHttpServerConfig, StreamableHttpService};
 use rmcp::{ErrorData, RoleServer, ServerHandler};
+use serde::Serialize;
+use typed_builder::TypedBuilder;
 use url::Url;
 
 use lorebay_lib_core::{Caller, LibraryState};
@@ -167,12 +169,32 @@ mod catalog;
 mod error;
 mod tools;
 
-async fn protected_resource(State(state): State<LibraryState>) -> Json<serde_json::Value> {
+#[derive(Clone, Debug, Serialize, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+struct ProtectedResourceResponse {
+    resource: String,
+    authorization_servers: [String; 1],
+}
+
+#[derive(Clone, Debug, Serialize, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+struct ResourceMethodError {
+    error: &'static str,
+    error_description: &'static str,
+}
+
+async fn protected_resource(State(state): State<LibraryState>) -> Json<ProtectedResourceResponse> {
     let settings = state.settings();
-    Json(serde_json::json!({
-        "resource": format!("{}{}", settings.public_url.trim_end_matches('/'), settings.mcp_path),
-        "authorization_servers": [settings.authorization_server],
-    }))
+    Json(
+        ProtectedResourceResponse::builder()
+            .resource(format!(
+                "{}{}",
+                settings.public_url.trim_end_matches('/'),
+                settings.mcp_path
+            ))
+            .authorization_servers([settings.authorization_server.clone()])
+            .build(),
+    )
 }
 
 async fn resource_method_not_allowed() -> impl IntoResponse {
@@ -182,10 +204,12 @@ async fn resource_method_not_allowed() -> impl IntoResponse {
             (header::CACHE_CONTROL, "no-store"),
             (header::PRAGMA, "no-cache"),
         ],
-        Json(serde_json::json!({
-            "error": "invalid_request",
-            "error_description": "The request method is not supported.",
-        })),
+        Json(
+            ResourceMethodError::builder()
+                .error("invalid_request")
+                .error_description("The request method is not supported.")
+                .build(),
+        ),
     )
 }
 

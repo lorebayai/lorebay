@@ -1,9 +1,7 @@
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::SystemTime;
 
-use anyhow::Result;
+use lorebay_lib_types::unix_millis;
 
-pub(super) fn now_millis() -> Result<i64> {
-    Ok(i64::try_from(
-        SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis(),
-    )?)
+pub(super) fn now_millis() -> anyhow::Result<i64> {
+    Ok(unix_millis(SystemTime::now())?)
 }

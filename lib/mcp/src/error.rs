@@ -1,6 +1,9 @@
 use std::fmt::Display;
 
-use lorebay_lib_core::{ArtifactError, ArtifactTextError, SpaceError, TaskError, TaskTextError};
+use lorebay_lib_core::{
+    ArtifactError, ArtifactTextError, PageSizeError, SpaceError, TaskChangeError, TaskError,
+    TaskTextError,
+};
 use rmcp::model::CallToolResult;
 use serde_json::{Value, json};
 
@@ -28,8 +31,8 @@ impl ToolError {
         Self::field("request.invalid_body", field, code, message)
     }
 
-    pub fn query_field(field: &str, message: &str) -> Self {
-        Self::field("request.invalid_query", field, "invalid", message)
+    pub fn query_field(field: &str, code: &str, message: &str) -> Self {
+        Self::field("request.invalid_query", field, code, message)
     }
 
     pub fn task_text(field: &str, error: TaskTextError) -> Self {
@@ -96,7 +99,7 @@ impl From<SpaceError> for ToolError {
     fn from(error: SpaceError) -> Self {
         match error {
             SpaceError::InvalidCursor => invalid_query("cursor"),
-            SpaceError::InvalidPageSize => invalid_query("page_size"),
+            SpaceError::InvalidPageSize(_) => invalid_query(PageSizeError::FIELD),
             error => Self::from_operation(error.code(), error),
         }
     }
@@ -105,17 +108,29 @@ impl From<SpaceError> for ToolError {
 impl From<TaskError> for ToolError {
     fn from(error: TaskError) -> Self {
         match error {
-            TaskError::Filter(error) => Self::query_field(error.field(), &error.to_string()),
+            TaskError::Filter(error) => {
+                Self::query_field(error.field(), "invalid", &error.to_string())
+            }
             TaskError::InvalidCursor => invalid_query("cursor"),
-            TaskError::InvalidPageSize => invalid_query("page_size"),
-            TaskError::NoChanges => Self::body_field("body", "required", &error.to_string()),
+            TaskError::InvalidPageSize(_) => invalid_query(PageSizeError::FIELD),
+            TaskError::NoChanges(error) => error.into(),
             error => Self::from_operation(error.code(), error),
         }
     }
 }
 
+impl From<TaskChangeError> for ToolError {
+    fn from(error: TaskChangeError) -> Self {
+        Self::body_field(
+            TaskChangeError::FIELD,
+            TaskChangeError::FIELD_CODE,
+            &error.to_string(),
+        )
+    }
+}
+
 pub(super) fn invalid_query(field: &str) -> ToolError {
-    ToolError::query_field(field, "Invalid pagination parameter.")
+    ToolError::query_field(field, PageSizeError::FIELD_CODE, &PageSizeError.to_string())
 }
 
 fn task_text_code(error: &TaskTextError) -> &'static str {

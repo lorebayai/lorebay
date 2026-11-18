@@ -8,6 +8,8 @@ fileGroups:
   rust:
     - '/lib/core/src/**/*'
     - '/lib/mcp/src/**/*'
+    - '/lib/migration/**/*'
+    - 'migration/**/*'
     - '/lib/types/src/**/*'
 
 tasks:
@@ -20,14 +22,3 @@ tasks:
     deps: ['web:build']
   integration:
     deps: ['web:build']
-  generate-entities:
-    command: 'bash lorebayd/scripts/generate-entities.sh'
-    inputs:
-      - '/lorebayd/scripts/generate-entities.sh'
-      - '/schema/**/*'
-      - '/lib/core/src/migration/**/*'
-      - 'src/migration/**/*'
-    options:
-      cache: false
-      runInCI: false
-      runFromWorkspaceRoot: true

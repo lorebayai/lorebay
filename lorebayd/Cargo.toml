@@ -23,8 +23,10 @@ jsonwebtoken.workspace = true
 lorebay-base.workspace = true
 lorebay-lib-core = { workspace = true, features = ["sqlite"] }
 lorebay-lib-mcp = { workspace = true, features = ["sqlite"] }
+lorebay-lib-migration = { workspace = true, features = ["sqlite"] }
 lorebay-lib-types.workspace = true
-sea-orm-migration = { workspace = true, features = ["sqlx-sqlite"] }
+lorebayd-migration.workspace = true
+sea-orm-migration.workspace = true
 sea-orm = { workspace = true, features = ["sqlx-sqlite"] }
 serde.workspace = true
 serde_json.workspace = true

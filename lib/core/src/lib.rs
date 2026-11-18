@@ -1,6 +1,5 @@
 //! Library operations for spaces, tasks, and artifacts.
 
-pub use migration::Migrator;
 pub use operation::*;
 pub use storage::*;
 
@@ -14,7 +13,6 @@ mod domain;
     reason = "sea-orm-cli names relations after the tables"
 )]
 mod entity;
-mod migration;
 mod operation;
 mod repository;
 mod storage;

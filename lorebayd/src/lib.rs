@@ -18,7 +18,6 @@ mod domain;
 mod entity;
 mod files;
 mod library;
-mod migration;
 mod oauth;
 mod pages;
 mod repository;

@@ -7,5 +7,7 @@ fileGroups:
 
 tasks:
   integration:
+    inputs:
+      - '/lib/migration/**/*'
     options:
       cache: false

@@ -14,7 +14,7 @@ use lorebay_lib_core::{
     TaskRead, TaskResult, TaskStatus, TaskTextError, TaskTitle, add_note, change_task, create_task,
     delete_note, delete_task, list_tasks, read_scratchpad, read_task,
 };
-use lorebay_lib_core::{Page, PageOptions, TaskSummary, TaskTarget, WriteOperation};
+use lorebay_lib_core::{Page, PageOptions, TaskStatusError, TaskSummary, TaskTarget};
 
 use super::login_session::invalid_json;
 use lorebay_lib_core::Artifact;
@@ -109,13 +109,6 @@ impl TryFrom<ChangeTaskRequest> for TaskChanges {
     type Error = ApiError;
 
     fn try_from(request: ChangeTaskRequest) -> Result<Self, Self::Error> {
-        if request.title.is_none() && request.status.is_none() && request.result.is_none() {
-            return Err(invalid_field(
-                "body",
-                "required",
-                "Provide a title, status or result.",
-            ));
-        }
         let title = request
             .title
             .map(TaskTitle::try_from)
@@ -126,17 +119,25 @@ impl TryFrom<ChangeTaskRequest> for TaskChanges {
             .as_deref()
             .map(TaskStatus::try_from)
             .transpose()
-            .map_err(|_| invalid_field("status", "invalid", "Expected in progress or ended."))?;
+            .map_err(|error| {
+                invalid_field(
+                    TaskStatusError::FIELD,
+                    TaskStatusError::FIELD_CODE,
+                    &error.to_string(),
+                )
+            })?;
         let result = request
             .result
             .map(TaskResult::try_from)
             .transpose()
             .map_err(|error| invalid_text("result", error))?;
-        Ok(Self::builder()
+        let changes = Self::builder()
             .title(title)
             .status(status)
             .result(result)
-            .build())
+            .build();
+        changes.validate()?;
+        Ok(changes)
     }
 }
 
@@ -149,7 +150,7 @@ impl TryFrom<ListTasksQuery> for (PageOptions, TaskFilters) {
             .as_deref()
             .map(TaskStatus::try_from)
             .transpose()
-            .map_err(|_| invalid_filter("status", "Expected in progress or ended."))?;
+            .map_err(invalid_filter)?;
         let keyword = query
             .keyword
             .map(TaskKeyword::try_from)
@@ -222,7 +223,7 @@ pub(crate) async fn create(
     let title = request.try_into()?;
     let task = state
         .library
-        .run_write(WriteOperation::CreateTask, Some(&caller), async |write| {
+        .run_write(Some(&caller), async |write| {
             create_task(write, &caller, &space, title).await
         })
         .await?;
@@ -245,7 +246,7 @@ pub(crate) async fn append_note(
     let input = request.try_into()?;
     let note = state
         .library
-        .run_write(WriteOperation::AddNote, Some(&caller), async |write| {
+        .run_write(Some(&caller), async |write| {
             add_note(write, &caller, target, input).await
         })
         .await?;
@@ -268,7 +269,7 @@ pub(crate) async fn change(
     let input = request.try_into()?;
     let task = state
         .library
-        .run_write(WriteOperation::ChangeTask, Some(&caller), async |write| {
+        .run_write(Some(&caller), async |write| {
             change_task(write, &caller, target, input).await
         })
         .await?;
@@ -288,7 +289,7 @@ pub(crate) async fn delete(
     };
     state
         .library
-        .run_write(WriteOperation::DeleteTask, Some(&caller), async |write| {
+        .run_write(Some(&caller), async |write| {
             delete_task(write, &caller, target).await
         })
         .await?;
@@ -317,7 +318,7 @@ pub(crate) async fn remove_note(
     };
     state
         .library
-        .run_write(WriteOperation::DeleteNote, Some(&caller), async |write| {
+        .run_write(Some(&caller), async |write| {
             delete_note(write, &caller, target, time).await
         })
         .await?;
@@ -408,12 +409,12 @@ fn text_error(field: &str, error: TaskTextError) -> FieldError {
         .build()
 }
 
-fn invalid_filter(field: &str, message: &str) -> ApiError {
+fn invalid_filter(error: TaskStatusError) -> ApiError {
     ApiError::InvalidQuery(vec![
         FieldError::builder()
-            .field(field)
-            .code("invalid")
-            .message(message)
+            .field(TaskStatusError::FIELD)
+            .code(TaskStatusError::FIELD_CODE)
+            .message(error.to_string())
             .build(),
     ])
 }

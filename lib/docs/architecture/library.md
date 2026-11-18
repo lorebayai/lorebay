@@ -103,22 +103,22 @@ eight tables.
 
 ## 4. Crates
 
-The library lives in the top-level folder `lib/`, as three crates, each
+The library lives in the top-level folder `lib/`, as four crates, each
 in its own subfolder and named `lorebay-lib-<subfolder>`:
 
 | Crate | Folder | Holds | Depends on |
 | --- | --- | --- | --- |
-| `lorebay-lib-types` | `lib/types/` | The secret type and the hash helper | No database, MCP or async crate |
-| `lorebay-lib-core` | `lib/core/` | Operations, rules, interfaces, settings, result types, data layer, migrations, the storage interface | `lorebay-lib-types`, SeaORM |
+| `lorebay-lib-types` | `lib/types/` | The secret type, hash helper, cursor codec and Unix time conversion | No database, MCP or async crate |
+| `lorebay-lib-core` | `lib/core/` | Operations, rules, interfaces, settings, result types, data layer, the storage interface | `lorebay-lib-types`, SeaORM |
+| `lorebay-lib-migration` | `lib/migration/` | The library schema and its migrator | SeaORM migration |
 | `lorebay-lib-mcp` | `lib/mcp/` | The MCP layer, its tools, the MCP authorization challenge and metadata | `lorebay-lib-core`, the MCP SDK, axum |
 
-- **Three crates, not one.** A client that needs only the secret type, such
+- A client that needs only the secret type, such
   as a command-line tool, depends on `lorebay-lib-types` and builds no
   database and no MCP layer. The MCP layer is its own crate so the compiler
   holds that it reaches only the public operations, as a product's own entry
-  point does. One crate with features to drop the database and MCP layers
-  was rejected: it would use features for a purpose other than leaving out a
-  backend, and nothing would stop the MCP layer from calling internals.
+  point does. The migration crate lets a product apply the schema separately
+  from building the server or MCP layer.
 - **The folder is `lib/` and the crates carry `lib-`.** The folder holds
   the shared library, not one feature of it. A product's workspace may hold
   its own `core` or `mcp` crate, and a name such as `lorebay-core` says
@@ -133,17 +133,17 @@ in its own subfolder and named `lorebay-lib-<subfolder>`:
 - **The build tool finds the crates** through a glob in
   `.moon/workspace.yml`, `lib/*/moon.yml`, since `*/moon.yml` matches
   only top-level folders. With
-  source-path IDs the projects are `lib/types`, `lib/core` and
-  `lib/mcp`, and each is in the `library` layer, so no library crate can
-  depend on an application.
+  source-path IDs the projects are `lib/types`, `lib/core`, `lib/migration`
+  and `lib/mcp`. They use the `library` layer, which cannot depend on an
+  application.
 
 ### 4.1 Database backends and dependencies
 
 - **The library picks no backend.** `lorebay-lib-core` has two features,
-  `sqlite` and `postgres`, and no default; each turns on the matching driver
-  of SeaORM and its migration crate. `lorebay-lib-mcp` forwards the same
-  two features. A consumer turns on the backend it runs, Lorebay `sqlite`,
-  so a consumer on Postgres builds no SQLite driver.
+  `sqlite` and `postgres`, and no default. Each turns on the matching SeaORM
+  driver. `lorebay-lib-mcp` forwards those features to core.
+  `lorebay-lib-migration` has its own `sqlite` and `postgres` features without
+  a default. Consumers select the driver they use. Lorebay selects `sqlite`.
 - **Features choose drivers, not code paths.** The library never connects:
   the product hands it connections. Where a statement must differ between
   the backends, such as keyword search, the data layer picks the form from
@@ -152,11 +152,10 @@ in its own subfolder and named `lorebay-lib-<subfolder>`:
 - **Versions are declared once,** in the root `[workspace.dependencies]`,
   which declares SeaORM and its migration crate with no driver feature. A
   consumer in another repository takes a git dependency on one commit.
-- **Three dependencies are public.** The public API exposes SeaORM's
-  connections and transactions, the `http` request headers, and the axum
-  router of the MCP layer. A consumer uses semver-compatible releases of
-  SeaORM, `http` and axum, which Cargo then unifies; every other dependency
-  of the library is private.
+- The public API exposes SeaORM connections and transactions, the SeaORM
+  migration trait implemented by `Migrator`, `http` request headers, and
+  the axum MCP router. Consumers use semver-compatible releases of those
+  dependencies so Cargo can unify them.
 
 ## 5. Public API
 
@@ -164,7 +163,8 @@ The library makes public what a product needs to build its entry points
 and its implementations, and nothing more:
 
 - `lorebay-lib-types`: the secret type, whose debug output is redacted,
-  and `sha256_hex`, the lowercase hexadecimal SHA-256 of a string.
+  `sha256_hex`, the cursor codec shared by list operations, and conversion
+  from a caller-supplied `SystemTime` to Unix milliseconds.
 - `lorebay-lib-core`:
   - the library state and its settings ([section 11](#11-settings));
   - the five interfaces and the types they exchange
@@ -178,8 +178,9 @@ and its implementations, and nothing more:
   - the read that resolves a space key for a caller, inside the transaction
     it is handed: it checks the scope, answers a missing space or one of
     another owner as not found, and returns the space's ID and number
-    ([section 7.1](#71-run-one-write));
-  - the library's migrator ([section 12](#12-data)).
+    ([section 7.1](#71-run-one-write)).
+- `lorebay-lib-migration`: the library's `Migrator`. Products import it
+  directly to apply the library schema ([section 12](#12-data)).
 - `lorebay-lib-mcp`: one function that returns the router a product
   mounts at the root of its origin.
 
@@ -195,9 +196,10 @@ reaches data only through the operations and the reads above.
   MCP layer may not depend on a product, and copying them into the MCP crate
   lets the two entry points drift.
 - **Inputs validate themselves.** Input types, such as a task title or a
-  note, check their own length and format when built, and the page-size
-  limits are public constants, so every entry point refuses the same input
-  the same way. Page sizes and input lengths are not settings.
+  note, check their own length and format when built. Task changes, statuses
+  and page sizes have shared validation and field errors. Each entry point
+  maps those errors to its protocol. Page sizes and input lengths are
+  constants.
 - **Errors carry codes, not HTTP.** Each area of operations has one error
   enum with no HTTP status and no response body. Each error has a stable
   code, such as `task.not_found`, which the MCP layer puts in the tool error
@@ -321,9 +323,10 @@ methods:
 
 - **The product opens, commits and rolls back.** The library writes inside
   the transaction it is handed and never commits or rolls back.
-- **The record says what was written:** the operation, the caller and the
-  space. A product adds its own rows from it, such as an audit record, so
-  what it adds holds for a tool call as for its own entry point.
+- The library operation supplies its own label and space for the record
+  passed to the commit hook, along with the caller from the write entry.
+  A product can use the record to add its own rows, such as an audit record,
+  for writes from either entry point.
 - **A write transaction serializes with every write it could conflict
   with.** On SQLite it takes the write lock before its first statement, the
   immediate mode of the
@@ -361,11 +364,11 @@ Every implementation:
 - holds only the library's files: the orphaned-file round deletes every
   listed file that no record points to.
 
-The library decides every rule, the size limit, the lifetimes, the content
-type and whether a browser opens the file inline, and passes it to the
-backend, which carries it out and decides none. A backend's own leftovers,
-such as partial uploads, are its own to remove; the list shows only
-finished files.
+At startup the product gives its storage backend the same upload size limit
+it supplies to the library. The backend enforces it when receiving uploads,
+and the library checks it again when recording completion. The library
+passes URL lifetimes and download presentation with each request to the
+backend. The backend removes its partial uploads and lists finished files.
 
 **The storage is a trait object.** A generic parameter was rejected: it
 would spread through every operation, the state, the MCP layer and the
@@ -532,7 +535,7 @@ state:
 | The MCP entry's public address and path | Allowed origins, the challenge and the metadata |
 | The MCP server's name and version | The server information agents see |
 | Where to authorize | The authorization server the metadata names |
-| The artifact size limit | The check after the upload, and the upload URL |
+| The artifact size limit | Startup policy for receiving uploads and the check at completion |
 | The upload and download URL lifetimes | The URLs storage issues |
 | The types a browser may open inline | Download URLs |
 | The age after which an incomplete registration is abandoned | The abandoned-registration round |
@@ -561,22 +564,20 @@ The library has seven tables: `space`, `space_task`, `space_note`,
 - **The owner ID** of a space is text with no foreign key.
 - **Two groups of migrations share one database.** The library's migrator
   records its history in its own table, `space_migration`, and a product's
-  migrator keeps SeaORM's default table. The product runs the library's
-  migrator first, then its own, at startup. With one shared history table,
-  each migrator would stop at the other group's versions, which it does not
-  know.
+  migrator keeps SeaORM's default table. At startup Lorebay imports the
+  library's migrator from `lorebay-lib-migration` and its own from
+  `lorebayd-migration`. It applies the library group first and its own
+  second in one transaction, before serving.
 - **A product's table may refer to a library table,** as Lorebay's
   memberships refer to `space`. The foreign key is declared in the
   product's migration.
-- **Each group's entities are generated from its own tables.** The
-  library's are generated from a database that ran only the library's
-  migrations. A product's are generated with only its own tables selected,
-  so a product entity carries no relation to a library entity, and the
-  generator emits none. A product joins its rows to a space through the
-  space ID the library returns, never through a library entity. Generating
-  the product's entities with the library's included was rejected: they
-  would duplicate the library's, and removing them would mean editing
-  generated code.
+- Each migration crate has its own entity generation entry. The library
+  builds a disposable SQLite database from only its migrations. Lorebay
+  applies both groups and selects only its own tables. Generated relations
+  stay within their group. A product joins its rows to a space through the
+  space ID the library returns. The
+  [SeaORM rules](../../../playbook/topics/seaorm.md#entities) describe the
+  generation commands and the projection.
 
 ## 13. Concurrent writers
 

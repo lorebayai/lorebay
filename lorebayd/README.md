@@ -15,14 +15,12 @@ cargo run -p lorebayd -- hash-password < /path/to/password.txt
 cargo run -p lorebayd -- --config /path/to/lorebayd.json --dotenv /path/to/lorebayd.env
 ```
 
-Startup applies the library's migrations first, then Lorebay's. This schema
-requires a fresh data directory when coming from the previous single-group
-schema. Keep the old directory to use with its previous build.
+Startup applies the library's migrations first, then Lorebay's.
 
 `moon run web:build` builds the static web files before direct Cargo commands.
 The server build, lint and test tasks run it as a dependency.
 
-Run `moon run lorebayd:generate-entities` to regenerate both crates' entities from disposable databases.
+Run `moon run lorebayd/migration:generate-entities` to regenerate Lorebay's entities.
 
 Open the metadata's `/oauth/authorize` endpoint with the client's authorization
 parameters to sign in and consent. The built-in CLI client ID is `lorebay-cli`;

@@ -1,10 +1,10 @@
 use std::net::IpAddr;
 use std::sync::Arc;
-use std::time::{Duration, UNIX_EPOCH};
+use std::time::Duration;
 
 use anyhow::anyhow;
 use lorebay_base::{Clock, RateLimitError, RateLimiter, SystemClock};
-use lorebay_lib_types::{Secret, sha256_hex};
+use lorebay_lib_types::{Secret, sha256_hex, unix_millis};
 use sea_orm::{
     ConnectionTrait, DatabaseConnection, DatabaseTransaction, Set, SqliteTransactionMode,
     TransactionOptions, TransactionTrait,
@@ -231,9 +231,7 @@ pub(crate) async fn verify(
 }
 
 pub(crate) fn now_millis() -> anyhow::Result<i64> {
-    Ok(i64::try_from(
-        SystemClock.now().duration_since(UNIX_EPOCH)?.as_millis(),
-    )?)
+    Ok(unix_millis(SystemClock.now())?)
 }
 
 pub(crate) async fn create_session(

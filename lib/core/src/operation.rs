@@ -118,7 +118,6 @@ impl LibraryState {
 
     pub async fn run_write<T, E: From<anyhow::Error>>(
         &self,
-        operation: WriteOperation,
         caller: Option<&Caller>,
         write: impl AsyncFnOnce(&mut Write<'_>) -> Result<T, E>,
     ) -> Result<T, E> {
@@ -126,35 +125,43 @@ impl LibraryState {
         let mut context = Write {
             state: self,
             transaction: &transaction,
-            space_id: None,
+            progress: WriteProgress::Empty,
             delete: Vec::new(),
         };
         let result = write(&mut context).await;
         let Write {
-            space_id, delete, ..
+            progress, delete, ..
         } = context;
-        if result.is_err() {
-            if let Err(cause) = self.database.abandon_write(transaction).await {
-                tracing::error!(%cause, "could not abandon write");
-            }
-            return result;
-        }
-        self.database
-            .commit_write(
-                transaction,
+        let result = result.and_then(|value| match progress {
+            WriteProgress::Recorded {
+                operation,
+                space_id,
+            } => Ok((
+                value,
                 WriteRecord {
                     operation,
                     caller,
                     space_id,
                 },
-            )
-            .await?;
+            )),
+            _ => Err(anyhow::anyhow!("A write must complete one library operation").into()),
+        });
+        let (value, record) = match result {
+            Ok(result) => result,
+            Err(error) => {
+                if let Err(cause) = self.database.abandon_write(transaction).await {
+                    tracing::error!(%cause, "could not abandon write");
+                }
+                return Err(error);
+            }
+        };
+        self.database.commit_write(transaction, record).await?;
         for location in delete {
             if let Err(cause) = self.storage.delete(&location).await {
                 tracing::warn!(%cause, %location, "could not delete stored file");
             }
         }
-        result
+        Ok(value)
     }
 
     pub(crate) async fn run_read<T, E: From<anyhow::Error>>(
@@ -262,13 +269,29 @@ pub struct MembershipPage<'a> {
 pub struct Write<'a> {
     state: &'a LibraryState,
     transaction: &'a DatabaseTransaction,
-    pub(crate) space_id: Option<String>,
+    progress: WriteProgress,
     pub(crate) delete: Vec<String>,
 }
 
 impl Write<'_> {
     pub fn transaction(&self) -> &DatabaseTransaction {
         self.transaction
+    }
+
+    pub(crate) fn begin_operation(&mut self) -> InterfaceResult<()> {
+        anyhow::ensure!(
+            matches!(self.progress, WriteProgress::Empty),
+            "A write can run only one library operation"
+        );
+        self.progress = WriteProgress::Pending;
+        Ok(())
+    }
+
+    pub(crate) fn record(&mut self, operation: WriteOperation, space_id: Option<String>) {
+        self.progress = WriteProgress::Recorded {
+            operation,
+            space_id,
+        };
     }
 
     pub(crate) fn handle(&self) -> OperationHandle<'_> {
@@ -301,4 +324,13 @@ pub struct WriteRecord<'a> {
     pub operation: WriteOperation,
     pub caller: Option<&'a Caller>,
     pub space_id: Option<String>,
+}
+
+enum WriteProgress {
+    Empty,
+    Pending,
+    Recorded {
+        operation: WriteOperation,
+        space_id: Option<String>,
+    },
 }

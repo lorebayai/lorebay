@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::io::{Error, ErrorKind};
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime};
 
 use anyhow::{Context, Result, bail};
 use futures_util::future::BoxFuture;
@@ -12,7 +12,7 @@ use lorebay_lib_core::{
     DownloadRequest, DownloadSpec, FileStorage, StoredFile as LibraryFile, UploadRequest,
     UploadSpec,
 };
-use lorebay_lib_types::Secret;
+use lorebay_lib_types::{Secret, unix_millis};
 use tempfile::{Builder, TempPath};
 use thiserror::Error;
 use tokio::fs::{self, File};
@@ -62,7 +62,7 @@ pub(crate) struct LocalDirectory {
 }
 
 impl LocalDirectory {
-    pub async fn open(config: &Config) -> Result<Self> {
+    pub async fn open(config: &Config, size_limit: u64) -> Result<Self> {
         let files = config.data_directory.join("artifacts");
         let temporary = config.data_directory.join("uploads");
         fs::create_dir_all(&files).await?;
@@ -75,7 +75,7 @@ impl LocalDirectory {
             .temporary(temporary)
             .key(load_key(&config.data_directory)?)
             .origin(config.public_url.trim_end_matches('/'))
-            .size_limit(config.upload_size_limit_bytes)
+            .size_limit(size_limit)
             .idle_timeout(Duration::from_secs(config.upload_idle_timeout_seconds))
             .slots(Arc::new(Semaphore::new(
                 config.upload_concurrency_limit as usize,
@@ -337,7 +337,5 @@ fn valid_location(location: &str) -> bool {
 }
 
 fn now_millis() -> Result<i64> {
-    Ok(i64::try_from(
-        SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis(),
-    )?)
+    Ok(unix_millis(SystemTime::now())?)
 }

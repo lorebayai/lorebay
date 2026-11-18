@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::slice::from_ref;
 
 use lorebay_lib_types::Secret;
+use lorebay_lib_types::{decode_cursor, encode_cursor};
 use sea_orm::{DatabaseTransaction, DbErr, IntoActiveModel, Set};
 use serde::Serialize;
 use thiserror::Error;
@@ -11,11 +12,11 @@ use crate::entity::{space, space_note as note, space_task as task};
 use crate::repository::{
     ArtifactRepository, NoteRepository, SpaceRepository, TaskAfter, TaskListFilter, TaskRepository,
 };
-use crate::{Caller, LibraryState, OperationHandle, Write};
+use crate::{Caller, LibraryState, OperationHandle, Write, WriteOperation};
 
 use super::id::{primary_key, random_task_id};
 use super::key::{format_key, parse_key};
-use super::pagination::{Page, PageOptions, decode_cursor, encode_cursor};
+use super::pagination::{Page, PageOptions, PageSizeError};
 use super::space_access::{READ_ROLES, SpaceAccessError, WRITE_ROLES, check_space};
 use super::task_access::{TaskAccessError, TaskAction, TaskCheck, check_task};
 use super::time::now_millis;
@@ -37,10 +38,10 @@ pub enum TaskError {
     Internal(#[from] anyhow::Error),
     #[error("Invalid cursor")]
     InvalidCursor,
-    #[error("Invalid pagination parameter.")]
-    InvalidPageSize,
-    #[error("Provide a title, status or result.")]
-    NoChanges,
+    #[error(transparent)]
+    InvalidPageSize(#[from] PageSizeError),
+    #[error(transparent)]
+    NoChanges(#[from] TaskChangeError),
     #[error("Task not found")]
     NotFound,
     #[error("Note not found")]
@@ -110,6 +111,33 @@ pub struct TaskRead {
     pub artifacts: Vec<Artifact>,
 }
 
+#[derive(Debug, Error)]
+#[error("Provide a title, status or result.")]
+pub struct TaskChangeError;
+
+impl TaskChangeError {
+    pub const FIELD: &str = "body";
+    pub const FIELD_CODE: &str = "required";
+}
+
+#[derive(Debug, Error)]
+#[error("Expected in progress or ended.")]
+pub struct TaskStatusError;
+
+impl TaskStatusError {
+    pub const FIELD: &str = "status";
+    pub const FIELD_CODE: &str = "invalid";
+}
+
+impl TaskChanges {
+    pub fn validate(&self) -> Result<(), TaskChangeError> {
+        if self.title.is_none() && self.status.is_none() && self.result.is_none() {
+            return Err(TaskChangeError);
+        }
+        Ok(())
+    }
+}
+
 impl TaskStatus {
     pub fn as_str(self) -> &'static str {
         match self {
@@ -120,13 +148,13 @@ impl TaskStatus {
 }
 
 impl TryFrom<&str> for TaskStatus {
-    type Error = DbErr;
+    type Error = TaskStatusError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         match value {
             "ended" => Ok(Self::Ended),
             "in progress" => Ok(Self::InProgress),
-            _ => Err(DbErr::Type("Invalid task status".into())),
+            _ => Err(TaskStatusError),
         }
     }
 }
@@ -139,7 +167,10 @@ impl TryFrom<(task::Model, String)> for Task {
             .key(format_key("TK", task.number))
             .task_id(Secret::from(task.random_id))
             .title(task.title)
-            .status(TaskStatus::try_from(task.status.as_str())?)
+            .status(
+                TaskStatus::try_from(task.status.as_str())
+                    .map_err(|_| DbErr::Type("Invalid task status".into()))?,
+            )
             .person(person)
             .agent_name(task.agent_name)
             .result(task.result)
@@ -165,10 +196,10 @@ impl TaskError {
             Self::Access(error) => error.code(),
             Self::Caller(error) => error.code(),
             Self::Database(_) | Self::Internal(_) => "server.internal",
-            Self::Filter(_) | Self::InvalidCursor | Self::InvalidPageSize => {
+            Self::Filter(_) | Self::InvalidCursor | Self::InvalidPageSize(_) => {
                 "request.invalid_query"
             }
-            Self::NoChanges => "request.invalid_body",
+            Self::NoChanges(_) => "request.invalid_body",
             Self::NotFound => "task.not_found",
             Self::NoteNotFound => "note.not_found",
             Self::Space(error) => error.code(),
@@ -208,6 +239,7 @@ pub async fn create_task(
     space: &str,
     title: TaskTitle,
 ) -> Result<CreatedTask, TaskError> {
+    write.begin_operation()?;
     let agent = caller.agent()?;
     let authorized = check_space(write.state(), write.handle(), caller, space, WRITE_ROLES).await?;
     let transaction = write.transaction();
@@ -237,7 +269,7 @@ pub async fn create_task(
             last_activity_at: Set(now),
         })
         .await?;
-    write.space_id = Some(space_id);
+    write.record(WriteOperation::CreateTask, Some(space_id));
     Ok(CreatedTask {
         task_title: task.title,
         key: format_key("TK", number),
@@ -251,6 +283,7 @@ pub async fn add_note(
     target: TaskTarget<'_>,
     content: NoteContent,
 ) -> Result<NoteAdded, TaskError> {
+    write.begin_operation()?;
     caller.agent()?;
     let task = check_task(
         write.state(),
@@ -288,7 +321,7 @@ pub async fn add_note(
         .build()
         .update(task)
         .await?;
-    write.space_id = Some(space_id);
+    write.record(WriteOperation::AddNote, Some(space_id));
     Ok(NoteAdded {
         time,
         task_title: title,
@@ -301,9 +334,8 @@ pub async fn change_task(
     target: TaskTarget<'_>,
     changes: TaskChanges,
 ) -> Result<TaskRead, TaskError> {
-    if changes.title.is_none() && changes.result.is_none() && changes.status.is_none() {
-        return Err(TaskError::NoChanges);
-    }
+    write.begin_operation()?;
+    changes.validate()?;
     let action = if changes.title.is_none()
         && changes.result.is_none()
         && changes.status == Some(TaskStatus::Ended)
@@ -322,7 +354,7 @@ pub async fn change_task(
         .await?;
     let space_id = task.space_id.clone();
     let result = full_task(write.state(), handle, task, None).await?;
-    write.space_id = Some(space_id);
+    write.record(WriteOperation::ChangeTask, Some(space_id));
     Ok(result)
 }
 
@@ -331,6 +363,7 @@ pub async fn delete_task(
     caller: &Caller,
     target: TaskTarget<'_>,
 ) -> Result<(), TaskError> {
+    write.begin_operation()?;
     caller.person()?;
     let task = check_task(
         write.state(),
@@ -351,7 +384,7 @@ pub async fn delete_task(
         .delete(&task.id)
         .await?;
     write.delete.extend(locations);
-    write.space_id = Some(task.space_id);
+    write.record(WriteOperation::DeleteTask, Some(task.space_id));
     Ok(())
 }
 
@@ -361,6 +394,7 @@ pub async fn delete_note(
     target: TaskTarget<'_>,
     time: i64,
 ) -> Result<(), TaskError> {
+    write.begin_operation()?;
     caller.person()?;
     let task = check_task(
         write.state(),
@@ -377,7 +411,7 @@ pub async fn delete_note(
     if deleted == 0 {
         return Err(TaskError::NoteNotFound);
     }
-    write.space_id = Some(task.space_id);
+    write.record(WriteOperation::DeleteNote, Some(task.space_id));
     Ok(())
 }
 
@@ -389,7 +423,7 @@ pub async fn list_tasks(
     filters: TaskFilters,
 ) -> Result<Page<TaskSummary>, TaskError> {
     filters.validate()?;
-    options.validate().map_err(|_| TaskError::InvalidPageSize)?;
+    options.validate()?;
     state
         .run_read(async |handle| {
             let authorized = check_space(state, handle, caller, space, READ_ROLES).await?;
@@ -595,7 +629,7 @@ async fn note_page(
     space: &str,
     options: PageOptions,
 ) -> Result<Page<Note>, TaskError> {
-    options.validate().map_err(|_| TaskError::InvalidPageSize)?;
+    options.validate()?;
     let version = format!("notes-v1:{space}:{}", task.number);
     let after = options
         .cursor

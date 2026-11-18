@@ -1,7 +1,0 @@
-language: 'rust'
-layer: 'configuration'
-
-fileGroups:
-  rust:
-    - '/lib/core/src/migration/**/*'
-    - '/lorebayd/src/migration/**/*'

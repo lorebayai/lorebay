@@ -3,9 +3,8 @@ use std::sync::atomic::Ordering;
 
 use futures_util::future::join_all;
 use lorebay_lib_core::{
-    Caller, NoteContent, TaskChanges, TaskStatus, WriteOperation, add_note, change_task,
-    complete_artifact, delete_task, get_artifact_download_url, list_tasks, read_task,
-    remove_abandoned_artifacts,
+    Caller, NoteContent, TaskChanges, TaskStatus, add_note, change_task, complete_artifact,
+    delete_task, get_artifact_download_url, list_tasks, read_task, remove_abandoned_artifacts,
 };
 use tokio::sync::{Barrier, mpsc};
 
@@ -100,16 +99,13 @@ async fn add_note_keeps_times_increasing_when_appended_concurrently() {
             let task = &task;
             async move {
                 barrier.wait().await;
-                let content = NoteContent::try_from(format!("Note {number}")).unwrap();
-                fixture
-                    .state
-                    .run_write(
-                        WriteOperation::AddNote,
-                        Some(&fixture.agent),
-                        async |write| add_note(write, &fixture.agent, target(task), content).await,
-                    )
-                    .await
-                    .unwrap()
+                append(
+                    &fixture.state,
+                    &fixture.agent,
+                    task,
+                    &format!("Note {number}"),
+                )
+                .await
             }
         }))
         .await;
@@ -152,7 +148,7 @@ async fn add_note_fails_when_task_ends_concurrently() {
         let closing = task.clone();
         let close = tokio::spawn(async move {
             closer
-                .run_write(WriteOperation::ChangeTask, Some(&issuer), async |write| {
+                .run_write(Some(&issuer), async |write| {
                     change_task(write, &issuer, target(&closing), ended()).await
                 })
                 .await
@@ -171,7 +167,7 @@ async fn add_note_fails_when_task_ends_concurrently() {
         let appending = task.clone();
         let append = tokio::spawn(async move {
             appender
-                .run_write(WriteOperation::AddNote, Some(&writer), async |write| {
+                .run_write(Some(&writer), async |write| {
                     let content = NoteContent::try_from("After closure".to_owned()).unwrap();
                     add_note(write, &writer, target(&appending), content).await
                 })
@@ -310,23 +306,19 @@ async fn list_tasks_matches_keyword_when_ascii_case_differs() {
         let result = fixture.task("Other title").await;
         fixture
             .state
-            .run_write(
-                WriteOperation::ChangeTask,
-                Some(&fixture.agent),
-                async |write| {
-                    change_task(
-                        write,
-                        &fixture.agent,
-                        target(&result),
-                        TaskChanges {
-                            title: None,
-                            status: None,
-                            result: Some("BUILD done".to_owned().try_into().unwrap()),
-                        },
-                    )
-                    .await
-                },
-            )
+            .run_write(Some(&fixture.agent), async |write| {
+                change_task(
+                    write,
+                    &fixture.agent,
+                    target(&result),
+                    TaskChanges {
+                        title: None,
+                        status: None,
+                        result: Some("BUILD done".to_owned().try_into().unwrap()),
+                    },
+                )
+                .await
+            })
             .await
             .unwrap();
         for (keyword, expected) in [
@@ -368,15 +360,11 @@ async fn delete_task_keeps_rows_and_files_when_product_rolls_back() {
 
         let outcome: anyhow::Result<()> = fixture
             .state
-            .run_write(
-                WriteOperation::DeleteTask,
-                Some(&fixture.person),
-                async |write| {
-                    delete_task(write, &fixture.person, target(&task)).await?;
-                    assert!(fixture.storage.contains(&location, b"keep"));
-                    anyhow::bail!("product deliberately abandoned the write");
-                },
-            )
+            .run_write(Some(&fixture.person), async |write| {
+                delete_task(write, &fixture.person, target(&task)).await?;
+                assert!(fixture.storage.contains(&location, b"keep"));
+                anyhow::bail!("product deliberately abandoned the write");
+            })
             .await;
         assert_eq!(
             outcome.unwrap_err().to_string(),
@@ -423,7 +411,7 @@ async fn get_task_fails_as_not_found_when_space_has_another_owner() {
         assert_eq!(read.code(), "space.not_found");
         let write = fixture
             .state
-            .run_write(WriteOperation::ChangeTask, Some(&outside), async |write| {
+            .run_write(Some(&outside), async |write| {
                 change_task(write, &outside, target(&task), ended()).await
             })
             .await

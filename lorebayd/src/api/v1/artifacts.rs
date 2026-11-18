@@ -11,7 +11,7 @@ use crate::domain::caller::VerifiedCaller;
 use crate::server::ServerState;
 use lorebay_lib_core::{
     ArtifactCompleted, ArtifactFileName, ArtifactRegistered, ArtifactSummary, ArtifactTextError,
-    DownloadRequest, NewArtifact, TaskTarget, WriteOperation, complete_artifact, delete_artifact,
+    DownloadRequest, NewArtifact, TaskTarget, complete_artifact, delete_artifact,
     get_artifact_download_url, register_artifact,
 };
 
@@ -106,11 +106,9 @@ pub(crate) async fn delete(
     let caller = caller.library_caller();
     state
         .library
-        .run_write(
-            WriteOperation::DeleteArtifact,
-            Some(&caller),
-            async |write| delete_artifact(write, &caller, target, &key).await,
-        )
+        .run_write(Some(&caller), async |write| {
+            delete_artifact(write, &caller, target, &key).await
+        })
         .await?;
     Ok(Envelope::builder().data(()).build())
 }

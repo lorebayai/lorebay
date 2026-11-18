@@ -9,9 +9,7 @@ use crate::api::{ApiError, Envelope, FieldError, ListQuery, Meta, invalid_query}
 use crate::domain::caller::VerifiedCaller;
 use crate::domain::create_space;
 use crate::server::ServerState;
-use lorebay_lib_core::{
-    NewSpace, Space, SpaceChanges, WriteOperation, change_space, list_spaces, read_space,
-};
+use lorebay_lib_core::{NewSpace, Space, SpaceChanges, change_space, list_spaces, read_space};
 
 use super::login_session::invalid_json;
 
@@ -104,7 +102,7 @@ pub(crate) async fn change(
     let changes = request.try_into()?;
     let space = state
         .library
-        .run_write(WriteOperation::ChangeSpace, Some(&caller), async |write| {
+        .run_write(Some(&caller), async |write| {
             change_space(write, &caller, &key, changes).await
         })
         .await?;

@@ -13,10 +13,11 @@ use http::HeaderMap;
 use lorebay_lib_core::{
     Caller, CallerResolver, CreatedTask, DatabaseTransactions, DownloadRequest, DownloadSpec,
     FileStorage, LibraryInterfaces, LibrarySettings, LibraryState, Membership, MembershipPage,
-    Migrator, NewArtifact, NewSpace, NoteAdded, OperationHandle, PageOptions, PersonNames,
-    SpaceRole, SpaceRoles, StoredFile, TaskFilters, TaskTarget, UploadRequest, UploadSpec,
-    WriteOperation, WriteRecord, add_note, create_space, create_task, register_artifact,
+    NewArtifact, NewSpace, NoteAdded, OperationHandle, PageOptions, PersonNames, SpaceRole,
+    SpaceRoles, StoredFile, TaskFilters, TaskTarget, UploadRequest, UploadSpec, WriteRecord,
+    add_note, create_space, create_task, register_artifact,
 };
+use lorebay_lib_migration::Migrator;
 use lorebay_lib_types::Secret;
 use sea_orm::sea_query::{Alias, Expr, ExprTrait, Func, Query};
 use sea_orm::{
@@ -47,22 +48,18 @@ pub struct Fixture {
 impl Fixture {
     pub async fn space(&self) {
         self.state
-            .run_write(
-                WriteOperation::CreateSpace,
-                Some(&self.person),
-                async |write| {
-                    create_space(
-                        write,
-                        &self.person.owner_id,
-                        1,
-                        NewSpace {
-                            name: "Team".to_owned(),
-                            summary: "Shared work".to_owned(),
-                        },
-                    )
-                    .await
-                },
-            )
+            .run_write(Some(&self.person), async |write| {
+                create_space(
+                    write,
+                    &self.person.owner_id,
+                    1,
+                    NewSpace {
+                        name: "Team".to_owned(),
+                        summary: "Shared work".to_owned(),
+                    },
+                )
+                .await
+            })
             .await
             .unwrap();
     }
@@ -394,7 +391,7 @@ impl DatabaseTransactions for Transactions {
 pub async fn new_task(state: &LibraryState, caller: &Caller, title: &str) -> CreatedTask {
     let title = title.to_owned().try_into().unwrap();
     state
-        .run_write(WriteOperation::CreateTask, Some(caller), async |write| {
+        .run_write(Some(caller), async |write| {
             create_task(write, caller, SPACE, title).await
         })
         .await
@@ -457,7 +454,7 @@ pub async fn append(
 ) -> NoteAdded {
     let content = content.to_owned().try_into().unwrap();
     state
-        .run_write(WriteOperation::AddNote, Some(caller), async |write| {
+        .run_write(Some(caller), async |write| {
             add_note(write, caller, target(task), content).await
         })
         .await

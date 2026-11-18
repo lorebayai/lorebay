@@ -1,0 +1,19 @@
+language: 'rust'
+layer: 'library'
+
+fileGroups:
+  rust:
+    - '/lib/migration/src/**/*'
+    - '/lib/migration/Cargo.toml'
+
+tasks:
+  generate-entities:
+    command: 'bash lorebayd/migration/scripts/generate-entities.sh'
+    inputs:
+      - '@group(rust)'
+      - 'scripts/**/*'
+      - '/lib/migration/scripts/entity-generation.sh'
+    options:
+      cache: false
+      runInCI: false
+      runFromWorkspaceRoot: true

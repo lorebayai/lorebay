@@ -2,13 +2,14 @@
 
 ## Crates and dependencies
 
-- The root `Cargo.toml` is the workspace. Each crate is a top-level folder
-  listed in its `members`, as the
-  [repository layout](../../README.md#repository-layout) shows, except the
-  library's crates, which are subfolders of `lib/`. The crate that builds
-  the `lorebayd` executable is named `lorebayd`; a crate in `lib/` is
-  named `lorebay-lib-<subfolder>`; any other crate is named
-  `lorebay-<folder>`.
+- The root `Cargo.toml` lists every crate in its workspace `members`.
+  Crates live in top-level folders, in subfolders of `lib/`, or in a
+  subfolder of the product crate that owns them. See the
+  [repository layout](../../README.md#repository-layout).
+- The crate that builds the `lorebayd` executable is named `lorebayd`.
+  A crate in `lib/` is named `lorebay-lib-<subfolder>`. A product-owned
+  nested crate is named `<product>-<subfolder>`, such as
+  `lorebayd-migration`. Other top-level crates are named `lorebay-<folder>`.
 - A new crate gets a `moon.yml`, a `README.md` per
   [documentation.md](../core/documentation.md#readmes), and an `AGENTS.md`
   importing this fragment, with `ln -s AGENTS.md CLAUDE.md` beside it, in the

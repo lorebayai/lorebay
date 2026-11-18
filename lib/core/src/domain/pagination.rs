@@ -1,6 +1,3 @@
-use base64::Engine;
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use lorebay_lib_types::sha256_hex;
 use typed_builder::TypedBuilder;
 
 #[derive(Clone, Debug, TypedBuilder)]
@@ -17,23 +14,6 @@ pub struct Page<T> {
     pub next_cursor: Option<String>,
 }
 
-pub(crate) fn encode_cursor(version: &str, person_id: &str, value: &str) -> String {
-    URL_SAFE_NO_PAD.encode(format!("{version}\n{}\n{value}", sha256_hex(person_id)))
-}
-
-pub(crate) fn decode_cursor(version: &str, person_id: &str, cursor: &str) -> Option<String> {
-    let bytes = URL_SAFE_NO_PAD.decode(cursor).ok()?;
-    let decoded = String::from_utf8(bytes).ok()?;
-    let mut parts = decoded.splitn(3, '\n');
-    if parts.next() != Some(version) || parts.next() != Some(sha256_hex(person_id).as_str()) {
-        return None;
-    }
-    parts
-        .next()
-        .filter(|value| !value.is_empty())
-        .map(str::to_owned)
-}
-
 pub const DEFAULT_PAGE_SIZE: u64 = 20;
 pub const MAX_PAGE_SIZE: u64 = 100;
 
@@ -41,7 +21,32 @@ pub const MAX_PAGE_SIZE: u64 = 100;
 #[error("Invalid pagination parameter.")]
 pub struct PageSizeError;
 
+impl PageSizeError {
+    pub const FIELD: &str = "page_size";
+    pub const FIELD_CODE: &str = "invalid";
+}
+
 impl PageOptions {
+    pub fn new(page_size: Option<u64>, cursor: Option<String>) -> Result<Self, PageSizeError> {
+        let options = Self {
+            page_size: page_size.unwrap_or(DEFAULT_PAGE_SIZE),
+            cursor,
+        };
+        options.validate()?;
+        Ok(options)
+    }
+
+    pub fn from_text(
+        page_size: Option<&str>,
+        cursor: Option<String>,
+    ) -> Result<Self, PageSizeError> {
+        let page_size = page_size
+            .map(str::parse::<u64>)
+            .transpose()
+            .map_err(|_| PageSizeError)?;
+        Self::new(page_size, cursor)
+    }
+
     pub fn validate(&self) -> Result<(), PageSizeError> {
         if (1..=MAX_PAGE_SIZE).contains(&self.page_size) {
             Ok(())

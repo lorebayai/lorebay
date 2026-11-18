@@ -1,6 +1,6 @@
 use lorebay_lib_core::{
-    Caller, LibraryState, NoteContent, Page, TaskRead, TaskTarget, TaskTitle, WriteOperation,
-    add_note, change_task, complete_artifact, create_task, get_artifact_download_url, list_spaces,
+    Caller, LibraryState, NoteContent, Page, TaskRead, TaskTarget, TaskTitle, add_note,
+    change_task, complete_artifact, create_task, get_artifact_download_url, list_spaces,
     list_tasks, read_task, register_artifact,
 };
 use serde::Serialize;
@@ -76,7 +76,7 @@ async fn create(
         .map_err(|error| ToolError::task_text("title", error))?;
     let space = arguments.string("space")?;
     let task = state
-        .run_write(WriteOperation::CreateTask, Some(caller), async |write| {
+        .run_write(Some(caller), async |write| {
             create_task(write, caller, &space, title).await
         })
         .await?;
@@ -91,7 +91,7 @@ async fn update(
     let task_id = arguments.string("task_id")?;
     let changes = arguments.changes()?;
     let read = state
-        .run_write(WriteOperation::ChangeTask, Some(caller), async |write| {
+        .run_write(Some(caller), async |write| {
             change_task(write, caller, target(&task_id), changes).await
         })
         .await?;
@@ -110,7 +110,7 @@ async fn append(
     let content = NoteContent::try_from(arguments.string("content")?)
         .map_err(|error| ToolError::task_text("content", error))?;
     let note = state
-        .run_write(WriteOperation::AddNote, Some(caller), async |write| {
+        .run_write(Some(caller), async |write| {
             add_note(write, caller, target(&task_id), content).await
         })
         .await?;

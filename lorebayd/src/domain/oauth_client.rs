@@ -1,7 +1,5 @@
-use std::num::TryFromIntError;
-use std::time::{SystemTimeError, UNIX_EPOCH};
-
 use lorebay_base::Clock;
+use lorebay_lib_types::{UnixMillisError, unix_millis};
 use sea_orm::{
     DatabaseConnection, DbErr, Set, SqliteTransactionMode, TransactionOptions, TransactionTrait,
 };
@@ -15,13 +13,11 @@ use crate::repository::OAuthClientRepository;
 #[derive(Debug, Error)]
 pub(crate) enum OAuthClientError {
     #[error(transparent)]
-    Clock(#[from] SystemTimeError),
-    #[error(transparent)]
     Database(#[from] DbErr),
     #[error(transparent)]
     Random(#[from] getrandom::Error),
     #[error(transparent)]
-    Timestamp(#[from] TryFromIntError),
+    Timestamp(#[from] UnixMillisError),
 }
 
 #[derive(Clone, Debug, TypedBuilder)]
@@ -42,9 +38,7 @@ pub(crate) async fn register_client(
         client_id: Set(client_id.clone()),
         client_name: Set(input.client_name),
         metadata: Set(input.metadata),
-        created_at: Set(i64::try_from(
-            clock.now().duration_since(UNIX_EPOCH)?.as_millis(),
-        )?),
+        created_at: Set(unix_millis(clock.now())?),
         first_authorized_at: Set(None),
     };
     let transaction = database

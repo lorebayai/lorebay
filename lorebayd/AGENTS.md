@@ -18,6 +18,7 @@ Follow these playbook fragments:
   users file ([Identity](../docs/architecture/identity.md#3-accounts)). The
   command hashes with the library's function, so it and sign-in always
   agree, and it starts nothing.
+- The `migration/` crate owns Lorebay's schema migrations.
 - The source follows this layout, with only the folders the code needs:
 
   ```text
@@ -34,7 +35,6 @@ Follow these playbook fragments:
   |-- domain/       Product operations, one module per area
   |-- worker/       Background jobs, one file per job
   |-- storage/      The file storage layer and its backends
-  |-- migration/    Schema migrations (seaorm.md)
   |-- entity/       Generated SeaORM entities (seaorm.md)
   `-- repository/   Repositories (seaorm.md)
   ```
@@ -51,16 +51,22 @@ and file storage layers.
 | Transport | `src/api/`, `src/oauth/`, `src/pages/`, `src/files/` | Converting a protocol's requests into domain inputs, and domain results back |
 | Worker | `src/worker/` | The [background jobs](../docs/architecture/system.md#6-background-jobs), calling domain functions as a transport does per request |
 | Domain | `src/domain/` | The API operations: permission checks, data rules and transactions |
-| Data | `src/repository/`, `src/entity/`, `src/migration/` | The database layer |
+| Data | `src/repository/`, `src/entity/`, `migration/` | The database layer |
 | Storage | `src/storage/` | The [file storage layer](../lib/docs/architecture/storage.md#3-file-storage) |
 
 - Web API operations on shared content call the same public core functions
   as MCP. The embedded MCP router comes from `lorebay-lib-mcp`.
-- Product domain functions take typed inputs and verified product callers.
-  Web API handlers convert verified callers to the library's person ID,
-  optional agent name and owner scope before calling core.
-- The domain and the library check permissions for the operations they own,
-  using their respective permission matrices. Transports only translate.
+- Domain functions must not use axum, HTTP, MCP, or transport request and
+  response types. They take typed inputs and verified callers and must
+  never receive raw tokens. Web API handlers convert verified callers to
+  the library's person ID, optional agent name and owner scope before
+  calling core.
+- Domain functions check permissions for the operations they own, using
+  the library's [permission matrix](../lib/docs/contracts/access-control.md#4-permissions)
+  and [Lorebay's own rows](../docs/contracts/access-control.md#4-permissions),
+  in the order of the
+  [space and task checks](../lib/docs/contracts/access-control.md#6-space-and-task-checks).
+  Transports never check permissions.
 - Product-only domain functions own their transactions. Library writes and
   composed space creation use the library's write entry with Lorebay's
   transaction adapter. Helpers use the operation's transaction.
@@ -76,9 +82,9 @@ and file storage layers.
   domain layer: a handler converts the request into the domain function's
   input, and the domain result into the response type, with `From` or
   `TryFrom`. They never derive SeaORM traits or expose entity types.
-- Field rules that need no stored data, such as lengths and formats, are
-  checked on the request type. Rules that need stored data belong to the
-  domain function.
+- Request types check the protocol's field shape and convert inputs to
+  domain types. The domain types check shared field rules. Rules that need
+  stored data belong to the domain function.
 - A handler, or an MCP tool, extracts its inputs, calls one domain function
   and converts the result. It holds no business rule.
 

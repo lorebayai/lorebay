@@ -55,10 +55,10 @@ docker stop lorebay-test-postgres
 - `cli/`: the Rust crate that builds the `lorebay` command-line client.
 - `docs/`: product and system design docs.
 - `lib/`: the library crates and design for features every product shares.
-- `lorebayd/`: the Rust crate that builds the `lorebayd` executable.
+- `lorebayd/`: the Rust crate that builds the `lorebayd` executable and
+  the home of its `migration/` crate.
 - `playbook/`: conventions for coding agents, imported from `AGENTS.md`
   files.
-- `schema/`: the migration runner for generating Rust entities.
 - `web/`: the TypeScript web pages embedded by `lorebayd`.
 
 ## Docs

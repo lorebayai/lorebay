@@ -1,6 +1,6 @@
 use lorebay_lib_core::{
-    LibraryState, NewSpace, Space, SpaceError, SpaceRole, WriteOperation,
-    create_space as insert_space, highest_space_number,
+    LibraryState, NewSpace, Space, SpaceError, SpaceRole, create_space as insert_space,
+    highest_space_number,
 };
 use sea_orm::{DbErr, Set};
 
@@ -20,7 +20,7 @@ pub(crate) async fn create_space(
     let caller = caller.library_caller();
     caller.person()?;
     state
-        .run_write(WriteOperation::CreateSpace, Some(&caller), async |write| {
+        .run_write(Some(&caller), async |write| {
             let number = highest_space_number(write.transaction())
                 .await?
                 .unwrap_or(0)

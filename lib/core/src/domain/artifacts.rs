@@ -158,18 +158,15 @@ pub async fn register_artifact(
 ) -> Result<ArtifactRegistered, ArtifactError> {
     caller.agent()?;
     let (number, location, task_title) = state
-        .run_write(
-            WriteOperation::RegisterArtifact,
-            Some(caller),
-            async |write| insert_registration(write, caller, target, input).await,
-        )
+        .run_write(Some(caller), async |write| {
+            insert_registration(write, caller, target, input).await
+        })
         .await?;
     let upload = state
         .storage
         .upload_url(UploadSpec {
             location: &location,
             lifetime: state.settings().upload_url_lifetime,
-            size_limit: state.settings().upload_size_limit,
         })
         .await?;
     Ok(ArtifactRegistered {
@@ -195,13 +192,9 @@ pub async fn complete_artifact(
     let size = uploaded_size(state, &artifact.storage_key).await?;
     let time = now_millis()?;
     state
-        .run_write(
-            WriteOperation::CompleteArtifact,
-            Some(caller),
-            async |write| {
-                record_completion(write, caller, target, Completion { key, size, time }).await
-            },
-        )
+        .run_write(Some(caller), async |write| {
+            record_completion(write, caller, target, Completion { key, size, time }).await
+        })
         .await
 }
 
@@ -211,6 +204,7 @@ pub async fn delete_artifact(
     target: TaskTarget<'_>,
     key: &str,
 ) -> Result<(), ArtifactError> {
+    write.begin_operation()?;
     caller.person()?;
     let task = check_task(
         write.state(),
@@ -227,7 +221,7 @@ pub async fn delete_artifact(
         .await?
         .ok_or(ArtifactError::NotFound)?;
     write.delete.push(location);
-    write.space_id = Some(task.space_id);
+    write.record(WriteOperation::DeleteArtifact, Some(task.space_id));
     Ok(())
 }
 
@@ -243,6 +237,7 @@ async fn insert_registration(
     target: TaskTarget<'_>,
     input: NewArtifact,
 ) -> Result<(i64, String, String), ArtifactError> {
+    write.begin_operation()?;
     let task = check_task(
         write.state(),
         write.handle(),
@@ -274,7 +269,7 @@ async fn insert_registration(
             completed_at: Set(None),
         })
         .await?;
-    write.space_id = Some(space_id);
+    write.record(WriteOperation::RegisterArtifact, Some(space_id));
     Ok((number, location, task.title))
 }
 
@@ -307,6 +302,7 @@ async fn record_completion(
     target: TaskTarget<'_>,
     completion: Completion<'_>,
 ) -> Result<ArtifactCompleted, ArtifactError> {
+    write.begin_operation()?;
     let (task, current) = checked_artifact(
         write.state(),
         write.handle(),
@@ -317,8 +313,9 @@ async fn record_completion(
     .await?;
     let space_id = task.space_id.clone();
     if current.completed_at.is_some() {
-        write.space_id = Some(space_id);
-        return completed(current, task.title);
+        let result = completed(current, task.title)?;
+        write.record(WriteOperation::CompleteArtifact, Some(space_id));
+        return Ok(result);
     }
     let time = completion.time.max(task.last_activity_at);
     let transaction = write.transaction();
@@ -338,8 +335,9 @@ async fn record_completion(
         .build()
         .update(task)
         .await?;
-    write.space_id = Some(space_id);
-    completed(current, title)
+    let result = completed(current, title)?;
+    write.record(WriteOperation::CompleteArtifact, Some(space_id));
+    Ok(result)
 }
 
 async fn checked_artifact(

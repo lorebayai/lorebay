@@ -50,10 +50,19 @@ impl SpaceRole {
         }
     }
 
+    /// Caps a person's role for an agent acting on their behalf.
+    pub fn for_agent(self) -> Self {
+        match self {
+            Self::Admin | Self::Owner => Self::Contributor,
+            role => role,
+        }
+    }
+
     pub(super) fn for_caller(self, caller: &Caller) -> Self {
-        match (self, caller.agent_name.is_some()) {
-            (Self::Admin | Self::Owner, true) => Self::Contributor,
-            _ => self,
+        if caller.agent_name.is_some() {
+            self.for_agent()
+        } else {
+            self
         }
     }
 }
