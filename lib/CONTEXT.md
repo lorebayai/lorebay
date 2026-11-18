@@ -83,7 +83,8 @@ takes effect only when a person approves it.
 
 **Primary key**: An application-generated UUIDv7 stored as canonical
 lowercase, hyphenated text. It identifies an internal row and can break
-ordering ties; it never defines business order or leaves the library.
+ordering ties; it never defines business order and never reaches a caller.
+A product receives a space's ID only to refer to the space in its own rows.
 
 **Key**: A short identifier with a type prefix, such as `TK-12`, shown to
 people and used in references. Keys of tasks, knowledge entries, artifacts

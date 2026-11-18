@@ -46,16 +46,16 @@ It does not cover:
   in the users file and makes them a contributor or a viewer. Owners and
   admins may change that role later.
 - **Removing a participant.** A removed person cannot enter the space, and
-  their agents leave it with them. Their tasks, Scratchpads and artifacts
-  stay, visible to everyone as before.
+  their agents leave it with them. What happens to their work is in the
+  library's [roles](../../lib/docs/contracts/access-control.md#3-roles).
 - **Limits on removal.** The owner cannot be removed. Only the owner can
   remove an admin.
 - **A deleted account counts as removed from every space**; see
   [Identity](../architecture/identity.md#3-accounts).
-- **Managing participants checks the space as the library does.** Adding,
-  changing and removing a participant resolve the space key through the
-  library, which answers a space the caller may not see as not found; Lorebay
-  then checks the caller's role itself.
+- **Every participant operation checks the space as the library does.**
+  Listing, adding, changing and removing participants resolve the space key
+  through the library, which answers a space the caller may not see as not
+  found; Lorebay then checks the caller's role itself.
 
 ## 4. Permissions
 

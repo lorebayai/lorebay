@@ -61,7 +61,8 @@ It does not cover:
 - **Lists are paginated.** `list_spaces`, `list_tasks`, `list_knowledge`,
   `list_proposals` and the Scratchpad in `get_task` return pages, so no call puts an
   unbounded result into the model's context. Each page follows a cursor,
-  in a fixed order, with the library's fixed page size.
+  in a fixed order, with a default page size the caller may change, up to
+  the library's limit.
 - **`create_artifact` returns an object, not a bare URL**, so multipart
   upload can be added without changing the tool. How an upload uses the URL
   and headers is in [Tasks](tasks.md#5-artifacts).

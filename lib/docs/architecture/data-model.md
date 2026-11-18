@@ -12,8 +12,8 @@
 > The library stores a person only as the product's ID, and refers to no
 > product's table.
 >
-> Primary keys never leave the library. Callers see keys and random task
-> IDs.
+> Primary keys never reach a caller, who sees keys and random task IDs. A
+> product receives a space's ID only to refer to the space in its own rows.
 
 ## 1. Purpose
 
@@ -53,7 +53,8 @@ It does not cover:
   and the RFC variant. Every primary key is NOT NULL and has no database
   generation or default.
 - **Primary keys identify internal rows and break ordering ties.** They
-  never define the business order and never leave the library. Calls use
+  never define the business order and never reach a caller; a product
+  receives a space's ID only to refer to the space in its own rows. Calls use
   public keys, such as `SPACE-1` and `TK-12`, and random task IDs. A space's
   key uses its separate `number`, never its primary key.
 - **Random IDs remain separate from primary keys.** A task keeps its

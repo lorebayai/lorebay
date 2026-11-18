@@ -37,20 +37,16 @@ It does not cover:
   the backend without passing through the library.
 - **Each artifact file is written once.** Each artifact has its own location
   in storage, which the library generates and never takes from the file
-  name. Every backend refuses a second upload to a location, and refuses an
-  upload without the headers the upload URL came with. What a client sees
+  name. Every backend answers 403 to an upload that lacks the headers its
+  upload URL came with, and 412 to a second upload to a location, so a
+  client that gets 412 knows the file is already stored. What a client sees
   is in [Tasks](../contracts/tasks.md#5-artifacts).
 - **The client reports a finished upload.** A backend may not see when an
   upload finishes, so the client must call `complete_artifact` after the
   transfer. The library then asks storage for the file's size and records
   it.
-- **The size limit is checked after the upload.** Over the limit the
-  product sets, the library refuses the report with `artifact.too_large`,
-  deletes the file and leaves the registration incomplete. A backend that
-  can refuse an oversized upload itself still does; the check after the
-  upload holds on a backend that cannot, and when the limit was lowered
-  after the upload. See
-  [Library architecture](library.md#9-files).
+- **The size limit is checked after the upload**, as
+  [Library architecture](library.md#9-files) states.
 - **The interface lists the stored files.** The cleanup round that deletes
   files no record points to finds them in that list, and the round that
   removes abandoned registrations deletes their files. A backend's own
