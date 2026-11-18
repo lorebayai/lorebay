@@ -113,12 +113,13 @@ in its own subfolder and named `lorebay-lib-<subfolder>`:
 | `lorebay-lib-migration` | `lib/migration/` | The library schema and its migrator | SeaORM migration |
 | `lorebay-lib-mcp` | `lib/mcp/` | The MCP layer, its tools, the MCP authorization challenge and metadata | `lorebay-lib-core`, the MCP SDK, axum |
 
-- A client that needs only the secret type, such
-  as a command-line tool, depends on `lorebay-lib-types` and builds no
-  database and no MCP layer. The MCP layer is its own crate so the compiler
-  holds that it reaches only the public operations, as a product's own entry
-  point does. The migration crate lets a product apply the schema separately
-  from building the server or MCP layer.
+- **The library has four crates.** A client that needs only the secret type,
+  such as a command-line tool, depends on `lorebay-lib-types` and builds no
+  database or MCP layer. The MCP crate can call only the core's public
+  operations, as a product's entry point does. The migration crate lets a
+  product apply the schema separately from building the server or MCP layer.
+  A single crate with layer-selecting features would use Cargo features for
+  more than driver selection and let MCP code reach core internals.
 - **The folder is `lib/` and the crates carry `lib-`.** The folder holds
   the shared library, not one feature of it. A product's workspace may hold
   its own `core` or `mcp` crate, and a name such as `lorebay-core` says
@@ -152,10 +153,10 @@ in its own subfolder and named `lorebay-lib-<subfolder>`:
 - **Versions are declared once,** in the root `[workspace.dependencies]`,
   which declares SeaORM and its migration crate with no driver feature. A
   consumer in another repository takes a git dependency on one commit.
-- The public API exposes SeaORM connections and transactions, the SeaORM
-  migration trait implemented by `Migrator`, `http` request headers, and
-  the axum MCP router. Consumers use semver-compatible releases of those
-  dependencies so Cargo can unify them.
+- **Four dependencies are public.** The public API exposes SeaORM connections
+  and transactions, the SeaORM migration trait implemented by `Migrator`,
+  `http` request headers, and the axum MCP router. Consumers use
+  semver-compatible releases of those dependencies so Cargo can unify them.
 
 ## 5. Public API
 
@@ -323,10 +324,10 @@ methods:
 
 - **The product opens, commits and rolls back.** The library writes inside
   the transaction it is handed and never commits or rolls back.
-- The library operation supplies its own label and space for the record
-  passed to the commit hook, along with the caller from the write entry.
-  A product can use the record to add its own rows, such as an audit record,
-  for writes from either entry point.
+- **The operation supplies the write label and space.** The write entry adds
+  the caller and passes the record to the commit hook. A product can use
+  the record to add its own rows, such as an audit record, for writes from
+  either entry point.
 - **A write transaction serializes with every write it could conflict
   with.** On SQLite it takes the write lock before its first statement, the
   immediate mode of the
@@ -571,11 +572,13 @@ The library has seven tables: `space`, `space_task`, `space_note`,
 - **A product's table may refer to a library table,** as Lorebay's
   memberships refer to `space`. The foreign key is declared in the
   product's migration.
-- Each migration crate has its own entity generation entry. The library
-  builds a disposable SQLite database from only its migrations. Lorebay
-  applies both groups and selects only its own tables. Generated relations
-  stay within their group. A product joins its rows to a space through the
-  space ID the library returns. The
+- **Each group generates its own entities.** Each migration crate has its own
+  entity generation entry. The library builds a disposable SQLite database
+  from only its migrations. Lorebay applies both groups and selects only its
+  own tables. Generating library entities alongside Lorebay's would duplicate
+  the library's models and require hand-editing generated code to remove the
+  duplicates. Generated relations stay within their group. A product joins
+  its rows to a space through the space ID the library returns. The
   [SeaORM rules](../../../playbook/topics/seaorm.md#entities) describe the
   generation commands and the projection.
 
