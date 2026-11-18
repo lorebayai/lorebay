@@ -8,10 +8,6 @@ use futures_util::Stream;
 use lorebay_base::Secret;
 use typed_builder::TypedBuilder;
 
-mod listing;
-mod local;
-mod signature;
-
 pub(crate) use local::*;
 
 pub(crate) trait FileStorage: Send + Sync {
@@ -62,3 +58,7 @@ pub(crate) struct UploadRequest {
     pub headers: BTreeMap<String, String>,
     pub expires_at: i64,
 }
+
+mod listing;
+mod local;
+mod signature;
