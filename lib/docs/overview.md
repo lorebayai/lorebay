@@ -34,6 +34,3 @@ Lorebay is the first product built on it. Terms follow the
   and `#` references.
 - [MCP tools](contracts/mcp-tools.md): the protocol versions and the 14 tools
   agents call.
-- [Agent skill](contracts/agent-skill.md): the rules the skill gives agents,
-  the places a product fills, and what the library does when the rules are
-  broken.

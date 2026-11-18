@@ -82,9 +82,6 @@ flowchart TD
   permission matrix the library owns, and the two cleanup rounds for
   artifact files.
 - **The MCP layer** and its tools, which call the operations.
-- **The skill text.** Today it is the agent skill contract, with marked
-  places a product fills: where to create a space, how to be added to one,
-  and how to delete a task or a note. The library ships no skill file.
 - **Seven tables**, listed in [section 12](#12-data).
 
 ### 3.2 What a product holds
@@ -96,6 +93,9 @@ flowchart TD
 - its own entry points: its API router with its response and error formats,
   its pages and its command-line tools;
 - the file storage backend, and the file URLs it serves;
+- its agent skill: each product writes and ships its own skill against the
+  tools' contract in [MCP tools](../contracts/mcp-tools.md) and the tool
+  descriptions, and the library ships and documents no skill;
 - the process, the scheduling of background jobs, and the deployment.
 
 For Lorebay this is everything outside the library's folder, with Lorebay's
@@ -537,7 +537,6 @@ state:
 | The types a browser may open inline | Download URLs |
 | The age after which an incomplete registration is abandoned | The abandoned-registration round |
 | The age after which a file without a record is orphaned | The orphaned-file round |
-| The skill's product text | The marked places of the agent skill contract |
 
 - **Two values come with the call instead:** the number and the owner ID of
   each new space.

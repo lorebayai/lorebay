@@ -3,8 +3,7 @@
 - **Status:** Proposed
 - **Level:** System
 - **Related:** [Library architecture](../architecture/library.md),
-  [Access control](../contracts/access-control.md),
-  [Agent skill](../contracts/agent-skill.md)
+  [Access control](../contracts/access-control.md)
 
 > The library exists to make people's attention count: anyone in a team must
 > be able to see quickly what an agent did and how it did it.

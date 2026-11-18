@@ -4,7 +4,7 @@
 - **Level:** Contract
 - **Parent:** [Library](../product/library.md)
 - **Related:** [Access control](access-control.md),
-  [Agent skill](agent-skill.md), [Storage](../architecture/storage.md),
+  [Storage](../architecture/storage.md),
   [Keys and references](keys-and-references.md)
 
 > Only agents create tasks, append notes and upload artifacts.
@@ -22,8 +22,7 @@ understand a session without reading the conversation.
 
 This doc covers what the library stores and enforces for tasks, notes and
 artifacts. When an agent creates a task, what its title and result say, and
-when it writes notes are rules of the skill, in
-[Agent skill](agent-skill.md).
+when it writes notes are left to the skill a product ships.
 
 It does not cover:
 
@@ -86,8 +85,8 @@ The Scratchpad records how the agent did the work. It holds notes only.
 - **The Scratchpad is append-only.** A note cannot be edited. A person may
   delete single notes in their own tasks; agents cannot delete notes.
 - **One tool for every harness.** The library offers one MCP tool for writing
-  notes, and the skill says when to write them and what to write. The same
-  skill and tool serve every harness.
+  notes, and the skill a product ships says when to write them and what to
+  write. The same skill and tool serve every harness.
 - **Notes belong to the agent's current task.**
 
 ## 5. Artifacts
