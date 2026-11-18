@@ -88,6 +88,19 @@ impl TryFrom<artifact::Model> for Artifact {
     }
 }
 
+pub(crate) async fn check_artifact_download(
+    database: &DatabaseConnection,
+    location: &str,
+) -> Result<(), ArtifactError> {
+    ArtifactRepository::builder()
+        .connection(database)
+        .build()
+        .completed_by_storage_key(location)
+        .await?
+        .ok_or(ArtifactError::NotFound)?;
+    Ok(())
+}
+
 pub(crate) async fn get_artifact_download_url(
     database: &DatabaseConnection,
     storage: &impl FileStorage,
@@ -173,7 +186,8 @@ pub(crate) async fn complete_artifact(
 ) -> Result<ArtifactCompleted, ArtifactError> {
     caller.agent()?;
     let read = database.begin().await?;
-    let (task, artifact) = checked_artifact(&read, caller, &target, key).await?;
+    let (task, artifact) =
+        checked_artifact(&read, caller, &target, key, TaskAction::CompleteArtifact).await?;
     read.commit().await?;
     if artifact.completed_at.is_some() {
         return completed(artifact, task.title);
@@ -183,7 +197,14 @@ pub(crate) async fn complete_artifact(
         .await?
         .ok_or(ArtifactError::NotUploaded)?;
     let transaction = write_transaction(database).await?;
-    let (task, current) = checked_artifact(&transaction, caller, &target, key).await?;
+    let (task, current) = checked_artifact(
+        &transaction,
+        caller,
+        &target,
+        key,
+        TaskAction::CompleteArtifact,
+    )
+    .await?;
     if current.completed_at.is_some() {
         transaction.commit().await?;
         return completed(current, task.title);
@@ -209,18 +230,54 @@ pub(crate) async fn complete_artifact(
     completed(current, title)
 }
 
+pub(crate) async fn delete_artifact(
+    database: &DatabaseConnection,
+    storage: &impl FileStorage,
+    caller: &VerifiedCaller,
+    target: ArtifactTarget<'_>,
+    key: &str,
+) -> Result<(), ArtifactError> {
+    caller.person()?;
+    let transaction = write_transaction(database).await?;
+    let (_, artifact) =
+        checked_artifact(&transaction, caller, &target, key, TaskAction::Delete).await?;
+    if artifact.completed_at.is_none() {
+        return Err(ArtifactError::NotFound);
+    }
+    ArtifactRepository::builder()
+        .connection(&transaction)
+        .build()
+        .delete(&artifact.id)
+        .await?;
+    transaction.commit().await?;
+    delete_artifact_files(storage, [artifact.storage_key]).await;
+    Ok(())
+}
+
+pub(crate) async fn delete_artifact_files(
+    storage: &impl FileStorage,
+    locations: impl IntoIterator<Item = String>,
+) {
+    for location in locations {
+        if let Err(error) = storage.delete(&location).await {
+            tracing::warn!(%error, %location, "artifact file deletion failed");
+        }
+    }
+}
+
 async fn checked_artifact<C: ConnectionTrait>(
     connection: &C,
     caller: &VerifiedCaller,
     target: &ArtifactTarget<'_>,
     key: &str,
+    action: TaskAction,
 ) -> Result<(task::Model, artifact::Model), ArtifactError> {
     let task = check_task(
         connection,
         caller,
         target.task_id.expose(),
         target.path_space,
-        TaskAction::CompleteArtifact,
+        action,
     )
     .await?;
     let number = parse_key("AR", key).ok_or(ArtifactError::NotFound)?;

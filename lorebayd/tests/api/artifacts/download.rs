@@ -267,6 +267,65 @@ async fn download_file_fails_when_url_was_altered() {
     server.stop().await;
 }
 
+#[tokio::test]
+async fn download_file_fails_when_artifact_was_deleted() {
+    let (server, person, agent) = setup().await;
+    for resource in ["artifact", "task"] {
+        let task = create(&server, &agent, SPACE, "Deleted download").await;
+        let registered = register(&server, &agent, &task).await;
+        let key = registered["key"].as_str().unwrap();
+        upload_ok(&server, &registered, "Uploaded bytes").await;
+        assert_eq!(
+            complete(&server, &agent, &task, key).await.status(),
+            StatusCode::OK
+        );
+        let download = download_url(&server, &person, SPACE, key).await;
+        let url = download["url"].as_str().unwrap();
+        let response = fetch(&server, url).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.bytes().await.unwrap(), "Uploaded bytes");
+        let mut path = format!(
+            "/api/v1/spaces/{SPACE}/tasks/{}",
+            task["task_id"].as_str().unwrap()
+        );
+        if resource == "artifact" {
+            path.push_str(&format!("/artifacts/{key}"));
+        }
+        let response = request(&server, &person, Method::DELETE, &path, Value::Null).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.json::<Value>().await.unwrap(),
+            json!({"data":null,"meta":{}})
+        );
+        assert_deleted_download(&server, url).await;
+        upload_ok(&server, &registered, "Leftover file bytes").await;
+        assert_deleted_download(&server, url).await;
+        assert_problem(
+            url_request(&server, &person, SPACE, key).await,
+            StatusCode::NOT_FOUND,
+            "artifact.not_found",
+        )
+        .await;
+    }
+    server.stop().await;
+}
+
+async fn assert_deleted_download(server: &Server, url: &str) {
+    let response = fetch(server, url).await;
+    assert_security(&response, "sandbox");
+    assert_problem(response, StatusCode::NOT_FOUND, "file.not_found").await;
+    let response = server
+        .client
+        .head(file_url(server, url))
+        .send()
+        .await
+        .map_err(|_| "download request failed")
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert_security(&response, "sandbox");
+    assert!(response.bytes().await.unwrap().is_empty());
+}
+
 async fn uploaded(server: &Server, agent: &Value, task: &Value, name: &str) -> String {
     let response = registration(
         server,

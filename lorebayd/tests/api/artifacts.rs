@@ -14,6 +14,7 @@ use crate::tasks::helpers::{SPACE, append, create, participant, read, setup};
 
 use helpers::*;
 
+mod deletion;
 mod download;
 mod helpers;
 

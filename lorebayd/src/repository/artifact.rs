@@ -1,5 +1,6 @@
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DbErr, EntityTrait, QueryFilter, QueryOrder,
+    QuerySelect,
 };
 use typed_builder::TypedBuilder;
 
@@ -12,6 +13,14 @@ pub(crate) struct ArtifactRepository<'a, C> {
 }
 
 impl<C: ConnectionTrait> ArtifactRepository<'_, C> {
+    pub async fn completed_by_storage_key(&self, location: &str) -> Result<Option<Model>, DbErr> {
+        Entity::find()
+            .filter(Column::StorageKey.eq(location))
+            .filter(Column::CompletedAt.is_not_null())
+            .one(self.connection)
+            .await
+    }
+
     pub async fn completed_by_space_number(
         &self,
         space_id: &str,
@@ -46,7 +55,22 @@ impl<C: ConnectionTrait> ArtifactRepository<'_, C> {
         model.insert(self.connection).await
     }
 
+    pub async fn storage_keys(&self, task_id: &str) -> Result<Vec<String>, DbErr> {
+        Entity::find()
+            .select_only()
+            .column(Column::StorageKey)
+            .filter(Column::TaskId.eq(task_id))
+            .into_tuple()
+            .all(self.connection)
+            .await
+    }
+
     pub async fn update(&self, model: ActiveModel) -> Result<Model, DbErr> {
         model.update(self.connection).await
+    }
+
+    pub async fn delete(&self, id: &str) -> Result<(), DbErr> {
+        Entity::delete_by_id(id).exec(self.connection).await?;
+        Ok(())
     }
 }

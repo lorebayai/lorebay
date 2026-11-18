@@ -56,12 +56,10 @@ async fn delete_task_removes_task_and_scratchpad() {
     assert_eq!(next["key"], "TK-2");
     assert_ne!(next["task_id"], task["task_id"]);
     assert_eq!(scratchpad(&server, &person, "TK-2").await, json!([]));
-    assert_problem(
-        upload_artifact(&server, &artifact).await,
-        StatusCode::PRECONDITION_FAILED,
-        "file.already_exists",
-    )
-    .await;
+    assert_eq!(
+        upload_artifact(&server, &artifact).await.status(),
+        StatusCode::CREATED
+    );
     server.stop().await;
 }
 

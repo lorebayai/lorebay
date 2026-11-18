@@ -347,7 +347,14 @@ pub(crate) async fn delete(
     path: Result<Path<(String, Secret<String>)>, PathRejection>,
 ) -> Result<Envelope<()>, ApiError> {
     let Path((space, task_id)) = path.map_err(invalid_path)?;
-    delete_task(&state.database, &caller, &space, task_id.expose()).await?;
+    delete_task(
+        &state.database,
+        state.storage.as_ref(),
+        &caller,
+        &space,
+        task_id.expose(),
+    )
+    .await?;
     Ok(Envelope::builder().data(()).build())
 }
 
