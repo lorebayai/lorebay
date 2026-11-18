@@ -32,10 +32,21 @@ bash <(curl -fsSL https://moonrepo.dev/install/moon.sh)
 ```
 
 moon installs the Node.js and pnpm releases that `.moon/toolchains.yml` pins
-the first time a task needs them. Run every check from the repo root:
+the first time a task needs them. Start the Postgres service for the library
+integration tests. The tests use the fixed loopback address below.
+
+```bash
+docker run --rm -d --name lorebay-test-postgres \
+  -e POSTGRES_USER=lorebay_test -e POSTGRES_PASSWORD=lorebay_test \
+  -e POSTGRES_DB=postgres -p 127.0.0.1:55432:5432 postgres:18.7@sha256:2ea8630df176ad090ec92136dee850397c5af8781e4bcf2e4162593691c61bbc
+docker exec lorebay-test-postgres pg_isready -h 127.0.0.1 -U lorebay_test -d postgres
+```
+
+Once Postgres is ready, run every check from the repo root:
 
 ```bash
 moon ci
+docker stop lorebay-test-postgres
 ```
 
 ## Repository layout

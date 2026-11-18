@@ -9,6 +9,8 @@ Implement the five interfaces and construct a `LibraryState`. Apply the library
 migrator before running any operation. Product transactions own commit and rollback.
 
 Run `moon run lib/core:format lib/core:lint lib/core:build` from the workspace root.
+Run the Postgres scenarios with `moon run lib/core:integration`. They use
+`postgres:18.7@sha256:2ea8630df176ad090ec92136dee850397c5af8781e4bcf2e4162593691c61bbc` on `127.0.0.1:55432`.
 Run `moon run :generate-entities` to apply the migrations to a disposable
 database and regenerate the entities.
 

@@ -30,5 +30,12 @@ tracing.workspace = true
 typed-builder.workspace = true
 uuid.workspace = true
 
+[dev-dependencies]
+lorebay-lib-core = { path = ".", features = ["postgres"] }
+
+[[test]]
+name = "api"
+path = "tests/api/main.rs"
+
 [lints]
 workspace = true

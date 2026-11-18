@@ -1967,6 +1967,7 @@ dependencies = [
  "futures-util",
  "getrandom 0.4.3",
  "http",
+ "lorebay-lib-core",
  "lorebay-lib-types",
  "sea-orm",
  "sea-orm-migration",

@@ -14,6 +14,20 @@ permissions:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.7@sha256:2ea8630df176ad090ec92136dee850397c5af8781e4bcf2e4162593691c61bbc
+        env:
+          POSTGRES_USER: lorebay_test
+          POSTGRES_PASSWORD: lorebay_test
+          POSTGRES_DB: postgres
+        ports:
+          - 127.0.0.1:55432:5432
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U lorebay_test -d postgres"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7.0.1
@@ -29,7 +43,7 @@ jobs:
       - name: Restore Cargo Cache
         uses: Swatinem/rust-cache@v2.9.3
         with:
-          shared-key: ci-linux-tests
+          shared-key: ci-linux-tests-lib-v1
           save-if: 'false'
       - name: Run Moon CI
         run: moon ci
