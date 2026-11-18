@@ -70,6 +70,9 @@ pub(crate) async fn call(
             .await?;
             value(NoteAddedResponse::from(note))
         }
+        "create_artifact" => artifacts::create(state, caller, arguments).await,
+        "complete_artifact" => artifacts::complete(state, caller, arguments).await,
+        "get_artifact_url" => artifacts::download(state, caller, arguments).await,
         _ => Err(ApiError::Internal),
     }
 }
@@ -113,3 +116,5 @@ fn value(data: impl Serialize) -> Result<Value, ApiError> {
         ApiError::Internal
     })
 }
+
+mod artifacts;

@@ -14,9 +14,10 @@ use crate::tasks::helpers::{SPACE, append, create, participant, read, setup};
 
 use helpers::*;
 
+pub(crate) mod helpers;
+
 mod deletion;
 mod download;
-mod helpers;
 
 #[tokio::test]
 async fn register_artifact_returns_key_upload_url_and_headers() {

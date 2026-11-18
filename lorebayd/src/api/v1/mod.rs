@@ -3,6 +3,10 @@ use axum::routing::{delete, get, post};
 
 use crate::server::ServerState;
 
+pub(crate) use artifacts::{
+    ArtifactCompletedResponse, ArtifactDownloadResponse, ArtifactRegisteredResponse,
+    RegisterArtifactRequest,
+};
 pub(crate) use spaces::SpaceResponse;
 pub(crate) use tasks::{
     ChangeTaskRequest, ListTasksQuery, NoteAddedResponse, ReadTaskQuery, TaskResponse,
