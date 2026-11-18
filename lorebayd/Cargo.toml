@@ -39,6 +39,7 @@ uuid.workspace = true
 
 [dev-dependencies]
 reqwest.workspace = true
+tokio = { workspace = true, features = ["process"] }
 
 [[test]]
 name = "api"

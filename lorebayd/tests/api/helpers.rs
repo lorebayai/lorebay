@@ -1,23 +1,22 @@
 use std::fs;
-use std::net::SocketAddr;
+use std::net::{SocketAddr, TcpListener};
 use std::time::Duration;
 
-use anyhow::Result;
 use argon2::password_hash::PasswordHasher;
 use argon2::{Algorithm, Argon2, Params, Version};
-use lorebayd::{Config, hash_password, run};
+use lorebayd::Config;
 use reqwest::{Client, Method, Response, StatusCode};
 use sea_orm::sea_query::{Alias, Expr, Query};
 use sea_orm::{ConnectionTrait, Database};
 use serde_json::{Value, json};
 use tempfile::TempDir;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::oneshot;
-use tokio::task::JoinHandle;
-use tokio::time::{sleep, timeout};
+use tokio::net::TcpStream;
+use tokio::time::{Instant, sleep, timeout};
 use typed_builder::TypedBuilder;
 use url::Url;
+
+use server::ServerTask;
 
 pub use oauth::*;
 
@@ -42,9 +41,8 @@ pub struct Server {
     pub client: Client,
     pub address: SocketAddr,
     pub public_url: String,
+    task: ServerTask,
     pub directory: TempDir,
-    shutdown: Option<oneshot::Sender<()>>,
-    task: Option<JoinHandle<Result<()>>>,
 }
 
 impl Default for Settings {
@@ -107,53 +105,6 @@ impl Server {
             configure,
         )
         .await
-    }
-
-    async fn start_with(
-        directory: TempDir,
-        users: &[(&str, &str)],
-        configure: impl FnOnce(&mut Config),
-    ) -> Self {
-        let users_file = directory.path().join("users.json");
-        let users: Vec<_> = users.iter().map(|(username, password)| {
-            json!({"username": username, "password_hash": hash_password(password).unwrap()})
-        }).collect();
-        fs::write(&users_file, serde_json::to_vec(&users).unwrap()).unwrap();
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let address = listener.local_addr().unwrap();
-        let public_url_file = directory.path().join("public-url");
-        let public_url = if public_url_file.exists() {
-            fs::read_to_string(&public_url_file).unwrap()
-        } else {
-            format!("http://{address}")
-        };
-        let mut config = Config::builder()
-            .listen_address(address)
-            .data_directory(directory.path().join("data"))
-            .users_file(Some(users_file))
-            .public_url(public_url)
-            .build();
-        configure(&mut config);
-        fs::write(public_url_file, &config.public_url).unwrap();
-        let public_url = config.public_url.clone();
-        let (shutdown, stopped) = oneshot::channel();
-        let task = tokio::spawn(run(config, listener, async {
-            let _ = stopped.await;
-        }));
-        let server = Self {
-            client: Client::builder()
-                .timeout(TEST_TIMEOUT)
-                .no_proxy()
-                .build()
-                .unwrap(),
-            address,
-            public_url,
-            directory,
-            shutdown: Some(shutdown),
-            task: Some(task),
-        };
-        server.wait_for_status("/readyz", StatusCode::OK).await;
-        server
     }
 
     pub async fn get(&self, path: &str) -> Response {
@@ -224,41 +175,19 @@ impl Server {
     }
 
     pub fn begin_shutdown(&mut self) {
-        self.shutdown.take().unwrap().send(()).unwrap();
+        self.task.begin_shutdown();
     }
 
-    pub async fn wait_for_status(&self, path: &str, expected: StatusCode) {
-        timeout(TEST_TIMEOUT, async {
-            loop {
-                if let Ok(response) = self
-                    .client
-                    .get(format!("http://{}{path}", self.address))
-                    .send()
-                    .await
-                    && response.status() == expected
-                {
-                    break;
-                }
-                assert!(
-                    !self.task.as_ref().unwrap().is_finished(),
-                    "server exited before {expected}"
-                );
-                sleep(POLL_INTERVAL).await;
-            }
-        })
-        .await
-        .unwrap();
+    pub async fn wait_for_status(&mut self, path: &str, expected: StatusCode) {
+        self.wait_for_status_with_budget(path, expected, TEST_TIMEOUT)
+            .await;
     }
 
     pub async fn finish_shutdown(&mut self) {
-        timeout(TEST_TIMEOUT, self.task.take().unwrap())
-            .await
-            .unwrap()
-            .unwrap()
-            .unwrap();
+        self.task.finish_shutdown(TEST_TIMEOUT).await;
     }
 
-    pub async fn wait_for_listener_to_close(&self) {
+    pub async fn wait_for_listener_to_close(&mut self) {
         timeout(TEST_TIMEOUT, async {
             while TcpStream::connect(self.address).await.is_ok() {
                 sleep(POLL_INTERVAL).await;
@@ -266,7 +195,7 @@ impl Server {
         })
         .await
         .unwrap();
-        assert!(!self.task.as_ref().unwrap().is_finished());
+        self.task.assert_running();
     }
 
     pub async fn stop(mut self) -> TempDir {
@@ -285,6 +214,79 @@ impl Server {
             .unwrap();
         assert_eq!(&interim, b"HTTP/1.1 100 Continue\r\n\r\n");
         stream
+    }
+
+    async fn start_with(
+        directory: TempDir,
+        users: &[(&str, &str)],
+        configure: impl FnOnce(&mut Config),
+    ) -> Self {
+        let users_file = directory.path().join("users.json");
+        fixtures::write_users(&users_file, users).await;
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let public_url_file = directory.path().join("public-url");
+        let public_url = if public_url_file.exists() {
+            fs::read_to_string(&public_url_file).unwrap()
+        } else {
+            format!("http://{address}")
+        };
+        let mut config = Config::builder()
+            .listen_address(address)
+            .data_directory(directory.path().join("data"))
+            .users_file(Some(users_file))
+            .public_url(public_url)
+            .build();
+        configure(&mut config);
+        fs::write(public_url_file, &config.public_url).unwrap();
+        let public_url = config.public_url.clone();
+        let task = ServerTask::start(config, listener);
+        let mut server = Self {
+            client: Client::builder()
+                .timeout(TEST_TIMEOUT)
+                .no_proxy()
+                .build()
+                .unwrap(),
+            address,
+            public_url,
+            directory,
+            task,
+        };
+        server
+            .wait_for_status_with_budget("/readyz", StatusCode::OK, STARTUP_TIMEOUT)
+            .await;
+        server
+    }
+
+    async fn wait_for_status_with_budget(
+        &mut self,
+        path: &str,
+        expected: StatusCode,
+        budget: Duration,
+    ) {
+        let deadline = Instant::now() + budget;
+        loop {
+            self.task.assert_running();
+            let response = self
+                .client
+                .get(format!("http://{}{path}", self.address))
+                .timeout(PROBE_TIMEOUT)
+                .send()
+                .await;
+            self.task.assert_running();
+            if response
+                .as_ref()
+                .is_ok_and(|response| response.status() == expected)
+            {
+                return;
+            }
+            if Instant::now() >= deadline {
+                self.task.fail(&format!(
+                    "server did not return {expected} for {path} within {budget:?}; last probe: {response:?}"
+                ));
+            }
+            sleep(POLL_INTERVAL).await;
+        }
     }
 }
 
@@ -436,5 +438,9 @@ pub async fn walk(
     rows
 }
 
+const STARTUP_TIMEOUT: Duration = Duration::from_secs(120);
+const PROBE_TIMEOUT: Duration = Duration::from_millis(250);
 const POLL_INTERVAL: Duration = Duration::from_millis(10);
+mod fixtures;
 mod oauth;
+mod server;
