@@ -4,7 +4,20 @@ Core operations, authorization rules, and interfaces for shared spaces and their
 
 ## Usage
 
-Enable the `sqlite` or `postgres` feature for the database your product supplies.
+In an external product's Cargo manifest, pin every library crate you use to
+the same git commit and enable the database feature you need. For Postgres:
+
+```toml
+[dependencies]
+lorebay-lib-core = { git = "https://github.com/lorebayai/lorebay", rev = "<commit>", features = ["postgres"] }
+lorebay-lib-mcp = { git = "https://github.com/lorebayai/lorebay", rev = "<commit>", features = ["postgres"] }
+lorebay-lib-migration = { git = "https://github.com/lorebayai/lorebay", rev = "<commit>", features = ["postgres"] }
+```
+
+Replace `<commit>` with a full commit SHA. Use `sqlite` for SQLite. Build with
+Rust 1.100 or later. Match public dependency versions as described in
+[Library architecture](../docs/architecture/library.md#41-database-backends-and-dependencies).
+
 Implement the five interfaces and construct a `LibraryState`. Apply the library
 `Migrator` from `lorebay-lib-migration` before running any operation.
 Product transactions own commit and rollback.

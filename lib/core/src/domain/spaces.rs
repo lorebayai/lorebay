@@ -19,6 +19,9 @@ use super::space_access::{
 };
 use super::time::now_millis;
 
+pub const SPACE_NAME_MAX_BYTES: usize = 256;
+pub const SPACE_SUMMARY_MAX_BYTES: usize = 4096;
+
 #[derive(Debug, Error)]
 pub enum SpaceError {
     #[error(transparent)]
@@ -78,17 +81,17 @@ impl SpaceInputError {
     }
 }
 
-#[derive(Clone, Debug, TypedBuilder)]
-#[builder(field_defaults(setter(into)))]
+#[derive(Clone, Debug)]
 pub struct NewSpace {
-    pub name: String,
-    pub summary: String,
+    name: String,
+    summary: String,
 }
 
 impl NewSpace {
-    pub fn validate(&self) -> Result<(), SpaceInputError> {
-        validate_field("name", &self.name, 256)?;
-        validate_field("summary", &self.summary, 4096)
+    pub fn new(name: String, summary: String) -> Result<Self, SpaceInputError> {
+        validate_field("name", &name, SPACE_NAME_MAX_BYTES)?;
+        validate_field("summary", &summary, SPACE_SUMMARY_MAX_BYTES)?;
+        Ok(Self { name, summary })
     }
 }
 
@@ -112,25 +115,24 @@ impl From<AuthorizedSpace> for Space {
     }
 }
 
-#[derive(Clone, Debug, TypedBuilder)]
-#[builder(field_defaults(setter(into)))]
+#[derive(Clone, Debug)]
 pub struct SpaceChanges {
-    pub name: Option<String>,
-    pub summary: Option<String>,
+    name: Option<String>,
+    summary: Option<String>,
 }
 
 impl SpaceChanges {
-    pub fn validate(&self) -> Result<(), SpaceInputError> {
-        if self.name.is_none() && self.summary.is_none() {
+    pub fn new(name: Option<String>, summary: Option<String>) -> Result<Self, SpaceInputError> {
+        if name.is_none() && summary.is_none() {
             return Err(SpaceInputError::NoChanges);
         }
-        if let Some(name) = &self.name {
-            validate_field("name", name, 256)?;
+        if let Some(name) = &name {
+            validate_field("name", name, SPACE_NAME_MAX_BYTES)?;
         }
-        if let Some(summary) = &self.summary {
-            validate_field("summary", summary, 4096)?;
+        if let Some(summary) = &summary {
+            validate_field("summary", summary, SPACE_SUMMARY_MAX_BYTES)?;
         }
-        Ok(())
+        Ok(Self { name, summary })
     }
 }
 
@@ -151,7 +153,6 @@ pub async fn create_space(
     input: NewSpace,
 ) -> Result<(Space, SpaceReference), SpaceError> {
     write.begin_operation()?;
-    input.validate()?;
     let now = now_millis()?;
     let repository = SpaceRepository::builder()
         .connection(write.transaction())
@@ -275,7 +276,6 @@ pub async fn change_space(
     changes: SpaceChanges,
 ) -> Result<Space, SpaceError> {
     write.begin_operation()?;
-    changes.validate()?;
     caller.person()?;
     let authorized = check_space(write.state(), write.handle(), caller, key, CHANGE_ROLES).await?;
     let mut model = authorized.space.into_active_model();

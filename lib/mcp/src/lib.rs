@@ -93,7 +93,9 @@ impl ServerHandler for McpServer {
         _request: Option<PaginatedRequestParams>,
         _context: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, ErrorData> {
-        Ok(ListToolsResult::with_all_items(catalog().to_vec()))
+        Ok(ListToolsResult::with_all_items(
+            catalog().iter().map(|(_, tool)| tool.clone()).collect(),
+        ))
     }
 
     async fn call_tool(
@@ -101,9 +103,9 @@ impl ServerHandler for McpServer {
         request: CallToolRequestParams,
         context: RequestContext<RoleServer>,
     ) -> Result<CallToolResponse, ErrorData> {
-        let tool = catalog()
+        let (name, tool) = catalog()
             .iter()
-            .find(|tool| tool.name == request.name)
+            .find(|(_, tool)| tool.name == request.name)
             .ok_or_else(|| ErrorData::invalid_params("Unknown tool", None))?;
         let caller = context
             .extensions
@@ -111,11 +113,11 @@ impl ServerHandler for McpServer {
             .and_then(|parts| parts.extensions.get::<Caller>())
             .cloned()
             .ok_or_else(|| ErrorData::internal_error("Request context unavailable", None))?;
-        let arguments = match Arguments::parse(tool, request.arguments) {
+        let arguments = match Arguments::parse(*name, tool, request.arguments) {
             Ok(arguments) => arguments,
             Err(error) => return Ok(error.into_result().into()),
         };
-        let result = match tools::call(&self.state, &caller, &request.name, arguments).await {
+        let result = match tools::call(&self.state, &caller, *name, arguments).await {
             Ok(value) => CallToolResult::structured(value),
             Err(error) => error.into_result(),
         };

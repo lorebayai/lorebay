@@ -35,12 +35,7 @@ impl TryFrom<CreateSpaceRequest> for NewSpace {
     type Error = ApiError;
 
     fn try_from(request: CreateSpaceRequest) -> Result<Self, Self::Error> {
-        let input = Self::builder()
-            .name(request.name)
-            .summary(request.summary)
-            .build();
-        input.validate()?;
-        Ok(input)
+        Self::new(request.name, request.summary).map_err(Into::into)
     }
 }
 
@@ -48,12 +43,7 @@ impl TryFrom<ChangeSpaceRequest> for SpaceChanges {
     type Error = ApiError;
 
     fn try_from(request: ChangeSpaceRequest) -> Result<Self, Self::Error> {
-        let input = Self::builder()
-            .name(request.name)
-            .summary(request.summary)
-            .build();
-        input.validate()?;
-        Ok(input)
+        Self::new(request.name, request.summary).map_err(Into::into)
     }
 }
 

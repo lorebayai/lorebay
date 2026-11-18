@@ -1,4 +1,5 @@
 use reqwest::{Method, StatusCode};
+use sea_orm::{ConnectionTrait, Database};
 use serde_json::{Value, json};
 
 use crate::helpers::{
@@ -346,4 +347,47 @@ async fn assert_invalid_pagination(server: &Server, alice: &Value, bob: &Value) 
         )
         .await;
     }
+}
+
+#[tokio::test]
+async fn create_space_returns_conflict_when_number_is_taken() {
+    let server = Server::start().await;
+    let person = server.tokens().await;
+    let original = create_space(&server, &person, "Existing", "Shared work").await;
+    force_space_number_conflict(&server).await;
+    let refusal = assert_problem(
+        request(
+            &server,
+            &person,
+            Method::POST,
+            SPACES_PATH,
+            json!({"name": "Conflicting space", "summary": "Shared work"}),
+        )
+        .await,
+        StatusCode::CONFLICT,
+        "space.number_taken",
+    )
+    .await;
+    assert_eq!(refusal["title"], "Space number is already in use");
+    assert_eq!(read(&server, &person, "SPACE-1").await, original);
+    server.stop().await;
+}
+
+#[expect(
+    clippy::disallowed_methods,
+    reason = "SeaQuery has no builder for the SQLite trigger needed to force a number collision"
+)]
+async fn force_space_number_conflict(server: &Server) {
+    let path = server.directory.path().join("data/lorebay.sqlite3");
+    let database = Database::connect(format!("sqlite://{}", path.display()))
+        .await
+        .unwrap();
+    database
+        .execute_unprepared(
+            "CREATE TRIGGER force_taken_number AFTER INSERT ON space
+             BEGIN UPDATE space SET number = 1 WHERE id = NEW.id; END",
+        )
+        .await
+        .unwrap();
+    database.close().await.unwrap();
 }

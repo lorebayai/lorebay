@@ -14,14 +14,12 @@ pub enum ArtifactTextError {
     TooManyCharacters(usize),
 }
 
-#[derive(Clone, Debug, TypedBuilder)]
-#[builder(field_defaults(setter(into)))]
+#[derive(Clone, Debug)]
 pub struct ArtifactFileName {
     value: String,
 }
 
-#[derive(Clone, Debug, TypedBuilder)]
-#[builder(field_defaults(setter(into)))]
+#[derive(Clone, Debug)]
 pub struct ArtifactSummary {
     value: String,
 }

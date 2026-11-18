@@ -51,6 +51,8 @@ pub(crate) enum ApiError {
     RateLimited(u64),
     #[error("Space not found")]
     SpaceNotFound,
+    #[error("Space number is already in use")]
+    SpaceNumberTaken,
     #[error("The space role does not allow this operation")]
     SpacePermissionRequired,
     #[error("Set the task back to in progress before {0}")]
@@ -115,6 +117,7 @@ impl ApiError {
             Self::PersonRequired => (StatusCode::FORBIDDEN, "auth.person_required"),
             Self::RateLimited(_) => (StatusCode::TOO_MANY_REQUESTS, "auth.rate_limited"),
             Self::SpaceNotFound => (StatusCode::NOT_FOUND, "space.not_found"),
+            Self::SpaceNumberTaken => (StatusCode::CONFLICT, "space.number_taken"),
             Self::SpacePermissionRequired => (StatusCode::FORBIDDEN, "space.permission_required"),
             Self::TaskEnded(_) => (StatusCode::CONFLICT, "task.ended"),
             Self::TaskNotFound => (StatusCode::NOT_FOUND, "task.not_found"),
@@ -221,7 +224,8 @@ impl From<SpaceError> for ApiError {
             SpaceError::Input(error) => error.into(),
             SpaceError::InvalidCursor => invalid_query("cursor"),
             SpaceError::InvalidPageSize(_) => invalid_query(PageSizeError::FIELD),
-            SpaceError::Database(_) | SpaceError::Internal(_) | SpaceError::NumberTaken => {
+            SpaceError::NumberTaken => Self::SpaceNumberTaken,
+            SpaceError::Database(_) | SpaceError::Internal(_) => {
                 tracing::error!(%error, "space operation failed");
                 Self::Internal
             }

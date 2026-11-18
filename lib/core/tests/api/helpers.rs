@@ -53,10 +53,7 @@ impl Fixture {
                     write,
                     &self.person.owner_id,
                     1,
-                    NewSpace {
-                        name: "Team".to_owned(),
-                        summary: "Shared work".to_owned(),
-                    },
+                    NewSpace::new("Team".to_owned(), "Shared work".to_owned()).unwrap(),
                 )
                 .await
             })
@@ -264,6 +261,15 @@ impl FileStorage for Files {
         })
     }
 
+    fn delete_listed<'a>(&'a self, file: &'a StoredFile) -> BoxFuture<'a, Result<bool>> {
+        Box::pin(async move {
+            Ok(file
+                .location
+                .to_str()
+                .is_some_and(|name| self.0.lock().unwrap().remove(name).is_some()))
+        })
+    }
+
     fn list(&self) -> BoxStream<'_, Result<StoredFile>> {
         let files = self
             .0
@@ -273,7 +279,7 @@ impl FileStorage for Files {
             .cloned()
             .map(|location| {
                 Ok(StoredFile {
-                    location,
+                    location: location.into(),
                     modified: SystemTime::now(),
                 })
             })

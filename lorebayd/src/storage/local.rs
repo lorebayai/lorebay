@@ -267,21 +267,25 @@ impl FileStorage for LocalDirectory {
         })
     }
 
+    fn delete_listed<'a>(&'a self, file: &'a LibraryFile) -> BoxFuture<'a, Result<bool>> {
+        Box::pin(async move {
+            let file = StoredFile {
+                name: file.location.clone(),
+                kind: StoredFileKind::Artifact,
+                modified: file.modified,
+            };
+            self.remove_listed(&file).await
+        })
+    }
+
     fn list(&self) -> BoxStream<'_, Result<LibraryFile>> {
         list_files(self.files.clone(), StoredFileKind::Artifact)
-            .filter_map(async |entry| match entry {
-                Ok(file) => file
-                    .name
-                    .into_string()
-                    .ok()
-                    .filter(|name| valid_location(name))
-                    .map(|location| {
-                        Ok(LibraryFile {
-                            location,
-                            modified: file.modified,
-                        })
-                    }),
-                Err(error) => Some(Err(error)),
+            .map(|entry| {
+                let file = entry?;
+                Ok(LibraryFile {
+                    location: file.name,
+                    modified: file.modified,
+                })
             })
             .boxed()
     }
@@ -297,13 +301,13 @@ impl LocalDirectory {
         while let Some(file) = entries.next().await {
             let file = file?;
             if file.modified < cutoff {
-                removed += u64::from(self.delete_listed(&file).await?);
+                removed += u64::from(self.remove_listed(&file).await?);
             }
         }
         Ok(removed)
     }
 
-    async fn delete_listed(&self, file: &StoredFile) -> Result<bool> {
+    async fn remove_listed(&self, file: &StoredFile) -> Result<bool> {
         let directory = match file.kind {
             StoredFileKind::Artifact => &self.files,
             StoredFileKind::Temporary => &self.temporary,

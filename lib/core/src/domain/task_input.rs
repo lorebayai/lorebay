@@ -1,5 +1,4 @@
 use thiserror::Error;
-use typed_builder::TypedBuilder;
 
 pub const KEYWORD_MAX_CHARACTERS: usize = 200;
 pub const NOTE_MAX_CHARACTERS: usize = 10_000;
@@ -14,26 +13,22 @@ pub enum TaskTextError {
     TooLong(usize),
 }
 
-#[derive(Clone, Debug, TypedBuilder)]
-#[builder(field_defaults(setter(into)))]
+#[derive(Clone, Debug)]
 pub struct TaskTitle {
     value: String,
 }
 
-#[derive(Clone, Debug, TypedBuilder)]
-#[builder(field_defaults(setter(into)))]
+#[derive(Clone, Debug)]
 pub struct TaskResult {
     value: String,
 }
 
-#[derive(Clone, Debug, TypedBuilder)]
-#[builder(field_defaults(setter(into)))]
+#[derive(Clone, Debug)]
 pub struct NoteContent {
     value: String,
 }
 
-#[derive(Clone, Debug, TypedBuilder)]
-#[builder(field_defaults(setter(into)))]
+#[derive(Clone, Debug)]
 pub struct TaskKeyword {
     value: String,
 }

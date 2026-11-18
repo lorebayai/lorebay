@@ -7,6 +7,7 @@ use lorebay_lib_core::{
     TaskFilters, TaskKeyword, TaskResult, TaskStatus, TaskStatusError, TaskTitle,
 };
 
+use crate::catalog::ToolName;
 use crate::error::{ToolError, invalid_query};
 
 #[derive(Clone, Debug, TypedBuilder)]
@@ -16,14 +17,18 @@ pub(crate) struct Arguments {
 }
 
 impl Arguments {
-    pub fn parse(tool: &Tool, values: Option<JsonObject>) -> Result<Self, ToolError> {
+    pub fn parse(
+        tool_name: ToolName,
+        tool: &Tool,
+        values: Option<JsonObject>,
+    ) -> Result<Self, ToolError> {
         let values = values.unwrap_or_default();
         let properties = tool.input_schema["properties"]
             .as_object()
             .ok_or_else(ToolError::internal)?;
         for (name, value) in &values {
             let schema = properties.get(name).ok_or_else(|| {
-                if tool.name == "list_tasks" {
+                if tool_name == ToolName::ListTasks {
                     invalid_query("query")
                 } else {
                     ToolError::invalid_body()
@@ -39,7 +44,7 @@ impl Arguments {
                 return Err(match name.as_str() {
                     "page_size" | "cursor" => invalid_query(name),
                     "include_scratchpad" => invalid_query("query"),
-                    _ if tool.name == "list_tasks" => invalid_query("query"),
+                    _ if tool_name == ToolName::ListTasks => invalid_query("query"),
                     _ => ToolError::invalid_body(),
                 });
             }

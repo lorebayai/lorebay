@@ -136,9 +136,10 @@ Queries use the first of these that can express them:
 
 ## Transactions
 
-- A transaction covers only database work. File storage calls and outbound
-  HTTP requests run after the commit
-  ([Storage](../../lib/docs/architecture/storage.md#4-database)).
+- Keep file storage calls and outbound HTTP requests outside write
+  transactions. The [oversize refusal](../../lib/docs/architecture/library.md#71-run-one-write)
+  rechecks size and deletes under the artifact lock to protect a replacement
+  upload.
 - On SQLite, a transaction that writes must begin with
   `begin_with_options` and `SqliteTransactionMode::Immediate`, taking the
   write lock before its first read. A deferred transaction that reads and

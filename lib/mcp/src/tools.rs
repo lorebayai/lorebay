@@ -7,25 +7,26 @@ use serde::Serialize;
 use serde_json::{Value, json};
 
 use super::arguments::Arguments;
+use super::catalog::ToolName;
 use super::error::ToolError;
 
 pub(super) async fn call(
     state: &LibraryState,
     caller: &Caller,
-    name: &str,
+    name: ToolName,
     arguments: Arguments,
 ) -> Result<Value, ToolError> {
     match name {
-        "list_spaces" => page_response(list_spaces(state, caller, arguments.page()?).await?),
-        "create_task" => create(state, caller, &arguments).await,
-        "update_task" => update(state, caller, &arguments).await,
-        "list_tasks" => {
+        ToolName::ListSpaces => page_response(list_spaces(state, caller, arguments.page()?).await?),
+        ToolName::CreateTask => create(state, caller, &arguments).await,
+        ToolName::UpdateTask => update(state, caller, &arguments).await,
+        ToolName::ListTasks => {
             let (options, filters) = arguments.tasks()?;
             page_response(
                 list_tasks(state, caller, &arguments.string("space")?, options, filters).await?,
             )
         }
-        "get_task" => task_response(
+        ToolName::GetTask => task_response(
             read_task(
                 state,
                 caller,
@@ -35,8 +36,8 @@ pub(super) async fn call(
             )
             .await?,
         ),
-        "add_note" => append(state, caller, &arguments).await,
-        "create_artifact" => value(
+        ToolName::AddNote => append(state, caller, &arguments).await,
+        ToolName::CreateArtifact => value(
             register_artifact(
                 state,
                 caller,
@@ -45,7 +46,7 @@ pub(super) async fn call(
             )
             .await?,
         ),
-        "complete_artifact" => value(
+        ToolName::CompleteArtifact => value(
             complete_artifact(
                 state,
                 caller,
@@ -54,7 +55,7 @@ pub(super) async fn call(
             )
             .await?,
         ),
-        "get_artifact_url" => value(
+        ToolName::GetArtifactUrl => value(
             get_artifact_download_url(
                 state,
                 caller,
@@ -63,7 +64,6 @@ pub(super) async fn call(
             )
             .await?,
         ),
-        _ => Err(ToolError::internal()),
     }
 }
 

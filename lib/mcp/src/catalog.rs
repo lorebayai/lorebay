@@ -9,30 +9,59 @@ use lorebay_lib_core::{
 };
 use lorebay_lib_core::{DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};
 
-pub(crate) fn catalog() -> &'static [Tool] {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ToolName {
+    AddNote,
+    CompleteArtifact,
+    CreateArtifact,
+    CreateTask,
+    GetArtifactUrl,
+    GetTask,
+    ListSpaces,
+    ListTasks,
+    UpdateTask,
+}
+
+impl ToolName {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::AddNote => "add_note",
+            Self::CompleteArtifact => "complete_artifact",
+            Self::CreateArtifact => "create_artifact",
+            Self::CreateTask => "create_task",
+            Self::GetArtifactUrl => "get_artifact_url",
+            Self::GetTask => "get_task",
+            Self::ListSpaces => "list_spaces",
+            Self::ListTasks => "list_tasks",
+            Self::UpdateTask => "update_task",
+        }
+    }
+}
+
+pub(crate) fn catalog() -> &'static [(ToolName, Tool)] {
     CATALOG.as_slice()
 }
 
-static CATALOG: LazyLock<Vec<Tool>> = LazyLock::new(build_catalog);
+static CATALOG: LazyLock<Vec<(ToolName, Tool)>> = LazyLock::new(build_catalog);
 
-fn build_catalog() -> Vec<Tool> {
+fn build_catalog() -> Vec<(ToolName, Tool)> {
     vec![
         tool(
-            "list_spaces",
+            ToolName::ListSpaces,
             "List your spaces with keys, names, summaries and your agent role. Follow next_cursor with cursor to read the next page.",
             paged(json!({})),
             &[],
             true,
         ),
         tool(
-            "create_task",
+            ToolName::CreateTask,
             "Create a task in a space such as SPACE-1 with a nonempty title. Save the returned task_id for writes; the key is for reads. Returns the task title too.",
             json!({"space": space(), "title": {"type":"string", "minLength":1, "maxLength":TITLE_MAX_CHARACTERS}}),
             &["space", "title"],
             false,
         ),
         tool(
-            "update_task",
+            ToolName::UpdateTask,
             "Change a task using task_id, not a task key. Provide at least one of title, status or result. Reopen with status in progress; result replaces the whole Markdown result and an empty string clears it. Returns the updated task and its title.",
             json!({
                 "task_id":{"type":"string"},
@@ -42,22 +71,16 @@ fn build_catalog() -> Vec<Tool> {
             }),
             &["task_id"],
             false,
-        )
-        .with_annotations(
-            ToolAnnotations::new()
-                .read_only(false)
-                .destructive(true)
-                .open_world(false),
         ),
         tool(
-            "list_tasks",
+            ToolName::ListTasks,
             "List a space's tasks, newest activity first. Filter by person, agent, status or keyword in titles/results. own_open selects only your party's tasks that are not ended and cannot combine with person or status. Rows include task_id for writes. Repeat the same filters with cursor to read the next page.",
             task_list_properties(),
             &["space"],
             true,
         ),
         tool(
-            "get_task",
+            ToolName::GetTask,
             "Read a task by space and key such as TK-1, including its result and artifacts. Set include_scratchpad to true to read notes; page_size and cursor then page the Scratchpad.",
             paged(
                 json!({"space":space(), "key":{"type":"string"}, "include_scratchpad":{"type":"boolean", "default":false}}),
@@ -66,7 +89,7 @@ fn build_catalog() -> Vec<Tool> {
             true,
         ),
         tool(
-            "add_note",
+            ToolName::AddNote,
             "Append a nonempty Markdown note using task_id, not a task key. Only your party's tasks accept writes. Ended tasks must be reopened first. Returns the note time and task title.",
             json!({"task_id":{"type":"string"}, "content":{"type":"string", "minLength":1, "maxLength":NOTE_MAX_CHARACTERS}}),
             &["task_id", "content"],
@@ -79,24 +102,25 @@ fn build_catalog() -> Vec<Tool> {
 }
 
 fn tool(
-    name: &'static str,
+    name: ToolName,
     description: &'static str,
     properties: Value,
     required: &[&str],
     read_only: bool,
-) -> Tool {
+) -> (ToolName, Tool) {
     let schema = JsonObject::from_iter([
         ("type".into(), json!("object")),
         ("properties".into(), json!(properties)),
         ("required".into(), json!(required)),
         ("additionalProperties".into(), json!(false)),
     ]);
-    Tool::new(name, description, schema).with_annotations(
+    let definition = Tool::new(name.as_str(), description, schema).with_annotations(
         ToolAnnotations::new()
             .read_only(read_only)
-            .destructive(false)
+            .destructive(name == ToolName::UpdateTask)
             .open_world(false),
-    )
+    );
+    (name, definition)
 }
 
 fn space() -> Value {
@@ -122,9 +146,9 @@ fn task_list_properties() -> Value {
     }))
 }
 
-fn create_artifact() -> Tool {
+fn create_artifact() -> (ToolName, Tool) {
     tool(
-        "create_artifact",
+        ToolName::CreateArtifact,
         "Register an artifact using task_id, a file name and a summary. Returns its key, upload_url, method, headers and task title. Upload the file bytes with an HTTP PUT to upload_url carrying every returned header; files never pass through MCP. HTTP 412 means the file is already in storage: call complete_artifact with the returned key. Ended tasks must be reopened before registration.",
         json!({
             "task_id":{"type":"string"},
@@ -136,9 +160,9 @@ fn create_artifact() -> Tool {
     )
 }
 
-fn complete_artifact() -> Tool {
+fn complete_artifact() -> (ToolName, Tool) {
     tool(
-        "complete_artifact",
+        ToolName::CompleteArtifact,
         "Report an artifact upload complete using task_id and its artifact key, such as AR-1. Call after a successful upload or HTTP 412. Checks that the file is in storage and returns the artifact with its size and the current task title. Repeating completion succeeds without changing it; a registered upload may be completed after the task ends.",
         json!({"task_id":{"type":"string"}, "key":{"type":"string"}}),
         &["task_id", "key"],
@@ -146,9 +170,9 @@ fn complete_artifact() -> Tool {
     )
 }
 
-fn get_artifact_url() -> Tool {
+fn get_artifact_url() -> (ToolName, Tool) {
     tool(
-        "get_artifact_url",
+        ToolName::GetArtifactUrl,
         "Get a short-lived download URL and its expiry for a completed artifact in a space, using its key such as AR-1. Everyone in the space can read its artifacts. Download the file over HTTP GET using the returned url; files never pass through MCP.",
         json!({"space":space(), "key":{"type":"string"}}),
         &["space", "key"],

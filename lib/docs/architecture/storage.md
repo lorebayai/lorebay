@@ -69,9 +69,10 @@ It does not cover:
   that spans several tables, such as approving a proposal, deleting a task,
   or taking the next key for a new record, writes inside it; see
   [Library architecture](library.md#7-writes-and-transactions).
-- **Files are outside transactions.** Deleting a task or an artifact commits
-  the database first, then deletes the files. A file left behind is removed
-  by the cleanup round for files without a record.
+- **Task and artifact deletion remove files after commit.** A file left
+  behind is removed by the cleanup round for files without a record. The
+  [oversize refusal](library.md#71-run-one-write) holds the artifact lock
+  through the size recheck and deletion, leaving the registration incomplete.
 - **Keyword search is substring matching.** It uses SQL `LIKE`, not
   full-text search. This is enough at team scale, and it matches Chinese
   text without splitting it into words. How it treats case on both backends

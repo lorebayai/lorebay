@@ -53,32 +53,38 @@ pub async fn remove_orphaned_files(state: &LibraryState) -> Result<u64, Artifact
     let mut batches = state.storage.list().chunks(ARTIFACT_CLEANUP_BATCH_SIZE);
     let mut removed = 0;
     while let Some(batch) = batches.next().await {
-        let locations: Vec<String> = batch
+        let files: Vec<_> = batch
             .into_iter()
             .collect::<anyhow::Result<Vec<_>>>()?
             .into_iter()
             .filter(|file| file.modified < before)
-            .map(|file| file.location)
             .collect();
-        if locations.is_empty() {
-            continue;
-        }
-        let referenced = state
-            .run_read(async |handle| {
-                let found = ArtifactRepository::builder()
-                    .connection(handle.transaction())
-                    .build()
-                    .referenced_locations(locations.clone())
-                    .await?;
-                Ok::<_, ArtifactCleanupError>(found.into_iter().collect::<HashSet<_>>())
-            })
-            .await?;
-        for location in locations
-            .into_iter()
-            .filter(|location| !referenced.contains(location))
-        {
-            state.storage.delete(&location).await?;
-            removed += 1;
+        let locations: Vec<_> = files
+            .iter()
+            .filter_map(|file| file.location.to_str().map(str::to_owned))
+            .collect();
+        let referenced = if locations.is_empty() {
+            HashSet::new()
+        } else {
+            state
+                .run_read(async |handle| {
+                    let found = ArtifactRepository::builder()
+                        .connection(handle.transaction())
+                        .build()
+                        .referenced_locations(locations)
+                        .await?;
+                    Ok::<_, ArtifactCleanupError>(found.into_iter().collect())
+                })
+                .await?
+        };
+        for file in files {
+            if !file
+                .location
+                .to_str()
+                .is_some_and(|location| referenced.contains(location))
+            {
+                removed += u64::from(state.storage.delete_listed(&file).await?);
+            }
         }
     }
     Ok(removed)

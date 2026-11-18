@@ -152,11 +152,15 @@ in its own subfolder and named `lorebay-lib-<subfolder>`:
   serves both.
 - **Versions are declared once,** in the root `[workspace.dependencies]`,
   which declares SeaORM and its migration crate with no driver feature. A
-  consumer in another repository takes a git dependency on one commit.
+  consumer in another repository pins all library crates it uses to the
+  same git `rev` and sets `features = ["postgres"]` or `features = ["sqlite"]`
+  on the crates that select a driver. The minimum Rust release is 1.100.
+  See the [manifest example](../../core/README.md#usage).
 - **Four dependencies are public.** The public API exposes SeaORM connections
   and transactions, the SeaORM migration trait implemented by `Migrator`,
-  `http` request headers, and the axum MCP router. Consumers use
-  semver-compatible releases of those dependencies so Cargo can unify them.
+  `http` request headers, and the axum MCP router. Consumers use compatible
+  releases of `sea-orm` and `sea-orm-migration` 2, `http` 1, and `axum` 0.8
+  so Cargo can unify those dependencies.
 
 ## 5. Public API
 
@@ -354,7 +358,8 @@ never takes from a file name.
 | Download URL | Issues a URL that serves the file with the content type and disposition the library chose, expiring when the library says |
 | Size | Reports a file's size, or that no file is there |
 | Delete | Deletes a file; a missing file is not an error |
-| List | Lists every stored file as its location and last-modified time |
+| Delete listed | Deletes a listed regular file if its modification time still matches, and reports whether it removed the file |
+| List | Lists every regular stored file with its native name and last-modified time |
 
 Every implementation:
 
@@ -362,8 +367,10 @@ Every implementation:
   written once;
 - refuses an upload without the headers the tool descriptions promise;
 - expires its URLs;
-- holds only the library's files: the orphaned-file round deletes every
-  listed file that no record points to.
+- holds only the library's files. The orphaned-file round compares each
+  old file's name with the recorded storage locations and deletes unchanged
+  files without a record. A name that cannot be stored as a database string
+  qualifies as unreferenced.
 
 At startup the product gives its storage backend the same upload size limit
 it supplies to the library. The backend enforces it when receiving uploads,
@@ -405,17 +412,19 @@ sequenceDiagram
   product's commit succeeds, and drops them after a rollback or a failed
   commit. A deletion that fails or never runs leaves a file no record
   points to, which the orphaned-file round removes.
-- **Storage calls stay outside the transaction.** Each operation that calls
-  storage is divided like this:
+- **Oversized files are rechecked under the task and artifact locks.** The
+  initial size read and the other storage calls run outside the write
+  transaction. The locked recheck protects a replacement upload from a
+  second report that observed the old oversized file.
 
   | Operation | Before | Inside | After |
   | --- | --- | --- | --- |
   | Register an artifact | | Check the task, take the number, insert the registration | Issue the upload URL |
-  | Report an upload complete | Check the registration, ask storage for the size; over the limit, delete the file and refuse | Check again, then record the size and the time | |
+  | Report an upload complete | Check the registration and ask storage for the size | Check again under the task and artifact locks. If the first size exceeded the limit, recheck and delete only if still oversized. Otherwise record the checked size and time. | |
   | Issue a download URL | Check the space, read the completed record | | Issue the download URL |
   | Delete a task or an artifact | | Check, then delete the rows | Delete the files |
   | Remove abandoned registrations | | Delete the rows still incomplete | Delete their files |
-  | Remove orphaned files | List the files, read which have records | | Delete the files without one |
+  | Remove orphaned files | List the files, read which have records | | Delete unchanged files without records |
 
 - **A product may compose its own write** through the same entry, adding
   its rows inside, as it does when it creates a space with its owner's
@@ -612,7 +621,7 @@ both.
 | Delete a note | None | It deletes by task and time; a task's person never changes, so the party check needs no lock; a deleted time stays below the task's last activity and is never given again |
 | Delete a task | Task | A registration or note waiting on the task finds it gone; the files deleted are those of the rows deleted |
 | Register an artifact | Task, then space counter | The state is checked under the lock; numbers are distinct |
-| Report an upload complete | Task, then artifact | A second report finds the artifact complete; the task's last activity becomes the later of its current value and the completion |
+| Report an upload complete | Task, then artifact | A second report finds a completed artifact or rechecks an oversized observation before deleting. The task's last activity becomes the later of its current value and the completion. |
 | Delete an artifact | None | One statement deletes the row only if complete and returns its location |
 | Remove abandoned registrations | Each deleted row | One statement deletes only rows still incomplete when it deletes them and returns their locations; only those files are deleted |
 | Remove orphaned files | None | A record commits before any URL for its location exists, and locations are never reused, so a file old enough with no record never gets one |

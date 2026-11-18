@@ -8,7 +8,6 @@ use anyhow::Result as InterfaceResult;
 use futures_util::future::BoxFuture;
 use http::HeaderMap;
 use sea_orm::DatabaseTransaction;
-use tokio::sync::Mutex;
 use typed_builder::TypedBuilder;
 
 use crate::{CallerError, FileStorage, SpaceRole};
@@ -87,7 +86,6 @@ pub struct LibraryState {
     names: Arc<dyn PersonNames>,
     roles: Arc<dyn SpaceRoles>,
     pub(crate) storage: Arc<dyn FileStorage>,
-    pub(crate) oversize: Arc<Mutex<()>>,
 }
 
 impl LibraryState {
@@ -104,7 +102,6 @@ impl LibraryState {
             names: interfaces.names,
             roles: interfaces.roles,
             storage: interfaces.storage,
-            oversize: Arc::new(Mutex::new(())),
         })
     }
 

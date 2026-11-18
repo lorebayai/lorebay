@@ -15,20 +15,23 @@ cargo run -p lorebayd -- hash-password < /path/to/password.txt
 cargo run -p lorebayd -- --config /path/to/lorebayd.json --dotenv /path/to/lorebayd.env
 ```
 
-Startup applies the library's migrations first, then Lorebay's.
+Startup applies the library's migrations first, then Lorebay's. If startup
+reports a data directory from an earlier build, move the directory aside
+and restart with an empty one. Keep the users file outside that directory
+to recreate the accounts. Stored work and authorizations stay in the old
+directory.
 
-`moon run web:build` builds the static web files before direct Cargo commands.
-The server build, lint and test tasks run it as a dependency.
-
-Run `moon run lorebayd/migration:generate-entities` to regenerate Lorebay's entities.
+The server tasks build the static web files. For direct Cargo commands,
+run `moon run web:build` first. Regenerate Lorebay's entities with
+`moon run lorebayd/migration:generate-entities`.
 
 Open the metadata's `/oauth/authorize` endpoint with the client's authorization
-parameters to sign in and consent. The built-in CLI client ID is `lorebay-cli`;
-it accepts loopback redirects on any port and takes no agent name.
+parameters to sign in and consent. The built-in `lorebay-cli` client accepts
+any loopback redirect port and takes no agent name.
 
 `hash-password` reads a password from standard input and prints an Argon2id
-PHC hash. It removes one final line ending and starts no server.
-It accepts no password argument.
+PHC hash without starting the server. It removes one final line ending and
+accepts the password only on standard input.
 
 Set `users_file` before starting the server without a subcommand. Both flags
 are optional. The users file is a YAML list or a JSON array with these fields:
@@ -47,11 +50,9 @@ to end them, remove the username, restart, add it back and restart.
 
 ## Configuration
 
-Values are loaded from defaults, the `--config` JSON file, the `--dotenv`
-file and the process environment, in that order. Later values win.
-Only `LOREBAYD__` process variables are read. Nested keys use `__`.
-Dotenv does not change the process environment. Its substitutions use earlier
-assignments, then the supplied configuration environment.
+Later configuration sources override earlier ones: defaults, `--config` JSON,
+`--dotenv`, then `LOREBAYD__` process variables. Nested keys use `__`.
+Dotenv substitutions use earlier assignments and then the supplied environment.
 Relative paths resolve against the working directory.
 
 | JSON key | Environment variable | Default | Values |

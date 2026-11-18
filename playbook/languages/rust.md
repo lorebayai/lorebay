@@ -91,8 +91,9 @@
 - Data structs, including configuration, DTOs, requests, responses and
   options, must derive `TypedBuilder`, `Clone` and `Debug`, with
   `#[builder(field_defaults(setter(into)))]`. Structs holding no data may
-  omit `TypedBuilder`. Generated SeaORM entities follow the
-  [entity rules](../topics/seaorm.md#entities).
+  omit `TypedBuilder`. Validated inputs use checked constructors when a
+  generated builder would bypass their validation. Generated SeaORM entities
+  follow the [entity rules](../topics/seaorm.md#entities).
 - Every enum must order variants alphabetically, A to Z, as checked by
   `clippy::arbitrary_source_item_ordering`. An enum whose declaration order
   carries meaning, such as one deriving `PartialOrd` or `Ord`, must preserve

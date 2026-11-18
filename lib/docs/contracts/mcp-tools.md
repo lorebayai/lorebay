@@ -86,8 +86,9 @@ interface who is calling, and answers a caller it does not know with the
 For each tool it does two things:
 
 1. Converts tool arguments into operation arguments.
-2. Converts the result back, adding the task's title to the result of every
-   write.
+2. Converts the result back. Write results carry `task_title`. Operations
+   return the title directly, and for `update_task` the MCP layer copies
+   it from the updated task.
 
 A product's entry point takes the same arguments its own way; MCP takes
 them from the tool arguments. A call that carries a task ID passes it

@@ -23,7 +23,6 @@ sea-orm.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["sync"] }
 tracing.workspace = true
 typed-builder.workspace = true
 uuid.workspace = true
@@ -31,6 +30,7 @@ uuid.workspace = true
 [dev-dependencies]
 lorebay-lib-migration = { workspace = true, features = ["postgres"] }
 sea-orm-migration.workspace = true
+tokio.workspace = true
 lorebay-lib-core = { path = ".", features = ["postgres"] }
 
 [[test]]

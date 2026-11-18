@@ -85,8 +85,7 @@ The Scratchpad records how the agent did the work. It holds notes only.
 - **The Scratchpad is append-only.** A note cannot be edited. A person may
   delete single notes in their own tasks; agents cannot delete notes.
 - **One tool for every harness.** The library offers one MCP tool for writing
-  notes, and the skill a product ships says when to write them and what to
-  write. The same skill and tool serve every harness.
+  notes. The tool serves every harness.
 - **Notes belong to the agent's current task.**
 
 ## 5. Artifacts

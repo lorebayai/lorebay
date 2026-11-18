@@ -1,5 +1,6 @@
 use std::fs;
 use std::net::{SocketAddr, TcpListener};
+use std::path::Path;
 use std::time::Duration;
 
 use argon2::password_hash::PasswordHasher;
@@ -69,6 +70,15 @@ impl Server {
 
     pub async fn restart_with_users(directory: TempDir, users: &[(&str, &str)]) -> Self {
         Self::start_with(directory, users, |_| {}).await
+    }
+
+    pub async fn startup_error(directory: &Path) -> String {
+        let (config, listener) = start_config(directory, &[(TEST_USERNAME, TEST_PASSWORD)]).await;
+        ServerTask::start(config, listener)
+            .wait_for_exit(TEST_TIMEOUT)
+            .await
+            .unwrap_err()
+            .to_string()
     }
 
     pub async fn start_with_settings(settings: Settings) -> Self {
@@ -221,22 +231,9 @@ impl Server {
         users: &[(&str, &str)],
         configure: impl FnOnce(&mut Config),
     ) -> Self {
-        let users_file = directory.path().join("users.json");
-        fixtures::write_users(&users_file, users).await;
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let (mut config, listener) = start_config(directory.path(), users).await;
         let address = listener.local_addr().unwrap();
         let public_url_file = directory.path().join("public-url");
-        let public_url = if public_url_file.exists() {
-            fs::read_to_string(&public_url_file).unwrap()
-        } else {
-            format!("http://{address}")
-        };
-        let mut config = Config::builder()
-            .listen_address(address)
-            .data_directory(directory.path().join("data"))
-            .users_file(Some(users_file))
-            .public_url(public_url)
-            .build();
         configure(&mut config);
         fs::write(public_url_file, &config.public_url).unwrap();
         let public_url = config.public_url.clone();
@@ -444,3 +441,23 @@ const POLL_INTERVAL: Duration = Duration::from_millis(10);
 mod fixtures;
 mod oauth;
 mod server;
+
+async fn start_config(directory: &Path, users: &[(&str, &str)]) -> (Config, TcpListener) {
+    let users_file = directory.join("users.json");
+    fixtures::write_users(&users_file, users).await;
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let public_url_file = directory.join("public-url");
+    let public_url = if public_url_file.exists() {
+        fs::read_to_string(&public_url_file).unwrap()
+    } else {
+        format!("http://{address}")
+    };
+    let config = Config::builder()
+        .listen_address(address)
+        .data_directory(directory.join("data"))
+        .users_file(Some(users_file))
+        .public_url(public_url)
+        .build();
+    (config, listener)
+}
