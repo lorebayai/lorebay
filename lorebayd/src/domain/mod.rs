@@ -12,6 +12,7 @@ pub(crate) mod token;
 pub(crate) mod user_store;
 pub(crate) mod users;
 
+pub(crate) use artifact_cleanup::*;
 pub(crate) use artifact_input::*;
 pub(crate) use artifacts::*;
 pub(crate) use credential_cleanup::*;
@@ -28,6 +29,7 @@ pub(crate) use task_input::*;
 pub(crate) use tasks::*;
 pub(crate) use user_directory::*;
 
+mod artifact_cleanup;
 mod artifact_input;
 mod artifacts;
 mod credential_cleanup;

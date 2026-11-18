@@ -1,4 +1,6 @@
 use reqwest::{Method, Response, StatusCode};
+use sea_orm::sea_query::{Alias, Expr, ExprTrait, Query};
+use sea_orm::{ConnectionTrait, Database};
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -148,4 +150,25 @@ pub async fn held_upload(server: &Server, registered: &Value) -> TcpStream {
             .starts_with("HTTP/1.1 100 Continue")
     );
     stream
+}
+
+pub async fn age_registration(server: &Server, key: &str) {
+    let database = Database::connect(format!(
+        "sqlite://{}",
+        server
+            .directory
+            .path()
+            .join("data/lorebay.sqlite3")
+            .display()
+    ))
+    .await
+    .unwrap();
+    let number = key.strip_prefix("AR-").unwrap().parse::<i64>().unwrap();
+    let statement = Query::update()
+        .table(Alias::new("artifact"))
+        .value(Alias::new("created_at"), Expr::value(0_i64))
+        .and_where(Expr::col(Alias::new("number")).eq(number))
+        .to_owned();
+    database.execute(&statement).await.unwrap();
+    database.close().await.unwrap();
 }

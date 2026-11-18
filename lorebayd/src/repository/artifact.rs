@@ -13,6 +13,34 @@ pub(crate) struct ArtifactRepository<'a, C> {
 }
 
 impl<C: ConnectionTrait> ArtifactRepository<'_, C> {
+    pub async fn abandoned(&self, before: i64, limit: u64) -> Result<Vec<Model>, DbErr> {
+        Entity::find()
+            .filter(Column::CompletedAt.is_null())
+            .filter(Column::CreatedAt.lt(before))
+            .order_by_asc(Column::Id)
+            .limit(limit)
+            .all(self.connection)
+            .await
+    }
+
+    pub async fn delete_ids(&self, ids: Vec<String>) -> Result<(), DbErr> {
+        Entity::delete_many()
+            .filter(Column::Id.is_in(ids))
+            .exec(self.connection)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn referenced_locations(&self, locations: Vec<String>) -> Result<Vec<String>, DbErr> {
+        Entity::find()
+            .select_only()
+            .column(Column::StorageKey)
+            .filter(Column::StorageKey.is_in(locations))
+            .into_tuple()
+            .all(self.connection)
+            .await
+    }
+
     pub async fn completed_by_storage_key(&self, location: &str) -> Result<Option<Model>, DbErr> {
         Entity::find()
             .filter(Column::StorageKey.eq(location))

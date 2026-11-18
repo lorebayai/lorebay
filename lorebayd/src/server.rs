@@ -169,13 +169,7 @@ async fn serve_until_shutdown(
 ) -> Result<()> {
     let (stop, stopped) = watch::channel(false);
     let (stop_workers, workers_stopped) = watch::channel(false);
-    let mut workers = JoinSet::new();
-    workers.spawn(worker::remove_expired_credentials(
-        state.database.clone(),
-        Duration::from_secs(state.identity.config.credential_cleanup_interval_seconds),
-        Duration::from_secs(state.identity.config.unused_client_lifetime_seconds),
-        workers_stopped,
-    ));
+    let mut workers = start_workers(&state, workers_stopped);
     let server = serve(listener, router(state.clone())?, stopped);
     tokio::pin!(server);
     tracing::info!("lorebayd ready");
@@ -209,6 +203,32 @@ async fn serve_until_shutdown(
     }
     tracing::info!("lorebayd stopped");
     Ok(())
+}
+
+fn start_workers(state: &ServerState, stopped: watch::Receiver<bool>) -> JoinSet<()> {
+    let config = &state.identity.config;
+    let mut workers = JoinSet::new();
+    workers.spawn(worker::remove_expired_credentials(
+        state.database.clone(),
+        Duration::from_secs(config.credential_cleanup_interval_seconds),
+        Duration::from_secs(config.unused_client_lifetime_seconds),
+        stopped.clone(),
+    ));
+    workers.spawn(worker::remove_abandoned_artifacts(
+        state.database.clone(),
+        state.storage.clone(),
+        Duration::from_secs(config.artifact_cleanup_interval_seconds),
+        Duration::from_secs(config.abandoned_artifact_lifetime_seconds),
+        stopped.clone(),
+    ));
+    workers.spawn(worker::remove_orphaned_files(
+        state.database.clone(),
+        state.storage.clone(),
+        Duration::from_secs(config.artifact_cleanup_interval_seconds),
+        Duration::from_secs(config.orphaned_file_lifetime_seconds),
+        stopped,
+    ));
+    workers
 }
 
 async fn finish_workers(workers: &mut JoinSet<()>) {
