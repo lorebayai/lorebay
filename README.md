@@ -23,6 +23,8 @@ Install [rustup](https://rustup.rs), then install the Rust release that
 rustup toolchain install
 ```
 
+Install Python 3.9 or later for the library boundary check and entity generation.
+
 Install moon, then add `~/.moon/bin` to `PATH`:
 
 ```bash

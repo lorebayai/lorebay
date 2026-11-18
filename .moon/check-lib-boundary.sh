@@ -90,6 +90,8 @@ for package in metadata["packages"]:
     manifest = Path(package["manifest_path"])
     if not manifest.resolve().is_relative_to(library):
         continue
+    for target in package["targets"]:
+        check_path(manifest, Path(target["src_path"]), "Cargo target")
     for dependency in package["dependencies"]:
         if "path" in dependency:
             check_path(manifest, Path(dependency["path"]), "dependency")
