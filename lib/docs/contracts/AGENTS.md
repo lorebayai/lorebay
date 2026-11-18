@@ -8,10 +8,6 @@ Rules for the docs in `lib/docs/contracts/`.
 - Who may do what lives only in the permission matrix of
   [access-control.md](access-control.md#4-permissions). Other contracts link
   to it.
-- A rule that only the skill enforces lives only in
-  [agent-skill.md](agent-skill.md). Its backstop states what the library
-  does when an agent breaks the rule, and links to the contract that
-  enforces it.
 - Every MCP tool maps to one library operation. A change to a tool updates
   [mcp-tools.md](mcp-tools.md) and the operation's row in the permission
   matrix together.

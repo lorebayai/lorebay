@@ -4,7 +4,7 @@
 - **Level:** Contract
 - **Parent:** [Entry points](../architecture/entry-points.md)
 - **Related:** [Access control](access-control.md),
-  [Keys and references](keys-and-references.md), [Agent skill](agent-skill.md),
+  [Keys and references](keys-and-references.md),
   [Library architecture](../architecture/library.md)
 
 > Each of the 14 tools maps to one library operation and adds no logic of

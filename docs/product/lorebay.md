@@ -38,10 +38,9 @@ It does not cover:
 - **Web pages.** Deploying Lorebay gives the data, the APIs and the pages
   people read, from one process. See
   [System architecture](../architecture/system.md).
-- **Skill.** The skill ships with Lorebay, filled with Lorebay's text in the
-  places the [agent skill contract](../../lib/docs/contracts/agent-skill.md)
-  marks. The web pages explain how to install the skill and connect an
-  agent's MCP client.
+- **Skill.** Lorebay writes and ships its own skill, whose rules are in
+  [Agent skill](../contracts/agent-skill.md). The web pages explain how to
+  install the skill and connect an agent's MCP client.
 
 ## 4. Creating a space
 
