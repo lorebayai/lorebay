@@ -4,22 +4,26 @@
 - **Level:** System
 - **Parent:** [Lorebay](../product/lorebay.md)
 - **Related:** [Storage](storage.md), [Identity](identity.md),
-  [MCP tools](../contracts/mcp-tools.md), [Web API](../contracts/web-api.md)
+  [Web API](../contracts/web-api.md),
+  [Entry points](../../lib/docs/architecture/entry-points.md)
 
-> Lorebay is one `lorebayd` process. Every entry point maps onto one set of
-> API operations, and permission and data rules exist once, below them.
+> Lorebay is one `lorebayd` process, holding the library and Lorebay's own
+> entry points, identity and jobs.
 
 ## 1. Purpose
 
-People, external programs and agents all reach the same data. Mapping every
-entry point onto one set of operations keeps one copy of the permission
-rules, so the MCP server and the Web API can never disagree.
+A team should get Lorebay running by starting one executable, with no other
+service beside it. `lorebayd` holds the library, Lorebay's implementations
+of the library's interfaces, the Web API, the web pages and the background
+jobs.
 
 ## 2. Scope
 
-This doc covers the process, its entry points, its layers and its background
-jobs. Storage is in [Storage](storage.md), and credentials and sign-in are
-in [Identity](identity.md).
+This doc covers the process, its entry points and its background jobs. How
+every entry point reaches the same library operations is in
+[Entry points](../../lib/docs/architecture/entry-points.md); storage is in
+[Storage](storage.md), and credentials and sign-in are in
+[Identity](identity.md).
 
 It does not cover running several `lorebayd` processes at once. A deployment
 runs exactly one.
@@ -33,26 +37,22 @@ flowchart TD
     agent["Agent"]
     subgraph lorebayd["lorebayd, one process"]
         web["Web API and pages"]
-        mcp["MCP layer"]
-        ops["API operations"]
-        rules["Permission and data rules"]
-        db["Database layer"]
-        fs["File storage layer"]
+        oauth["OAuth endpoints"]
+        impls["Interface implementations"]
+        jobs["Background jobs"]
+        library["Library, with its MCP layer"]
     end
     sqlite["SQLite"]
     store["Artifact files<br/>local directory or S3"]
     human -- "login session" --> web
     program -- "agent authorization" --> web
-    agent -- "agent authorization" --> mcp
-    human -- "file URL" --> store
-    agent -- "file URL" --> store
-    web --> ops
-    mcp --> ops
-    ops --> rules
-    rules --> db
-    rules -- "issue URLs" --> fs
-    db --> sqlite
-    fs --> store
+    agent -- "agent authorization" --> library
+    agent -- "authorize" --> oauth
+    web --> library
+    jobs --> library
+    library --> impls
+    impls --> sqlite
+    impls --> store
 ```
 
 | Caller | Entry point | Credential |
@@ -66,17 +66,15 @@ flowchart TD
 
 - **One process.** Deploying one `lorebayd` gives the data, the APIs and the
   web pages.
-- **Entry points only translate protocols.** Permission checks and data rules
-  live in the layer below the API operations, written once. The MCP server
-  and the Web API check exactly the same way; see
-  [Access control](../contracts/access-control.md#6-space-and-task-checks).
-- **Every MCP tool maps to one Web API operation.** The MCP layer calls the
-  operation in-process, not over the network. See
-  [MCP tools](../contracts/mcp-tools.md).
-- **Artifact files bypass MCP and `/api/v1`.** A caller first gets a
-  short-lived URL, then transfers the file over HTTP. With S3, files go
-  straight to S3 and never pass through `lorebayd`. See
-  [Storage](storage.md#4-file-storage).
+- **The Web API is Lorebay's mapping of the library's operations**, beside
+  Lorebay's own operations for sign-in, agents and participants; see
+  [Web API](../contracts/web-api.md).
+- **The MCP layer is the library's.** `lorebayd` mounts its router and
+  answers who is calling through Lorebay's credentials; see
+  [Identity](identity.md#4-credentials).
+- **Artifact files bypass MCP and `/api/v1`.** With a local directory,
+  `lorebayd` serves the file URLs itself; with S3, files go straight to S3
+  and never pass through `lorebayd`. See [Storage](storage.md#4-file-storage).
 
 ## 5. Technology
 
@@ -88,9 +86,11 @@ flowchart TD
 Background jobs run inside `lorebayd`. Each job must be safe to run again.
 They include:
 
-- removing artifact registrations whose upload was never completed;
-- deleting stored files that no database record points to, and temporary
-  files left by interrupted uploads;
+- the library's two cleanup rounds, which remove artifact registrations
+  whose upload was never completed and delete stored files that no record
+  points to;
+- removing the temporary files that interrupted uploads leave in the local
+  directory; see [Storage](storage.md#4-file-storage);
 - removing expired authorization codes, device sign-in requests, login
   sessions and agent authorizations, and replaced refresh tokens past their
   expiry;

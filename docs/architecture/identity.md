@@ -9,9 +9,9 @@
 > There are exactly two credentials, both bearer tokens: a login session for
 > a person, and an agent authorization for one of a person's agents.
 >
-> Every request checks the token, the account, the person's role in the space
-> and the session or authorization record, so a removal or revocation takes
-> effect on the next request.
+> Every request checks the token, the account and the session or
+> authorization record, and the library asks for the person's role, so a
+> removal or revocation takes effect on the next request.
 
 ## 1. Purpose
 
@@ -67,10 +67,16 @@ It does not cover:
 - **External programs are agents.** A program that calls the Web API
   authorizes through OAuth like an agent, is recorded as one of a person's
   agents, and gets an agent's permissions. There is no third credential.
+- **Every caller carries Lorebay's one owner ID as its scope.** Lorebay
+  gives every space the same owner ID, so the library's scope check never
+  hides a space from a Lorebay caller; see
+  [Library architecture](../../lib/docs/architecture/library.md#8-scope-and-space-numbers).
 - **Operations only people perform accept only a login session**, such as
   approving and rejecting proposals, deleting tasks, notes and artifacts,
   changing Knowledge directly, rolling back, and managing participants. The
-  full list is in [Access control](../contracts/access-control.md#4-permissions).
+  full list is in the library's
+  [permission matrix](../../lib/docs/contracts/access-control.md#4-permissions)
+  and Lorebay's [own rows](../contracts/access-control.md#4-permissions).
 
 ## 5. Sign-in
 
@@ -121,9 +127,9 @@ It does not cover:
   an outside identity service.
 - **Clients register through Dynamic Client Registration.** Lorebay accepts
   MCP clients on several protocol versions; see
-  [MCP tools](../contracts/mcp-tools.md#3-protocol-versions). Dynamic Client
-  Registration is the one registration method that all of those versions
-  define. Registration is open and needs no credential, as
+  [MCP tools](../../lib/docs/contracts/mcp-tools.md#3-protocol-versions).
+  Dynamic Client Registration is the one registration method that all of
+  those versions define. Registration is open and needs no credential, as
   [RFC 7591](https://datatracker.ietf.org/doc/html/rfc7591) allows; a
   registered client can do nothing until a person authorizes it.
   Registration is rate limited by address. A background job removes clients
@@ -158,7 +164,7 @@ It does not cover:
 - **An agent follows its person.** It is a participant in every space its
   person is in, and leaves a space when its person does. Its role is derived
   from its person's; see
-  [Access control](../contracts/access-control.md#3-participants-and-roles).
+  [Access control](../contracts/access-control.md#3-participants).
 - **Revoking an authorization deletes its record.** People see the agents
   they authorized and can revoke any of them. A task keeps the agent name
   copied when it was created, so the name survives revocation.
@@ -171,9 +177,17 @@ It does not cover:
   key. The token names the person and the login session or agent
   authorization it belongs to, and carries its expiry, so a forged or expired
   token is rejected before any lookup.
-- **Every request still loads the record the token names**, together with the
-  caller's role. A token whose login session or authorization was deleted is
-  rejected, although its signature is valid and it has not expired.
+- **Every request still loads the record the token names.** A token whose
+  login session or authorization was deleted, or whose account was deleted,
+  is rejected, although its signature is valid and it has not expired. The
+  library then asks Lorebay for the caller's role, which a removed person no
+  longer has.
+- **This is how Lorebay meets the library's caller interface.** The
+  interface requires that a revoked authorization, a removed member and a
+  deleted person take effect on the next request; see
+  [Library architecture](../../lib/docs/architecture/library.md#61-caller).
+  Checking the token, the record and the account on every request, and
+  answering roles from `participant`, meets it.
 - **Access tokens expire soon.** A client exchanges its refresh token for a
   new access token.
 - **Refresh tokens are random strings**, stored only as hashes. Each refresh

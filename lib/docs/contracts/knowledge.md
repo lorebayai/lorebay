@@ -2,7 +2,7 @@
 
 - **Status:** Proposed
 - **Level:** Contract
-- **Parent:** [Lorebay](../product/lorebay.md)
+- **Parent:** [Library](../product/library.md)
 - **Related:** [Access control](access-control.md),
   [Agent skill](agent-skill.md), [Data model](../architecture/data-model.md)
 
@@ -46,7 +46,7 @@ decisions an agent needs from a person in the middle of its work.
   it.
 - **Every version is kept.** A content version stores the content and the
   summary; a deletion version stores neither. People view the history and
-  roll back on the web.
+  roll back.
 - **Agents read only the latest version.** Older versions are kept, but
   agents cannot read them.
 - **Rolling back creates a new version** whose content and summary equal the
@@ -57,8 +57,8 @@ decisions an agent needs from a person in the middle of its work.
   for owners and admins; see [section 4](#4-proposals).
 - **Deleting.** A deletion is recorded as a version, with who deleted the
   entry and when. The content stays in earlier versions, and rolling back
-  restores it. Deleted entries are listed separately on the web, where they
-  can be rolled back; agents don't see them when listing or searching.
+  restores it. Deleted entries are listed separately for people, who can roll
+  them back; agents don't see them when listing or searching.
 - **Renaming** is a change: owners and admins rename directly, and anyone else
   includes the new name in a change proposal. A name must be unique within
   the space, deleted entries included: a direct rename to another entry's
@@ -109,8 +109,8 @@ flowchart TD
   give a reason.
 - **Changed since proposed.** If someone changes the entry's content or
   summary after the proposal was made, the proposal can still be approved.
-  The page marks it "changed since proposed" and shows the difference from
-  the current content, and the approver decides. On approval the proposal's
+  The proposal is marked "changed since proposed", so a product shows the
+  difference from the current content, and the approver decides. On approval the proposal's
   content wins; the change in between stays in the history and can be rolled
   back to. A rename in between is not marked, because renaming creates no
   version; if the proposal also renames the entry, its name replaces the

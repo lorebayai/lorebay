@@ -3,21 +3,27 @@
 - **Status:** Proposed
 - **Level:** Contract
 - **Parent:** [System architecture](../architecture/system.md)
-- **Related:** [Access control](access-control.md), [MCP tools](mcp-tools.md),
-  [Identity](../architecture/identity.md)
+- **Related:** [Access control](access-control.md),
+  [Identity](../architecture/identity.md),
+  [Library access control](../../lib/docs/contracts/access-control.md)
 
-> The Web API is the full set of operations, under `/api/v1`. The MCP tools
-> cover only the part agents use.
+> The Web API is Lorebay's HTTP mapping of the library's operations, beside
+> Lorebay's own operations, under `/api/v1`.
 
 ## 1. Purpose
 
-The web pages, external programs and the MCP layer all use the same
-operations. The Web API exposes all of them over HTTP and JSON.
+The web pages, the `lorebay` CLI and external programs reach a space's
+content through the library's operations, and Lorebay's own data through
+Lorebay's operations. The Web API exposes both over HTTP and JSON. Agents
+in a harness reach the library through its
+[MCP tools](../../lib/docs/contracts/mcp-tools.md) instead.
 
 ## 2. Scope
 
 This doc covers the Web API's paths, credentials and conventions. Which
-operations exist, and who may call each, is in
+operations exist, and who may call each, is in two tables: the library's
+[permission matrix](../../lib/docs/contracts/access-control.md#4-permissions)
+and the rows of Lorebay's own operations in
 [Access control](access-control.md#4-permissions).
 
 It does not cover:
@@ -31,7 +37,7 @@ It does not cover:
   the space in the path; `{space}` is the space's key, such as `SPACE-1`.
 - **Calls that write into a task also name the task** in the path, by its
   task ID and never by key; see
-  [Keys and references](keys-and-references.md#4-task-ids).
+  [Keys and references](../../lib/docs/contracts/keys-and-references.md#4-task-ids).
 - **Other paths accept keys**, such as `/api/v1/spaces/SPACE-1/tasks/TK-12`.
 
 ```text
@@ -65,10 +71,14 @@ POST /api/v1/spaces/{space}/proposals/{key}/approve
   [registration](../architecture/identity.md#6-agent-authorization).
 - **Every list is paginated** with a cursor, a default page size and a fixed
   order.
+- **Library errors keep their codes.** A library operation's refusal
+  carries the library's error code, such as `task.not_found`, with an HTTP
+  status Lorebay chooses in one place; `artifact.not_uploaded` and
+  `artifact.too_large` answer 409.
 - **Writes don't check references**; see
-  [Keys and references](keys-and-references.md#5-references).
+  [Keys and references](../../lib/docs/contracts/keys-and-references.md#5-references).
 - **Ended tasks reject notes and artifact registrations**; see
-  [Tasks](tasks.md#3-tasks).
+  [Tasks](../../lib/docs/contracts/tasks.md#3-tasks).
 
 ## 5. Operations
 
@@ -77,4 +87,5 @@ POST /api/v1/spaces/{space}/proposals/{key}/approve
 - **A contributor's rollback is a proposal** whose content and summary are
   the chosen old version.
 - **Withdrawing a proposal** has no operation of its own: a person rejects
-  their own party's proposal; see [Knowledge](knowledge.md#4-proposals).
+  their own party's proposal; see
+  [Knowledge](../../lib/docs/contracts/knowledge.md#4-proposals).

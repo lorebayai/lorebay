@@ -3,8 +3,9 @@
 How a Rust crate stores data through SeaORM: dependencies, migrations,
 generated entities, repositories, schema, queries and transactions. SQLite
 is the backend the rules are written for; a rule that differs on Postgres,
-the database layer's other backend
-([Storage](../../docs/architecture/storage.md#3-layers)), says so. Imported
+the library's other backend
+([Library architecture](../../lib/docs/architecture/library.md#41-database-backends-and-dependencies)),
+says so. Imported
 by the `AGENTS.md` of every Rust project that uses SeaORM.
 
 ## Dependencies
@@ -17,7 +18,7 @@ by the `AGENTS.md` of every Rust project that uses SeaORM.
   A crate that runs only on SQLite leaves it out, so its build carries no
   driver it cannot use.
 - The tables hold only INTEGER and TEXT
-  ([Data model](../../docs/architecture/data-model.md#3-conventions)), so no
+  ([Data model](../../lib/docs/architecture/data-model.md#3-conventions)), so no
   `with-*` feature is needed until a column needs one.
 - `sea-orm-cli` runs at the version of the workspace's `sea-orm`.
 
@@ -32,9 +33,11 @@ by the `AGENTS.md` of every Rust project that uses SeaORM.
 
 ## Migrations
 
-- [Data model](../../docs/architecture/data-model.md) is the schema's home.
-  The schema the migrations build must match its SQLite DDL, and a schema
-  change updates that doc in the same pull request.
+- The data model docs are the schema's home: the
+  [library's](../../lib/docs/architecture/data-model.md) for its migrations
+  and [Lorebay's](../../docs/architecture/data-model.md) for `lorebayd`'s.
+  The schema each group of migrations builds must match its doc's SQLite
+  DDL, and a schema change updates that doc in the same pull request.
 - Migrations use SeaORM's schema builder: `DeriveIden` enums for table and
   column names, the `schema` helpers and `SchemaManager`. Partial indexes
   use the index builder's `and_where`, and CHECK constraints the table
@@ -44,7 +47,8 @@ by the `AGENTS.md` of every Rust project that uses SeaORM.
   Postgres and remain INTEGER on SQLite.
 - The application must generate every primary key before the insert.
   Migrations must declare TEXT NOT NULL primary keys with no auto-increment
-  or database default, as [Data model](../../docs/architecture/data-model.md#3-conventions)
+  or database default, as
+  [Data model](../../lib/docs/architecture/data-model.md#3-conventions)
   requires.
 - Until the first deployment whose data must be kept, a migration merged to
   `main` may be rewritten instead of followed by a new one; a database made
@@ -129,7 +133,7 @@ Queries use the first of these that can express them:
 
 - A transaction covers only database work. File storage calls and outbound
   HTTP requests run after the commit
-  ([Storage](../../docs/architecture/storage.md#5-database)).
+  ([Storage](../../lib/docs/architecture/storage.md#4-database)).
 - On SQLite, a transaction that writes must begin with
   `begin_with_options` and `SqliteTransactionMode::Immediate`, taking the
   write lock before its first read. A deferred transaction that reads and

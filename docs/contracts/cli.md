@@ -5,7 +5,7 @@
 - **Parent:** [System architecture](../architecture/system.md)
 - **Related:** [Web API](web-api.md), [Access control](access-control.md),
   [Identity](../architecture/identity.md),
-  [Keys and references](keys-and-references.md)
+  [Keys and references](../../lib/docs/contracts/keys-and-references.md)
 
 > The `lorebay` executable is a Web API client acting with a person's login
 > session. It adds no server operation and never reads `lorebayd`'s data
@@ -50,12 +50,14 @@ It does not cover:
 - **A space is named by key and a person by username.** Examples are
   `SPACE-1` and `alice`. Objects to read can be named by key. A command that
   writes into a task takes its task ID, including closing or deleting it,
-  as [Keys and references](keys-and-references.md#4-task-ids) requires. It
-  never treats a task key as a task ID.
+  as
+  [Keys and references](../../lib/docs/contracts/keys-and-references.md#4-task-ids)
+  requires. It never treats a task key as a task ID.
 - **Commands send the operation's inputs and show its result.** They neither
   bypass checks nor choose a different operation based on the person's
-  role. Permissions are solely in the
-  [permission matrix](access-control.md#4-permissions).
+  role. Permissions are solely in the library's
+  [permission matrix](../../lib/docs/contracts/access-control.md#4-permissions)
+  and Lorebay's [own rows](access-control.md#4-permissions).
 
 In the table, `<space>` is a space key, `<task>` a task key, `<task-id>` a
 task ID, `<entry>` a knowledge entry's name or key, `<version>` a version
@@ -109,7 +111,7 @@ contains spaces. Optional arguments appear in brackets. List rows follow
 - **An update requires a field to change.** `space change`, `knowledge
   change` and `proposal change` require at least one of their optional
   fields; omitted fields are unchanged. Proposal inputs and version behavior
-  follow [Knowledge](knowledge.md#3-knowledge-entries).
+  follow [Knowledge](../../lib/docs/contracts/knowledge.md#3-knowledge-entries).
 - **Roles and statuses are checked before making a call.** Participant
   addition accepts `contributor` or `viewer`; setting a role accepts `admin`,
   `contributor` or `viewer`. Ownership is not assigned by these commands.
@@ -117,14 +119,14 @@ contains spaces. Optional arguments appear in brackets. List rows follow
   `pending`, `approved` and `rejected`. Another value is a usage error.
 - **Artifact lists come from `task show`.** `artifact url` returns the Web
   API's URL; the person can transfer the file with it over HTTP as
-  [Tasks](tasks.md#5-artifacts) describes.
+  [Tasks](../../lib/docs/contracts/tasks.md#5-artifacts) describes.
 - **`--own-open` lists only the person's own tasks that are not `ended`**,
   as `list_tasks` does for an agent's party; see
-  [MCP tools](mcp-tools.md#6-wrong-task-ids).
+  [MCP tools](../../lib/docs/contracts/mcp-tools.md#6-wrong-task-ids).
 - **A contributor proposes a rollback with `proposal change`.** They read
   the chosen old version and supply its content and summary, following
-  [Knowledge](knowledge.md#3-knowledge-entries). The CLI never silently
-  changes a direct operation into a proposal.
+  [Knowledge](../../lib/docs/contracts/knowledge.md#3-knowledge-entries).
+  The CLI never silently changes a direct operation into a proposal.
 
 ## 4. Sign-in and credentials
 
@@ -255,4 +257,4 @@ Exit codes:
   in both output modes. `participant remove` runs without a confirmation
   prompt. Logout is an explicit sign-out and needs no further confirmation.
   `proposal delete` submits a proposal rather than deleting
-  an entry; it follows [Knowledge](knowledge.md#4-proposals).
+  an entry; it follows [Knowledge](../../lib/docs/contracts/knowledge.md#4-proposals).
