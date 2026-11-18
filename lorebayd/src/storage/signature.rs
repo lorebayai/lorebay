@@ -7,7 +7,7 @@ use anyhow::{Context, Result, bail};
 use base64::Engine;
 use base64::prelude::BASE64_URL_SAFE_NO_PAD;
 use hmac::{Hmac, KeyInit, Mac};
-use lorebay_base::Secret;
+use lorebay_lib_types::Secret;
 use sha2::Sha256;
 use tempfile::Builder;
 

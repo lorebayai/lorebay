@@ -1,4 +1,4 @@
-use lorebay_base::Secret;
+use lorebay_lib_types::Secret;
 use serde_json::Value;
 
 use crate::api::{

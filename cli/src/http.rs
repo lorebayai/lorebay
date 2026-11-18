@@ -2,7 +2,7 @@ use std::env;
 use std::fs;
 use std::time::Duration;
 
-use lorebay_base::Secret;
+use lorebay_lib_types::Secret;
 use reqwest::redirect::Policy;
 use reqwest::retry;
 use reqwest::{Certificate, Client, Method, Response, StatusCode};

@@ -6,7 +6,8 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use lorebay_base::{ConfigError, Secret, init_logging};
+use lorebay_base::{ConfigError, init_logging};
+use lorebay_lib_types::Secret;
 use lorebayd::{Config, hash_password, run};
 use tokio::net::TcpListener;
 use tokio::signal::unix::{SignalKind, signal as unix_signal};

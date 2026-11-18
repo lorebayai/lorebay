@@ -5,7 +5,7 @@ use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use lorebay_base::Secret;
+use lorebay_lib_types::Secret;
 use serde::{Deserialize, Serialize};
 use tempfile::NamedTempFile;
 use tokio::time::{Instant, sleep};

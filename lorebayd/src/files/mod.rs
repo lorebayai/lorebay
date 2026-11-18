@@ -10,7 +10,7 @@ use axum::middleware::map_response;
 use axum::response::{IntoResponse, Response};
 use axum::routing::put;
 use futures_util::stream::try_unfold;
-use lorebay_base::Secret;
+use lorebay_lib_types::Secret;
 use serde::Deserialize;
 use thiserror::Error;
 use tokio::fs::File;

@@ -1,0 +1,12 @@
+layer: 'configuration'
+
+tasks:
+  boundary:
+    command: 'bash .moon/check-lib-boundary.sh'
+    inputs:
+      - '/lib/**/*'
+      - '/Cargo.toml'
+      - '/Cargo.lock'
+      - '/.moon/check-lib-boundary.sh'
+    options:
+      runFromWorkspaceRoot: true

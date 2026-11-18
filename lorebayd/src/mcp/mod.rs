@@ -17,7 +17,7 @@ use rmcp::transport::{StreamableHttpServerConfig, StreamableHttpService};
 use rmcp::{ErrorData, RoleServer, ServerHandler};
 use url::Url;
 
-use lorebay_base::Secret;
+use lorebay_lib_types::Secret;
 
 use crate::domain::access::{AccessError, AgentCaller, verify_agent};
 use crate::domain::caller::VerifiedCaller;

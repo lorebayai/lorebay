@@ -4,7 +4,7 @@ use axum::Json;
 use axum::extract::rejection::{JsonRejection, PathRejection};
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use lorebay_base::Secret;
+use lorebay_lib_types::Secret;
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 

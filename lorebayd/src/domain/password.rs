@@ -3,7 +3,7 @@ use argon2::password_hash::{
     Error as PasswordError, PasswordHasher, PasswordVerifier, phc::PasswordHash,
 };
 use argon2::{Argon2, Params};
-use lorebay_base::Secret;
+use lorebay_lib_types::Secret;
 
 /// Produces an Argon2id PHC string with a fresh random salt.
 pub fn hash_password(password: &str) -> Result<Secret<String>> {

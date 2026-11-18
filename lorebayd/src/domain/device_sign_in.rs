@@ -1,7 +1,8 @@
 use std::net::IpAddr;
 
 use anyhow::anyhow;
-use lorebay_base::{RateLimitError, Secret};
+use lorebay_base::RateLimitError;
+use lorebay_lib_types::{Secret, sha256_hex};
 use sea_orm::{
     DatabaseConnection, DatabaseTransaction, DbErr, Set, SqlErr, SqliteTransactionMode,
     TransactionOptions, TransactionTrait,
@@ -19,7 +20,6 @@ use super::login_session::{
     Identity, LoginError, Tokens, create_session, new_refresh_token, now_millis,
 };
 use super::primary_key;
-use super::token::token_hash;
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum DeviceDecision {
@@ -96,8 +96,8 @@ pub(crate) async fn request_device_code(
             .build();
         let model = ActiveModel {
             id: Set(primary_key()),
-            device_code_hash: Set(token_hash(codes.device_code.expose())),
-            user_code_hash: Set(token_hash(normalize_user_code(&codes.user_code).expose())),
+            device_code_hash: Set(sha256_hex(codes.device_code.expose())),
+            user_code_hash: Set(sha256_hex(normalize_user_code(&codes.user_code).expose())),
             status: Set(DeviceStatus::Pending.as_str().to_owned()),
             account_id: Set(None),
             created_at: Set(now),
@@ -133,7 +133,7 @@ pub(crate) async fn read_device_request(
     let row = DeviceSignInRequestRepository::builder()
         .connection(database)
         .build()
-        .by_user_hash(&token_hash(normalized.expose()))
+        .by_user_hash(&sha256_hex(normalized.expose()))
         .await?
         .filter(|row| row.expires_at > now && row.status == DeviceStatus::Pending.as_str())
         .ok_or(DeviceError::InvalidUserCode)?;
@@ -158,7 +158,7 @@ pub(crate) async fn decide_device_request(
         .build();
     let now = now_millis()?;
     let row = repository
-        .by_user_hash(&token_hash(normalize_user_code(&input.user_code).expose()))
+        .by_user_hash(&sha256_hex(normalize_user_code(&input.user_code).expose()))
         .await?
         .filter(|row| row.expires_at > now && row.status == DeviceStatus::Pending.as_str())
         .ok_or(DeviceError::InvalidUserCode)?;
@@ -188,7 +188,7 @@ pub(crate) async fn exchange_device_code(
         .connection(&transaction)
         .build();
     let row = repository
-        .by_device_hash(&token_hash(device_code.expose()))
+        .by_device_hash(&sha256_hex(device_code.expose()))
         .await?
         .ok_or(DeviceError::InvalidGrant)?;
     let now = now_millis()?;

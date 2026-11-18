@@ -1,7 +1,7 @@
 use axum::extract::FromRequestParts;
 use axum::http::{header, request::Parts};
 
-use lorebay_base::Secret;
+use lorebay_lib_types::Secret;
 
 use crate::domain::access::verify_agent;
 use crate::domain::caller::VerifiedCaller;

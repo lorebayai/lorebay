@@ -1,6 +1,6 @@
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use lorebay_base::Secret;
+use lorebay_lib_types::{Secret, sha256_hex};
 use sea_orm::{
     ConnectionTrait, DatabaseConnection, DatabaseTransaction, DbErr, Set, SqlErr,
     SqliteTransactionMode, TransactionOptions, TransactionTrait,
@@ -25,7 +25,7 @@ use super::device_sign_in::{DeviceError, exchange_device_code};
 use super::login_session::{
     self, Identity, LoginError, Tokens, issue_tokens, new_refresh_token, now_millis, session_expiry,
 };
-use super::token::{TokenKind, TokenSubject, token_hash};
+use super::token::{TokenKind, TokenSubject};
 use super::{primary_key, random_id};
 
 #[derive(Clone, Debug)]
@@ -108,7 +108,7 @@ async fn exchange_code(
         .build();
     let now = now_millis()?;
     let code = repository
-        .by_hash(&token_hash(input.code.expose()))
+        .by_hash(&sha256_hex(input.code.expose()))
         .await?
         .ok_or(TokenError::InvalidGrant)?;
     let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(input.code_verifier.expose().as_bytes()));
@@ -177,7 +177,7 @@ async fn create_agent(
         client_id: Set(code.client_id.clone()),
         name: Set(code.agent_name.ok_or(TokenError::InvalidGrant)?),
         random_id: Set(random_id),
-        refresh_token_hash: Set(token_hash(refresh_token.expose())),
+        refresh_token_hash: Set(sha256_hex(refresh_token.expose())),
         refresh_expires_at: Set(session_expiry(identity, now)),
         created_at: Set(now),
     };
@@ -235,7 +235,7 @@ async fn refresh_agent(
         })
         .await?;
     let mut model: ActiveModel = authorization.into();
-    model.refresh_token_hash = Set(token_hash(refresh_token.expose()));
+    model.refresh_token_hash = Set(sha256_hex(refresh_token.expose()));
     model.refresh_expires_at = Set(session_expiry(identity, now));
     repository.update(model).await?;
     Ok(tokens)
@@ -247,7 +247,7 @@ async fn refresh_tokens(
     input: TokenRefresh,
 ) -> Result<Tokens, TokenError> {
     let transaction = begin_write(database).await?;
-    let hash = Secret::from(token_hash(input.refresh_token.expose()));
+    let hash = Secret::from(sha256_hex(input.refresh_token.expose()));
     let now = now_millis()?;
     let history = RefreshTokenHistoryRepository::builder()
         .connection(&transaction)

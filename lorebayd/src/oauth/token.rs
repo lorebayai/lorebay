@@ -3,7 +3,7 @@ use axum::extract::rejection::FormRejection;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Form, Json};
-use lorebay_base::Secret;
+use lorebay_lib_types::Secret;
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 
