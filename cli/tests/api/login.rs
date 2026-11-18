@@ -159,6 +159,12 @@ async fn help_and_usage_use_documented_exit_codes() {
         assert_success(&output);
         assert!(String::from_utf8_lossy(&output.stdout).contains("Usage:"));
         assert!(output.stderr.is_empty());
+        if arguments.starts_with(&["task", "delete"]) {
+            assert!(
+                String::from_utf8_lossy(&output.stdout)
+                    .contains("Delete a task, its notes, artifacts and their files")
+            );
+        }
     }
     for arguments in [
         vec!["login"],

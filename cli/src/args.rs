@@ -170,7 +170,7 @@ pub(crate) enum UserCommand {
 pub(crate) enum TaskCommand {
     /// End a task named by its task ID.
     Close { space: String, task_id: String },
-    /// Delete a task and its notes.
+    /// Delete a task, its notes, artifacts and their files.
     Delete {
         space: String,
         task_id: String,
