@@ -4,78 +4,47 @@
 - **Level:** System
 - **Related:** [System architecture](../architecture/system.md),
   [Access control](../contracts/access-control.md),
-  [Agent skill](../contracts/agent-skill.md)
+  [Library](../../lib/docs/product/library.md)
 
-> Lorebay exists to make people's attention count: anyone in a team must be
-> able to see quickly what an agent did and how it did it.
+> Lorebay is the first product built on the library: one deployment gives a
+> team the library's spaces, with its own sign-in, web pages and skill.
 >
-> Spaces are fully isolated from each other.
+> Anyone who can sign in may create a space.
 
 ## 1. Purpose
 
-Lorebay solves how people and agents work together in a team. Without it:
-
-- What one person's agent did is invisible to the rest of the team; the
-  record stays in that person's harness.
-- Knowing what a session did, and how, means reading the whole conversation.
-- Every new session needs the background explained again, and what an agent
-  learns while working is lost.
-
-How the data is shown matters most: a reader must be able to tell quickly
-what an agent did and how.
+Lorebay brings the library to a team that wants no outside services: one
+process holds the people who sign in, their spaces, the web pages they read
+and the endpoints their agents call. The problem the library solves, spaces
+and the data they hold are in [Library](../../lib/docs/product/library.md).
 
 ## 2. Scope
 
-This doc covers what Lorebay is, what a space is, and what a deployment
-ships. Lorebay does only what its design docs describe; anything they don't
-describe is out of scope.
+This doc covers what one Lorebay deployment carries and who may create a
+space. Lorebay does only what its design docs and the library's describe;
+anything they don't describe is out of scope.
 
 It does not cover:
 
 - the layout of the web pages;
-- notifications, such as telling approvers about a new proposal;
-- comments or replies on tasks, notes, Knowledge or proposals;
-- deleting a space: nobody can delete one, including its owner;
-- a Lorebay-wide administrator who can list or delete spaces or reassign
-  their owners;
+- a Lorebay-wide administrator who can list spaces or reassign their
+  owners;
 - non-functional requirements, such as supported scale or data retention.
 
-## 3. Spaces
+## 3. What a deployment carries
 
-A Lorebay holds many spaces. A space is one team's workspace.
-
-- **Spaces are isolated.** Each space has its own participants, tasks,
-  Scratchpads, artifacts, Knowledge and proposals, and no space sees
-  another's. A person may belong to several spaces.
-- **Anyone who can log in may create a space**, and becomes its owner.
-- **Name and summary.** Each space has a name and a one-sentence summary of
-  what it is for. Its creator writes them; its owner and admins may change
-  them. Names need not be unique.
-- **Key.** Each space has a key, such as `SPACE-1`, that never changes. It is
-  its public identifier, separate from its internal primary key. See
-  [Keys and references](../contracts/keys-and-references.md).
-- A space holds many people and many agents. Who may do what is defined in
-  [Access control](../contracts/access-control.md).
-- From a space, anyone in it can see every member's tasks, what each task
-  produced and how the work was done.
-
-## 4. What a deployment ships
-
+- **Many spaces.** A Lorebay holds many spaces, and every person who can
+  sign in may belong to several.
 - **Web pages.** Deploying Lorebay gives the data, the APIs and the pages
   people read, from one process. See
   [System architecture](../architecture/system.md).
-- **Skill.** The skill ships with Lorebay. The web pages explain how to
-  install the skill and connect an agent's MCP client. See
-  [Agent skill](../contracts/agent-skill.md).
+- **Skill.** The skill ships with Lorebay, filled with Lorebay's text in the
+  places the [agent skill contract](../../lib/docs/contracts/agent-skill.md)
+  marks. The web pages explain how to install the skill and connect an
+  agent's MCP client.
 
-## 5. Data
+## 4. Creating a space
 
-Lorebay stores five kinds of data in each space:
-
-| Data | What it records | Home |
-| --- | --- | --- |
-| Task | What one piece of agent work did, and its result | [Tasks](../contracts/tasks.md#3-tasks) |
-| Scratchpad | How the agent did it: the notes it wrote along the way | [Tasks](../contracts/tasks.md#4-scratchpad) |
-| Artifact | Files the agent produced | [Tasks](../contracts/tasks.md#5-artifacts) |
-| Knowledge | Shared documents later sessions read | [Knowledge](../contracts/knowledge.md#3-knowledge-entries) |
-| Proposal | A requested change to Knowledge, waiting for a person | [Knowledge](../contracts/knowledge.md#4-proposals) |
+- **Anyone who can sign in may create a space**, and becomes its owner.
+- **Members are participants.** Who is in a space with which role, and how
+  that changes, is in [Access control](../contracts/access-control.md).

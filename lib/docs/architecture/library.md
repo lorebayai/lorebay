@@ -300,7 +300,7 @@ with the spaces would read one page in one step, but it would make every
 product keep its memberships in the library's database. Two steps cost one
 more round trip per page, and each membership must carry its space's
 number. Lorebay keeps it in a `space_number` column on its membership rows,
-unique together with the space ID and set when the row is inserted; both
+unique together with the person's ID and set when the row is inserted; both
 creating a space and adding a member already know the number. Fetching
 roles for
 batches of the library's spaces instead was rejected: a person in few of

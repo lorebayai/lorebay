@@ -2,7 +2,7 @@
 
 - **Status:** Proposed
 - **Level:** Contract
-- **Parent:** [Lorebay](../product/lorebay.md)
+- **Parent:** [Library](../product/library.md)
 - **Related:** [Access control](access-control.md),
   [Agent skill](agent-skill.md), [Storage](../architecture/storage.md),
   [Keys and references](keys-and-references.md)
@@ -20,7 +20,7 @@ understand a session without reading the conversation.
 
 ## 2. Scope
 
-This doc covers what Lorebay stores and enforces for tasks, notes and
+This doc covers what the library stores and enforces for tasks, notes and
 artifacts. When an agent creates a task, what its title and result say, and
 when it writes notes are rules of the skill, in
 [Agent skill](agent-skill.md).
@@ -38,9 +38,8 @@ It does not cover:
   after another, and one task may span several sessions. Subagents are not
   separate sessions.
 - **Only agents create tasks.** A person who wants work done tells an agent.
-- **A deleted task is gone.** A person may delete their own task on the web,
-  with its Scratchpad and artifacts. Later writes to it are rejected as not
-  found.
+- **A deleted task is gone.** A person may delete their own task, with its
+  Scratchpad and artifacts. Later writes to it are rejected as not found.
 
 A task holds:
 
@@ -49,16 +48,16 @@ A task holds:
 | Key | Such as `TK-12`, assigned on creation; see [Keys and references](keys-and-references.md) |
 | Title | One sentence |
 | Status | `in progress` or `ended` |
-| Person and agent | Whose agent created it; the agent name is copied from the authorization at creation |
+| Person and agent | Whose agent created it; the agent name is copied from the caller at creation |
 | Start and end times | The end time is set when the task becomes `ended`, cleared when it returns to `in progress`, and set again when it ends again |
-| Last activity time | Set by Lorebay whenever the task receives a note, an artifact or a new result |
+| Last activity time | Set by the library whenever the task receives a note, an artifact or a new result |
 | Result | Markdown text, rendered as Markdown |
 
 - **`ended` means nobody is working on the task now**, not that the work is
   done. Whether it is done shows in the result.
 - **Only agents and people change the status.** Agents usually do; a person
-  may change the status of their own tasks on the web, such as closing one
-  left `in progress`. Lorebay never changes a status on its own, so a session
+  may change the status of their own tasks, such as closing one left
+  `in progress`. The library never changes a status on its own, so a session
   closed abruptly leaves its task `in progress`.
 - **The result is one field.** Each update replaces it whole, and only the
   latest version is kept; the Scratchpad holds the history.
@@ -73,7 +72,8 @@ A task holds:
 - **Finding tasks.** A space's tasks can be filtered by person, agent and
   status, and searched by keyword in titles and results. An agent is matched
   by the name copied onto its tasks, which is unique among one person's
-  agents; see [Identity](../architecture/identity.md#6-agent-authorization).
+  agents; see
+  [Library architecture](../architecture/library.md#61-caller).
   An agent authorized again under the same name is filtered together with
   its earlier tasks.
 
@@ -84,9 +84,8 @@ The Scratchpad records how the agent did the work. It holds notes only.
 - **A note** is a short Markdown entry with a time, rendered as Markdown. A
   task's Scratchpad is its notes in time order.
 - **The Scratchpad is append-only.** A note cannot be edited. A person may
-  delete single notes in their own tasks on the web; agents cannot delete
-  notes.
-- **One tool for every harness.** Lorebay offers one MCP tool for writing
+  delete single notes in their own tasks; agents cannot delete notes.
+- **One tool for every harness.** The library offers one MCP tool for writing
   notes, and the skill says when to write them and what to write. The same
   skill and tool serve every harness.
 - **Notes belong to the agent's current task.**
@@ -97,8 +96,8 @@ Artifacts are files, often large, such as reports, images, exported
 documents or data.
 
 - **Uploads take two steps.** The agent gets a short-lived upload URL and
-  the headers to send with it, through MCP or the Web API, then transfers
-  the file over HTTP. Downloads work the same way.
+  the headers to send with it, through MCP or a product's entry point, then
+  transfers the file over HTTP. Downloads work the same way.
 - **Each upload URL writes one file.** The URL can be reused until it
   expires, but only one upload succeeds:
   - an upload without the returned headers is rejected with 403;
@@ -107,12 +106,19 @@ documents or data.
   - a failed or interrupted upload leaves no file, so the client may retry
     with the same URL.
 - **An upload is complete only when the client reports it.** Until then the
-  artifact is not listed among the task's artifacts.
+  artifact is not listed among the task's artifacts, and no download URL is
+  issued for it. A report before any file is in storage is refused with
+  `artifact.not_uploaded`.
+- **An oversized file is refused when the upload is reported complete.**
+  When the file in storage is over the size limit the product sets, the
+  report is refused with `artifact.too_large`, the file is deleted and the
+  artifact stays incomplete; reporting it again is refused with
+  `artifact.not_uploaded`.
 - **Each artifact has a file name and a one-sentence summary.**
 - **Artifacts are immutable.** To update one, upload a new one.
-- **An artifact must not exceed 5 GB.** How browsers show artifacts is in
-  [Storage](../architecture/storage.md#4-file-storage).
+- **An artifact must not exceed the size limit the product sets.** How
+  browsers show artifacts is in
+  [Storage](../architecture/storage.md#3-file-storage).
 - **An artifact belongs to the agent's current task.** Opening a task shows
   its Scratchpad and artifacts.
-- **Deleting.** A person may delete their own artifacts on the web; agents
-  cannot.
+- **Deleting.** A person may delete their own artifacts; agents cannot.

@@ -52,19 +52,20 @@ and file storage layers.
 | Worker | `src/worker/` | The [background jobs](../docs/architecture/system.md#6-background-jobs), calling domain functions as a transport does per request |
 | Domain | `src/domain/` | The API operations: permission checks, data rules and transactions |
 | Data | `src/repository/`, `src/entity/`, `src/migration/` | The database layer |
-| Storage | `src/storage/` | The [file storage layer](../docs/architecture/storage.md#3-layers) |
+| Storage | `src/storage/` | The [file storage layer](../lib/docs/architecture/storage.md#3-file-storage) |
 
 - A **domain function** performs one API operation, such as appending a
   note. A Web API operation and the MCP tool mapped to it call the same
-  domain function ([MCP tools](../docs/contracts/mcp-tools.md#5-the-mcp-layer)).
+  domain function ([MCP tools](../lib/docs/contracts/mcp-tools.md#5-the-mcp-layer)).
 - Domain functions must not use transport types: no axum, HTTP or MCP
   types, and no request or response structs. They take typed inputs and the
   verified caller, a person and, for an agent, its authorization, never a
   raw token.
-- Domain functions check permissions, by the
-  [permission matrix](../docs/contracts/access-control.md#4-permissions) and
-  in the order of
-  [the space and task checks](../docs/contracts/access-control.md#6-space-and-task-checks).
+- Domain functions check permissions, by the library's
+  [permission matrix](../lib/docs/contracts/access-control.md#4-permissions)
+  and Lorebay's [own rows](../docs/contracts/access-control.md#4-permissions),
+  and in the order of
+  [the space and task checks](../lib/docs/contracts/access-control.md#6-space-and-task-checks).
   Transports never check permissions.
 - A domain function that writes opens one transaction, passes it to every
   repository and helper it calls, and commits once. A helper that joins a
