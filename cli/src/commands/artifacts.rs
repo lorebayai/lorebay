@@ -9,10 +9,25 @@ use crate::error::{Failure, Result};
 use crate::http::Http;
 use crate::output::{self, Outcome, Render};
 
-use super::api_path;
+use super::{api_path, delete};
 
 pub(super) async fn run(command: ArtifactCommand, store: &Store) -> Result<Outcome> {
     match command {
+        ArtifactCommand::Delete {
+            space,
+            task_id,
+            artifact,
+            yes,
+        } => {
+            delete(
+                store,
+                &api_path(&[SPACES, &space, TASKS, &task_id, ARTIFACTS, &artifact])?,
+                &format!("artifact {artifact} of task {task_id} in {space}"),
+                yes,
+                "Artifact deleted.",
+            )
+            .await
+        }
         ArtifactCommand::Url { space, artifact } => {
             let body = Http::new()?
                 .authorized(
@@ -38,6 +53,7 @@ pub(super) async fn run(command: ArtifactCommand, store: &Store) -> Result<Outco
 
 const ARTIFACTS: &str = "artifacts";
 const SPACES: &str = "spaces";
+const TASKS: &str = "tasks";
 const URL: &str = "url";
 
 #[derive(Clone, Debug, TypedBuilder)]

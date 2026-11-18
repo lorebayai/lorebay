@@ -17,6 +17,14 @@ pub(crate) enum AgentCommand {
 
 #[derive(Clone, Debug, Subcommand)]
 pub(crate) enum ArtifactCommand {
+    /// Delete an artifact from a task named by its task ID.
+    Delete {
+        space: String,
+        task_id: String,
+        artifact: String,
+        #[arg(long)]
+        yes: bool,
+    },
     /// Print an artifact's short-lived download URL.
     Url { space: String, artifact: String },
 }
@@ -28,7 +36,7 @@ pub(crate) enum Command {
         #[command(subcommand)]
         command: AgentCommand,
     },
-    /// Get artifact download URLs.
+    /// Read and delete task artifacts.
     Artifact {
         #[command(subcommand)]
         command: ArtifactCommand,
