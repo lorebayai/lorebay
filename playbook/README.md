@@ -38,7 +38,7 @@ Fragments:
 - [languages/typescript.md](languages/typescript.md): TypeScript packages,
   the pnpm catalog, checks, and the statically exported Next.js pages.
 - [topics/design-docs.md](topics/design-docs.md): placing, shaping,
-  writing and reviewing design docs, in `docs/` and `spaces/docs/`.
+  writing and reviewing design docs, in `docs/` and `lib/docs/`.
 - [topics/github-actions.md](topics/github-actions.md): writing and pinning
   GitHub Actions workflows.
 - [topics/seaorm.md](topics/seaorm.md): storing data in SQLite through

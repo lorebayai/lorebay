@@ -103,44 +103,45 @@ eight tables.
 
 ## 4. Crates
 
-The library lives in the top-level folder `spaces/`, as three crates, each
-in its own subfolder and named `lorebay-spaces-<subfolder>`:
+The library lives in the top-level folder `lib/`, as three crates, each
+in its own subfolder and named `lorebay-lib-<subfolder>`:
 
 | Crate | Folder | Holds | Depends on |
 | --- | --- | --- | --- |
-| `lorebay-spaces-types` | `spaces/types/` | The secret type and the hash helper | No database, MCP or async crate |
-| `lorebay-spaces-core` | `spaces/core/` | Operations, rules, interfaces, settings, result types, data layer, migrations, the storage interface | `lorebay-spaces-types`, SeaORM |
-| `lorebay-spaces-mcp` | `spaces/mcp/` | The MCP layer, its tools, the MCP authorization challenge and metadata | `lorebay-spaces-core`, the MCP SDK, axum |
+| `lorebay-lib-types` | `lib/types/` | The secret type and the hash helper | No database, MCP or async crate |
+| `lorebay-lib-core` | `lib/core/` | Operations, rules, interfaces, settings, result types, data layer, migrations, the storage interface | `lorebay-lib-types`, SeaORM |
+| `lorebay-lib-mcp` | `lib/mcp/` | The MCP layer, its tools, the MCP authorization challenge and metadata | `lorebay-lib-core`, the MCP SDK, axum |
 
 - **Three crates, not one.** A client that needs only the secret type, such
-  as a command-line tool, depends on `lorebay-spaces-types` and builds no
+  as a command-line tool, depends on `lorebay-lib-types` and builds no
   database and no MCP layer. The MCP layer is its own crate so the compiler
   holds that it reaches only the public operations, as a product's own entry
   point does. One crate with features to drop the database and MCP layers
   was rejected: it would use features for a purpose other than leaving out a
   backend, and nothing would stop the MCP layer from calling internals.
-- **Names carry `spaces`.** A product's workspace may hold its own `core` or
-  `mcp` crate, and generic names such as `lorebay-core` say nothing about
-  which library they belong to; `lorebay-spaces-*` stays unique in any
-  workspace that depends on the library.
-- **The library depends on nothing of a product.** Nothing in `spaces/`
+- **The folder is `lib/` and the crates carry `lib-`.** The folder holds
+  the shared library, not one feature of it. A product's workspace may hold
+  its own `core` or `mcp` crate, and a name such as `lorebay-core` says
+  nothing about which part of Lorebay it belongs to; `lorebay-lib-*` names
+  the shared library and stays unique in any workspace that depends on it.
+- **The library depends on nothing of a product.** Nothing in `lib/`
   depends on or links to another top-level folder of this repository,
   except the playbook: a doc may link to a fragment, and an `AGENTS.md` may
   import one. The root Cargo workspace settings and the toolchain are
   shared too. A check that `moon ci` runs fails on a dependency, or a link
   outside the playbook, that leaves the folder.
 - **The build tool finds the crates** through a glob in
-  `.moon/workspace.yml`, `spaces/*/moon.yml`, since `*/moon.yml` matches
+  `.moon/workspace.yml`, `lib/*/moon.yml`, since `*/moon.yml` matches
   only top-level folders. With
-  source-path IDs the projects are `spaces/types`, `spaces/core` and
-  `spaces/mcp`, and each is in the `library` layer, so no library crate can
+  source-path IDs the projects are `lib/types`, `lib/core` and
+  `lib/mcp`, and each is in the `library` layer, so no library crate can
   depend on an application.
 
 ### 4.1 Database backends and dependencies
 
-- **The library picks no backend.** `lorebay-spaces-core` has two features,
+- **The library picks no backend.** `lorebay-lib-core` has two features,
   `sqlite` and `postgres`, and no default; each turns on the matching driver
-  of SeaORM and its migration crate. `lorebay-spaces-mcp` forwards the same
+  of SeaORM and its migration crate. `lorebay-lib-mcp` forwards the same
   two features. A consumer turns on the backend it runs, Lorebay `sqlite`,
   so a consumer on Postgres builds no SQLite driver.
 - **Features choose drivers, not code paths.** The library never connects:
@@ -162,9 +163,9 @@ in its own subfolder and named `lorebay-spaces-<subfolder>`:
 The library makes public what a product needs to build its entry points
 and its implementations, and nothing more:
 
-- `lorebay-spaces-types`: the secret type, whose debug output is redacted,
+- `lorebay-lib-types`: the secret type, whose debug output is redacted,
   and `sha256_hex`, the lowercase hexadecimal SHA-256 of a string.
-- `lorebay-spaces-core`:
+- `lorebay-lib-core`:
   - the library state and its settings ([section 11](#11-settings));
   - the five interfaces and the types they exchange
     ([section 6](#6-interfaces));
@@ -179,7 +180,7 @@ and its implementations, and nothing more:
     another owner as not found, and returns the space's ID and number
     ([section 7.1](#71-run-one-write));
   - the library's migrator ([section 12](#12-data)).
-- `lorebay-spaces-mcp`: one function that returns the router a product
+- `lorebay-lib-mcp`: one function that returns the router a product
   mounts at the root of its origin.
 
 Entities, repositories and the role checks stay private, so a product
@@ -187,7 +188,7 @@ reaches data only through the operations and the reads above.
 
 - **Results are shared, not duplicated.** The operations' result types,
   such as a task with its artifacts or one page of spaces, live in
-  `lorebay-spaces-core` and serialize to the field names both entry points
+  `lorebay-lib-core` and serialize to the field names both entry points
   return. The MCP layer serializes them into tool results; a product may
   serialize them in its own responses, as Lorebay does, or map them to its
   own format. Keeping them in a product's router was rejected because the
@@ -642,7 +643,7 @@ built.
 ## 15. Tests on Postgres
 
 What only Postgres can show, such as two writers racing, is tested against
-Postgres through the public API of `lorebay-spaces-core`, with test
+Postgres through the public API of `lorebay-lib-core`, with test
 implementations of the interfaces the tested operations call. The tests
 keep the [testing rules](../../../playbook/topics/testing.md#black-box) as
 they stand:

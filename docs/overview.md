@@ -3,7 +3,7 @@
 Product- and system-wide designs for Lorebay: what it is, how `lorebayd` is
 built, and the contracts its users, APIs and agents rely on. Terms follow the
 [glossary](../CONTEXT.md). The library Lorebay builds on has its own
-design, from the [library overview](../spaces/docs/overview.md).
+design, from the [library overview](../lib/docs/overview.md).
 
 ## Product
 

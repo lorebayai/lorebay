@@ -1,7 +1,7 @@
 # Design Docs
 
 How a design doc is placed, shaped, written and reviewed. Imported by the
-`AGENTS.md` of every docs folder: `docs/` for Lorebay and `spaces/docs/` for
+`AGENTS.md` of every docs folder: `docs/` for Lorebay and `lib/docs/` for
 the library. Each docs folder's `AGENTS.md` adds what differs: what the
 folder holds, its levels, its glossary and its own rules.
 

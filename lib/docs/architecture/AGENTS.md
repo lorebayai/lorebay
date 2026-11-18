@@ -1,6 +1,6 @@
 # Library architecture docs
 
-Rules for the docs in `spaces/docs/architecture/`.
+Rules for the docs in `lib/docs/architecture/`.
 
 - Architecture docs state how the library is built: its crates, its public
   API, the interfaces a product implements, transactions, storage and the

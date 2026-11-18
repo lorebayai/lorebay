@@ -4,10 +4,10 @@ Follow these playbook fragments:
 
 ## Library docs conventions
 
-- `spaces/docs/` holds the design of the library: the features every
+- `lib/docs/` holds the design of the library: the features every
   product shares, and the interfaces a product implements to use them.
-- The glossary is `spaces/CONTEXT.md`.
-- Nothing here links to a file outside `spaces/`, except the playbook.
+- The glossary is `lib/CONTEXT.md`.
+- Nothing here links to a file outside `lib/`, except the playbook.
 - The docs describe the library for any product. A choice that only
   Lorebay makes is named as Lorebay's.
 - Each topic folder's `AGENTS.md` adds the rules for that folder.
