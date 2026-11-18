@@ -14,6 +14,7 @@ use crate::tasks::helpers::{SPACE, append, create, participant, read, setup};
 
 use helpers::*;
 
+mod download;
 mod helpers;
 
 #[tokio::test]
@@ -332,6 +333,8 @@ async fn upload_file_fails_when_url_is_expired() {
         "artifact.not_uploaded",
     )
     .await;
+    let directory = server.stop().await;
+    let server = Server::restart(directory).await;
     let fresh = register(&server, &agent, &task).await;
     upload_ok(&server, &fresh, "fresh").await;
     server.stop().await;

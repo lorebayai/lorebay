@@ -16,6 +16,10 @@ pub(crate) fn router() -> Router<ServerState> {
         .route("/spaces", get(spaces::list).post(spaces::create))
         .route("/spaces/{space}", get(spaces::read).patch(spaces::change))
         .route(
+            "/spaces/{space}/artifacts/{key}/url",
+            get(artifacts::download_url),
+        )
+        .route(
             "/spaces/{space}/tasks",
             get(tasks::list).post(tasks::create),
         )

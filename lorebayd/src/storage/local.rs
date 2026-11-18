@@ -13,28 +13,31 @@ use tokio::fs::{self, File};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use typed_builder::TypedBuilder;
+use url::Url;
 use uuid::Uuid;
 
 use crate::Config;
 
 use super::signature::{load_key, sign, verify};
-use super::{FileStorage, UploadRequest};
+use super::{DownloadRequest, FileOperation, FileStorage, UploadRequest};
 
 #[derive(Debug, Error)]
-pub(crate) enum UploadError {
+pub(crate) enum StorageError {
     #[error("A file already exists at this location")]
     AlreadyExists,
     #[error("The upload was interrupted")]
     Interrupted,
     #[error(transparent)]
     Io(#[from] Error),
+    #[error("File not found")]
+    NotFound,
     #[error("The upload exceeds the size limit")]
     TooLarge,
     #[error("Too many uploads are in progress")]
     TooMany,
-    #[error("The upload URL is expired")]
+    #[error("The file URL is expired")]
     UrlExpired,
-    #[error("The upload URL is invalid")]
+    #[error("The file URL is invalid")]
     UrlInvalid,
 }
 
@@ -72,36 +75,57 @@ impl LocalDirectory {
 
     pub fn authorize(
         &self,
+        operation: FileOperation<'_>,
         location: &str,
         expiry: i64,
         signature: &str,
-    ) -> Result<(), UploadError> {
-        if !valid_location(location) || !verify(self.key.expose(), location, expiry, signature) {
-            return Err(UploadError::UrlInvalid);
+    ) -> Result<(), StorageError> {
+        if !valid_location(location)
+            || !verify(self.key.expose(), operation, location, expiry, signature)
+        {
+            return Err(StorageError::UrlInvalid);
         }
-        if expiry <= now_millis().map_err(|_| UploadError::UrlInvalid)? {
-            return Err(UploadError::UrlExpired);
+        if expiry <= now_millis().map_err(|_| StorageError::UrlInvalid)? {
+            return Err(StorageError::UrlExpired);
         }
         Ok(())
     }
 
-    pub fn admit(&self) -> Result<OwnedSemaphorePermit, UploadError> {
+    pub async fn open_download(&self, location: &str) -> Result<(File, u64), StorageError> {
+        let path = self
+            .resolve(location)
+            .map_err(|_| StorageError::UrlInvalid)?;
+        let file = File::open(path).await.map_err(|error| {
+            if error.kind() == ErrorKind::NotFound {
+                StorageError::NotFound
+            } else {
+                StorageError::Io(error)
+            }
+        })?;
+        let metadata = file.metadata().await?;
+        if !metadata.is_file() {
+            return Err(StorageError::NotFound);
+        }
+        Ok((file, metadata.len()))
+    }
+
+    pub fn admit(&self) -> Result<OwnedSemaphorePermit, StorageError> {
         self.slots
             .clone()
             .try_acquire_owned()
-            .map_err(|_| UploadError::TooMany)
+            .map_err(|_| StorageError::TooMany)
     }
 
-    pub async fn receive<S, D, E>(&self, location: &str, mut stream: S) -> Result<(), UploadError>
+    pub async fn receive<S, D, E>(&self, location: &str, mut stream: S) -> Result<(), StorageError>
     where
         S: Stream<Item = Result<D, E>> + Unpin,
         D: AsRef<[u8]>,
     {
         let destination = self
             .resolve(location)
-            .map_err(|_| UploadError::UrlInvalid)?;
+            .map_err(|_| StorageError::UrlInvalid)?;
         if fs::try_exists(&destination).await? {
-            return Err(UploadError::AlreadyExists);
+            return Err(StorageError::AlreadyExists);
         }
         let temporary = Builder::new()
             .prefix("upload-")
@@ -110,13 +134,13 @@ impl LocalDirectory {
         let mut file = File::from_std(file);
         let mut size = 0u64;
         while let Some(chunk) = stream.next().await {
-            let chunk = chunk.map_err(|_| UploadError::Interrupted)?;
+            let chunk = chunk.map_err(|_| StorageError::Interrupted)?;
             let bytes = chunk.as_ref();
             size = size
                 .checked_add(bytes.len() as u64)
-                .ok_or(UploadError::TooLarge)?;
+                .ok_or(StorageError::TooLarge)?;
             if size > self.size_limit {
-                return Err(UploadError::TooLarge);
+                return Err(StorageError::TooLarge);
             }
             file.write_all(bytes).await?;
         }
@@ -126,12 +150,12 @@ impl LocalDirectory {
         self.publish(path, destination).await
     }
 
-    async fn publish(&self, temporary: TempPath, destination: PathBuf) -> Result<(), UploadError> {
+    async fn publish(&self, temporary: TempPath, destination: PathBuf) -> Result<(), StorageError> {
         let directory = File::open(&self.files).await?;
         match fs::hard_link(&temporary, &destination).await {
             Ok(()) => {}
             Err(error) if error.kind() == ErrorKind::AlreadyExists => {
-                return Err(UploadError::AlreadyExists);
+                return Err(StorageError::AlreadyExists);
             }
             Err(error) => return Err(error.into()),
         }
@@ -148,6 +172,19 @@ impl LocalDirectory {
         result
     }
 
+    fn signed_url(&self, operation: FileOperation<'_>, location: &str) -> Result<(Url, i64)> {
+        self.resolve(location)?;
+        let expiry = now_millis()?
+            .checked_add(self.lifetime_millis)
+            .context("file URL expiry overflow")?;
+        let signature = sign(self.key.expose(), operation, location, expiry)?;
+        let mut url = Url::parse(&format!("{}/files/{location}", self.origin))?;
+        url.query_pairs_mut()
+            .append_pair("expires", &expiry.to_string())
+            .append_pair("signature", &signature);
+        Ok((url, expiry))
+    }
+
     fn resolve(&self, location: &str) -> Result<PathBuf> {
         if !valid_location(location) {
             bail!("invalid artifact storage location");
@@ -157,18 +194,21 @@ impl LocalDirectory {
 }
 
 impl FileStorage for LocalDirectory {
+    async fn download_url(&self, location: &str, file_name: &str) -> Result<DownloadRequest> {
+        let (mut url, expires_at) =
+            self.signed_url(FileOperation::Download(file_name), location)?;
+        url.query_pairs_mut().append_pair("file_name", file_name);
+        Ok(DownloadRequest::builder()
+            .url(Secret::from(String::from(url)))
+            .expires_at(expires_at)
+            .build())
+    }
+
     async fn upload_url(&self, location: &str) -> Result<UploadRequest> {
-        self.resolve(location)?;
-        let expiry = now_millis()?
-            .checked_add(self.lifetime_millis)
-            .context("file URL expiry overflow")?;
-        let signature = sign(self.key.expose(), location, expiry)?;
+        let (url, expiry) = self.signed_url(FileOperation::Upload, location)?;
         Ok(UploadRequest::builder()
             .method("PUT")
-            .url(Secret::from(format!(
-                "{}/files/{location}?expires={expiry}&signature={signature}",
-                self.origin
-            )))
+            .url(Secret::from(String::from(url)))
             .headers(BTreeMap::from([(
                 "If-None-Match".to_owned(),
                 "*".to_owned(),
