@@ -30,8 +30,11 @@ jobs:
         id: cargo-cache
         uses: Swatinem/rust-cache@v2.9.3
         with:
-          shared-key: ci-linux
+          shared-key: ci-linux-tests
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Run Cargo Warmup
         if: steps.cargo-cache.outputs.cache-hit != 'true'
         run: moon run base:lint cli:lint lorebayd:lint base:build cli:build lorebayd:build
+      - name: Build Test Targets
+        if: steps.cargo-cache.outputs.cache-hit != 'true'
+        run: moon run base:test cli:test lorebayd:test cli:integration lorebayd:integration -- --no-run
