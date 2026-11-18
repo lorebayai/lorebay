@@ -124,12 +124,14 @@ in its own subfolder and named `lorebay-spaces-<subfolder>`:
   which library they belong to; `lorebay-spaces-*` stays unique in any
   workspace that depends on the library.
 - **The library depends on nothing of a product.** Nothing in `spaces/`
-  depends on or links to another top-level folder of this repository. The
-  root Cargo workspace settings, the playbook and the toolchain are shared.
-  A check that `moon ci` runs fails on a dependency or a link that leaves
-  the folder.
-- **The build tool finds the crates** through a second glob in
-  `.moon/workspace.yml`, `spaces/*/moon.yml`, beside `*/moon.yml`. With
+  depends on or links to another top-level folder of this repository,
+  except the playbook: a doc may link to a fragment, and an `AGENTS.md` may
+  import one. The root Cargo workspace settings and the toolchain are
+  shared too. A check that `moon ci` runs fails on a dependency, or a link
+  outside the playbook, that leaves the folder.
+- **The build tool finds the crates** through a glob in
+  `.moon/workspace.yml`, `spaces/*/moon.yml`, since `*/moon.yml` matches
+  only top-level folders. With
   source-path IDs the projects are `spaces/types`, `spaces/core` and
   `spaces/mcp`, and each is in the `library` layer, so no library crate can
   depend on an application.
@@ -172,12 +174,16 @@ and its implementations, and nothing more:
     record;
   - the read of the highest space number
     ([section 8](#8-scope-and-space-numbers));
+  - the read that resolves a space key for a caller, inside the transaction
+    it is handed: it checks the scope, answers a missing space or one of
+    another owner as not found, and returns the space's ID and number
+    ([section 7.1](#71-run-one-write));
   - the library's migrator ([section 12](#12-data)).
 - `lorebay-spaces-mcp`: one function that returns the router a product
   mounts at the root of its origin.
 
-Entities, repositories and the checks stay private, so a product reaches
-data only through the operations.
+Entities, repositories and the role checks stay private, so a product
+reaches data only through the operations and the reads above.
 
 - **Results are shared, not duplicated.** The operations' result types,
   such as a task with its artifacts or one page of spaces, live in
@@ -261,8 +267,8 @@ two methods, and no database type, query or table crosses the interface.
 | Memberships | The operation handle, the person, the scope, the last space number already listed, a limit | Up to the limit of the person's memberships in the scope with a higher space number, in increasing space number: each a space ID, its number and the role |
 
 - **The operation handle** is the library's own type. It says whether the
-  call belongs to a read or a write, and carries the operation's
-  transaction or the read connection, per
+  call belongs to a read or a write, and carries the operation's write or
+  read transaction, per
   [section 7.2](#72-interfaces-inside-an-operation). An implementation that
   keeps memberships in the library's database reads through it and never
   takes another connection; one that keeps them elsewhere ignores it.
@@ -292,18 +298,22 @@ two methods, and no database type, query or table crosses the interface.
 with the spaces would read one page in one step, but it would make every
 product keep its memberships in the library's database. Two steps cost one
 more round trip per page, and each membership must carry its space's
-number, which Lorebay keeps on its membership rows. Fetching roles for
+number. Lorebay keeps it in a `space_number` column on its membership rows,
+unique together with the space ID and set when the row is inserted; both
+creating a space and adding a member already know the number. Fetching
+roles for
 batches of the library's spaces instead was rejected: a person in few of
 many spaces would make one page scan them all.
 
 ### 6.4 Database
 
-**A connection for reads, and the transaction of each write.** The
-interface has four methods:
+**The transaction of each read and of each write.** The interface has five
+methods:
 
 | Method | Does |
 | --- | --- |
-| Read connection | Returns the connection reads run on |
+| Begin read | Opens a transaction for one read |
+| End read | Receives the transaction of a read and ends it |
 | Begin write | Opens a transaction for one write |
 | Commit write | Receives the transaction and a record of the write, may add rows of its own, and commits |
 | Abandon write | Receives the transaction of a failed write and rolls it back |
@@ -319,9 +329,13 @@ interface has four methods:
   [SeaORM rules](../../../playbook/topics/seaorm.md#transactions). On
   Postgres the default isolation suffices, because the library locks the
   rows it reads and then writes.
-- **Reads run statement by statement** on the read connection, with no
-  transaction. A read racing a write may combine the states before and
-  after it; every write checks again, so no caller acts on such a mix.
+- **A read sees one state.** A read of several statements, such as a task
+  with its notes and artifacts, or a role check and the content it guards,
+  runs in one read transaction, as the
+  [SeaORM rules](../../../playbook/topics/seaorm.md#transactions) require.
+  On SQLite it is a deferred transaction; on Postgres it is a repeatable-read
+  transaction, so every statement sees the snapshot of the first. A write
+  never commits between two statements of one read.
 
 ### 6.5 File storage
 
@@ -401,11 +415,17 @@ sequenceDiagram
 - **A product may compose its own write** through the same entry, adding
   its rows inside, as it does when it creates a space with its owner's
   membership ([section 8](#8-scope-and-space-numbers)).
-- **A product's writes that touch no library table** run in transactions
+- **A product's writes that write no library table** run in transactions
   it opens itself. Lorebay's sign-in, agent authorization and membership
   writes keep theirs. Routing them through the entry was rejected: the entry
   exists so that what a product adds holds for every library write, tool
   calls included, and a product's own write is already in its hands.
+- **A product's own write in a space resolves the space through the
+  library.** Inside its own transaction it calls the library's read that
+  resolves a space key for the caller ([section 5](#5-public-api)), which
+  checks the scope and answers not found as every library operation does,
+  then checks the caller's role itself and uses the returned space ID for
+  its own rows, such as a new membership.
 
 ### 7.2 Interfaces inside an operation
 
@@ -415,9 +435,9 @@ is called outside it, never another connection:
 | Interface | Called | Gets |
 | --- | --- | --- |
 | Caller | Before the operation | The request's headers |
-| Space roles | In the permission check, and when listing spaces | The operation handle: the write's transaction, or the read connection |
-| Person names | When a result shows people, or a filter names one | The write's transaction, or the read connection |
-| Database | To begin, commit or abandon | |
+| Space roles | In the permission check, and when listing spaces | The operation handle: the write's or the read's transaction |
+| Person names | When a result shows people, or a filter names one | The write's or the read's transaction |
+| Database | To begin and end a read, and to begin, commit or abandon a write | |
 | File storage | Before or after the transaction | |
 
 - **An implementation uses the connection it is handed.** Lorebay's
@@ -608,9 +628,11 @@ built.
 - **The library names nothing of one product.** No identifier in the
   library names a database engine, a storage backend or its temporary
   files, a product's record of people or of memberships, or a kind of
-  credential, and no code branches for one product. A statement whose form
-  depends on the database backend, of which the library supports two, is
-  not a branch for one product.
+  credential, and no code branches for one product. The two exceptions name
+  a database backend, of which the library supports two, and are not about
+  one product: the `sqlite` and `postgres` features
+  ([section 4.1](#41-database-backends-and-dependencies)), and the code that
+  picks a statement's form by the connection's backend.
 - **Lorebay uses the same interfaces as any other product.** It has no
   shortcut into the library's internals.
 - **A second product must be able to run the library** on Postgres, with

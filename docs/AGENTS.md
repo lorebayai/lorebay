@@ -6,8 +6,7 @@ Follow these playbook fragments:
 
 - `docs/` holds Lorebay's design. The design of the library Lorebay builds
   on is in `spaces/docs/`; Lorebay's docs link to it and repeat none of it.
-- [overview.md](overview.md) lists every doc, and terms follow the glossary,
-  [CONTEXT.md](../CONTEXT.md).
+- The glossary is [CONTEXT.md](../CONTEXT.md).
 - Each topic folder's `AGENTS.md` adds the rules for that folder.
 - A doc stays at one of these levels:
 
