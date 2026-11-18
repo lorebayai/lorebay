@@ -1,7 +1,7 @@
 use std::time::{Duration, SystemTime};
 
 use httpdate::parse_http_date;
-use lorebay_base::Secret;
+use lorebay_lib_types::Secret;
 use reqwest::header::RETRY_AFTER;
 use reqwest::{Response, StatusCode};
 use serde::Deserialize;

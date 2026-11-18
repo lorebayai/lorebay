@@ -5,9 +5,8 @@ use std::path::Path;
 
 use anyhow::{Context, Result, bail};
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
-use lorebay_base::Secret;
+use lorebay_lib_types::Secret;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use tempfile::Builder;
 use typed_builder::TypedBuilder;
 
@@ -89,13 +88,6 @@ impl TokenSigner {
         )?
         .claims)
     }
-}
-
-pub(crate) fn token_hash(token: &str) -> String {
-    Sha256::digest(token.as_bytes())
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
 }
 
 const SIGNING_KEY_FILE: &str = "signing.key";

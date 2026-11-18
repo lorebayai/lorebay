@@ -17,7 +17,7 @@ base64.workspace = true
 clap.workspace = true
 getrandom.workspace = true
 httpdate.workspace = true
-lorebay-base.workspace = true
+lorebay-lib-types.workspace = true
 reqwest = { workspace = true, features = ["rustls", "query"] }
 serde.workspace = true
 serde_json.workspace = true

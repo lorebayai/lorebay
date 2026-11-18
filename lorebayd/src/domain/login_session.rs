@@ -3,7 +3,8 @@ use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
 
 use anyhow::anyhow;
-use lorebay_base::{Clock, RateLimitError, RateLimiter, Secret, SystemClock};
+use lorebay_base::{Clock, RateLimitError, RateLimiter, SystemClock};
+use lorebay_lib_types::{Secret, sha256_hex};
 use sea_orm::{
     ConnectionTrait, DatabaseConnection, DatabaseTransaction, Set, SqliteTransactionMode,
     TransactionOptions, TransactionTrait,
@@ -23,7 +24,7 @@ use crate::repository::refresh_token_history::RefreshTokenHistoryRepository;
 
 use super::access::Caller;
 use super::caller::{CallerError, VerifiedCaller};
-use super::token::{Claims, TokenKind, TokenSigner, TokenSubject, token_hash};
+use super::token::{Claims, TokenKind, TokenSigner, TokenSubject};
 use super::user_store::UserStore;
 use super::{primary_key, random_id};
 
@@ -111,7 +112,7 @@ pub(crate) async fn refresh(
     token: &str,
 ) -> Result<Tokens, LoginError> {
     let transaction = begin_write(database).await?;
-    let hash = Secret::from(token_hash(token));
+    let hash = Secret::from(sha256_hex(token));
     let history = RefreshTokenHistoryRepository::builder()
         .connection(&transaction)
         .build()
@@ -177,7 +178,7 @@ pub(crate) async fn rotate_refresh(
         })
         .await?;
     let mut model: ActiveModel = session.into();
-    model.refresh_token_hash = Set(token_hash(refresh_token.expose()));
+    model.refresh_token_hash = Set(sha256_hex(refresh_token.expose()));
     model.expires_at = Set(session_expiry(identity, now));
     repository.update(model).await?;
     Ok(tokens)
@@ -258,7 +259,7 @@ pub(crate) async fn create_session(
         id: Set(id.clone()),
         account_id: Set(account.id),
         random_id: Set(random_id),
-        refresh_token_hash: Set(token_hash(refresh_token.expose())),
+        refresh_token_hash: Set(sha256_hex(refresh_token.expose())),
         created_at: Set(now),
         expires_at: Set(session_expiry(identity, now)),
     };

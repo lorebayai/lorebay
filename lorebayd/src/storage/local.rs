@@ -6,7 +6,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, bail};
 use futures_util::{Stream, StreamExt};
-use lorebay_base::Secret;
+use lorebay_lib_types::Secret;
 use tempfile::{Builder, TempPath};
 use thiserror::Error;
 use tokio::fs::{self, File};

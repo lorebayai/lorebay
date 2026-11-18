@@ -5,7 +5,7 @@ use std::time::SystemTime;
 
 use anyhow::Result;
 use futures_util::Stream;
-use lorebay_base::Secret;
+use lorebay_lib_types::Secret;
 use typed_builder::TypedBuilder;
 
 pub(crate) use local::*;

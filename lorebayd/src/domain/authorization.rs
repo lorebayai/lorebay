@@ -1,6 +1,6 @@
 use std::net::IpAddr;
 
-use lorebay_base::Secret;
+use lorebay_lib_types::{Secret, sha256_hex};
 use sea_orm::{
     ConnectionTrait, DatabaseConnection, Set, SqliteTransactionMode, TransactionOptions,
     TransactionTrait,
@@ -18,7 +18,6 @@ use crate::repository::oauth_code::OauthCodeRepository;
 use super::access::Caller;
 use super::caller::{CallerError, VerifiedCaller};
 use super::login_session::now_millis;
-use super::token::token_hash;
 use super::{authorization_server_metadata, primary_key, random_id};
 
 pub(crate) const CLI_CLIENT_ID: &str = "lorebay-cli";
@@ -141,7 +140,7 @@ async fn issue_code<C: ConnectionTrait>(
     let now = now_millis()?;
     let model = ActiveModel {
         id: Set(primary_key()),
-        code_hash: Set(token_hash(code.expose())),
+        code_hash: Set(sha256_hex(code.expose())),
         account_id: Set(caller.account_id.clone()),
         client_id: Set(input.client_id.clone()),
         redirect_uri: Set(input.redirect_uri.clone()),

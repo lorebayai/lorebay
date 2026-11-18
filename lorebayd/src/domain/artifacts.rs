@@ -1,4 +1,4 @@
-use lorebay_base::Secret;
+use lorebay_lib_types::Secret;
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbErr, IntoActiveModel, Set, TransactionTrait};
 use thiserror::Error;
 use typed_builder::TypedBuilder;

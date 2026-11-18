@@ -1,7 +1,7 @@
+use lorebay_lib_types::sha256_hex;
 use thiserror::Error;
 use typed_builder::TypedBuilder;
 
-use super::token::token_hash;
 use super::{TaskKeyword, TaskStatus};
 
 #[derive(Debug, Error)]
@@ -51,6 +51,6 @@ impl TaskFilters {
             self.own_open,
             self.keyword.as_ref().map(TaskKeyword::as_str),
         ))?;
-        Ok(format!("tasks-v2:{}", token_hash(&scope)))
+        Ok(format!("tasks-v2:{}", sha256_hex(&scope)))
     }
 }

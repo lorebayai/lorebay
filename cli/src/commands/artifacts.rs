@@ -1,4 +1,4 @@
-use lorebay_base::Secret;
+use lorebay_lib_types::Secret;
 use reqwest::Method;
 use typed_builder::TypedBuilder;
 

@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use anyhow::{Context, Result, anyhow, bail};
-use lorebay_base::Secret;
+use lorebay_lib_types::Secret;
 use serde::Deserialize;
 use serde_path_to_error::{Error as PathError, Segment};
 use serde_yaml_ng::{Deserializer, Value};

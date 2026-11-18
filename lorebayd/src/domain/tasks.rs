@@ -1,4 +1,4 @@
-use lorebay_base::Secret;
+use lorebay_lib_types::Secret;
 use sea_orm::{
     DatabaseConnection, DatabaseTransaction, DbErr, IntoActiveModel, Set, SqliteTransactionMode,
     TransactionOptions, TransactionTrait,
