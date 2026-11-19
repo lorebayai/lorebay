@@ -1,0 +1,6 @@
+{
+  "name": "lorebay",
+  "description": "Lorebay's agent skill",
+  "owner": { "name": "Lorebay" },
+  "plugins": [{ "name": "lorebay", "source": "./skill" }]
+}

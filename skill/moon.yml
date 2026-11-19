@@ -1,0 +1,12 @@
+layer: "configuration"
+
+tasks:
+  plugin:
+    command: "bash .moon/check-skill-plugin.sh"
+    inputs:
+      - "/skill/**/*"
+      - "/.claude-plugin/**/*"
+      - "/.agents/**/*"
+      - "/.moon/check-skill-plugin.sh"
+    options:
+      runFromWorkspaceRoot: true

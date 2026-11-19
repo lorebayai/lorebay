@@ -1,30 +1,22 @@
 # Lorebay skill
 
 Lorebay's agent skill, in `lorebay/`, tells a coding agent how to record its
-work in a Lorebay space. A person installs it in Claude Code 2.1.325 or Codex
-0.169.0, or newer, and connects the harness to a `lorebayd`, whose address
+work in a Lorebay space. A person installs it in Claude Code 2.1.328 or Codex
+0.170.0, or newer, and connects the harness to a `lorebayd`, whose address
 the person deploying it gives. Older harness versions are untested.
 
 ## Usage
 
-Link the skill from a clone of this repo into the harness's user-level skills
-directory, so pulling the clone updates it. From the repo root, the first
-line for Claude Code and the second for Codex:
+Install the skill as a plugin from this repo's marketplace, and connect the
+harness at user level, so every project and worktree has the server, under
+the name `lorebay` that the skill uses. `<url>` is `https://` with the host
+and port, such as `https://lorebay.test:8443`; both harnesses refuse OAuth
+over `http://` except on `localhost`, `127.0.0.1` or `::1`. For Claude Code,
+in a terminal, since `mcp login` needs one:
 
 ```bash
-mkdir -p ~/.claude/skills && ln -s "$PWD/skill/lorebay" ~/.claude/skills/lorebay
-mkdir -p ~/.agents/skills && ln -s "$PWD/skill/lorebay" ~/.agents/skills/lorebay
-```
-
-A new session picks up the skill and each pull; `/skills` lists `lorebay`.
-
-Connect the harness at user level, so every project and worktree has the
-server, under the name `lorebay` that the skill uses. `<url>` is `https://`
-with the host and port, such as `https://lorebay.test:8443`; both harnesses
-refuse OAuth over `http://` except on `localhost`, `127.0.0.1` or `::1`. For
-Claude Code, in a terminal, since `mcp login` needs one:
-
-```bash
+claude plugin marketplace add https://github.com/lorebayai/lorebay.git
+claude plugin install lorebay@lorebay
 claude mcp add --scope user --transport http lorebay <url>/mcp
 claude mcp login lorebay
 ```
@@ -37,6 +29,8 @@ let the agent's shell reach the network, in every project, to upload files;
 the approval lets non-interactive runs, such as `codex exec`, call the tools.
 
 ```bash
+codex plugin marketplace add https://github.com/lorebayai/lorebay.git --ref main
+codex plugin add lorebay@lorebay
 codex mcp add lorebay --url <url>/mcp
 ```
 
@@ -48,6 +42,14 @@ network_access = true
 url = "<url>/mcp"
 default_tools_approval_mode = "approve"
 ```
+
+A new session loads the skill: `/skills` lists `lorebay:lorebay`, and
+`claude plugin details lorebay@lorebay` and `codex plugin list` show the
+plugin. To update, run `claude plugin marketplace update lorebay` and
+`claude plugin update lorebay@lorebay`, or turn on auto-update in `/plugin`;
+for Codex, run `codex plugin marketplace upgrade lorebay`. Remove an older
+install's links, `~/.claude/skills/lorebay` and `~/.agents/skills/lorebay`,
+or the skill loads twice.
 
 `--no-browser` on either `mcp login` prints the authorization link only. On
 Lorebay's authorization page, sign in, consent and name the agent, such as
