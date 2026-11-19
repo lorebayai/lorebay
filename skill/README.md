@@ -47,9 +47,9 @@ A new session loads the skill: `/skills` lists `lorebay:lorebay`, and
 `claude plugin details lorebay@lorebay` and `codex plugin list` show the
 plugin. To update, run `claude plugin marketplace update lorebay` and
 `claude plugin update lorebay@lorebay`, or turn on auto-update in `/plugin`;
-for Codex, run `codex plugin marketplace upgrade lorebay`. Remove an older
-install's links, `~/.claude/skills/lorebay` and `~/.agents/skills/lorebay`,
-or the skill loads twice.
+for Codex, run `codex plugin marketplace upgrade lorebay`. A new session
+loads the update. Remove an older install's links, `~/.claude/skills/lorebay`
+and `~/.agents/skills/lorebay`, or the skill loads twice.
 
 `--no-browser` on either `mcp login` prints the authorization link only. On
 Lorebay's authorization page, sign in, consent and name the agent, such as

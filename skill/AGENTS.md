@@ -10,15 +10,15 @@ Folder orientation:
   1,024 characters.
 - Any further file of the skill lives under `lorebay/` and is linked from
   `SKILL.md` by a relative path.
-- The skill installs as the plugin `lorebay`, which this folder is: the
-  marketplaces `../.claude-plugin/marketplace.json` for Claude Code and
-  `../.agents/plugins/marketplace.json` for Codex each list only it, and its
+- The skill installs as the plugin `lorebay`, which this folder is.
+  `skill:plugin` checks that the marketplaces
+  `../.claude-plugin/marketplace.json` for Claude Code and
+  `../.agents/plugins/marketplace.json` for Codex each list only it, that its
   manifests `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json` are
-  identical and point `skills` at `./lorebay`. Plugin files stay out of
-  `lorebay/`.
-- No marketplace or manifest has a `version`, so each harness's update
-  follows `main`, and none declares an MCP server: the person registers it
-  by hand. `skill:plugin` checks these rules.
+  identical and point `skills` at `./lorebay`, and that none of the four has
+  a `version`, so each harness's update follows `main`, or declares an MCP
+  server.
+- Plugin files stay out of `lorebay/`.
 - The skill's text uses no harness-specific syntax, such as a tool namespace
   or a skill mention, so one copy serves every harness. It names the tools by
   their bare names, as [MCP tools](../lib/docs/contracts/mcp-tools.md#4-tools)

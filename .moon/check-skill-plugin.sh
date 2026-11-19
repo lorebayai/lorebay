@@ -13,10 +13,14 @@ errors = []
 
 def load(path):
     try:
-        return json.loads(Path(path).read_text())
+        data = json.loads(Path(path).read_text())
     except (OSError, ValueError) as error:
         errors.append(f"{path}: {error}")
         return {}
+    if isinstance(data, dict):
+        return data
+    errors.append(f"{path}: is not a JSON object")
+    return {}
 
 
 marketplaces = {
