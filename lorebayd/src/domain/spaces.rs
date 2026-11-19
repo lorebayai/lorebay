@@ -26,7 +26,8 @@ pub(crate) async fn create_space(
                 .unwrap_or(0)
                 .checked_add(1)
                 .ok_or_else(|| DbErr::Type("Space numbers exhausted".into()))?;
-            let (space, reference) = insert_space(write, OWNER_ID, number, input).await?;
+            let role = SpaceRole::Owner;
+            let (space, reference) = insert_space(write, OWNER_ID, number, role, input).await?;
             let now = now_millis()?;
             ParticipantRepository::builder()
                 .connection(write.transaction())
@@ -36,7 +37,7 @@ pub(crate) async fn create_space(
                     space_id: Set(reference.id),
                     space_number: Set(reference.number),
                     account_id: Set(caller.person_id.clone()),
-                    role: Set(SpaceRole::Owner.as_str().to_owned()),
+                    role: Set(role.as_str().to_owned()),
                     created_at: Set(now),
                     updated_at: Set(now),
                 })

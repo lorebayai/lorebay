@@ -3,8 +3,8 @@ use std::sync::atomic::Ordering;
 
 use futures_util::future::join_all;
 use lorebay_lib_core::{
-    Caller, NewSpace, NoteContent, SpaceError, SpaceInputError, TaskChanges, TaskStatus, add_note,
-    change_task, complete_artifact, create_space, delete_task, get_artifact_download_url,
+    Caller, NewSpace, NoteContent, SpaceError, SpaceInputError, SpaceRole, TaskChanges, TaskStatus,
+    add_note, change_task, complete_artifact, create_space, delete_task, get_artifact_download_url,
     highest_space_number, list_tasks, read_task, remove_abandoned_artifacts,
 };
 use sea_orm::TransactionTrait;
@@ -32,7 +32,14 @@ async fn create_space_refuses_nonpositive_numbers() {
             let error = fixture
                 .state
                 .run_write(Some(&fixture.person), async |write| {
-                    create_space(write, &fixture.person.owner_id, number, input).await
+                    create_space(
+                        write,
+                        &fixture.person.owner_id,
+                        number,
+                        SpaceRole::Owner,
+                        input,
+                    )
+                    .await
                 })
                 .await
                 .unwrap_err();

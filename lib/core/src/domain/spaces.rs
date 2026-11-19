@@ -154,6 +154,7 @@ pub async fn create_space(
     write: &mut Write<'_>,
     owner_id: &str,
     number: i64,
+    creator_role: SpaceRole,
     input: NewSpace,
 ) -> Result<(Space, SpaceReference), SpaceError> {
     write.begin_operation()?;
@@ -198,7 +199,7 @@ pub async fn create_space(
     Ok((
         AuthorizedSpace {
             space,
-            role: SpaceRole::Owner,
+            role: creator_role,
         }
         .into(),
         reference,

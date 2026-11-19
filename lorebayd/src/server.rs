@@ -257,7 +257,7 @@ fn start_workers(state: &ServerState, stopped: watch::Receiver<bool>) -> JoinSet
         interval,
         stopped.clone(),
     ));
-    workers.spawn(worker::remove_temporary_uploads(
+    workers.spawn(worker::remove_local_leftovers(
         state.storage.clone(),
         interval,
         Duration::from_secs(config.orphaned_file_lifetime_seconds),

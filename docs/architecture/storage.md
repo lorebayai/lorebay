@@ -63,7 +63,9 @@ It does not cover:
   which fails if a file is already there, and removes the temporary file. It
   rejects an upload without the header the upload URL came with, and an
   upload over the size limit. An interrupted upload leaves only the
-  temporary file, which a background job removes; see
+  temporary file. A background job removes old temporary uploads and old
+  regular artifact files with names outside the library's location format.
+  It rechecks file type and modification time before deleting. See
   [System architecture](system.md#6-background-jobs).
 - **Every download is checked against its record.** The file URLs
   `lorebayd` serves ask the library whether the artifact is still recorded,

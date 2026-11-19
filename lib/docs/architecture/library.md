@@ -145,11 +145,12 @@ in its own subfolder and named `lorebay-lib-<subfolder>`:
   driver. `lorebay-lib-mcp` forwards those features to core.
   `lorebay-lib-migration` has its own `sqlite` and `postgres` features without
   a default. Consumers select the driver they use. Lorebay selects `sqlite`.
-- **Features choose drivers, not code paths.** The library never connects:
-  the product hands it connections. Where a statement must differ between
-  the backends, such as keyword search, the data layer picks the form from
-  the connection's backend at run time, and one build with both features on
-  serves both.
+- **Backend features select drivers.** The product supplies the runtime
+  connections. Where a statement must differ between the backends, such as
+  keyword search, the data layer picks the form from the connection's
+  backend at run time, and one build with both features on serves both.
+  The migration crate's `sqlite` feature also builds the entity generation
+  helper and binary, which open a disposable SQLite file in development.
 - **Versions are declared once,** in the root `[workspace.dependencies]`,
   which declares SeaORM and its migration crate with no driver feature. A
   consumer in another repository pins all library crates it uses to the
@@ -184,8 +185,10 @@ and its implementations, and nothing more:
     it is handed: it checks the scope, answers a missing space or one of
     another owner as not found, and returns the space's ID and number
     ([section 7.1](#71-run-one-write)).
-- `lorebay-lib-migration`: the library's `Migrator`. Products import it
-  directly to apply the library schema ([section 12](#12-data)).
+- `lorebay-lib-migration`: the library's `Migrator`, which products import
+  directly to apply the library schema, and `open_entity_database` with the
+  `sqlite` feature for the disposable database used in entity generation
+  ([section 12](#12-data)).
 - `lorebay-lib-mcp`: one function that returns the router a product
   mounts at the root of its origin.
 
@@ -328,6 +331,9 @@ methods:
 
 - **The product opens, commits and rolls back.** The library writes inside
   the transaction it is handed and never commits or rolls back.
+- **On SQLite the product enables foreign key checks** on every
+  connection it hands to the library. Task deletion relies on the cascade
+  to its notes and on clearing the source task from proposals.
 - **The operation supplies the write label and space.** The write entry adds
   the caller and passes the record to the commit hook. A product can use
   the record to add its own rows, such as an audit record, for writes from
@@ -349,8 +355,9 @@ methods:
 ### 6.5 File storage
 
 **Issues upload and download URLs, reports a file's size, deletes, and
-lists.** A file is named by its location, which the library generates and
-never takes from a file name.
+lists.** The library generates each location as a UUIDv7 in the canonical
+text form of the [Data model](data-model.md#3-conventions). A backend can
+use it as a single path segment or object key.
 
 | Method | Does |
 | --- | --- |
@@ -358,8 +365,7 @@ never takes from a file name.
 | Download URL | Issues a URL that serves the file with the content type and disposition the library chose, expiring when the library says |
 | Size | Reports a file's size, or that no file is there |
 | Delete | Deletes a file; a missing file is not an error |
-| Delete listed | Deletes a listed regular file if its modification time still matches, and reports whether it removed the file |
-| List | Lists every regular stored file with its native name and last-modified time |
+| List | Lists each stored file's location and last-modified time |
 
 Every implementation:
 
@@ -367,16 +373,14 @@ Every implementation:
   written once;
 - refuses an upload without the headers the tool descriptions promise;
 - expires its URLs;
-- holds only the library's files. The orphaned-file round compares each
-  old file's name with the recorded storage locations and deletes unchanged
-  files without a record. A name that cannot be stored as a database string
-  qualifies as unreferenced.
+- holds the library's files. The orphaned-file round deletes every listed
+  file old enough with no record pointing to its location.
 
 At startup the product gives its storage backend the same upload size limit
 it supplies to the library. The backend enforces it when receiving uploads,
 and the library checks it again when recording completion. The library
 passes URL lifetimes and download presentation with each request to the
-backend. The backend removes its partial uploads and lists finished files.
+backend. The backend removes its own leftovers and lists finished files.
 
 **The storage is a trait object.** A generic parameter was rejected: it
 would spread through every operation, the state, the MCP layer and the
@@ -397,9 +401,14 @@ sequenceDiagram
     Operation->>Database: Begin write
     Database-->>Operation: Transaction
     Operation->>Operation: Inside: permission check, then writes
-    Operation->>Database: Commit write, with the record
-    Database->>Database: Product rows, then commit
-    Operation->>Storage: After: issue URLs, delete files
+    alt Write succeeds
+        Operation->>Database: Commit write, with the record
+        Database->>Database: Product rows, then commit
+        Operation->>Storage: After commit: issue URLs, delete files
+    else Oversize refusal
+        Operation->>Database: Roll back
+        Operation->>Storage: After rollback: delete oversized file
+    end
     Operation-->>EntryPoint: Result
 ```
 
@@ -412,19 +421,19 @@ sequenceDiagram
   product's commit succeeds, and drops them after a rollback or a failed
   commit. A deletion that fails or never runs leaves a file no record
   points to, which the orphaned-file round removes.
-- **Oversized files are rechecked under the task and artifact locks.** The
-  initial size read and the other storage calls run outside the write
-  transaction. The locked recheck protects a replacement upload from a
-  second report that observed the old oversized file.
+- **Storage calls run outside the transaction.** A completion reads the
+  size before the write, decides under the task and artifact locks, and
+  deletes an oversized file after rolling back the refused write
+  ([section 9](#9-files)).
 
   | Operation | Before | Inside | After |
   | --- | --- | --- | --- |
   | Register an artifact | | Check the task, take the number, insert the registration | Issue the upload URL |
-  | Report an upload complete | Check the registration and ask storage for the size | Check again under the task and artifact locks. If the first size exceeded the limit, recheck and delete only if still oversized. Otherwise record the checked size and time. | |
+  | Report an upload complete | Check the registration and read the stored size | Lock the task and artifact, check whether the registration is still incomplete, and record completion or refuse the oversized file | Delete an oversized file after rollback |
   | Issue a download URL | Check the space, read the completed record | | Issue the download URL |
   | Delete a task or an artifact | | Check, then delete the rows | Delete the files |
   | Remove abandoned registrations | | Delete the rows still incomplete | Delete their files |
-  | Remove orphaned files | List the files, read which have records | | Delete unchanged files without records |
+  | Remove orphaned files | List the files, read which have records | | Delete the files without records |
 
 - **A product may compose its own write** through the same entry, adding
   its rows inside, as it does when it creates a space with its owner's
@@ -492,9 +501,10 @@ Both rounds are safe to run again.
   never reuses one.
 - **Creating a space is a step a product composes.** It runs inside a write
   the product runs through the entry, because its number, its owner and the
-  owner's membership are the product's. The library inserts the space; the
-  product checks who may create one before, and adds the membership inside
-  the same transaction.
+  owner's membership are the product's. The product authorizes creation,
+  supplies the creator's role for the result and adds the membership in
+  the same transaction. Lorebay uses the owner role for both the result
+  and membership.
 - **Lorebay numbers its spaces by the highest number plus one,** read
   through the library inside the write that creates the space. Its write
   transaction holds the database's write lock, so two creations cannot take
@@ -505,12 +515,14 @@ Both rounds are safe to run again.
 ## 9. Files
 
 - **The size limit is checked after the upload.** When an upload is
-  reported complete, the library asks storage for the file's size. Over the
-  limit, it refuses with `artifact.too_large`, deletes the file and leaves
-  the registration incomplete, so nobody can download it. A backend that
-  can refuse an oversized upload itself still does; the check after the
-  upload is what holds on a backend that cannot, and when the limit was
-  lowered after the upload.
+  reported complete, the library reads the file's size before the write
+  transaction. Inside the transaction it locks the task and artifact and
+  checks that the registration is still incomplete. If the observed size
+  exceeds the limit, it refuses with `artifact.too_large`, rolls back and
+  then deletes the file. A later report with no file returns
+  `artifact.not_uploaded`. A backend can also enforce the limit at upload.
+  The completion check covers backends that defer it and a limit lowered
+  after the upload.
 - **A download URL may outlive its content.** A URL issued before its
   content was deleted may work until it expires or the file is gone.
   Lorebay serves its own file URLs and checks the record on every download,
@@ -621,13 +633,17 @@ both.
 | Delete a note | None | It deletes by task and time; a task's person never changes, so the party check needs no lock; a deleted time stays below the task's last activity and is never given again |
 | Delete a task | Task | A registration or note waiting on the task finds it gone; the files deleted are those of the rows deleted |
 | Register an artifact | Task, then space counter | The state is checked under the lock; numbers are distinct |
-| Report an upload complete | Task, then artifact | A second report finds a completed artifact or rechecks an oversized observation before deleting. The task's last activity becomes the later of its current value and the completion. |
+| Report an upload complete | Task, then artifact | A second report of a completed registration returns the existing result. Reports that observed the same oversized size refuse while the registration remains incomplete. Each refusal deletes after rollback, and deleting an already absent file succeeds. The task's last activity becomes the later of its current value and the completion. |
 | Delete an artifact | None | One statement deletes the row only if complete and returns its location |
 | Remove abandoned registrations | Each deleted row | One statement deletes only rows still incomplete when it deletes them and returns their locations; only those files are deleted |
 | Remove orphaned files | None | A record commits before any URL for its location exists, and locations are never reused, so a file old enough with no record never gets one |
 | Change Knowledge directly | Entry, then space counter for a new entry | The next version is computed from the locked entry; the unique name refuses a second entry of one name |
 | Submit a proposal | Task, when it names one; then space counter | The task cannot be deleted before the proposal refers to it; the base version is a snapshot by design |
 | Approve or reject a proposal | Proposal, then entry, then space counter for a new entry | The status is checked under the lock, so a proposal is decided once |
+
+The oversize refusal uses the size read before taking the locks. If a new
+upload replaces the oversized file at the same location before a pending
+deletion runs, that deletion can remove the replacement.
 
 The Knowledge and proposal writes follow the same rules when they are
 built.
@@ -641,11 +657,11 @@ built.
 - **The library names nothing of one product.** No identifier in the
   library names a database engine, a storage backend or its temporary
   files, a product's record of people or of memberships, or a kind of
-  credential, and no code branches for one product. The two exceptions name
-  a database backend, of which the library supports two, and are not about
-  one product: the `sqlite` and `postgres` features
-  ([section 4.1](#41-database-backends-and-dependencies)), and the code that
-  picks a statement's form by the connection's backend.
+  credential, and no code branches for one product. Three exceptions name
+  a database backend. They are the `sqlite` and `postgres` features, the
+  code that picks a statement's form by the connection's backend, and the
+  disposable SQLite database used for entity generation
+  ([section 4.1](#41-database-backends-and-dependencies)).
 - **Lorebay uses the same interfaces as any other product.** It has no
   shortcut into the library's internals.
 - **A second product must be able to run the library** on Postgres, with

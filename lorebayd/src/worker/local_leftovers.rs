@@ -6,7 +6,7 @@ use tokio::sync::watch;
 
 use crate::storage::LocalDirectory;
 
-pub(crate) async fn remove_temporary_uploads(
+pub(crate) async fn remove_local_leftovers(
     storage: Arc<LocalDirectory>,
     interval: Duration,
     lifetime: Duration,
@@ -18,9 +18,9 @@ pub(crate) async fn remove_temporary_uploads(
             let _ = stopped.changed().await;
         },
         || async {
-            match storage.remove_temporary_uploads(lifetime).await {
-                Ok(removed) => tracing::info!(removed, "temporary upload cleanup finished"),
-                Err(error) => tracing::error!(%error, "temporary upload cleanup failed"),
+            match storage.remove_local_leftovers(lifetime).await {
+                Ok(removed) => tracing::info!(removed, "local file cleanup finished"),
+                Err(error) => tracing::error!(%error, "local file cleanup failed"),
             }
         },
     )

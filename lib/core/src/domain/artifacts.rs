@@ -191,11 +191,15 @@ pub async fn complete_artifact(
     }
     let size = stored_size(state, &artifact.storage_key).await?;
     let time = now_millis()?;
-    state
+    let result = state
         .run_write(Some(caller), async |write| {
             record_completion(write, caller, target, Completion { key, size, time }).await
         })
-        .await
+        .await;
+    if matches!(&result, Err(ArtifactError::TooLarge)) {
+        state.storage.delete(&artifact.storage_key).await?;
+    }
+    result
 }
 
 pub async fn delete_artifact(
@@ -281,26 +285,6 @@ async fn stored_size(state: &LibraryState, location: &str) -> Result<u64, Artifa
         .ok_or(ArtifactError::NotUploaded)
 }
 
-async fn checked_size(
-    state: &LibraryState,
-    artifact: &artifact::Model,
-    observed: u64,
-) -> Result<i64, ArtifactError> {
-    let limit = state.settings().upload_size_limit;
-    let size = if observed > limit {
-        // The artifact row stays locked through the recheck and deletion.
-        let size = stored_size(state, &artifact.storage_key).await?;
-        if size > limit {
-            state.storage.delete(&artifact.storage_key).await?;
-            return Err(ArtifactError::TooLarge);
-        }
-        size
-    } else {
-        observed
-    };
-    Ok(i64::try_from(size).map_err(anyhow::Error::from)?)
-}
-
 async fn record_completion(
     write: &mut Write<'_>,
     caller: &Caller,
@@ -322,7 +306,10 @@ async fn record_completion(
         write.record(WriteOperation::CompleteArtifact, Some(space_id));
         return Ok(result);
     }
-    let size = checked_size(write.state(), &current, completion.size).await?;
+    if completion.size > write.state().settings().upload_size_limit {
+        return Err(ArtifactError::TooLarge);
+    }
+    let size = i64::try_from(completion.size).map_err(anyhow::Error::from)?;
     let time = completion.time.max(task.last_activity_at);
     let transaction = write.transaction();
     let mut current = current.into_active_model();

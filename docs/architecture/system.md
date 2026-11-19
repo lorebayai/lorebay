@@ -89,8 +89,8 @@ They include:
 - the library's two cleanup rounds, which remove artifact registrations
   whose upload was never completed and delete stored files that no record
   points to;
-- removing the temporary files that interrupted uploads leave in the local
-  directory; see [Storage](storage.md#4-file-storage);
+- removing old temporary uploads and old artifact files with out-of-format
+  names in the local directory; see [Storage](storage.md#4-file-storage);
 - removing expired authorization codes, device sign-in requests, login
   sessions and agent authorizations, and replaced refresh tokens past their
   expiry;

@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::ffi::OsString;
 use std::time::{Duration, SystemTime};
 
 use anyhow::Result;
@@ -20,9 +19,6 @@ pub trait FileStorage: Send + Sync {
     fn size<'a>(&'a self, location: &'a str) -> BoxFuture<'a, Result<Option<u64>>>;
 
     fn delete<'a>(&'a self, location: &'a str) -> BoxFuture<'a, Result<()>>;
-
-    /// Deletes a listed file only if it is still regular and has the same modification time.
-    fn delete_listed<'a>(&'a self, file: &'a StoredFile) -> BoxFuture<'a, Result<bool>>;
 
     fn list(&self) -> BoxStream<'_, Result<StoredFile>>;
 }
@@ -96,6 +92,6 @@ pub struct UploadRequest {
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
 pub struct StoredFile {
-    pub location: OsString,
+    pub location: String,
     pub modified: SystemTime,
 }

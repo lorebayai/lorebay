@@ -267,40 +267,41 @@ impl FileStorage for LocalDirectory {
         })
     }
 
-    fn delete_listed<'a>(&'a self, file: &'a LibraryFile) -> BoxFuture<'a, Result<bool>> {
-        Box::pin(async move {
-            let file = StoredFile {
-                name: file.location.clone(),
-                kind: StoredFileKind::Artifact,
-                modified: file.modified,
-            };
-            self.remove_listed(&file).await
-        })
-    }
-
     fn list(&self) -> BoxStream<'_, Result<LibraryFile>> {
         list_files(self.files.clone(), StoredFileKind::Artifact)
-            .map(|entry| {
-                let file = entry?;
-                Ok(LibraryFile {
-                    location: file.name,
-                    modified: file.modified,
-                })
+            .filter_map(async |entry| match entry {
+                Ok(file) => file
+                    .name
+                    .into_string()
+                    .ok()
+                    .filter(|name| valid_location(name))
+                    .map(|location| {
+                        Ok(LibraryFile {
+                            location,
+                            modified: file.modified,
+                        })
+                    }),
+                Err(error) => Some(Err(error)),
             })
             .boxed()
     }
 }
 
 impl LocalDirectory {
-    pub async fn remove_temporary_uploads(&self, lifetime: Duration) -> Result<u64> {
+    pub async fn remove_local_leftovers(&self, lifetime: Duration) -> Result<u64> {
         let cutoff = SystemTime::now()
             .checked_sub(lifetime)
-            .context("Temporary upload cutoff is out of range")?;
-        let mut entries = list_files(self.temporary.clone(), StoredFileKind::Temporary).boxed();
+            .context("Local file cleanup cutoff is out of range")?;
+        let uploads = list_files(self.temporary.clone(), StoredFileKind::Temporary);
+        let artifacts = list_files(self.files.clone(), StoredFileKind::Artifact);
+        let mut entries = uploads.chain(artifacts).boxed();
         let mut removed = 0;
         while let Some(file) = entries.next().await {
             let file = file?;
-            if file.modified < cutoff {
+            if file.modified < cutoff
+                && (file.kind == StoredFileKind::Temporary
+                    || !file.name.to_str().is_some_and(valid_location))
+            {
                 removed += u64::from(self.remove_listed(&file).await?);
             }
         }
