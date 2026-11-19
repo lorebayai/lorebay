@@ -1,3 +1,7 @@
+Folder orientation:
+
+- @README.md
+
 ## Skill conventions
 
 - `lorebay/SKILL.md` is the skill Lorebay ships, in the Agent Skills format
