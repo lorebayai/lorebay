@@ -22,8 +22,8 @@ and 9.
 ## 2. Scope
 
 This doc covers Lorebay's part of the agent rules, by the library's rule
-numbers, with Lorebay's backstops. Every rule, its library part and the
-library's backstop are in the library's
+numbers, with what Lorebay adds to a rule's backstop. Every rule, its
+library part and the library's backstop are in the library's
 [Agent rules](../../lib/docs/contracts/agent-rules.md).
 
 It does not cover:
@@ -42,6 +42,6 @@ them as the library's contract does.
 | # | Rule | Lorebay's part | Backstop |
 | --- | --- | --- | --- |
 | 1 | [**Choose the space**](../../lib/docs/contracts/agent-rules.md#3-session-start) | The project's local instructions that record the space key are its committed agent instructions file that the harness loaded, so the whole team shares the key: both `AGENTS.md` and `CLAUDE.md` when the project has them as separate files, and the file the harness loads when the project has neither. If the person is in no space, tell the person to create a space with `lorebay space create`, or to ask a space's owner or an admin to add them; see [CLI](cli.md#3-commands) and [Access control](access-control.md#3-participants). | None |
-| 2 | [**Create the task**](../../lib/docs/contracts/agent-rules.md#3-session-start) | In the cases with no task, the person deletes a task already created with `lorebay task delete`; see [CLI](cli.md#3-commands). | Partial, as the library's rule says |
-| 5 | [**Write notes**](../../lib/docs/contracts/agent-rules.md#4-while-working) | The command in the backstop. | None; a person can delete a note that holds a secret with `lorebay note delete` |
+| 2 | [**Create the task**](../../lib/docs/contracts/agent-rules.md#3-session-start) | In the cases with no task, the person deletes a task already created with `lorebay task delete`; see [CLI](cli.md#3-commands). | Partial, as the [library's rule](../../lib/docs/contracts/agent-rules.md#3-session-start) says |
+| 5 | [**Write notes**](../../lib/docs/contracts/agent-rules.md#4-while-working) | The command in the backstop. | None; a person can delete a note that holds a secret with `lorebay note delete`; see [CLI](cli.md#3-commands) |
 | 9 | [**Keep working when the MCP server is unreachable**](../../lib/docs/contracts/agent-rules.md#4-while-working) | After an unauthorized answer, also suggest that the person re-authorize Lorebay's MCP server in the harness. | None |

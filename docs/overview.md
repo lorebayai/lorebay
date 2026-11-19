@@ -30,5 +30,5 @@ tasks, Knowledge and MCP tools, has its own design, from the
   `/api/v1`.
 - [CLI](contracts/cli.md): the `lorebay` commands, browser and device sign-in,
   credentials, output and exit codes.
-- [Agent skill](contracts/agent-skill.md): the skill Lorebay ships, which
-  states the library's agent rules and Lorebay's additions to them.
+- [Agent skill](contracts/agent-skill.md): Lorebay's part of the agent
+  rules its skill states, beside the library's agent rules.
