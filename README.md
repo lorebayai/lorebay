@@ -59,6 +59,8 @@ docker stop lorebay-test-postgres
   the home of its `migration/` crate.
 - `playbook/`: conventions for coding agents, imported from `AGENTS.md`
   files.
+- `skill/`: the agent skill Lorebay ships, which tells agents how to record
+  their work in a space.
 - `web/`: the TypeScript web pages embedded by `lorebayd`.
 
 ## Docs
