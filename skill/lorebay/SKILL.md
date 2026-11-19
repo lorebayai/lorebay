@@ -98,13 +98,18 @@ this rule and rule 11.
 
 ### 5. Write notes
 
+Record in this order: the task; the plan, before the work it describes; the
+work, with a note after each finished step; then, once every edit and check is
+done, the uploads (rule 6), the result (rule 10) and the end (rule 12).
+
 Write notes with `add_note`:
 
-- **First, a plan,** in each session that starts work on the task: what the
-  person wants this time, then how you intend to do it.
+- **The plan,** in each session that starts work on the task: what the person
+  wants this time, then how you intend to do it.
 - **Reopening an `ended` task also starts with a note:** what was missed, and
   how you will fix it.
-- **After each finished step:** what you did, and why.
+- **After each finished step:** what you did, and why. A task of one step gets
+  this note too; the result does not replace it.
 - **No closing note:** the conclusion goes in the result.
 
 Never write secrets, such as keys, passwords, credentials, or upload and
@@ -114,9 +119,13 @@ summary. A person can delete a note that holds a secret with
 
 ### 6. Upload artifacts
 
-Upload only files you produced that have no other home, such as reports,
-images, exported documents or data. Link files already in a repository or a
-pull request in Deliverables instead.
+Upload each final file deliverable, such as a report, an image, an exported
+document or data, also when the person never says "deliverable" or "upload". A
+file only on local disk counts, also an untracked or uncommitted one inside a
+Git folder. Only when a file's final content is in a pushed commit or a pull
+request, link that in Deliverables instead. The uploaded bytes must match the
+final file: if a file changes after its upload, upload it again as a new
+artifact and reference that one in the result.
 
 Upload with the URL and headers that `create_artifact` returns, then call
 `complete_artifact`, also when the upload returns 412: the file is already
@@ -143,7 +152,8 @@ Keep working when the MCP server is unreachable, whether at session start,
 partway through, or because the authorization stopped working, and tell the
 person once that this stretch is not recorded. After an unauthorized answer,
 also suggest that the person re-authorize Lorebay's MCP server in the harness.
-Don't backfill the stretch; record as usual once the server is back.
+Once the server is back, also after re-authorization, record only new work:
+don't backfill the stretch or create a task for it.
 
 A call that gets no answer, a server error (`server.internal`) or an
 unauthorized answer (`401`) counts as the server being unreachable; a refusal
