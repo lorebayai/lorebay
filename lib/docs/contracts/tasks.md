@@ -114,8 +114,7 @@ documents or data.
   `artifact.not_uploaded`.
 - **Each artifact has a file name and a one-sentence summary.**
 - **Artifacts are immutable.** To update one, upload a new one.
-- **An artifact must not exceed the size limit the product sets.** How
-  browsers show artifacts is in
+- **How browsers show artifacts** is in
   [Storage](../architecture/storage.md#3-file-storage).
 - **An artifact belongs to the agent's current task.** Opening a task shows
   its Scratchpad and artifacts.

@@ -16,8 +16,8 @@ cargo run -p lorebayd -- --config /path/to/lorebayd.json --dotenv /path/to/loreb
 ```
 
 Startup applies the library's migrations first, then Lorebay's. If startup
-refuses an earlier data directory, move it aside and start with an empty
-one. See [what to preserve](../docs/architecture/storage.md#3-layers).
+refuses a data directory from an earlier build, move it aside and start with
+an empty one; the users file recreates the accounts.
 
 `moon run web:build` builds the static web files before direct Cargo commands.
 The server build, lint and test tasks run it as a dependency.
@@ -79,13 +79,13 @@ Relative paths resolve against the working directory.
 | `device_rate_window_seconds` | `LOREBAYD__DEVICE_RATE_WINDOW_SECONDS` | `60` | 1..315360000 seconds |
 | `device_verification_rate_limit` | `LOREBAYD__DEVICE_VERIFICATION_RATE_LIMIT` | `10` | Positive u32 read and decision attempts per peer IP per window |
 | `device_verification_rate_window_seconds` | `LOREBAYD__DEVICE_VERIFICATION_RATE_WINDOW_SECONDS` | `60` | 1..315360000 seconds |
-| `upload_url_lifetime_seconds` | `LOREBAYD__UPLOAD_URL_LIFETIME_SECONDS` | `900` | 1..315360000 seconds |
+| `upload_url_lifetime_seconds` | `LOREBAYD__UPLOAD_URL_LIFETIME_SECONDS` | `900` | 1..315360000 seconds; upload and download URLs |
 | `upload_size_limit_bytes` | `LOREBAYD__UPLOAD_SIZE_LIMIT_BYTES` | `5000000000` | 1..5000000000 bytes |
 | `upload_concurrency_limit` | `LOREBAYD__UPLOAD_CONCURRENCY_LIMIT` | `4` | Positive u32 concurrent uploads |
 | `upload_idle_timeout_seconds` | `LOREBAYD__UPLOAD_IDLE_TIMEOUT_SECONDS` | `30` | 1..315360000 seconds without an upload chunk |
 | `artifact_cleanup_interval_seconds` | `LOREBAYD__ARTIFACT_CLEANUP_INTERVAL_SECONDS` | `3600` | 1..315360000 seconds; the three artifact cleanup jobs |
 | `abandoned_artifact_lifetime_seconds` | `LOREBAYD__ABANDONED_ARTIFACT_LIFETIME_SECONDS` | `86400` | 1..315360000 seconds; longer than `upload_url_lifetime_seconds` |
-| `orphaned_file_lifetime_seconds` | `LOREBAYD__ORPHANED_FILE_LIFETIME_SECONDS` | `86400` | 1..315360000 seconds; longer than `upload_url_lifetime_seconds` and `upload_idle_timeout_seconds` |
+| `orphaned_file_lifetime_seconds` | `LOREBAYD__ORPHANED_FILE_LIFETIME_SECONDS` | `86400` | 1..315360000 seconds; longer than `upload_url_lifetime_seconds` and `upload_idle_timeout_seconds`; also the age for the local directory's temporary uploads and out-of-format files |
 | `logging.level` | `LOREBAYD__LOGGING__LEVEL` | `info` | `off`, `error`, `warn`, `info`, `debug`, `trace` |
 
 Set `public_url` to the origin clients reach, including through a TLS proxy

@@ -1,6 +1,4 @@
-# Product docs
-
-Rules for the docs in `docs/product/`.
+## Product docs conventions
 
 - Product docs are at the System level. They state what Lorebay offers a
   team on top of the library, and what it leaves out.

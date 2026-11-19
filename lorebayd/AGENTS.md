@@ -16,8 +16,8 @@ Follow these playbook fragments:
   password for the users file. Every other item is `pub(crate)`.
 - `main.rs` also runs the command that produces a password hash for the
   users file ([Identity](../docs/architecture/identity.md#3-accounts)). The
-  command hashes with the library's function, so it and sign-in always
-  agree, and it starts nothing.
+  command hashes with the same function as sign-in, so they always agree,
+  and it starts nothing.
 - The `migration/` crate owns Lorebay's schema migrations.
 - The source follows this layout, with only the folders the code needs:
 
@@ -41,16 +41,14 @@ Follow these playbook fragments:
 
 ### Layers
 
-The layers are those of
-[System architecture](../docs/architecture/system.md#3-components):
-transports and workers call the domain, and the domain calls the database
-and file storage layers.
+Transports and workers call Lorebay's domain functions and the library's
+operations; the domain calls the database layer.
 
 | Layer | Lives in | Owns |
 | --- | --- | --- |
 | Transport | `src/api/`, `src/oauth/`, `src/pages/`, `src/files/` | Converting a protocol's requests into domain inputs, and domain results back |
-| Worker | `src/worker/` | The [background jobs](../docs/architecture/system.md#6-background-jobs), calling domain functions as a transport does per request |
-| Domain | `src/domain/` | The API operations: permission checks, data rules and transactions |
+| Worker | `src/worker/` | The [background jobs](../docs/architecture/system.md#6-background-jobs), calling domain functions or the library's cleanup rounds |
+| Domain | `src/domain/` | Lorebay's own operations: permission checks, data rules and transactions |
 | Data | `src/repository/`, `src/entity/`, `migration/` | The database layer |
 | Storage | `src/storage/` | The [file storage layer](../lib/docs/architecture/storage.md#3-file-storage) |
 
@@ -85,15 +83,16 @@ and file storage layers.
 - Request types check the protocol's field shape and convert inputs to
   domain types. The domain types check shared field rules. Rules that need
   stored data belong to the domain function.
-- A handler, or an MCP tool, extracts its inputs, calls one domain function
-  and converts the result. It holds no business rule.
+- A handler extracts its inputs, calls one domain function or one library
+  operation, and converts the result. It holds no business rule.
 
 ### Errors
 
 - Each domain area has one error enum, per
   [rust.md](../playbook/languages/rust.md#errors-and-data-structures). Each
   transport converts it into its protocol's error in one place: an HTTP
-  status and body for the Web API, a tool error for MCP.
+  status and body for the Web API. The library's MCP layer converts its
+  own.
 - Database, I/O and other internal failures are logged with their cause and
   reach the caller only as an internal error.
 

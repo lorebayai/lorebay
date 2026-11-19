@@ -41,6 +41,9 @@ It does not cover:
 - **An agent follows its person.** It is in every space its person is in,
   with its person's role capped as the library caps it, and leaves a space
   when its person does.
+- **Listing participants also lists their agents.** Each row has a type,
+  `human` or `agent`, a username and a role; an agent's row adds its name,
+  and its role is its person's, capped.
 - **The creator of a space is its owner.** The owner appoints admins.
 - **Adding a participant.** An owner or admin picks a person from all users
   in the users file and makes them a contributor or a viewer. Owners and
@@ -75,7 +78,7 @@ whichever credential the caller holds.
 | Participant | List | Yes | Yes |
 | Participant | Add, change role, remove | Owner, admin; only the owner when an admin is involved | No |
 
-- **Any signed-in person may create a space**, and becomes its owner.
+- **Any signed-in person may create a space.**
 - **Credentials map onto the library's columns.** In the library's matrix,
   a login session calls as a person and an agent authorization as an
   agent.

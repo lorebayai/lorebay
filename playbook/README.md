@@ -41,9 +41,9 @@ Fragments:
   writing and reviewing design docs, in `docs/` and `lib/docs/`.
 - [topics/github-actions.md](topics/github-actions.md): writing and pinning
   GitHub Actions workflows.
-- [topics/seaorm.md](topics/seaorm.md): storing data in SQLite through
-  SeaORM: migrations, generated entities, repositories, queries and
-  transactions.
+- [topics/seaorm.md](topics/seaorm.md): storing data through SeaORM, on
+  SQLite and, where it differs, on Postgres: migrations, generated entities,
+  repositories, queries and transactions.
 - [topics/testing.md](topics/testing.md): the integration, E2E and unit test
   levels, and where each one's tests live.
 

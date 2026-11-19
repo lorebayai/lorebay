@@ -13,7 +13,8 @@
 - A new crate gets a `moon.yml`, a `README.md` per
   [documentation.md](../core/documentation.md#readmes), and an `AGENTS.md`
   importing this fragment, with `ln -s AGENTS.md CLAUDE.md` beside it, in the
-  change that creates it.
+  change that creates it, unless a parent folder's `AGENTS.md` already
+  imports it.
 - Every third-party dependency version must be declared once in the root
   `Cargo.toml` `[workspace.dependencies]`. Crates must inherit it with
   `name = { workspace = true }`, adding `features` when needed; a crate

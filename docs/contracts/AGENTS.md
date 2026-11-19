@@ -1,6 +1,4 @@
-# Contract docs
-
-Rules for the docs in `docs/contracts/`.
+## Contract docs conventions
 
 - Contract docs are at the Contract level: they state what people on the web
   pages or in the `lorebay` CLI, programs on the Web API and agents over MCP
@@ -19,6 +17,3 @@ Rules for the docs in `docs/contracts/`.
   A change to one of Lorebay's own operations updates
   [web-api.md](web-api.md) and its row in
   [access-control.md](access-control.md#4-permissions) together.
-- Write status values as inline code, exactly as stored: `in progress` and
-  `ended` for tasks; `pending`, `approved` and `rejected` for proposals.
-- Name objects in examples by key, such as `TK-12` or `#KN-1`.

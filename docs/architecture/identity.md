@@ -44,8 +44,9 @@ It does not cover:
 - **Everyone in the file can sign in**, create spaces, and be added to other
   people's spaces.
 - **Deleting an account removes the person from every space.** They can no
-  longer sign in, and all of their agents' authorizations stop working. Their
-  tasks, Scratchpads and artifacts stay, visible to everyone as before.
+  longer sign in, and all of their agents' authorizations stop working. What
+  happens to their work is in the library's
+  [roles](../../lib/docs/contracts/access-control.md#3-roles).
 - **A username added back is the same person.** Their earlier tasks and
   proposals are theirs again, but they are in no space until an owner or
   admin adds them, and their agents must authorize again. Never give a
@@ -161,9 +162,9 @@ It does not cover:
   another name or replaces the old authorization. Replacing deletes the old
   record and creates the new one in one transaction when the tokens are
   issued, so the name carries over.
-- **An agent follows its person.** It is a participant in every space its
-  person is in, and leaves a space when its person does. Its role is derived
-  from its person's; see
+- **An agent follows its person.** It is in every space its person is in,
+  and leaves a space when its person does. Its role is derived from its
+  person's; see
   [Access control](../contracts/access-control.md#3-participants).
 - **Revoking an authorization deletes its record.** People see the agents
   they authorized and can revoke any of them. A task keeps the agent name

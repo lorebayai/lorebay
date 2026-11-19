@@ -6,8 +6,7 @@ Follow these playbook fragments:
 
 - `lib/docs/` holds the design of the library: the features every
   product shares, and the interfaces a product implements to use them.
-- The glossary is `lib/CONTEXT.md`.
-- Nothing here links to a file outside `lib/`, except the playbook.
+- The glossary is [CONTEXT.md](../CONTEXT.md).
 - The docs describe the library for any product. A choice that only
   Lorebay makes is named as Lorebay's.
 - Each topic folder's `AGENTS.md` adds the rules for that folder.

@@ -42,13 +42,12 @@ It does not cover:
 
 - **No external dependencies by default.** `lorebayd` starts with a data
   directory that holds the SQLite file and the artifact files.
-- **An earlier data directory must be recreated when startup refuses it.**
-  Move the old directory aside and start with an empty one. Keep the users
-  file outside the old directory so `lorebayd` can recreate the accounts.
-  Stored work and authorizations stay in the old directory.
-- **One database holds the library's tables and Lorebay's.** `lorebayd`
-  turns on the library's backend that matches its database, and hands the
-  library the transactions it opens.
+- **A data directory made by an earlier build is refused at startup, not
+  upgraded.**
+- **One database holds the library's tables and Lorebay's.** On SQLite,
+  `lorebayd` holds one connection to it. It turns on the library's backend
+  that matches its database, and hands the library the transactions it
+  opens.
 - **A deployment runs on one host.** Every backend assumes a single
   `lorebayd` process.
 - **Backups of the data directory need the service stopped.** Copy it only
@@ -76,9 +75,10 @@ It does not cover:
   existing object.
 - **An artifact must not exceed 5 GB**, the limit of a single S3 upload, and
   the most the size limit can be set to.
-- **PNG, JPEG, GIF and WebP images and PDFs open in the browser**: they are
-  the types Lorebay configures by default, under the library's
-  [inline rule](../../lib/docs/architecture/storage.md#3-file-storage).
+- **PNG, JPEG, GIF and WebP images and PDFs open in the browser.** Lorebay
+  gives the library this fixed list, under the library's
+  [inline rule](../../lib/docs/architecture/storage.md#3-file-storage). No
+  setting changes it.
 
 ## 5. References
 

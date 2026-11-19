@@ -15,16 +15,17 @@ lorebay-lib-migration = { git = "https://github.com/lorebayai/lorebay", rev = "<
 ```
 
 Replace `<commit>` with a full commit SHA. Use `sqlite` for SQLite. Build with
-Rust 1.100 or later. Match public dependency versions as described in
-[Library architecture](../docs/architecture/library.md#41-database-backends-and-dependencies).
+Rust 1.100 or later. Use the releases of the public dependencies that the
+library architecture names.
 
 Implement the five interfaces and construct a `LibraryState`. Apply the library
 `Migrator` from `lorebay-lib-migration` before running any operation.
 Product transactions own commit and rollback.
 
 Run `moon run lib/core:format lib/core:lint lib/core:build` from the workspace root.
-Run the Postgres scenarios with `moon run lib/core:integration`. They use
-`postgres:18.7@sha256:2ea8630df176ad090ec92136dee850397c5af8781e4bcf2e4162593691c61bbc` on `127.0.0.1:55432`.
+Run the Postgres scenarios with `moon run lib/core:integration`. They need
+Postgres on `127.0.0.1:55432`; without it the tests fail and print the
+command that starts it.
 Run `moon run lib/migration:generate-entities` to regenerate the core entities
 from a disposable database.
 

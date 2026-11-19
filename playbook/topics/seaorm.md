@@ -27,10 +27,11 @@ by the `AGENTS.md` of every Rust project that uses SeaORM.
   Each crate exports its `Migrator`. Its `src/migration/mod.rs` lists its
   migrations in order. Each migration is one file named
   `mYYYYMMDD_NNNNNN_<verb>_<table>.rs`, such as
-  `m20261116_000001_create_tables.rs`.
+  `m20261118_000001_create_space_tables.rs`.
 - `src/entity/` holds the generated entities, one file per table.
-- `src/repository/<table>.rs` holds one table's repository, such as
-  `src/repository/task.rs`.
+- `src/repository/<table>.rs` holds one table's repository, named for the
+  table without the library's `space_` prefix, such as
+  `src/repository/task.rs` for `space_task`.
 
 ## Migrations
 
@@ -155,3 +156,7 @@ Queries use the first of these that can express them:
 - Integration scenarios run each test against a fresh SQLite file in its own
   data directory ([testing.md](testing.md#black-box)). The start helper
   applies migrations through `run`, as production does.
+- The library's scenarios run on Postgres: each creates its own database
+  and applies the library's `Migrator`, as
+  [Library architecture](../../lib/docs/architecture/library.md#15-tests-on-postgres)
+  describes.

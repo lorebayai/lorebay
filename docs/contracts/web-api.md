@@ -70,11 +70,13 @@ POST /api/v1/spaces/{space}/proposals/{key}/approve
   Identity, on [sign-in](../architecture/identity.md#5-sign-in) and on
   [registration](../architecture/identity.md#6-agent-authorization).
 - **Every list is paginated** with a cursor, a default page size and a fixed
-  order.
+  order, as the library's
+  [lists](../../lib/docs/contracts/mcp-tools.md#4-tools) are.
 - **Library errors keep their codes.** A library operation's refusal
   carries the library's error code, such as `task.not_found`, with an HTTP
-  status Lorebay chooses in one place; `artifact.not_uploaded` and
-  `artifact.too_large` and `space.number_taken` answer 409.
+  status Lorebay chooses in one place; `task.ended`,
+  `artifact.not_uploaded`, `artifact.too_large` and `space.number_taken`
+  answer 409.
 - **Writes don't check references**; see
   [Keys and references](../../lib/docs/contracts/keys-and-references.md#5-references).
 - **Ended tasks reject notes and artifact registrations**; see
@@ -84,8 +86,6 @@ POST /api/v1/spaces/{space}/proposals/{key}/approve
 
 - **Listing users** exists for adding participants. Everyone signed in may
   call it and sees every username.
-- **A contributor's rollback is a proposal** whose content and summary are
-  the chosen old version.
 - **Withdrawing a proposal** has no operation of its own: a person rejects
   their own party's proposal; see
   [Knowledge](../../lib/docs/contracts/knowledge.md#4-proposals).

@@ -1,6 +1,4 @@
-# Library product docs
-
-Rules for the docs in `lib/docs/product/`.
+## Library product docs conventions
 
 - Product docs are at the System level. They state the problem the library
   solves, what it offers every product, its people and their agents, and

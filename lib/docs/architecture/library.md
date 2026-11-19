@@ -2,6 +2,11 @@
 
 - **Status:** Proposed
 - **Level:** System
+- **Parent:** [Library](../product/library.md)
+- **Related:** [Entry points](entry-points.md), [Storage](storage.md),
+  [Data model](data-model.md),
+  [Access control](../contracts/access-control.md),
+  [MCP tools](../contracts/mcp-tools.md)
 
 > The library holds the features every product shares. A product holds
 > identity, teams, its entry points and its deployment, and reaches the
@@ -155,8 +160,8 @@ in its own subfolder and named `lorebay-lib-<subfolder>`:
   which declares SeaORM and its migration crate with no driver feature. A
   consumer in another repository pins all library crates it uses to the
   same git `rev` and sets `features = ["postgres"]` or `features = ["sqlite"]`
-  on the crates that select a driver. The minimum Rust release is 1.100.
-  See the [manifest example](../../core/README.md#usage).
+  on the crates that select a driver. See the
+  [manifest example](../../core/README.md#usage).
 - **Four dependencies are public.** The public API exposes SeaORM connections
   and transactions, the SeaORM migration trait implemented by `Migrator`,
   `http` request headers, and the axum MCP router. Consumers use compatible
@@ -215,8 +220,7 @@ reaches data only through the operations and the reads above.
   credential; a product's entry point writes the text about its own
   credentials.
 - **The hash helper is `sha256_hex`.** It names what it computes, for any
-  input. It keeps its output, so cursors issued before the rename still
-  decode.
+  input. Its output is part of the cursor format and must not change.
 
 ## 6. Interfaces
 
@@ -270,7 +274,8 @@ Every implementation:
 **A person's role in a space, and the person's memberships in a scope.**
 The product keeps memberships wherever it likes: in the library's database,
 in its own, or in a directory it asks. The library sees them only through
-two methods, and no database type, query or table crosses the interface.
+two methods; no query or table crosses the interface, and the only
+database type is the transaction the operation handle carries.
 
 | Method | Takes | Answers |
 | --- | --- | --- |
@@ -463,9 +468,10 @@ is called outside it, never another connection:
 | Database | To begin and end a read, and to begin, commit or abandon a write | |
 | File storage | Before or after the transaction | |
 
-- **An implementation uses the connection it is handed.** Lorebay's
-  database has one connection, so an implementation that took another
-  while a transaction is open would wait until it timed out.
+- **An implementation uses the connection it is handed.** In a product
+  whose database has one connection, as Lorebay's has, an implementation
+  that took another while a transaction is open would wait until it timed
+  out.
 - **Names are looked up in batches:** one call for the people of a page,
   never one per row.
 
@@ -505,12 +511,6 @@ Both rounds are safe to run again.
   supplies the creator's role for the result and adds the membership in
   the same transaction. Lorebay uses the owner role for both the result
   and membership.
-- **Lorebay numbers its spaces by the highest number plus one,** read
-  through the library inside the write that creates the space. Its write
-  transaction holds the database's write lock, so two creations cannot take
-  one number. Highest-plus-one would reuse the number of a deleted space;
-  no space can be deleted, so a counter, which would need a ninth table of
-  Lorebay's, buys nothing.
 
 ## 9. Files
 
@@ -527,9 +527,6 @@ Both rounds are safe to run again.
   content was deleted may work until it expires or the file is gone.
   Lorebay serves its own file URLs and checks the record on every download,
   through the library's read.
-- **Inline or attachment is the library's choice.** It works out the
-  content type from the file name and serves only the configured types
-  inline; every other file is an attachment.
 
 ## 10. MCP layer
 
@@ -647,10 +644,6 @@ deletion runs, that deletion can remove the replacement.
 
 The Knowledge and proposal writes follow the same rules when they are
 built.
-
-- **Keyword search** treats ASCII letters in either case as equal and every
-  other character exactly, with `%`, `_` and `\` taken literally, on both
-  backends.
 
 ## 14. Rules for library code
 

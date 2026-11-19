@@ -82,12 +82,9 @@ It does not cover:
   `space.owner_id` hold the product's IDs as text. They are the one
   exception to declared foreign keys: the library has no table of people or
   owners, and removing or deleting a person writes nothing here.
-- **Keyword search uses `LIKE`**, not a full-text index; see
-  [Storage](storage.md#4-database). `\`, `%` and `_` in the keyword are
-  escaped, with `LIKE ? ESCAPE '\'`, or `a_b` would match `axb`. Case is
-  treated as [Library architecture](library.md#13-concurrent-writers)
-  states. Listing Knowledge by prefix does not use `LIKE`; see
-  [section 6.1](#61-space_knowledge).
+- **Keyword search uses `LIKE ? ESCAPE '\'`**, not a full-text index; how
+  it matches is in [Storage](storage.md#4-database). Listing Knowledge by
+  prefix does not use `LIKE`; see [section 6.1](#61-space_knowledge).
 - **References are not stored.** A product resolves `#KN-1` when it shows
   the text.
 

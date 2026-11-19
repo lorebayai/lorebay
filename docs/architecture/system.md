@@ -86,9 +86,8 @@ flowchart TD
 Background jobs run inside `lorebayd`. Each job must be safe to run again.
 They include:
 
-- the library's two cleanup rounds, which remove artifact registrations
-  whose upload was never completed and delete stored files that no record
-  points to;
+- the library's abandoned-registration and orphaned-file rounds; see
+  [Entry points](../../lib/docs/architecture/entry-points.md#4-entry-points);
 - removing old temporary uploads and old artifact files with out-of-format
   names in the local directory; see [Storage](storage.md#4-file-storage);
 - removing expired authorization codes, device sign-in requests, login
