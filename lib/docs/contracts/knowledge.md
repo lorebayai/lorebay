@@ -20,8 +20,8 @@ under people's control and every version is kept.
 ## 2. Scope
 
 This doc covers knowledge entries, their versions, and proposals. When agents
-read Knowledge, what belongs in it, and when agents propose changes are left
-to the skill a product ships.
+read Knowledge, what belongs in it, and when agents propose changes are in
+[Agent rules](agent-rules.md).
 
 It does not cover proposals for anything other than Knowledge, such as
 decisions an agent needs from a person in the middle of its work.
