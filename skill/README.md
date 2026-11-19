@@ -43,9 +43,9 @@ url = "<url>/mcp"
 default_tools_approval_mode = "approve"
 ```
 
-A new session loads the skill: `/skills` lists `lorebay:lorebay`, and
-`claude plugin details lorebay@lorebay` and `codex plugin list` show the
-plugin. To update, run `claude plugin marketplace update lorebay` and
+A new session loads the skill: `claude plugin details lorebay@lorebay` and
+`codex plugin list` show the plugin, and Claude Code's `/skills` selector
+lists it. To update, run `claude plugin marketplace update lorebay` and
 `claude plugin update lorebay@lorebay`, or turn on auto-update in `/plugin`;
 for Codex, run `codex plugin marketplace upgrade lorebay`. A new session
 loads the update. Remove an older install's links, `~/.claude/skills/lorebay`
