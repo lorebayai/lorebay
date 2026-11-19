@@ -17,20 +17,21 @@ Follow these playbook fragments:
   - removing or changing a public item, re-export, public field or feature;
   - removing or changing an error variant a product can match on;
   - changing a migration a product has applied;
-  - changing the behavior a contract under `docs/contracts/` states;
+  - changing the behavior a contract under [docs/contracts/](docs/contracts/)
+    states;
   - a new major release of a public dependency
     ([Library architecture](docs/architecture/library.md#41-database-backends-and-dependencies));
   - raising the minimum Rust version.
 - While the version is `0.x`, a breaking change bumps the minor version and
-  any other change bumps the patch version. Features stay additive, have no
-  default and select drivers only.
+  any other change bumps the patch version. Features stay additive and follow
+  [Library architecture](docs/architecture/library.md#41-database-backends-and-dependencies).
 - Every change a product can observe adds an entry under `## Unreleased` in
   [CHANGELOG.md](CHANGELOG.md), in the same pull request, and marks a
   breaking change as breaking.
 - A release bumps the four crates to one new version, in their manifests
-  and in the root `[workspace.dependencies]`, and moves the entries under
-  `## <version> - <date>`. After the merge, the merge commit is tagged
-  `lib-v<version>`.
+  and in the root `[workspace.dependencies]`. When the release commit is
+  tagged `lib-v<version>`, its entries move under `## <version> - <date>`,
+  and the manifest example in [README.md](README.md#usage) pins that tag.
 - The library crates set their own `version` and `publish = true`, so that
   `moon run lib:package` can verify them together. Nobody runs
   `cargo publish`; publishing to a registry is out of
