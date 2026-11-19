@@ -213,10 +213,15 @@ the library reads it through the
 | `size` | INTEGER | Nullable | Bytes, read from storage when the upload is reported complete |
 | `created_at` | INTEGER | Not null | When the artifact was registered |
 | `completed_at` | INTEGER | Nullable | When the upload was reported complete; until then the artifact is not listed among the task's artifacts |
+| `refused_at` | INTEGER | Nullable | When a report found the file over the size limit; a refused artifact is never completed |
 
 - **The key is taken at registration**, and `complete_artifact` names the
   artifact by it. The abandoned-registration round removes registrations
-  that were never completed; their keys stay unused.
+  neither completed nor refused; their keys stay unused.
+- **A refused registration stays until its task is deleted**, so a later
+  report answers `artifact.refused`. Its `storage_key` holds no file: the
+  orphaned-file round does not count it as a record; see
+  [Library architecture](library.md#9-files).
 - **The library generates `storage_key`**, never from the file name, so
   files with the same name never overwrite each other; see
   [Storage](storage.md#3-file-storage).
@@ -225,7 +230,8 @@ the library reads it through the
   is stored.
 - **`space_id` is here** for key uniqueness and space checks. The composite
   foreign key `(task_id, space_id)` keeps it equal to the task's space. A
-  CHECK allows `size` only once the upload is complete.
+  CHECK allows `size` only once the upload is complete, and another forbids
+  a registration from being both completed and refused.
 - **Index:** `space_artifact_task`, on `task_id`.
 
 ## 6. Knowledge and proposals
@@ -403,9 +409,11 @@ CREATE TABLE space_artifact (
   size          INTEGER,
   created_at    INTEGER NOT NULL,
   completed_at  INTEGER,
+  refused_at    INTEGER,
   UNIQUE (space_id, number),
   FOREIGN KEY (task_id, space_id) REFERENCES space_task (id, space_id) ON DELETE CASCADE,
-  CHECK ((completed_at IS NULL) = (size IS NULL))
+  CHECK ((completed_at IS NULL) = (size IS NULL)),
+  CHECK (refused_at IS NULL OR completed_at IS NULL)
 );
 CREATE INDEX space_artifact_task ON space_artifact (task_id);
 

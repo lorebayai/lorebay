@@ -71,8 +71,8 @@ It does not cover:
   [Library architecture](library.md#7-writes-and-transactions).
 - **Task and artifact deletion remove files after commit.** A file left
   behind is removed by the orphaned-file round. The
-  [oversize refusal](library.md#71-run-one-write) rolls back before
-  deleting the file, leaving the registration incomplete.
+  [oversize refusal](library.md#9-files) commits before deleting the file,
+  and the round removes a refused file whose deletion failed.
 - **Keyword search is substring matching.** It uses SQL `LIKE`, not
   full-text search. This is enough at team scale, and it matches Chinese
   text without splitting it into words. On both backends it treats ASCII

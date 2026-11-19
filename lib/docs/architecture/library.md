@@ -153,8 +153,10 @@ in its own subfolder and named `lorebay-lib-<subfolder>`:
   connections. Where a statement must differ between the backends, such as
   keyword search, the data layer picks the form from the connection's
   backend at run time, and one build with both features on serves both.
-  The migration crate's `sqlite` feature also builds the entity generation
-  helper and binary, which open a disposable SQLite file in development.
+- **Entity generation has its own feature.** The migration crate's
+  `entity-generation` feature turns on `sqlite` and builds the entity
+  generation helper and binary, which open a disposable SQLite file in
+  development. A product that selects `sqlite` builds neither.
 - **Versions are declared once,** in the root `[workspace.dependencies]`,
   which declares SeaORM and its migration crate with no driver feature. Its
   entries carry only the features every crate that inherits them needs,
@@ -187,7 +189,9 @@ and its implementations, and nothing more:
   - the five interfaces and the types they exchange
     ([section 6](#6-interfaces));
   - the write entry ([section 7](#7-writes-and-transactions));
-  - one function per operation, with its input, result and error types;
+  - one function per operation, with its input, result and error types,
+    and the steps before and after the write of the operations that call
+    storage ([section 7.1](#71-run-one-write));
   - the two cleanup rounds, and the read that checks a download against its
     record;
   - the read of the highest space number
@@ -198,7 +202,8 @@ and its implementations, and nothing more:
     ([section 7.1](#71-run-one-write)).
 - `lorebay-lib-migration`: the library's `Migrator`, which products import
   directly to apply the library schema, and `open_entity_database` with the
-  `sqlite` feature for the disposable database used in entity generation
+  `entity-generation` feature for the disposable database used in entity
+  generation
   ([section 12](#12-data)).
 - `lorebay-lib-mcp`: one function that returns the router a product
   mounts at the root of its origin.
@@ -219,6 +224,10 @@ reaches data only through the operations and the reads above.
   and page sizes have shared validation and field errors. Each entry point
   maps those errors to its protocol. Page sizes and input lengths are
   constants.
+- **Public enums and settings can grow.** The error enums, the write
+  labels, the settings and the interface set are non-exhaustive: a product
+  builds the settings and the interface set with their builders and handles
+  variants it does not know, so adding one is not a breaking change.
 - **Errors carry codes, not HTTP.** Each area of operations has one error
   enum with no HTTP status and no response body. Each error has a stable
   code, such as `task.not_found`, which the MCP layer puts in the tool error
@@ -337,7 +346,7 @@ methods:
 | Begin read | Opens a transaction for one read |
 | End read | Receives the transaction of a read and ends it |
 | Begin write | Opens a transaction for one write |
-| Commit write | Receives the transaction and a record of the write, may add rows of its own, and commits |
+| Commit write | Receives the transaction and the record of the write, or none when the write changed nothing; may add rows of its own, and commits |
 | Abandon write | Receives the transaction of a failed write and rolls it back |
 
 - **The product opens, commits and rolls back.** The library writes inside
@@ -345,10 +354,12 @@ methods:
 - **On SQLite the product enables foreign key checks** on every
   connection it hands to the library. Task deletion relies on the cascade
   to its notes and on clearing the source task from proposals.
-- **The operation supplies the write label and space.** The write entry adds
-  the caller and passes the record to the commit hook. A product can use
-  the record to add its own rows, such as an audit record, for writes from
-  either entry point.
+- **The operation supplies the write label, its caller and its space.** The
+  write entry passes the record to the commit hook; only the
+  abandoned-registration round's record has no caller. A repeated report of
+  a completed upload changes nothing and passes no record, so a product
+  never records it as a second change. A product can use the record to add
+  its own rows, such as an audit record, for writes from either entry point.
 - **A write transaction serializes with every write it could conflict
   with.** On SQLite it takes the write lock before its first statement, the
   immediate mode of the
@@ -385,7 +396,8 @@ Every implementation:
 - refuses an upload without the headers the tool descriptions promise;
 - expires its URLs;
 - lists only the library's files: the orphaned-file round deletes every
-  listed file old enough that no record points to.
+  listed file old enough that no record holds; a refused registration
+  holds none ([section 9](#9-files)).
 
 At startup the product gives its storage backend the same upload size limit
 it supplies to the library. The backend enforces it when receiving uploads,
@@ -403,47 +415,57 @@ the network or disk work behind it.
 ### 7.1 Run one write
 
 Every library write runs through one entry on the library state, and both
-the MCP layer and a product's entry point call operations that use it:
+the MCP layer and a product's entry point call operations through it:
 
 ```mermaid
 sequenceDiagram
-    EntryPoint->>Operation: Call with caller and input
-    Operation->>Storage: Before: storage reads the write needs
-    Operation->>Database: Begin write
-    Database-->>Operation: Transaction
-    Operation->>Operation: Inside: permission check, then writes
+    EntryPoint->>Storage: Before step: storage reads
+    EntryPoint->>WriteEntry: Run one write
+    WriteEntry->>Database: Begin write
+    Database-->>WriteEntry: Transaction
+    WriteEntry->>Operation: Inside: permission check, then writes
+    Operation-->>WriteEntry: Result, record, files to delete
     alt Write succeeds
-        Operation->>Database: Commit write, with the record
+        WriteEntry->>Database: Commit write, with the record
         Database->>Database: Product rows, then commit
-        Operation->>Storage: After commit: issue URLs, delete files
-    else Oversize refusal
-        Operation->>Database: Roll back
-        Operation->>Storage: After rollback: delete oversized file
+        WriteEntry->>Storage: After commit: delete files
+    else Write fails
+        WriteEntry->>Database: Abandon write
     end
-    Operation-->>EntryPoint: Result
+    WriteEntry-->>EntryPoint: Result
+    EntryPoint->>Storage: After step: issue URLs
 ```
 
+- **Every write operation has one shape.** It takes the write the entry
+  hands it, names its own caller and space for the record, and returns its
+  result. The entry takes no caller of its own, and one write runs exactly
+  one library operation, so a product can compose any of them, artifact
+  registration, completion and the abandoned-registration round included,
+  with its own rows.
 - **Inside, the permission check comes first.** The first statement of
   every write is the check of [section 8](#8-scope-and-space-numbers) and
-  the role. Only the two cleanup rounds, which have no caller, and creating
-  a space, whose rule is the product's, start otherwise.
+  the role. Only the abandoned-registration round, which has no caller, and
+  creating a space, whose rule is the product's, start otherwise.
 - **After-commit work is handed back.** The inside part returns its result
   together with the files to delete. The entry deletes them only after the
   product's commit succeeds, and drops them after a rollback or a failed
-  commit. An after-commit deletion that fails or never runs leaves a file
-  no record points to, which the orphaned-file round removes.
-- **Storage calls run outside the transaction.** A completion reads the
-  size before the write, decides under the task and artifact locks, and
-  deletes an oversized file after rolling back the refused write
-  ([section 9](#9-files)).
+  commit. A deletion that fails is logged and leaves the result unchanged.
+  An after-commit deletion that fails or never runs leaves a file no record
+  holds, which the orphaned-file round removes.
+- **Storage calls run outside the transaction.** An operation that calls
+  storage gives the entry point a step before the write, a step after the
+  commit, or both: registration returns a value that issues the upload URL
+  once the write has committed; completion reads the size in a step before
+  the write, decides under the task and artifact locks, and resolves its
+  answer after the commit ([section 9](#9-files)).
 
   | Operation | Before | Inside | After |
   | --- | --- | --- | --- |
   | Register an artifact | | Check the task, take the number, insert the registration | Issue the upload URL |
-  | Report an upload complete | Check the registration and read the stored size | Lock the task and artifact, check whether the registration is still incomplete, and record completion or refuse the oversized file | Delete an oversized file after rollback |
+  | Report an upload complete | Check the registration, answer one already refused, and read the stored size | Lock the task and artifact, recheck the registration, and record completion or the refusal of an oversized file | Delete a refused file |
   | Issue a download URL | Check the space, read the completed record | | Issue the download URL |
   | Delete a task or an artifact | | Check, then delete the rows | Delete the files |
-  | Remove abandoned registrations | | Delete the rows still incomplete | Delete their files |
+  | Remove abandoned registrations | | Delete the rows neither completed nor refused | Delete their files |
   | Remove orphaned files | List the files, read which have records | | Delete the files without records |
 
 - **A product may compose its own write** through the same entry, adding
@@ -491,19 +513,17 @@ the commit and the after-commit work:
 - a crash after deleting a task, an artifact or abandoned registrations
   leaves their files, which the orphaned-file round removes;
 - a crash after an oversize refusal and before its deletion leaves the
-  file with its incomplete registration; the next report refuses and deletes
-  it, or the abandoned-registration round removes both;
-- a crash after deleting an oversized file leaves its registration
-  incomplete, and reporting it complete again answers that the file was not
-  uploaded.
+  file with its refused registration, which no longer holds it; the
+  orphaned-file round removes the file, and every later report answers that
+  the registration was refused.
 
 Both rounds are safe to run again.
 
 ## 8. Scope and space numbers
 
 - **A space carries an owner ID** from the product, with no foreign key.
-  The product supplies it when it creates the space. Lorebay supplies one
-  fixed value.
+  Creating a space takes it from the scope of the caller the product
+  passes. Lorebay gives every caller one fixed value.
 - **The caller carries its scope**, an owner ID, from the caller
   interface or from the product's own entry point. Every operation loads
   the space, directly or through the task, compares the space's owner with
@@ -527,12 +547,23 @@ Both rounds are safe to run again.
 - **The size limit is checked after the upload.** When an upload is
   reported complete, the library reads the file's size before the write
   transaction. Inside the transaction it locks the task and artifact and
-  checks that the registration is still incomplete. If the observed size
-  exceeds the limit, it refuses with `artifact.too_large`, rolls back and
-  then deletes the file. A later report with no file returns
-  `artifact.not_uploaded`. A backend can also enforce the limit at upload.
-  The completion check covers backends that defer it and a limit lowered
-  after the upload.
+  checks that the registration is neither completed nor refused. A backend
+  can also enforce the limit at upload. The completion check covers
+  backends that defer it and a limit lowered after the upload.
+- **An oversize refusal is a committed write, and final.** If the observed
+  size exceeds the limit, the library marks the registration refused and
+  commits, then deletes the file, and answers `artifact.too_large` whether
+  or not the deletion succeeds. Every later report of that registration
+  answers `artifact.refused`, so no file at its location can ever complete,
+  and the client registers a new artifact at a new location. Rolling the
+  refusal back instead would leave the registration open, and a deletion
+  delayed past a new upload to the same location could remove a file a
+  later report had completed.
+- **A refused registration keeps its row but not its file.** The
+  orphaned-file round treats its file as having no record, so a file whose
+  deletion failed is still removed. The abandoned-registration round leaves
+  the row, so a late report keeps answering `artifact.refused`; the row
+  goes when its task is deleted.
 - **A download URL may outlive its content.** A URL issued before its
   content was deleted may work until it expires or the file is gone.
   Lorebay serves its own file URLs and checks the record on every download,
@@ -570,8 +601,8 @@ state:
 | The age after which an incomplete registration is abandoned | The abandoned-registration round |
 | The age after which a file without a record is orphaned | The orphaned-file round |
 
-- **Two values come with the call instead:** the number and the owner ID of
-  each new space.
+- **Two values come with the call instead:** the number of each new space,
+  and its owner ID, from the caller's scope.
 - **The library checks its settings** when the state is built: both
   cleanup ages must exceed the upload URL lifetime, or a round could remove
   an upload still in flight.
@@ -640,19 +671,20 @@ both.
 | Delete a note | None | It deletes by task and time; a task's person never changes, so the party check needs no lock; a deleted time stays below the task's last activity and is never given again |
 | Delete a task | Task | A registration or note waiting on the task finds it gone; the files deleted are those of the rows deleted |
 | Register an artifact | Task, then space counter | The state is checked under the lock; numbers are distinct |
-| Report an upload complete | Task, then artifact | A second report of a completed registration returns the existing result. Reports that observed the same oversized size refuse while the registration remains incomplete. Each refusal deletes after rollback, and deleting an already absent file succeeds. The task's last activity becomes the later of its current value and the completion. |
+| Report an upload complete | Task, then artifact | A second report of a completed registration returns the existing result and records no change. The first report to refuse an oversized file commits the refusal; a report that read the size before then finds the refusal under the lock and answers `artifact.refused`, so one deletion is queued. The task's last activity becomes the later of its current value and the completion. |
 | Delete an artifact | None | One statement deletes the row only if complete and returns its location |
-| Remove abandoned registrations | Each deleted row | One statement deletes only rows still incomplete when it deletes them and returns their locations; only those files are deleted |
-| Remove orphaned files | None | A record commits before any URL for its location exists, and locations are never reused, so a file old enough with no record never gets one |
+| Remove abandoned registrations | Each deleted row | One statement deletes only rows neither completed nor refused when it deletes them and returns their locations; only those files are deleted |
+| Remove orphaned files | None | A record commits before any URL for its location exists, and locations are never reused, so a file old enough with no record never gets one; a refused registration never completes, so its file is never needed |
 | Change Knowledge directly | Entry, then space counter for a new entry | The next version is computed from the locked entry; the unique name refuses a second entry of one name |
 | Submit a proposal | Task, when it names one; then space counter | The task cannot be deleted before the proposal refers to it; the base version is a snapshot by design |
 | Approve or reject a proposal | Proposal, then entry, then space counter for a new entry | The status is checked under the lock, so a proposal is decided once |
 
-The oversize refusal uses the size read before taking the locks. If a new
-upload replaces the oversized file at the same location before a pending
-deletion runs, that deletion can remove the replacement, even one a later
-report has recorded as complete; that artifact then has a record and no
-file, and its download fails.
+The oversize refusal uses the size read before taking the locks, and is
+final once it commits. A deletion delayed after that commit can remove only
+the refused file, or a file uploaded again to the same location, which no
+report can complete. A replacement is a new registration at a new
+location, so the delayed deletion never reaches a completed artifact's
+file.
 
 The Knowledge and proposal writes follow the same rules when they are
 built.

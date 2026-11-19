@@ -108,11 +108,13 @@ documents or data.
   artifact is not listed among the task's artifacts, and no download URL is
   issued for it. A report before any file is in storage is refused with
   `artifact.not_uploaded`.
-- **An oversized file is refused when the upload is reported complete.**
-  When the file in storage is over the size limit the product sets, the
-  report is refused with `artifact.too_large`, the file is deleted and the
-  artifact stays incomplete; reporting it again is refused with
-  `artifact.not_uploaded`.
+- **An oversized file is refused when the upload is reported complete,
+  and the refusal is final.** When the file in storage is over the size
+  limit the product sets, the report is refused with `artifact.too_large`
+  and the file is deleted. The artifact is never listed, and every later
+  report of it is refused with `artifact.refused`, even after a new upload
+  to its URL; to upload a smaller file, the client registers a new
+  artifact.
 - **Each artifact has a file name and a one-sentence summary.**
 - **Artifacts are immutable.** To update one, upload a new one.
 - **How browsers show artifacts** is in
