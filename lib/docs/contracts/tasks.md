@@ -22,7 +22,7 @@ understand a session without reading the conversation.
 
 This doc covers what the library stores and enforces for tasks, notes and
 artifacts. When an agent creates a task, what its title and result say, and
-when it writes notes are left to the skill a product ships.
+when it writes notes are in [Agent rules](agent-rules.md).
 
 It does not cover:
 

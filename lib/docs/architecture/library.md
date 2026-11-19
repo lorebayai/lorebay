@@ -87,6 +87,9 @@ flowchart TD
   permission matrix the library owns, and the two cleanup rounds for
   artifact files.
 - **The MCP layer** and its tools, which call the operations.
+- **Agent rules:** what an agent follows so that the records it writes
+  through the tools make sense, with each rule's backstop, in
+  [Agent rules](../contracts/agent-rules.md).
 - **Seven tables**, listed in [section 12](#12-data).
 
 ### 3.2 What a product holds
@@ -98,9 +101,11 @@ flowchart TD
 - its own entry points: its API router with its response and error formats,
   its pages and its command-line tools;
 - the file storage backend, and the file URLs it serves;
-- its agent skill: each product writes and ships its own skill against the
-  tools' contract in [MCP tools](../contracts/mcp-tools.md) and the tool
-  descriptions, and the library ships and documents no skill;
+- its agent skill: each product writes and ships its own skill, which
+  states the library's [agent rules](../contracts/agent-rules.md) and the
+  product's own, against the tools' contract in
+  [MCP tools](../contracts/mcp-tools.md) and the tool descriptions; the
+  library ships no skill;
 - the process, the scheduling of background jobs, and the deployment.
 
 For Lorebay this is everything outside the library's folder, with Lorebay's

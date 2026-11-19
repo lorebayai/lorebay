@@ -65,8 +65,14 @@ tools, such as Claude Code.
 **Session**: One agent conversation: one cloud run, or one conversation of a
 local agent. A subagent's work belongs to its parent's session.
 
-**Skill**: The agent skill a product ships. It tells agents when and how to
-call the MCP tools.
+**Skill**: The agent skill a product ships. It states the agent rules, and
+tells agents when and how to call the MCP tools.
+
+**Agent rules**: The rules an agent follows so that the records it writes
+through the MCP tools make sense, each with its backstop.
+
+**Backstop**: What the library blocks or detects when an agent breaks an
+agent rule.
 
 ## Data
 
