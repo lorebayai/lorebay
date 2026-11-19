@@ -50,7 +50,7 @@ async fn participant_add_lets_second_person_list_space() {
         if mode == "json" {
             assert_eq!(
                 body(&list),
-                json!({"data": [{"key": space, "name": "Team", "summary": "Team work", "role": "viewer"}], "meta": {}})
+                json!({"data": [{"key": space, "name": "Team", "summary": "Team work", "role": "viewer", "caller_person": SECOND_USERNAME}], "meta": {}})
             );
         } else {
             assert_eq!(
@@ -79,7 +79,7 @@ async fn space_rename_updates_name_and_summary() {
         ])
         .await;
     assert_success(&changed);
-    let expected = json!({"data": {"key": space, "name": "Renamed", "summary": "New summary", "role": "owner"}, "meta": {}});
+    let expected = json!({"data": {"key": space, "name": "Renamed", "summary": "New summary", "role": "owner", "caller_person": server.username}, "meta": {}});
     assert_eq!(body(&changed), expected);
     let shown = server
         .run(&["space", "show", &space, "--output", "json"])

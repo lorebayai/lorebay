@@ -9,6 +9,9 @@ crates `lorebay-lib-types`, `lorebay-lib-core`, `lorebay-lib-migration` and
 
 Version 0.1.0, the first version, not yet tagged.
 
+- **Breaking:** `Space` gains `caller_person`, the name of the caller's
+  person, on create, list, read and change results. `list_spaces` returns
+  the same field, accepted as `person` by `list_tasks`.
 - **Breaking:** core writes use the composable `run_write` entry without a
   caller argument. Each operation records its own caller, and `create_space`
   takes the caller instead of an independent owner scope.

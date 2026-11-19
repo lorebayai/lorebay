@@ -280,7 +280,10 @@ operations; only the MCP layer asks this interface.
 
 **Names for a batch of person IDs, and the ID for a name.** The library
 stores people only as IDs and asks for names when it shows a task or a
-proposal, and for an ID when a caller filters by a person's name.
+proposal, and for an ID when a caller filters by a person's name. When it
+returns spaces, it also asks once for the caller's own person name, through
+the operation's read or write handle, and puts that name in every space's
+`caller_person`. A missing name is an internal failure.
 
 Every implementation:
 

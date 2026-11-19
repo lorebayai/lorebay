@@ -59,6 +59,7 @@ async fn call_list_spaces_returns_spaces_with_capped_role() {
             list_page(&server, &agent, "/api/v1/spaces", &query).await
         );
         assert_eq!(page["data"][0]["role"], "contributor");
+        assert_eq!(page["data"][0]["caller_person"], "alice");
         rows.push(page["data"][0]["key"].clone());
         if let Some(cursor) = page["meta"]["next_cursor"].as_str() {
             assert_ne!(arguments["cursor"], cursor);

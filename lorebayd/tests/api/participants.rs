@@ -173,7 +173,7 @@ async fn change_participant_role_makes_admin_when_caller_is_owner() {
     let space = response.json::<Value>().await.unwrap()["data"].clone();
     assert_eq!(
         space,
-        json!({"key":"SPACE-1", "name":"Renamed", "summary":"Admin summary", "role":"admin"})
+        json!({"key":"SPACE-1", "name":"Renamed", "summary":"Admin summary", "role":"admin", "caller_person":"bob"})
     );
     assert_role(&server, &bob, "admin").await;
     assert_eq!(list(&server, &bob, "/api/v1/spaces").await, json!([space]));
@@ -273,7 +273,7 @@ async fn change_space_fails_when_caller_is_contributor() {
         let response = request(&server, &owner, Method::GET, SPACE, Value::Null).await;
         assert_eq!(
             response.json::<Value>().await.unwrap()["data"],
-            json!({"key":"SPACE-1", "name":"Team", "summary":"Shared work", "role":"owner"})
+            json!({"key":"SPACE-1", "name":"Team", "summary":"Shared work", "role":"owner", "caller_person":"alice"})
         );
     }
     server.stop().await;

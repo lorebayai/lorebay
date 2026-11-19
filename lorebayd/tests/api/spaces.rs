@@ -14,7 +14,7 @@ async fn create_space_makes_creator_owner() {
     for number in 1..=2 {
         let space = create_space(&server, &person, "Research", "Shared research").await;
         let expected = json!({"key": format!("SPACE-{number}"), "name": "Research",
-            "summary": "Shared research", "role": "owner"});
+            "summary": "Shared research", "role": "owner", "caller_person": "alice"});
         assert_eq!(space, expected);
         assert_eq!(
             read(&server, &person, space["key"].as_str().unwrap()).await,
@@ -178,6 +178,7 @@ async fn list_spaces_returns_only_spaces_caller_is_in() {
     let expected_agent: Vec<_> = expected
         .into_iter()
         .map(|mut space| {
+            assert_eq!(space["caller_person"], "alice");
             space["role"] = json!("contributor");
             space
         })
@@ -193,6 +194,7 @@ async fn list_spaces_returns_only_spaces_caller_is_in() {
     let bob_spaces = list_page(&server, &bob, SPACES_PATH, &[]).await;
     assert_eq!(bob_spaces["data"].as_array().unwrap().len(), 1);
     assert_eq!(bob_spaces["data"][0]["key"], "SPACE-1");
+    assert_eq!(bob_spaces["data"][0]["caller_person"], "bob");
     assert_eq!(
         list_page(&server, &alice, SPACES_PATH, &[]).await["data"]
             .as_array()
@@ -280,7 +282,7 @@ async fn change_space_updates_name_and_summary_when_caller_is_owner() {
     let person = server.tokens().await;
     create_space(&server, &person, "Research", "Shared research").await;
     let mut expected = json!({"key": "SPACE-1", "name": "Research",
-        "summary": "Shared research", "role": "owner"});
+        "summary": "Shared research", "role": "owner", "caller_person": "alice"});
     for changes in [
         json!({"name": "New name"}),
         json!({"summary": "New summary"}),

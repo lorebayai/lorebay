@@ -43,7 +43,7 @@ It does not cover:
 
 | Tool | Carries | Does | Library operation |
 | --- | --- | --- | --- |
-| `list_spaces` | Neither | Lists the person's spaces: key, such as `SPACE-1`; name; summary; role | List spaces |
+| `list_spaces` | Neither | Lists the person's spaces: key, such as `SPACE-1`; name; summary; role; `caller_person`, the name of the caller's person, accepted as `person` by `list_tasks` | List spaces |
 | `create_task` | Space | Creates a task from a space and a title; returns the task ID and key | Create a task |
 | `update_task` | Task ID | Changes the title, status or result, each optional; the status may go back to `in progress`; the result is replaced whole | Change a task |
 | `list_tasks` | Space | Lists the space's tasks, filtered by person, agent or status, or only the caller's party's tasks that are not `ended`; takes a keyword; each row has the agent name and last activity time; newest activity first | List tasks |
