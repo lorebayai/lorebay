@@ -1,0 +1,99 @@
+# Lorebay skill
+
+Lorebay's agent skill, in `lorebay/`, tells a coding agent how to record its
+work in a Lorebay space. A person installs it in Claude Code 2.1.325 or Codex
+0.169.0, or newer, and connects the harness to a `lorebayd`, whose address
+the person deploying it gives. Older harness versions are untested.
+
+## Usage
+
+Link the skill from a clone of this repo into the harness's user-level skills
+directory, so pulling the clone updates it. From the repo root, the first
+line for Claude Code and the second for Codex:
+
+```bash
+mkdir -p ~/.claude/skills && ln -s "$PWD/skill/lorebay" ~/.claude/skills/lorebay
+mkdir -p ~/.agents/skills && ln -s "$PWD/skill/lorebay" ~/.agents/skills/lorebay
+```
+
+A new session picks up the skill and each pull; `/skills` lists `lorebay`.
+
+Connect the harness at user level, so every project and worktree has the
+server, under the name `lorebay` that the skill uses. `<url>` is `https://`
+with the host and port, such as `https://lorebay.test:8443`; both harnesses
+refuse OAuth over `http://` except on `localhost`, `127.0.0.1` or `::1`. For
+Claude Code, in a terminal, since `mcp login` needs one:
+
+```bash
+claude mcp add --scope user --transport http lorebay <url>/mcp
+claude mcp login lorebay
+```
+
+For Codex, `mcp add` also starts the sign-in when it reaches the server, and
+`mcp login` repeats it. Then edit `~/.codex/config.toml` so it holds the
+lines below: `sandbox_mode` above the first `[table]`, and the approval line
+in the `[mcp_servers.lorebay]` table that `mcp add` wrote. The agent uploads
+files from its shell, which Codex's sandbox otherwise keeps off the network,
+in every project; the approval lets non-interactive runs, such as
+`codex exec`, call the tools.
+
+```bash
+codex mcp add lorebay --url <url>/mcp
+```
+
+```toml
+sandbox_mode = "workspace-write"
+[sandbox_workspace_write]
+network_access = true
+[mcp_servers.lorebay]
+url = "<url>/mcp"
+default_tools_approval_mode = "approve"
+```
+
+`--no-browser` on either `mcp login` prints the authorization link only. On
+Lorebay's authorization page, sign in, consent and name the agent, such as
+`Claude Code (home)`. Authorizing the same harness again suggests the same
+name: pick another, or replace the old authorization and keep the name.
+`lorebay agent revoke '<name>'` ends one. When more than 30 days, the
+server's default, pass between `claude mcp add` and the first authorization,
+the server has dropped the unused client registration: run
+`claude mcp remove --scope user lorebay` and add the server again.
+
+A server whose certificate comes from a private certificate authority, such
+as `https://lorebay.test:8443`, needs on each machine that connects: a hosts
+line `<server address> lorebay.test`, also for the browser that opens the
+authorization page, which warns unless it trusts the authority; the
+authority's certificate at a fixed path, such as
+`~/.local/share/lorebay/ca.crt`, not in the system trust store; and every
+process that connects trusting it, as Configuration lists. The authority's
+key never leaves its machine. `bundle.pem` joins the certificate to the
+system's authorities, which `SSL_CERT_FILE` replaces; on Debian or Ubuntu:
+
+```bash
+cd ~/.local/share/lorebay && cat /etc/ssl/certs/ca-certificates.crt ca.crt > bundle.pem
+```
+
+A person in several spaces names one per project, and the agent writes a
+line such as ``- Lorebay space: `SPACE-1` `` into the project's committed
+agent instructions files.
+
+The skill sends the person to `lorebay` commands, such as
+`lorebay space create` and `lorebay task delete`. Build the CLI from the repo
+root and sign in; [cli/README.md](../cli/README.md) lists its commands.
+
+```bash
+cargo install --locked --path cli
+lorebay login <url>
+```
+
+## Configuration
+
+| Environment variable | Set for | Value |
+| --- | --- | --- |
+| `NODE_EXTRA_CA_CERTS` | Claude Code, on every run or in `env` of `~/.claude/settings.json` | Absolute path of `ca.crt` |
+| `CODEX_CA_CERTIFICATE` | Codex, on every run | Absolute path of `ca.crt` |
+| `SSL_CERT_FILE` | Both harnesses, for uploads from the agent's shell, and the `lorebay` CLI | Absolute path of `bundle.pem` |
+
+## Docs
+
+See Lorebay's [Agent skill](../docs/contracts/agent-skill.md) contract.
