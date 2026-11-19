@@ -1,0 +1,12 @@
+{
+  "name": "lorebay",
+  "interface": { "displayName": "Lorebay" },
+  "plugins": [
+    {
+      "name": "lorebay",
+      "source": { "source": "local", "path": "./skill" },
+      "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" },
+      "category": "Developer Tools"
+    }
+  ]
+}

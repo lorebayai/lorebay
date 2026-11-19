@@ -1,0 +1,9 @@
+{
+  "name": "lorebay",
+  "description": "Tells a coding agent how to record its work in a Lorebay space",
+  "author": { "name": "Lorebay" },
+  "homepage": "https://github.com/lorebayai/lorebay/tree/main/skill",
+  "repository": "https://github.com/lorebayai/lorebay",
+  "license": "Apache-2.0",
+  "skills": ["./lorebay"]
+}

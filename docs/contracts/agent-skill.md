@@ -28,8 +28,9 @@ library part and the library's backstop are in the library's
 
 It does not cover:
 
-- packaging the skill and the MCP connection as a plugin or a marketplace
-  listing: people install the skill and connect MCP by hand;
+- installing the skill and connecting MCP: the skill installs as a plugin
+  from this repository's marketplaces, and the person registers the MCP
+  server by hand, as the [skill's README](../../skill/README.md) says;
 - clients that can connect over MCP but cannot install a skill, such as some
   mobile apps: they are not supported.
 
