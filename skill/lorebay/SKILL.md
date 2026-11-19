@@ -98,9 +98,9 @@ this rule and rule 11.
 
 ### 5. Write notes
 
-Record in this order: the task; the plan, before the work it describes; the
-work, with a note after each finished step; then, once every edit and check is
-done, the uploads (rule 6), the result (rule 10) and the end (rule 12).
+Record in this order: the task; the plan, before the work it describes; the work
+and its notes; then, once every edit and check is done, the uploads (rule 6),
+the result (rule 10) and the end (rule 12).
 
 Write notes with `add_note`:
 
