@@ -119,13 +119,14 @@ summary. A person can delete a note that holds a secret with
 
 ### 6. Upload artifacts
 
-Upload each final file deliverable, such as a report, an image, an exported
-document or data, also when the person never says "deliverable" or "upload". A
-file only on local disk counts, also an untracked or uncommitted one inside a
-Git folder. Only when a file's final content is in a pushed commit or a pull
-request, link that in Deliverables instead. The uploaded bytes must match the
-final file: if a file changes after its upload, upload it again as a new
-artifact and reference that one in the result.
+Upload each file the work produces for the person, such as a report, an image,
+an exported document or data, also when the person never says "deliverable" or
+"upload", or only asks to save it. A file only on local disk counts, also an
+untracked or uncommitted one inside a Git folder. Only when a file's final
+content is in a pushed commit or a pull request, link that in Deliverables
+instead. The uploaded bytes must match the final file: if a file changes after
+its upload, upload it again as a new artifact and reference that one in the
+result.
 
 Upload with the URL and headers that `create_artifact` returns, then call
 `complete_artifact`, also when the upload returns 412: the file is already
