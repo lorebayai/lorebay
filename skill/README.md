@@ -32,10 +32,9 @@ claude mcp login lorebay
 For Codex, `mcp add` also starts the sign-in when it reaches the server, and
 `mcp login` repeats it. Then edit `~/.codex/config.toml` so it holds the
 lines below: `sandbox_mode` above the first `[table]`, and the approval line
-in the `[mcp_servers.lorebay]` table that `mcp add` wrote. The agent uploads
-files from its shell, which Codex's sandbox otherwise keeps off the network,
-in every project; the approval lets non-interactive runs, such as
-`codex exec`, call the tools.
+in the `[mcp_servers.lorebay]` table that `mcp add` wrote. The sandbox lines
+let the agent's shell reach the network, in every project, to upload files;
+the approval lets non-interactive runs, such as `codex exec`, call the tools.
 
 ```bash
 codex mcp add lorebay --url <url>/mcp
