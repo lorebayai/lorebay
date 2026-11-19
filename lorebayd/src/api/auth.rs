@@ -1,7 +1,7 @@
 use axum::extract::FromRequestParts;
-use axum::http::request::Parts;
+use axum::http::{HeaderMap, header, request::Parts};
 
-use crate::domain::access::{bearer, verify_agent};
+use crate::domain::access::verify_agent;
 use crate::domain::caller::VerifiedCaller;
 use crate::domain::login_session;
 use crate::domain::token::TokenKind;
@@ -31,4 +31,14 @@ impl FromRequestParts<ServerState> for VerifiedCaller {
             )),
         }
     }
+}
+
+pub(crate) fn bearer(headers: &HeaderMap) -> Option<&str> {
+    headers
+        .get(header::AUTHORIZATION)?
+        .to_str()
+        .ok()?
+        .split_once(' ')
+        .filter(|(scheme, _)| scheme.eq_ignore_ascii_case("Bearer"))
+        .map(|(_, value)| value)
 }

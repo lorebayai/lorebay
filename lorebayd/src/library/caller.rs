@@ -5,7 +5,8 @@ use futures_util::future::BoxFuture;
 use lorebay_lib_core::{Caller, CallerResolver};
 use sea_orm::DatabaseConnection;
 
-use crate::domain::access::{AccessError, bearer, verify_agent};
+use crate::api::bearer;
+use crate::domain::access::{AccessError, verify_agent};
 use crate::domain::caller::VerifiedCaller;
 use crate::domain::login_session::Identity;
 

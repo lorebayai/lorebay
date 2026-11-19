@@ -487,7 +487,7 @@ Both rounds are safe to run again.
   not found, before it asks for the role. Listing spaces passes the scope
   to the memberships method and returns only spaces of that owner.
 - **A product gives each new space its number.** The library checks that
-  the number is unused, refuses it otherwise, and derives the key in the
+  the number is positive and unused, and derives the key in the
   fixed format, such as `SPACE-1`. The product keeps numbers unique and
   never reuses one.
 - **Creating a space is a step a product composes.** It runs inside a write

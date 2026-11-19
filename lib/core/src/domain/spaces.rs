@@ -59,6 +59,8 @@ impl SpaceError {
 pub enum SpaceInputError {
     #[error("Must not be empty.")]
     Empty(&'static str),
+    #[error("Must be positive.")]
+    InvalidNumber,
     #[error("Provide a name or summary.")]
     NoChanges,
     #[error("Must be at most {1} UTF-8 bytes.")]
@@ -69,6 +71,7 @@ impl SpaceInputError {
     pub const fn field(&self) -> &'static str {
         match self {
             Self::Empty(field) | Self::TooLong(field, _) => field,
+            Self::InvalidNumber => "number",
             Self::NoChanges => "body",
         }
     }
@@ -76,6 +79,7 @@ impl SpaceInputError {
     pub const fn field_code(&self) -> &'static str {
         match self {
             Self::Empty(_) | Self::NoChanges => "required",
+            Self::InvalidNumber => "invalid",
             Self::TooLong(_, _) => "too_long",
         }
     }
@@ -153,6 +157,9 @@ pub async fn create_space(
     input: NewSpace,
 ) -> Result<(Space, SpaceReference), SpaceError> {
     write.begin_operation()?;
+    if number <= 0 {
+        return Err(SpaceInputError::InvalidNumber.into());
+    }
     let now = now_millis()?;
     let repository = SpaceRepository::builder()
         .connection(write.transaction())

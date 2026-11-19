@@ -3,9 +3,11 @@ use std::sync::atomic::Ordering;
 
 use futures_util::future::join_all;
 use lorebay_lib_core::{
-    Caller, NoteContent, TaskChanges, TaskStatus, add_note, change_task, complete_artifact,
-    delete_task, get_artifact_download_url, list_tasks, read_task, remove_abandoned_artifacts,
+    Caller, NewSpace, NoteContent, SpaceError, SpaceInputError, TaskChanges, TaskStatus, add_note,
+    change_task, complete_artifact, create_space, delete_task, get_artifact_download_url,
+    highest_space_number, list_tasks, read_task, remove_abandoned_artifacts,
 };
+use sea_orm::TransactionTrait;
 use tokio::sync::{Barrier, mpsc};
 
 use helpers::{
@@ -21,6 +23,31 @@ use helpers::{
     reason = "this integration target uses fixture assertions that must fail the scenario"
 )]
 mod helpers;
+
+#[tokio::test]
+async fn create_space_refuses_nonpositive_numbers() {
+    with_postgres(async |fixture| {
+        for number in [0, -1] {
+            let input = NewSpace::new("Research".to_owned(), "Shared work".to_owned()).unwrap();
+            let error = fixture
+                .state
+                .run_write(Some(&fixture.person), async |write| {
+                    create_space(write, &fixture.person.owner_id, number, input).await
+                })
+                .await
+                .unwrap_err();
+            assert!(matches!(
+                error,
+                SpaceError::Input(SpaceInputError::InvalidNumber)
+            ));
+            assert_eq!(error.code(), "request.invalid_body");
+        }
+        let transaction = fixture.database.begin().await.unwrap();
+        assert_eq!(highest_space_number(&transaction).await.unwrap(), None);
+        transaction.commit().await.unwrap();
+    })
+    .await;
+}
 
 #[tokio::test]
 async fn create_task_assigns_distinct_keys_when_created_concurrently() {
