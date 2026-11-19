@@ -24,5 +24,8 @@
   Lorebay.
 - `SKILL.md` states the content rule first, in its own sentence, then the 13
   rules in session order, each with Lorebay's part beside the library's, so
-  the split between the contracts does not show. Each requirement of a rule
-  without a backstop has its own sentence.
+  the split between the contracts does not show. It states every requirement
+  of a rule without a backstop, since only the skill enforces those rules.
+- `SKILL.md` states each requirement once, in the fewest words that keep it
+  exact. It repeats no sentence of its own and no tool description, and
+  explains only what an agent needs to act.
