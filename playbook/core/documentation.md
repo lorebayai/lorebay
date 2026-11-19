@@ -34,12 +34,7 @@ crate such as `lorebayd/migration/`, or a test suite under `tests/`.
 
 `lib/` holds the library that Lorebay builds on, with its crates, its
 design docs and its glossary. It is a second home for design docs, under
-the same rules, plus one:
-
-- Nothing in `lib/` depends on, or links to, a file outside `lib/`, except
-  the playbook, which an `AGENTS.md` there may import and a doc may link to.
-  The root Cargo workspace settings and the toolchain stay shared.
-  `moon run lib:boundary` checks it.
+the same rules. Its own rules are in [lib/AGENTS.md](../../lib/AGENTS.md).
 
 ## READMEs
 
@@ -111,9 +106,10 @@ that apply.
 
 - Write each import path relative to the `AGENTS.md` that holds it, as its own
   list item with nothing after the path.
-- Import a fragment at the deepest folder that needs it. The root imports only
-  `core/` fragments, because everything imported loads into every session
-  under that folder.
+- Import a fragment at the deepest folder that needs it. A folder may import
+  one once for its subfolders when most of them need it; the others then
+  load it too. The root imports only `core/` fragments, because everything
+  imported loads into every session under that folder.
 - Never restate a rule an imported fragment already gives.
 - An `AGENTS.md` holds rules, not orientation. To give agents a folder's
   README, import it (`@README.md`) instead of restating it.

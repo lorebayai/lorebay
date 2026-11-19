@@ -22,7 +22,7 @@ are in [documentation.md](core/documentation.md#agent-instructions).
 | Folder | Holds | Imported by |
 | --- | --- | --- |
 | `core/` | Rules for every change in the repo | The root `AGENTS.md` |
-| `languages/` | Rules for one language | The `AGENTS.md` of projects in that language |
+| `languages/` | Rules for one language | The `AGENTS.md` of projects in that language, or of a folder above several of them |
 | `topics/` | Rules for one kind of work | The `AGENTS.md` of folders where that work happens |
 
 Fragments:

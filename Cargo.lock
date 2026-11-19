@@ -391,8 +391,6 @@ dependencies = [
  "http",
  "http-body",
  "http-body-util",
- "hyper",
- "hyper-util",
  "itoa",
  "matchit",
  "memchr",
@@ -404,7 +402,6 @@ dependencies = [
  "serde_path_to_error",
  "serde_urlencoded",
  "sync_wrapper",
- "tokio",
  "tower",
  "tower-layer",
  "tower-service",
@@ -1960,7 +1957,7 @@ dependencies = [
 
 [[package]]
 name = "lorebay-lib-core"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "futures-util",
@@ -1982,7 +1979,7 @@ dependencies = [
 
 [[package]]
 name = "lorebay-lib-mcp"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -1997,7 +1994,7 @@ dependencies = [
 
 [[package]]
 name = "lorebay-lib-migration"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "sea-orm-migration",
@@ -2006,7 +2003,7 @@ dependencies = [
 
 [[package]]
 name = "lorebay-lib-types"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
  "serde",
