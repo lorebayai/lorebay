@@ -19,6 +19,7 @@ impl<C: ConnectionTrait> ArtifactRepository<'_, C> {
             .column(Column::Id)
             .from(Entity)
             .and_where(Column::CompletedAt.is_null())
+            .and_where(Column::RefusedAt.is_null())
             .and_where(Column::CreatedAt.lt(before))
             .order_by(Column::Id, sea_orm::Order::Asc)
             .limit(limit)
@@ -27,6 +28,7 @@ impl<C: ConnectionTrait> ArtifactRepository<'_, C> {
             Expr::col(Column::Id)
                 .in_subquery(candidates)
                 .and(Column::CompletedAt.is_null())
+                .and(Column::RefusedAt.is_null())
                 .and(Column::CreatedAt.lt(before)),
         )
         .await
@@ -37,6 +39,7 @@ impl<C: ConnectionTrait> ArtifactRepository<'_, C> {
             .select_only()
             .column(Column::StorageKey)
             .filter(Column::StorageKey.is_in(locations))
+            .filter(Column::RefusedAt.is_null())
             .into_tuple()
             .all(self.connection)
             .await

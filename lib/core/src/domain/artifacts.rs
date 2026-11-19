@@ -18,6 +18,7 @@ use super::time::now_millis;
 use super::{CallerError, NewArtifact, TaskTarget};
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum ArtifactError {
     #[error(transparent)]
     Access(#[from] TaskAccessError),
@@ -31,10 +32,17 @@ pub enum ArtifactError {
     NotFound,
     #[error("The artifact file has not been uploaded")]
     NotUploaded,
-    #[error(transparent)]
-    Space(#[from] SpaceAccessError),
+    #[error("The artifact registration was refused; register a new artifact")]
+    Refused,
     #[error("The artifact file exceeds the size limit")]
     TooLarge,
+}
+
+#[derive(Clone, Debug)]
+#[non_exhaustive]
+pub enum ArtifactCompletion {
+    Completed(ArtifactCompleted),
+    Refused,
 }
 
 #[derive(Clone, Debug, Serialize, TypedBuilder)]
@@ -65,6 +73,54 @@ pub struct ArtifactRegistered {
     pub task_title: String,
 }
 
+#[derive(Clone, Debug, TypedBuilder)]
+#[builder(builder_method(vis = "pub(crate)"), field_defaults(setter(into)))]
+pub struct ArtifactRegistration {
+    key: String,
+    location: String,
+    task_title: String,
+}
+
+#[derive(Clone, Debug, TypedBuilder)]
+#[builder(builder_method(vis = "pub(crate)"), field_defaults(setter(into)))]
+pub struct PreparedArtifactCompletion {
+    artifact_id: String,
+    key: String,
+    size: Option<u64>,
+    time: i64,
+}
+
+impl ArtifactRegistration {
+    /// Issues the upload URL after the registration's write has committed.
+    pub async fn issue_upload(
+        self,
+        state: &LibraryState,
+    ) -> Result<ArtifactRegistered, ArtifactError> {
+        let upload = state
+            .storage
+            .upload_url(UploadSpec {
+                location: &self.location,
+                lifetime: state.settings().upload_url_lifetime,
+            })
+            .await?;
+        Ok(ArtifactRegistered {
+            key: self.key,
+            upload,
+            task_title: self.task_title,
+        })
+    }
+}
+
+impl ArtifactCompletion {
+    /// Converts a committed refusal into the caller's size-limit error.
+    pub fn into_result(self) -> Result<ArtifactCompleted, ArtifactError> {
+        match self {
+            Self::Completed(artifact) => Ok(artifact),
+            Self::Refused => Err(ArtifactError::TooLarge),
+        }
+    }
+}
+
 impl TryFrom<artifact::Model> for Artifact {
     type Error = DbErr;
 
@@ -88,6 +144,12 @@ impl TryFrom<artifact::Model> for Artifact {
     }
 }
 
+impl From<SpaceAccessError> for ArtifactError {
+    fn from(error: SpaceAccessError) -> Self {
+        Self::Access(error.into())
+    }
+}
+
 impl ArtifactError {
     pub const fn code(&self) -> &'static str {
         match self {
@@ -96,7 +158,7 @@ impl ArtifactError {
             Self::Database(_) | Self::Internal(_) => "server.internal",
             Self::NotFound => "artifact.not_found",
             Self::NotUploaded => "artifact.not_uploaded",
-            Self::Space(error) => error.code(),
+            Self::Refused => "artifact.refused",
             Self::TooLarge => "artifact.too_large",
         }
     }
@@ -151,55 +213,45 @@ pub async fn get_artifact_download_url(
 }
 
 pub async fn register_artifact(
-    state: &LibraryState,
+    write: &mut Write<'_>,
     caller: &Caller,
     target: TaskTarget<'_>,
     input: NewArtifact,
-) -> Result<ArtifactRegistered, ArtifactError> {
+) -> Result<ArtifactRegistration, ArtifactError> {
     caller.agent()?;
-    let (number, location, task_title) = state
-        .run_write(Some(caller), async |write| {
-            insert_registration(write, caller, target, input).await
-        })
-        .await?;
-    let upload = state
-        .storage
-        .upload_url(UploadSpec {
-            location: &location,
-            lifetime: state.settings().upload_url_lifetime,
-        })
-        .await?;
-    Ok(ArtifactRegistered {
-        key: format_key("AR", number),
-        upload,
-        task_title,
-    })
+    let (number, location, task_title) = insert_registration(write, caller, target, input).await?;
+    Ok(ArtifactRegistration::builder()
+        .key(format_key("AR", number))
+        .location(location)
+        .task_title(task_title)
+        .build())
 }
 
-pub async fn complete_artifact(
+/// Reads the file size before opening the completion's write transaction.
+pub async fn prepare_artifact_completion(
     state: &LibraryState,
     caller: &Caller,
     target: TaskTarget<'_>,
     key: &str,
-) -> Result<ArtifactCompleted, ArtifactError> {
+) -> Result<PreparedArtifactCompletion, ArtifactError> {
     caller.agent()?;
-    let (task, artifact) = state
+    let (_, artifact) = state
         .run_read(async |handle| checked_artifact(state, handle, caller, target, key).await)
         .await?;
-    if artifact.completed_at.is_some() {
-        return completed(artifact, task.title);
+    if artifact.refused_at.is_some() {
+        return Err(ArtifactError::Refused);
     }
-    let size = stored_size(state, &artifact.storage_key).await?;
-    let time = now_millis()?;
-    let result = state
-        .run_write(Some(caller), async |write| {
-            record_completion(write, caller, target, Completion { key, size, time }).await
-        })
-        .await;
-    if matches!(&result, Err(ArtifactError::TooLarge)) {
-        state.storage.delete(&artifact.storage_key).await?;
-    }
-    result
+    let size = if artifact.completed_at.is_some() {
+        None
+    } else {
+        Some(stored_size(state, &artifact.storage_key).await?)
+    };
+    Ok(PreparedArtifactCompletion::builder()
+        .artifact_id(artifact.id)
+        .key(key)
+        .size(size)
+        .time(now_millis()?)
+        .build())
 }
 
 pub async fn delete_artifact(
@@ -208,7 +260,7 @@ pub async fn delete_artifact(
     target: TaskTarget<'_>,
     key: &str,
 ) -> Result<(), ArtifactError> {
-    write.begin_operation()?;
+    write.begin_operation(Some(caller))?;
     caller.person()?;
     let task = check_task(
         write.state(),
@@ -229,10 +281,60 @@ pub async fn delete_artifact(
     Ok(())
 }
 
-struct Completion<'a> {
-    key: &'a str,
-    size: u64,
-    time: i64,
+pub async fn complete_artifact(
+    write: &mut Write<'_>,
+    caller: &Caller,
+    target: TaskTarget<'_>,
+    completion: PreparedArtifactCompletion,
+) -> Result<ArtifactCompletion, ArtifactError> {
+    write.begin_operation(Some(caller))?;
+    caller.agent()?;
+    let (task, current) = checked_artifact(
+        write.state(),
+        write.handle(),
+        caller,
+        target,
+        &completion.key,
+    )
+    .await?;
+    if current.id != completion.artifact_id {
+        return Err(ArtifactError::NotFound);
+    }
+    if current.refused_at.is_some() {
+        return Err(ArtifactError::Refused);
+    }
+    let space_id = task.space_id.clone();
+    if current.completed_at.is_some() {
+        let result = completed(current, task.title)?;
+        write.finish_without_record();
+        return Ok(ArtifactCompletion::Completed(result));
+    }
+    let size = completion.size.ok_or(ArtifactError::NotUploaded)?;
+    if size > write.state().settings().upload_size_limit {
+        return refuse_completion(write, current, space_id, completion.time).await;
+    }
+    let size = i64::try_from(size).map_err(anyhow::Error::from)?;
+    let time = completion.time.max(task.last_activity_at);
+    let transaction = write.transaction();
+    let mut current = current.into_active_model();
+    current.size = Set(Some(size));
+    current.completed_at = Set(Some(time));
+    let current = ArtifactRepository::builder()
+        .connection(transaction)
+        .build()
+        .update(current)
+        .await?;
+    let title = task.title.clone();
+    let mut task = task.into_active_model();
+    task.last_activity_at = Set(time);
+    TaskRepository::builder()
+        .connection(transaction)
+        .build()
+        .update(task)
+        .await?;
+    let result = completed(current, title)?;
+    write.record(WriteOperation::CompleteArtifact, Some(space_id));
+    Ok(ArtifactCompletion::Completed(result))
 }
 
 async fn insert_registration(
@@ -241,7 +343,7 @@ async fn insert_registration(
     target: TaskTarget<'_>,
     input: NewArtifact,
 ) -> Result<(i64, String, String), ArtifactError> {
-    write.begin_operation()?;
+    write.begin_operation(Some(caller))?;
     let task = check_task(
         write.state(),
         write.handle(),
@@ -271,10 +373,30 @@ async fn insert_registration(
             size: Set(None),
             created_at: Set(now_millis()?),
             completed_at: Set(None),
+            refused_at: Set(None),
         })
         .await?;
     write.record(WriteOperation::RegisterArtifact, Some(space_id));
     Ok((number, location, task.title))
+}
+
+async fn refuse_completion(
+    write: &mut Write<'_>,
+    current: artifact::Model,
+    space_id: String,
+    time: i64,
+) -> Result<ArtifactCompletion, ArtifactError> {
+    let location = current.storage_key.clone();
+    let mut current = current.into_active_model();
+    current.refused_at = Set(Some(time));
+    ArtifactRepository::builder()
+        .connection(write.transaction())
+        .build()
+        .update(current)
+        .await?;
+    write.delete.push(location);
+    write.record(WriteOperation::RefuseArtifact, Some(space_id));
+    Ok(ArtifactCompletion::Refused)
 }
 
 async fn stored_size(state: &LibraryState, location: &str) -> Result<u64, ArtifactError> {
@@ -283,54 +405,6 @@ async fn stored_size(state: &LibraryState, location: &str) -> Result<u64, Artifa
         .size(location)
         .await?
         .ok_or(ArtifactError::NotUploaded)
-}
-
-async fn record_completion(
-    write: &mut Write<'_>,
-    caller: &Caller,
-    target: TaskTarget<'_>,
-    completion: Completion<'_>,
-) -> Result<ArtifactCompleted, ArtifactError> {
-    write.begin_operation()?;
-    let (task, current) = checked_artifact(
-        write.state(),
-        write.handle(),
-        caller,
-        target,
-        completion.key,
-    )
-    .await?;
-    let space_id = task.space_id.clone();
-    if current.completed_at.is_some() {
-        let result = completed(current, task.title)?;
-        write.record(WriteOperation::CompleteArtifact, Some(space_id));
-        return Ok(result);
-    }
-    if completion.size > write.state().settings().upload_size_limit {
-        return Err(ArtifactError::TooLarge);
-    }
-    let size = i64::try_from(completion.size).map_err(anyhow::Error::from)?;
-    let time = completion.time.max(task.last_activity_at);
-    let transaction = write.transaction();
-    let mut current = current.into_active_model();
-    current.size = Set(Some(size));
-    current.completed_at = Set(Some(time));
-    let current = ArtifactRepository::builder()
-        .connection(transaction)
-        .build()
-        .update(current)
-        .await?;
-    let title = task.title.clone();
-    let mut task = task.into_active_model();
-    task.last_activity_at = Set(time);
-    TaskRepository::builder()
-        .connection(transaction)
-        .build()
-        .update(task)
-        .await?;
-    let result = completed(current, title)?;
-    write.record(WriteOperation::CompleteArtifact, Some(space_id));
-    Ok(result)
 }
 
 async fn checked_artifact(

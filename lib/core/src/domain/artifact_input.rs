@@ -5,6 +5,7 @@ pub const ARTIFACT_FILE_NAME_MAX_BYTES: usize = 255;
 pub const ARTIFACT_SUMMARY_MAX_CHARACTERS: usize = 500;
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum ArtifactTextError {
     #[error("Must not be empty.")]
     Empty,

@@ -223,9 +223,7 @@ pub(crate) async fn create(
     let title = request.try_into()?;
     let task = state
         .library
-        .run_write(Some(&caller), async |write| {
-            create_task(write, &caller, &space, title).await
-        })
+        .run_write(async |write| create_task(write, &caller, &space, title).await)
         .await?;
     Ok((StatusCode::CREATED, Envelope::builder().data(task).build()))
 }
@@ -246,9 +244,7 @@ pub(crate) async fn append_note(
     let input = request.try_into()?;
     let note = state
         .library
-        .run_write(Some(&caller), async |write| {
-            add_note(write, &caller, target, input).await
-        })
+        .run_write(async |write| add_note(write, &caller, target, input).await)
         .await?;
     Ok((StatusCode::CREATED, Envelope::builder().data(note).build()))
 }
@@ -269,9 +265,7 @@ pub(crate) async fn change(
     let input = request.try_into()?;
     let task = state
         .library
-        .run_write(Some(&caller), async |write| {
-            change_task(write, &caller, target, input).await
-        })
+        .run_write(async |write| change_task(write, &caller, target, input).await)
         .await?;
     Ok(Envelope::builder().data(task).build())
 }
@@ -289,9 +283,7 @@ pub(crate) async fn delete(
     };
     state
         .library
-        .run_write(Some(&caller), async |write| {
-            delete_task(write, &caller, target).await
-        })
+        .run_write(async |write| delete_task(write, &caller, target).await)
         .await?;
     Ok(Envelope::builder().data(()).build())
 }
@@ -318,9 +310,7 @@ pub(crate) async fn remove_note(
     };
     state
         .library
-        .run_write(Some(&caller), async |write| {
-            delete_note(write, &caller, target, time).await
-        })
+        .run_write(async |write| delete_note(write, &caller, target, time).await)
         .await?;
     Ok(Envelope::builder().data(()).build())
 }
@@ -401,6 +391,7 @@ fn text_error(field: &str, error: TaskTextError) -> FieldError {
     let code = match error {
         TaskTextError::Empty => "required",
         TaskTextError::TooLong(_) => "too_long",
+        _ => "invalid",
     };
     FieldError::builder()
         .field(field)

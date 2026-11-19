@@ -82,6 +82,10 @@ while it works.
 
 **Artifact**: An immutable file an agent uploads to a task.
 
+**Refused registration**: An artifact registration whose file was over the
+size limit when its upload was reported complete. It never completes; the
+client registers a new artifact instead.
+
 **Knowledge**: A space's shared Markdown documents, kept with their history.
 
 **Knowledge entry**: One named document in Knowledge, with a summary and its
@@ -98,10 +102,10 @@ its own schedule to remove what interrupted writes leave behind. There are
 two: the abandoned-registration round and the orphaned-file round.
 
 **Abandoned-registration round**: The cleanup round that removes artifact
-registrations whose upload was never reported complete, and their files.
+registrations neither completed nor refused, and their files.
 
 **Orphaned-file round**: The cleanup round that deletes stored files that no
-record points to.
+record points to, other than a refused registration.
 
 ## Identifiers
 

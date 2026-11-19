@@ -8,15 +8,19 @@ license.workspace = true
 repository.workspace = true
 publish.workspace = true
 
+[features]
+entity-generation = ["dep:anyhow", "dep:tokio", "lorebay-lib-migration/entity-generation"]
+
 [dependencies]
-anyhow.workspace = true
-lorebay-lib-migration = { workspace = true, features = ["sqlite"] }
+anyhow = { workspace = true, optional = true }
+lorebay-lib-migration = { workspace = true, optional = true }
 sea-orm-migration = { workspace = true, features = ["sqlx-sqlite"] }
-tokio = { workspace = true, features = ["rt-multi-thread"] }
+tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }
 
 [[bin]]
 name = "prepare-lorebay-entity-database"
 path = "src/bin/prepare-lorebay-entity-database.rs"
+required-features = ["entity-generation"]
 
 [lints]
 workspace = true

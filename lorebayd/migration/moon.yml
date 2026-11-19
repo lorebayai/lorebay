@@ -7,6 +7,14 @@ fileGroups:
     - '/lib/migration/Cargo.toml'
 
 tasks:
+  build:
+    args: ['--features', 'entity-generation']
+  lint:
+    command: 'cargo clippy --all-targets --locked --features entity-generation -- -D warnings'
+    options:
+      mergeArgs: 'replace'
+  test:
+    args: ['--features', 'entity-generation']
   generate-entities:
     command: 'bash lorebayd/migration/scripts/generate-entities.sh'
     inputs:

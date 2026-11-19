@@ -12,7 +12,6 @@ use crate::domain::{
     Participant, ParticipantError, add_participant, change_participant_role, list_participants,
     remove_participant,
 };
-use crate::library::parse_role;
 use crate::server::ServerState;
 
 use super::login_session::invalid_json;
@@ -49,7 +48,7 @@ impl TryFrom<RoleRequest> for SpaceRole {
     type Error = ApiError;
 
     fn try_from(request: RoleRequest) -> Result<Self, Self::Error> {
-        parse_role(request.role.as_str()).map_err(|_| invalid_role())
+        Self::try_from(request.role.as_str()).map_err(|_| invalid_role())
     }
 }
 

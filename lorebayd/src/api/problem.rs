@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use axum::Json;
 use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
@@ -7,7 +9,7 @@ use typed_builder::TypedBuilder;
 
 use super::invalid_query;
 use crate::domain::access::AccessError;
-use crate::domain::caller::CallerError;
+use crate::domain::caller::PersonSessionError;
 use crate::domain::login_session::LoginError;
 use lorebay_lib_core::{
     ArtifactError, CallerError as LibraryCallerError, SpaceAccessError, SpaceError,
@@ -17,14 +19,6 @@ use lorebay_lib_core::{PageSizeError, TaskChangeError};
 
 #[derive(Debug, Error)]
 pub(crate) enum ApiError {
-    #[error("An agent authorization is required")]
-    AgentRequired,
-    #[error("Artifact not found")]
-    ArtifactNotFound,
-    #[error("The artifact file has not been uploaded")]
-    ArtifactNotUploaded,
-    #[error("The artifact file exceeds the size limit")]
-    ArtifactTooLarge,
     #[error("Internal Server Error")]
     Internal,
     #[error("Bad Request")]
@@ -33,12 +27,17 @@ pub(crate) enum ApiError {
     InvalidPath(Vec<FieldError>),
     #[error("Bad Request")]
     InvalidQuery(Vec<FieldError>),
+    #[error("{message}")]
+    Library {
+        status: StatusCode,
+        code: &'static str,
+        message: String,
+        errors: Vec<FieldError>,
+    },
     #[error("Method Not Allowed")]
     MethodNotAllowed,
     #[error("Not Found")]
     NotFound,
-    #[error("Note not found")]
-    NoteNotFound,
     #[error("The person is already in the space")]
     ParticipantAlreadyExists,
     #[error("Participant not found")]
@@ -49,16 +48,6 @@ pub(crate) enum ApiError {
     PersonRequired,
     #[error("Too Many Requests")]
     RateLimited(u64),
-    #[error("Space not found")]
-    SpaceNotFound,
-    #[error("Space number is already in use")]
-    SpaceNumberTaken,
-    #[error("The space role does not allow this operation")]
-    SpacePermissionRequired,
-    #[error("Set the task back to in progress before {0}")]
-    TaskEnded(&'static str),
-    #[error("Task not found")]
-    TaskNotFound,
     #[error("Unauthorized")]
     Unauthorized,
     #[error("Service Unavailable")]
@@ -98,29 +87,50 @@ impl ApiError {
         ])
     }
 
+    fn library(status: StatusCode, code: &'static str, error: impl Display) -> Self {
+        let message = if status == StatusCode::INTERNAL_SERVER_ERROR {
+            tracing::error!(%error, "library operation failed");
+            "Internal Server Error".to_owned()
+        } else {
+            error.to_string()
+        };
+        Self::Library {
+            status,
+            code,
+            message,
+            errors: Vec::new(),
+        }
+    }
+
+    fn with_library_code(self, code: &'static str) -> Self {
+        let status = self.parts().0;
+        let message = self.to_string();
+        let errors = match self {
+            Self::InvalidBody(errors) | Self::InvalidQuery(errors) => errors,
+            _ => Vec::new(),
+        };
+        Self::Library {
+            status,
+            code,
+            message,
+            errors,
+        }
+    }
+
     fn parts(&self) -> (StatusCode, &'static str) {
         match self {
-            Self::AgentRequired => (StatusCode::FORBIDDEN, "auth.agent_required"),
-            Self::ArtifactNotFound => (StatusCode::NOT_FOUND, "artifact.not_found"),
-            Self::ArtifactNotUploaded => (StatusCode::CONFLICT, "artifact.not_uploaded"),
-            Self::ArtifactTooLarge => (StatusCode::CONFLICT, "artifact.too_large"),
             Self::Internal => (StatusCode::INTERNAL_SERVER_ERROR, "server.internal"),
             Self::InvalidBody(_) => (StatusCode::BAD_REQUEST, "request.invalid_body"),
             Self::InvalidPath(_) => (StatusCode::BAD_REQUEST, "request.invalid_path"),
             Self::InvalidQuery(_) => (StatusCode::BAD_REQUEST, "request.invalid_query"),
+            Self::Library { status, code, .. } => (*status, code),
             Self::MethodNotAllowed => (StatusCode::METHOD_NOT_ALLOWED, "http.method_not_allowed"),
             Self::NotFound => (StatusCode::NOT_FOUND, "http.not_found"),
-            Self::NoteNotFound => (StatusCode::NOT_FOUND, "note.not_found"),
             Self::ParticipantAlreadyExists => (StatusCode::CONFLICT, "participant.already_exists"),
             Self::ParticipantNotFound => (StatusCode::NOT_FOUND, "participant.not_found"),
             Self::PayloadTooLarge => (StatusCode::PAYLOAD_TOO_LARGE, "request.body_too_large"),
             Self::PersonRequired => (StatusCode::FORBIDDEN, "auth.person_required"),
             Self::RateLimited(_) => (StatusCode::TOO_MANY_REQUESTS, "auth.rate_limited"),
-            Self::SpaceNotFound => (StatusCode::NOT_FOUND, "space.not_found"),
-            Self::SpaceNumberTaken => (StatusCode::CONFLICT, "space.number_taken"),
-            Self::SpacePermissionRequired => (StatusCode::FORBIDDEN, "space.permission_required"),
-            Self::TaskEnded(_) => (StatusCode::CONFLICT, "task.ended"),
-            Self::TaskNotFound => (StatusCode::NOT_FOUND, "task.not_found"),
             Self::Unauthorized => (StatusCode::UNAUTHORIZED, "auth.unauthorized"),
             Self::Unavailable => (StatusCode::SERVICE_UNAVAILABLE, "server.not_ready"),
             Self::UserNotFound => (StatusCode::NOT_FOUND, "user.not_found"),
@@ -140,10 +150,10 @@ impl From<AccessError> for ApiError {
     }
 }
 
-impl From<CallerError> for ApiError {
-    fn from(error: CallerError) -> Self {
+impl From<PersonSessionError> for ApiError {
+    fn from(error: PersonSessionError) -> Self {
         match error {
-            CallerError::PersonRequired => Self::PersonRequired,
+            PersonSessionError::PersonRequired => Self::PersonRequired,
         }
     }
 }
@@ -164,72 +174,69 @@ impl From<LoginError> for ApiError {
 
 impl From<SpaceAccessError> for ApiError {
     fn from(error: SpaceAccessError) -> Self {
-        match error {
-            SpaceAccessError::NotFound => Self::SpaceNotFound,
-            SpaceAccessError::PermissionRequired => Self::SpacePermissionRequired,
-            error @ (SpaceAccessError::Database(_) | SpaceAccessError::Internal(_)) => {
-                tracing::error!(%error, "space access check failed");
-                Self::Internal
-            }
-        }
+        let status = match error {
+            SpaceAccessError::NotFound => StatusCode::NOT_FOUND,
+            SpaceAccessError::PermissionRequired => StatusCode::FORBIDDEN,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+        Self::library(status, error.code(), error)
     }
 }
 
 impl From<TaskAccessError> for ApiError {
     fn from(error: TaskAccessError) -> Self {
-        match error {
-            error @ (TaskAccessError::Database(_) | TaskAccessError::Internal(_)) => {
-                tracing::error!(%error, "task access check failed");
-                Self::Internal
-            }
-            TaskAccessError::Ended(operation) => Self::TaskEnded(operation),
-            TaskAccessError::NotFound => Self::TaskNotFound,
-            TaskAccessError::PermissionRequired => Self::SpacePermissionRequired,
-            TaskAccessError::Space(error) => error.into(),
-        }
+        let status = match error {
+            TaskAccessError::Ended(_) => StatusCode::CONFLICT,
+            TaskAccessError::NotFound => StatusCode::NOT_FOUND,
+            TaskAccessError::PermissionRequired => StatusCode::FORBIDDEN,
+            TaskAccessError::Space(error) => return error.into(),
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+        Self::library(status, error.code(), error)
     }
 }
 
 impl From<LibraryCallerError> for ApiError {
     fn from(error: LibraryCallerError) -> Self {
-        match error {
-            LibraryCallerError::AgentRequired => Self::AgentRequired,
-            LibraryCallerError::PersonRequired => Self::PersonRequired,
-        }
+        let message = match error {
+            LibraryCallerError::AgentRequired => "An agent authorization is required",
+            LibraryCallerError::PersonRequired => "A login session is required",
+            _ => return Self::library(StatusCode::INTERNAL_SERVER_ERROR, error.code(), error),
+        };
+        Self::library(StatusCode::FORBIDDEN, error.code(), message)
     }
 }
 
 impl From<ArtifactError> for ApiError {
     fn from(error: ArtifactError) -> Self {
-        match error {
-            ArtifactError::Access(error) => error.into(),
-            ArtifactError::Caller(error) => error.into(),
-            ArtifactError::Database(_) | ArtifactError::Internal(_) => {
-                tracing::error!(%error, "artifact operation failed");
-                Self::Internal
+        let status = match error {
+            ArtifactError::Access(error) => return error.into(),
+            ArtifactError::Caller(error) => return error.into(),
+            ArtifactError::NotFound => StatusCode::NOT_FOUND,
+            ArtifactError::NotUploaded | ArtifactError::Refused | ArtifactError::TooLarge => {
+                StatusCode::CONFLICT
             }
-            ArtifactError::NotFound => Self::ArtifactNotFound,
-            ArtifactError::NotUploaded => Self::ArtifactNotUploaded,
-            ArtifactError::Space(error) => error.into(),
-            ArtifactError::TooLarge => Self::ArtifactTooLarge,
-        }
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+        Self::library(status, error.code(), error)
     }
 }
 
 impl From<SpaceError> for ApiError {
     fn from(error: SpaceError) -> Self {
-        match error {
-            SpaceError::Access(error) => error.into(),
-            SpaceError::Caller(error) => error.into(),
-            SpaceError::Input(error) => error.into(),
-            SpaceError::InvalidCursor => invalid_query("cursor"),
-            SpaceError::InvalidPageSize(_) => invalid_query(PageSizeError::FIELD),
-            SpaceError::NumberTaken => Self::SpaceNumberTaken,
-            SpaceError::Database(_) | SpaceError::Internal(_) => {
-                tracing::error!(%error, "space operation failed");
-                Self::Internal
+        let code = error.code();
+        let status = match error {
+            SpaceError::Access(error) => return Self::from(error),
+            SpaceError::Caller(error) => return Self::from(error),
+            SpaceError::Input(error) => return Self::from(error).with_library_code(code),
+            SpaceError::InvalidCursor => return invalid_query("cursor").with_library_code(code),
+            SpaceError::InvalidPageSize(_) => {
+                return invalid_query(PageSizeError::FIELD).with_library_code(code);
             }
-        }
+            SpaceError::NumberTaken => StatusCode::CONFLICT,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+        Self::library(status, code, error)
     }
 }
 
@@ -255,25 +262,27 @@ impl From<TaskChangeError> for ApiError {
 
 impl From<TaskError> for ApiError {
     fn from(error: TaskError) -> Self {
-        match error {
-            TaskError::Access(error) => error.into(),
-            TaskError::Caller(error) => error.into(),
-            TaskError::Database(_) | TaskError::Internal(_) => {
-                tracing::error!(%error, "task operation failed");
-                Self::Internal
+        let code = error.code();
+        let status = match error {
+            TaskError::Access(error) => return error.into(),
+            TaskError::Caller(error) => return error.into(),
+            TaskError::Filter(error) => {
+                return Self::InvalidQuery(vec![FieldError {
+                    field: error.field().to_owned(),
+                    code: "invalid".to_owned(),
+                    message: error.to_string(),
+                }])
+                .with_library_code(code);
             }
-            TaskError::Filter(error) => Self::InvalidQuery(vec![FieldError {
-                field: error.field().to_owned(),
-                code: "invalid".to_owned(),
-                message: error.to_string(),
-            }]),
-            TaskError::InvalidCursor => invalid_query("cursor"),
-            TaskError::InvalidPageSize(_) => invalid_query(PageSizeError::FIELD),
-            TaskError::NoChanges(error) => error.into(),
-            TaskError::NotFound => Self::TaskNotFound,
-            TaskError::NoteNotFound => Self::NoteNotFound,
-            TaskError::Space(error) => error.into(),
-        }
+            TaskError::InvalidCursor => return invalid_query("cursor").with_library_code(code),
+            TaskError::InvalidPageSize(_) => {
+                return invalid_query(PageSizeError::FIELD).with_library_code(code);
+            }
+            TaskError::NoChanges(error) => return Self::from(error).with_library_code(code),
+            TaskError::NotFound | TaskError::NoteNotFound => StatusCode::NOT_FOUND,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+        Self::library(status, code, error)
     }
 }
 
@@ -284,7 +293,8 @@ impl From<ApiError> for ProblemDetails {
         let errors = match error {
             ApiError::InvalidBody(errors)
             | ApiError::InvalidPath(errors)
-            | ApiError::InvalidQuery(errors) => errors,
+            | ApiError::InvalidQuery(errors)
+            | ApiError::Library { errors, .. } => errors,
             _ => Vec::new(),
         };
         Self::builder()

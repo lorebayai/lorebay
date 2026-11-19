@@ -3,8 +3,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::anyhow;
-use lorebay_base::{Clock, RateLimitError, RateLimiter, SystemClock};
-use lorebay_lib_types::{Secret, sha256_hex, unix_millis};
+use lorebay_base::{RateLimitError, RateLimiter, SystemClock};
+use lorebay_lib_types::{Secret, sha256_hex};
 use sea_orm::{
     ConnectionTrait, DatabaseConnection, DatabaseTransaction, Set, SqliteTransactionMode,
     TransactionOptions, TransactionTrait,
@@ -22,8 +22,10 @@ use crate::repository::agent_authorization::AgentAuthorizationRepository;
 use crate::repository::login_session::LoginSessionRepository;
 use crate::repository::refresh_token_history::RefreshTokenHistoryRepository;
 
-use super::access::Caller;
-use super::caller::{CallerError, VerifiedCaller};
+use crate::time::now_millis;
+
+use super::access::PersonSession;
+use super::caller::{PersonSessionError, VerifiedCaller};
 use super::token::{Claims, TokenKind, TokenSigner, TokenSubject};
 use super::user_store::UserStore;
 use super::{primary_key, random_id};
@@ -31,7 +33,7 @@ use super::{primary_key, random_id};
 #[derive(Debug, Error)]
 pub(crate) enum LoginError {
     #[error(transparent)]
-    Caller(#[from] CallerError),
+    Caller(#[from] PersonSessionError),
     #[error(transparent)]
     Database(#[from] sea_orm::DbErr),
     #[error(transparent)]
@@ -207,7 +209,7 @@ pub(crate) async fn log_out(
 pub(crate) async fn verify(
     database: &DatabaseConnection,
     claims: Claims,
-) -> Result<Caller, LoginError> {
+) -> Result<PersonSession, LoginError> {
     let now = now_millis()?;
     if claims.kind != TokenKind::LoginSession || claims.exp <= (now / 1000) as u64 {
         return Err(LoginError::Unauthorized);
@@ -224,14 +226,10 @@ pub(crate) async fn verify(
         return Err(LoginError::Unauthorized);
     }
     transaction.commit().await?;
-    Ok(Caller::builder()
+    Ok(PersonSession::builder()
         .account_id(session.account_id)
         .login_session_id(session.id)
         .build())
-}
-
-pub(crate) fn now_millis() -> anyhow::Result<i64> {
-    Ok(unix_millis(SystemClock.now())?)
 }
 
 pub(crate) async fn create_session(

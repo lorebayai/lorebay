@@ -9,6 +9,6 @@ cli="$(entity_generator "$repo_root/target/tools")"
 schema_dir="$(mktemp -d "${TMPDIR:-/tmp}/lorebay-library-entities.XXXXXX")"
 trap 'rm -rf -- "$schema_dir"' EXIT
 database="$schema_dir/library.sqlite3"
-cargo run -p lorebay-lib-migration --locked --features sqlite --bin prepare-library-entity-database -- "$database"
+cargo run -p lorebay-lib-migration --locked --features entity-generation --bin prepare-library-entity-database -- "$database"
 generate_entities "$cli" "$database" "$schema_dir/entities" lib/core/src/entity \
   space,space_task,space_note,space_artifact,space_knowledge,space_knowledge_version,space_proposal

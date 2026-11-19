@@ -15,9 +15,10 @@ use crate::repository::OAuthClientRepository;
 use crate::repository::agent_authorization::AgentAuthorizationRepository;
 use crate::repository::oauth_code::OauthCodeRepository;
 
-use super::access::Caller;
-use super::caller::{CallerError, VerifiedCaller};
-use super::login_session::now_millis;
+use crate::time::now_millis;
+
+use super::access::PersonSession;
+use super::caller::{PersonSessionError, VerifiedCaller};
 use super::{authorization_server_metadata, primary_key, random_id};
 
 pub(crate) const CLI_CLIENT_ID: &str = "lorebay-cli";
@@ -42,7 +43,7 @@ pub(crate) enum AuthorizationError {
     #[error("Agent name is already taken")]
     AgentNameTaken,
     #[error(transparent)]
-    Caller(#[from] CallerError),
+    Caller(#[from] PersonSessionError),
     #[error(transparent)]
     Database(#[from] sea_orm::DbErr),
     #[error(transparent)]
@@ -118,7 +119,7 @@ struct RegisteredRedirects {
 
 async fn issue_code<C: ConnectionTrait>(
     connection: &C,
-    caller: &Caller,
+    caller: &PersonSession,
     input: &AuthorizationInput,
     agent_name: Option<String>,
     conflict: AgentNameConflict,

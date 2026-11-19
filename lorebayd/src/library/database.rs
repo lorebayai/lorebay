@@ -31,7 +31,7 @@ impl DatabaseTransactions for Transactions {
     fn commit_write<'a>(
         &'a self,
         transaction: DatabaseTransaction,
-        _record: WriteRecord<'a>,
+        _record: Option<WriteRecord<'a>>,
     ) -> BoxFuture<'a, anyhow::Result<()>> {
         Box::pin(async move { Ok(transaction.commit().await?) })
     }

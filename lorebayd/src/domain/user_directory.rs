@@ -3,13 +3,13 @@ use thiserror::Error;
 
 use crate::repository::account::AccountRepository;
 
-use super::caller::{CallerError, VerifiedCaller};
+use super::caller::{PersonSessionError, VerifiedCaller};
 use super::pagination::{Page, PageOptions, decode_cursor, encode_cursor};
 
 #[derive(Debug, Error)]
 pub(crate) enum UserDirectoryError {
     #[error(transparent)]
-    Caller(#[from] CallerError),
+    Caller(#[from] PersonSessionError),
     #[error(transparent)]
     Database(#[from] DbErr),
     #[error("Invalid cursor")]

@@ -54,6 +54,7 @@ impl ToolError {
             ArtifactTextError::TooManyBytes(_) | ArtifactTextError::TooManyCharacters(_) => {
                 "too_long"
             }
+            _ => "invalid",
         };
         Self::body_field(field, code, &error.to_string())
     }
@@ -137,5 +138,6 @@ fn task_text_code(error: &TaskTextError) -> &'static str {
     match error {
         TaskTextError::Empty => "required",
         TaskTextError::TooLong(_) => "too_long",
+        _ => "invalid",
     }
 }

@@ -13,7 +13,7 @@ pub(crate) enum StoredFileKind {
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
-pub(crate) struct StoredFile {
+pub(crate) struct LocalFile {
     pub name: OsString,
     pub kind: StoredFileKind,
     pub modified: SystemTime,

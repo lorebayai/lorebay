@@ -31,13 +31,14 @@ use typed_builder::TypedBuilder;
 
 use crate::Config;
 use crate::api::{self, ApiError, Envelope};
+use crate::domain::account;
 use crate::domain::login_session::Identity;
 use crate::domain::token::TokenSigner;
 use crate::domain::user_store::UserStore;
 use crate::domain::users::FileUserStore;
-use crate::domain::{account, login_session};
 use crate::oauth::{self, OAuthState};
 use crate::storage::LocalDirectory;
+use crate::time::now_millis;
 use crate::{files, library, worker};
 
 #[derive(Clone, Debug, TypedBuilder)]
@@ -67,7 +68,7 @@ pub async fn run(
         .await
         .context("could not create data_directory")?;
     let database = open_database(&config.data_directory).await?;
-    account::sync(&database, users.as_ref(), login_session::now_millis()?).await?;
+    account::sync(&database, users.as_ref(), now_millis()?).await?;
     let identity = Arc::new(identity(config.clone(), users)?);
     let settings = library::settings(&config);
     let storage = Arc::new(LocalDirectory::open(&config, settings.upload_size_limit).await?);

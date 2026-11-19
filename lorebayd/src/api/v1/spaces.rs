@@ -92,9 +92,7 @@ pub(crate) async fn change(
     let changes = request.try_into()?;
     let space = state
         .library
-        .run_write(Some(&caller), async |write| {
-            change_space(write, &caller, &key, changes).await
-        })
+        .run_write(async |write| change_space(write, &caller, &key, changes).await)
         .await?;
     Ok(Envelope::builder().data(space).build())
 }

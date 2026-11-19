@@ -8,6 +8,7 @@ use crate::{Caller, LibraryState, OperationHandle};
 use super::space_access::{SpaceAccessError, SpaceRole, role_in_space, scoped_space};
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum TaskAccessError {
     #[error(transparent)]
     Database(#[from] DbErr),

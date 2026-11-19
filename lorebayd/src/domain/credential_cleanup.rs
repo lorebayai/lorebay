@@ -6,14 +6,14 @@ use sea_orm::{
 use thiserror::Error;
 use typed_builder::TypedBuilder;
 
+use crate::time::now_millis;
+
 use crate::repository::OAuthClientRepository;
 use crate::repository::agent_authorization::AgentAuthorizationRepository;
 use crate::repository::device_sign_in_request::DeviceSignInRequestRepository;
 use crate::repository::login_session::LoginSessionRepository;
 use crate::repository::oauth_code::OauthCodeRepository;
 use crate::repository::refresh_token_history::RefreshTokenHistoryRepository;
-
-use super::login_session::now_millis;
 
 #[derive(Debug, Error)]
 pub(crate) enum CredentialCleanupError {

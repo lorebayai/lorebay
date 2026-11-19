@@ -29,7 +29,9 @@ pub(crate) async fn remove_abandoned_artifacts(
 async fn remove_round(state: &LibraryState) -> Result<u64, library::ArtifactCleanupError> {
     let mut removed = 0;
     loop {
-        let batch = library::remove_abandoned_artifacts(state).await?;
+        let batch = state
+            .run_write(async |write| library::remove_abandoned_artifacts(write).await)
+            .await?;
         removed += batch;
         if batch < library::ARTIFACT_CLEANUP_BATCH_SIZE as u64 {
             return Ok(removed);

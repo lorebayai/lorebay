@@ -130,6 +130,7 @@ fn artifact() -> TableCreateStatement {
         .col(big_integer_null(SpaceArtifact::Size))
         .col(big_integer(SpaceArtifact::CreatedAt))
         .col(big_integer_null(SpaceArtifact::CompletedAt))
+        .col(big_integer_null(SpaceArtifact::RefusedAt))
         .index(
             Index::create()
                 .unique()
@@ -140,6 +141,11 @@ fn artifact() -> TableCreateStatement {
             Expr::col(SpaceArtifact::CompletedAt)
                 .is_null()
                 .eq(Expr::col(SpaceArtifact::Size).is_null()),
+        )
+        .check(
+            Expr::col(SpaceArtifact::RefusedAt)
+                .is_null()
+                .or(Expr::col(SpaceArtifact::CompletedAt).is_null()),
         )
         .foreign_key(
             ForeignKey::create()
@@ -418,6 +424,7 @@ enum SpaceArtifact {
     FileName,
     Id,
     Number,
+    RefusedAt,
     Size,
     SpaceId,
     StorageKey,

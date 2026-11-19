@@ -75,8 +75,8 @@ POST /api/v1/spaces/{space}/proposals/{key}/approve
 - **Library errors keep their codes.** A library operation's refusal
   carries the library's error code, such as `task.not_found`, with an HTTP
   status Lorebay chooses in one place; `task.ended`,
-  `artifact.not_uploaded`, `artifact.too_large` and `space.number_taken`
-  answer 409.
+  `artifact.not_uploaded`, `artifact.refused`, `artifact.too_large` and
+  `space.number_taken` answer 409.
 - **Writes don't check references**; see
   [Keys and references](../../lib/docs/contracts/keys-and-references.md#5-references).
 - **Ended tasks reject notes and artifact registrations**; see

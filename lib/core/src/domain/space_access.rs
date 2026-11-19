@@ -10,6 +10,7 @@ use crate::{Caller, LibraryState, OperationHandle};
 use super::key::parse_key;
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum SpaceAccessError {
     #[error(transparent)]
     Database(#[from] DbErr),
@@ -38,6 +39,24 @@ pub enum SpaceRole {
     Contributor,
     Owner,
     Viewer,
+}
+
+#[derive(Debug, Error)]
+#[error("Invalid space role")]
+pub struct SpaceRoleError;
+
+impl TryFrom<&str> for SpaceRole {
+    type Error = SpaceRoleError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "admin" => Ok(Self::Admin),
+            "contributor" => Ok(Self::Contributor),
+            "owner" => Ok(Self::Owner),
+            "viewer" => Ok(Self::Viewer),
+            _ => Err(SpaceRoleError),
+        }
+    }
 }
 
 impl SpaceRole {

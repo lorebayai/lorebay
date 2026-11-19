@@ -7,13 +7,13 @@ use typed_builder::TypedBuilder;
 use crate::entity::agent_authorization::Model;
 use crate::repository::agent_authorization::AgentAuthorizationRepository;
 
-use super::caller::{CallerError, VerifiedCaller};
+use super::caller::{PersonSessionError, VerifiedCaller};
 use super::pagination::{Page, PageOptions, decode_cursor, encode_cursor};
 
 #[derive(Debug, Error)]
 pub(crate) enum AgentError {
     #[error(transparent)]
-    Caller(#[from] CallerError),
+    Caller(#[from] PersonSessionError),
     #[error(transparent)]
     Database(#[from] DbErr),
     #[error("Invalid cursor")]

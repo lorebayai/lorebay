@@ -21,6 +21,7 @@ pub struct Model {
     pub size: Option<i64>,
     pub created_at: i64,
     pub completed_at: Option<i64>,
+    pub refused_at: Option<i64>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

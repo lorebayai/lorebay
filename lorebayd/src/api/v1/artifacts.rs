@@ -12,7 +12,7 @@ use crate::server::ServerState;
 use lorebay_lib_core::{
     ArtifactCompleted, ArtifactFileName, ArtifactRegistered, ArtifactSummary, ArtifactTextError,
     DownloadRequest, NewArtifact, TaskTarget, complete_artifact, delete_artifact,
-    get_artifact_download_url, register_artifact,
+    get_artifact_download_url, prepare_artifact_completion, register_artifact,
 };
 
 use super::login_session::invalid_json;
@@ -65,13 +65,13 @@ pub(crate) async fn register(
         .path_space(Some(space.as_str()))
         .task_id(task_id.expose().as_str())
         .build();
-    let artifact = register_artifact(
-        &state.library,
-        &caller.library_caller(),
-        target,
-        request.try_into()?,
-    )
-    .await?;
+    let caller = caller.library_caller();
+    let input = request.try_into()?;
+    let registration = state
+        .library
+        .run_write(async |write| register_artifact(write, &caller, target, input).await)
+        .await?;
+    let artifact = registration.issue_upload(&state.library).await?;
     Ok((
         StatusCode::CREATED,
         Envelope::builder().data(artifact).build(),
@@ -88,8 +88,13 @@ pub(crate) async fn complete(
         .path_space(Some(space.as_str()))
         .task_id(task_id.expose().as_str())
         .build();
-    let artifact =
-        complete_artifact(&state.library, &caller.library_caller(), target, &key).await?;
+    let caller = caller.library_caller();
+    let prepared = prepare_artifact_completion(&state.library, &caller, target, &key).await?;
+    let completion = state
+        .library
+        .run_write(async |write| complete_artifact(write, &caller, target, prepared).await)
+        .await?;
+    let artifact = completion.into_result()?;
     Ok(Envelope::builder().data(artifact).build())
 }
 
@@ -106,9 +111,7 @@ pub(crate) async fn delete(
     let caller = caller.library_caller();
     state
         .library
-        .run_write(Some(&caller), async |write| {
-            delete_artifact(write, &caller, target, &key).await
-        })
+        .run_write(async |write| delete_artifact(write, &caller, target, &key).await)
         .await?;
     Ok(Envelope::builder().data(()).build())
 }
@@ -117,6 +120,7 @@ fn invalid_text(field: &str, error: ArtifactTextError) -> ApiError {
     let code = match error {
         ArtifactTextError::Empty => "required",
         ArtifactTextError::TooManyBytes(_) | ArtifactTextError::TooManyCharacters(_) => "too_long",
+        _ => "invalid",
     };
     ApiError::InvalidBody(vec![
         FieldError::builder()

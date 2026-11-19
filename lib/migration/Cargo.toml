@@ -10,8 +10,9 @@ publish = true
 
 [features]
 default = []
+entity-generation = ["sqlite", "dep:anyhow", "dep:tokio"]
 postgres = ["sea-orm-migration/sqlx-postgres"]
-sqlite = ["sea-orm-migration/sqlx-sqlite", "dep:anyhow", "dep:tokio"]
+sqlite = ["sea-orm-migration/sqlx-sqlite"]
 
 [dependencies]
 anyhow = { workspace = true, optional = true }
@@ -21,7 +22,7 @@ tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }
 [[bin]]
 name = "prepare-library-entity-database"
 path = "src/bin/prepare-library-entity-database.rs"
-required-features = ["sqlite"]
+required-features = ["entity-generation"]
 
 [lints]
 workspace = true

@@ -55,7 +55,7 @@ pub trait DatabaseTransactions: Send + Sync {
     fn commit_write<'a>(
         &'a self,
         transaction: DatabaseTransaction,
-        record: WriteRecord<'a>,
+        record: Option<WriteRecord<'a>>,
     ) -> BoxFuture<'a, InterfaceResult<()>>;
 
     fn abandon_write(&self, transaction: DatabaseTransaction)
@@ -64,6 +64,7 @@ pub trait DatabaseTransactions: Send + Sync {
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
+#[non_exhaustive]
 pub struct LibrarySettings {
     pub public_url: String,
     pub mcp_path: String,
@@ -115,7 +116,6 @@ impl LibraryState {
 
     pub async fn run_write<T, E: From<anyhow::Error>>(
         &self,
-        caller: Option<&Caller>,
         write: impl AsyncFnOnce(&mut Write<'_>) -> Result<T, E>,
     ) -> Result<T, E> {
         let transaction = self.database.begin_write().await?;
@@ -123,11 +123,15 @@ impl LibraryState {
             state: self,
             transaction: &transaction,
             progress: WriteProgress::Empty,
+            caller: None,
             delete: Vec::new(),
         };
         let result = write(&mut context).await;
         let Write {
-            progress, delete, ..
+            progress,
+            caller,
+            delete,
+            ..
         } = context;
         let result = result.and_then(|value| match progress {
             WriteProgress::Recorded {
@@ -135,12 +139,13 @@ impl LibraryState {
                 space_id,
             } => Ok((
                 value,
-                WriteRecord {
+                Some(WriteRecord {
                     operation,
-                    caller,
+                    caller: caller.as_ref(),
                     space_id,
-                },
+                }),
             )),
+            WriteProgress::Unchanged => Ok((value, None)),
             _ => Err(anyhow::anyhow!("A write must complete one library operation").into()),
         });
         let (value, record) = match result {
@@ -195,6 +200,7 @@ impl fmt::Debug for LibraryState {
 }
 
 #[derive(TypedBuilder)]
+#[non_exhaustive]
 pub struct LibraryInterfaces {
     pub caller: Arc<dyn CallerResolver>,
     pub database: Arc<dyn DatabaseTransactions>,
@@ -267,6 +273,7 @@ pub struct Write<'a> {
     state: &'a LibraryState,
     transaction: &'a DatabaseTransaction,
     progress: WriteProgress,
+    caller: Option<Caller>,
     pub(crate) delete: Vec<String>,
 }
 
@@ -275,12 +282,13 @@ impl Write<'_> {
         self.transaction
     }
 
-    pub(crate) fn begin_operation(&mut self) -> InterfaceResult<()> {
+    pub(crate) fn begin_operation(&mut self, caller: Option<&Caller>) -> InterfaceResult<()> {
         anyhow::ensure!(
             matches!(self.progress, WriteProgress::Empty),
             "A write can run only one library operation"
         );
         self.progress = WriteProgress::Pending;
+        self.caller = caller.cloned();
         Ok(())
     }
 
@@ -295,12 +303,17 @@ impl Write<'_> {
         OperationHandle::Write(self.transaction)
     }
 
+    pub(crate) fn finish_without_record(&mut self) {
+        self.progress = WriteProgress::Unchanged;
+    }
+
     pub(crate) fn state(&self) -> &LibraryState {
         self.state
     }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum WriteOperation {
     AddNote,
     ChangeSpace,
@@ -311,6 +324,7 @@ pub enum WriteOperation {
     DeleteArtifact,
     DeleteNote,
     DeleteTask,
+    RefuseArtifact,
     RegisterArtifact,
     RemoveAbandonedArtifacts,
 }
@@ -330,4 +344,5 @@ enum WriteProgress {
         operation: WriteOperation,
         space_id: Option<String>,
     },
+    Unchanged,
 }
