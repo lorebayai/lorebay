@@ -19,11 +19,10 @@ mkdir -p ~/.agents/skills && ln -s "$PWD/skill/lorebay" ~/.agents/skills/lorebay
 A new session picks up the skill and each pull; `/skills` lists `lorebay`.
 
 Connect the harness at user level, so every project and worktree has the
-server, under the name `lorebay` that the skill uses; the server reports
-itself as `lorebayd`. `<url>` is `https://` with the host and port, such as
-`https://lorebay.test:8443`; both harnesses refuse OAuth over `http://`
-except on `localhost`, `127.0.0.1` or `::1`. For Claude Code, in a terminal,
-since `mcp login` needs one:
+server, under the name `lorebay` that the skill uses. `<url>` is `https://`
+with the host and port, such as `https://lorebay.test:8443`; both harnesses
+refuse OAuth over `http://` except on `localhost`, `127.0.0.1` or `::1`. For
+Claude Code, in a terminal, since `mcp login` needs one:
 
 ```bash
 claude mcp add --scope user --transport http lorebay <url>/mcp
@@ -31,10 +30,12 @@ claude mcp login lorebay
 ```
 
 For Codex, `mcp add` also starts the sign-in when it reaches the server, and
-`mcp login` repeats it. Then edit `~/.codex/config.toml` to hold the lines
-below beside its other settings: the agent uploads files from its shell,
-which Codex's sandbox otherwise keeps off the network, and the approval lets
-non-interactive runs, such as `codex exec`, call the tools.
+`mcp login` repeats it. Then edit `~/.codex/config.toml` so it holds the
+lines below: `sandbox_mode` above the first `[table]`, and the approval line
+in the `[mcp_servers.lorebay]` table that `mcp add` wrote. The agent uploads
+files from its shell, which Codex's sandbox otherwise keeps off the network,
+in every project; the approval lets non-interactive runs, such as
+`codex exec`, call the tools.
 
 ```bash
 codex mcp add lorebay --url <url>/mcp
@@ -52,10 +53,11 @@ default_tools_approval_mode = "approve"
 `--no-browser` on either `mcp login` prints the authorization link only. On
 Lorebay's authorization page, sign in, consent and name the agent, such as
 `Claude Code (home)`. Authorizing the same harness again suggests the same
-name; replacing the old authorization keeps it. `lorebay agent revoke
-'<name>'` ends one. When over 30 days pass between `claude mcp add` and the
-first authorization, the server has dropped the unused client registration:
-run `claude mcp remove --scope user lorebay` and add the server again.
+name: pick another, or replace the old authorization and keep the name.
+`lorebay agent revoke '<name>'` ends one. When more than 30 days, the
+server's default, pass between `claude mcp add` and the first authorization,
+the server has dropped the unused client registration: run
+`claude mcp remove --scope user lorebay` and add the server again.
 
 A server whose certificate comes from a private certificate authority, such
 as `https://lorebay.test:8443`, needs on each machine that connects: a hosts
@@ -64,17 +66,16 @@ authorization page, which warns unless it trusts the authority; the
 authority's certificate at a fixed path, such as
 `~/.local/share/lorebay/ca.crt`, not in the system trust store; and every
 process that connects trusting it, as Configuration lists. The authority's
-key never leaves its machine. `bundle.pem` joins it to the system's
-authorities, which `SSL_CERT_FILE` replaces:
+key never leaves its machine. `bundle.pem` joins the certificate to the
+system's authorities, which `SSL_CERT_FILE` replaces; on Debian or Ubuntu:
 
 ```bash
 cd ~/.local/share/lorebay && cat /etc/ssl/certs/ca-certificates.crt ca.crt > bundle.pem
 ```
 
-A person in several spaces names one per project, and the agent writes its
-key into the project's committed agent instructions file, the one the harness
-loaded, or both `AGENTS.md` and `CLAUDE.md` when they are separate files,
-with a line such as ``- Lorebay space: `SPACE-1` ``.
+A person in several spaces names one per project, and the agent writes a
+line such as ``- Lorebay space: `SPACE-1` `` into the project's committed
+agent instructions files.
 
 The skill sends the person to `lorebay` commands, such as
 `lorebay space create` and `lorebay task delete`. Build the CLI from the repo
