@@ -378,8 +378,8 @@ Every implementation:
   written once;
 - refuses an upload without the headers the tool descriptions promise;
 - expires its URLs;
-- holds the library's files. The orphaned-file round deletes every listed
-  file old enough with no record pointing to its location.
+- lists only the library's files: the orphaned-file round deletes every
+  listed file old enough that no record points to.
 
 At startup the product gives its storage backend the same upload size limit
 it supplies to the library. The backend enforces it when receiving uploads,
@@ -424,8 +424,8 @@ sequenceDiagram
 - **After-commit work is handed back.** The inside part returns its result
   together with the files to delete. The entry deletes them only after the
   product's commit succeeds, and drops them after a rollback or a failed
-  commit. A deletion that fails or never runs leaves a file no record
-  points to, which the orphaned-file round removes.
+  commit. An after-commit deletion that fails or never runs leaves a file
+  no record points to, which the orphaned-file round removes.
 - **Storage calls run outside the transaction.** A completion reads the
   size before the write, decides under the task and artifact locks, and
   deletes an oversized file after rolling back the refused write
@@ -484,6 +484,9 @@ the commit and the after-commit work:
   complete, which the abandoned-registration round removes;
 - a crash after deleting a task, an artifact or abandoned registrations
   leaves their files, which the orphaned-file round removes;
+- a crash after an oversize refusal and before its deletion leaves the
+  file with its incomplete registration; the next report refuses and deletes
+  it, or the abandoned-registration round removes both;
 - a crash after deleting an oversized file leaves its registration
   incomplete, and reporting it complete again answers that the file was not
   uploaded.
@@ -501,10 +504,11 @@ Both rounds are safe to run again.
   the scope, and answers a space of another owner, and anything in it, as
   not found, before it asks for the role. Listing spaces passes the scope
   to the memberships method and returns only spaces of that owner.
-- **A product gives each new space its number.** The library checks that
-  the number is positive and unused, and derives the key in the
-  fixed format, such as `SPACE-1`. The product keeps numbers unique and
-  never reuses one.
+- **A product gives each new space its number.** The library refuses a
+  number that is not positive as invalid input (`request.invalid_body`,
+  field `number`) and a number already used with `space.number_taken`, and
+  derives the key in the fixed format, such as `SPACE-1`. The product
+  keeps numbers unique and never reuses one.
 - **Creating a space is a step a product composes.** It runs inside a write
   the product runs through the entry, because its number, its owner and the
   owner's membership are the product's. The product authorizes creation,
@@ -640,7 +644,9 @@ both.
 
 The oversize refusal uses the size read before taking the locks. If a new
 upload replaces the oversized file at the same location before a pending
-deletion runs, that deletion can remove the replacement.
+deletion runs, that deletion can remove the replacement, even one a later
+report has recorded as complete; that artifact then has a record and no
+file, and its download fails.
 
 The Knowledge and proposal writes follow the same rules when they are
 built.
@@ -663,7 +669,9 @@ built.
 
 ## 15. Tests on Postgres
 
-What only Postgres can show, such as two writers racing, is tested against
+What only Postgres can show, such as two writers racing, and what no
+Lorebay entry point can reach (a write the product abandons, another
+owner's space, a space number that is not positive) is tested against
 Postgres through the public API of `lorebay-lib-core`, with test
 implementations of the interfaces the tested operations call. The tests
 keep the [testing rules](../../../playbook/topics/testing.md#black-box) as

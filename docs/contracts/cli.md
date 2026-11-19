@@ -62,7 +62,9 @@ It does not cover:
 In the table, `<space>` is a space key, `<task>` a task key, `<task-id>` a
 task ID, `<entry>` a knowledge entry's name or key, `<version>` a version
 returned by its history, `<artifact>` an artifact key, `<proposal>` a
-proposal key, and `<note>` the note's time as the Scratchpad shows it.
+proposal key, and `<note>` the note's time as the Scratchpad shows it,
+which names one note; see
+[Tasks](../../lib/docs/contracts/tasks.md#4-scratchpad).
 `<name>` in an agent command is the person's agent name, quoted when it
 contains spaces. Optional arguments appear in brackets. List rows follow
 [section 6](#6-lists); all output follows [section 5](#5-output-and-failures).

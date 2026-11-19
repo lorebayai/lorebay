@@ -80,7 +80,8 @@ A task holds:
 
 The Scratchpad records how the agent did the work. It holds notes only.
 
-- **A note** is a short Markdown entry with a time, rendered as Markdown. A
+- **A note** is a short Markdown entry with a time, rendered as Markdown.
+  Times strictly increase within a task, so a note's time names it. A
   task's Scratchpad is its notes in time order.
 - **The Scratchpad is append-only.** A note cannot be edited. A person may
   delete single notes in their own tasks; agents cannot delete notes.

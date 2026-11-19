@@ -42,12 +42,14 @@ Follow these playbook fragments:
 ### Layers
 
 Transports and workers call Lorebay's domain functions and the library's
-operations; the domain calls the database layer.
+operations; the local-directory job calls the storage layer. The domain
+calls the database layer.
 
 | Layer | Lives in | Owns |
 | --- | --- | --- |
 | Transport | `src/api/`, `src/oauth/`, `src/pages/`, `src/files/` | Converting a protocol's requests into domain inputs, and domain results back |
-| Worker | `src/worker/` | The [background jobs](../docs/architecture/system.md#6-background-jobs), calling domain functions or the library's cleanup rounds |
+| Worker | `src/worker/` | The [background jobs](../docs/architecture/system.md#6-background-jobs), calling domain functions, the library's cleanup rounds, or the local directory's own cleanup |
+| Adapter | `src/library/` | Lorebay's implementations of the library's interfaces. They call the domain, data and storage layers; the caller resolver reads the request's credential with the transport's header parsing |
 | Domain | `src/domain/` | Lorebay's own operations: permission checks, data rules and transactions |
 | Data | `src/repository/`, `src/entity/`, `migration/` | The database layer |
 | Storage | `src/storage/` | The [file storage layer](../lib/docs/architecture/storage.md#3-file-storage) |

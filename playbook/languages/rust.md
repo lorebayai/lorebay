@@ -10,11 +10,11 @@
   A crate in `lib/` is named `lorebay-lib-<subfolder>`. A product-owned
   nested crate is named `<product>-<subfolder>`, such as
   `lorebayd-migration`. Other top-level crates are named `lorebay-<folder>`.
-- A new crate gets a `moon.yml`, a `README.md` per
-  [documentation.md](../core/documentation.md#readmes), and an `AGENTS.md`
-  importing this fragment, with `ln -s AGENTS.md CLAUDE.md` beside it, in the
-  change that creates it, unless a parent folder's `AGENTS.md` already
-  imports it.
+- A new crate gets a `moon.yml` and a `README.md` per
+  [documentation.md](../core/documentation.md#readmes) in the change that
+  creates it. It also gets an `AGENTS.md` importing this fragment, with
+  `ln -s AGENTS.md CLAUDE.md` beside it, unless a parent folder's
+  `AGENTS.md` already imports the fragment.
 - Every third-party dependency version must be declared once in the root
   `Cargo.toml` `[workspace.dependencies]`. Crates must inherit it with
   `name = { workspace = true }`, adding `features` when needed; a crate
