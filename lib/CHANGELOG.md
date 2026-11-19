@@ -39,6 +39,13 @@ Version 0.1.0, the first version, not yet tagged.
 - **Breaking:** `TaskFilters::cursor_version` is private to the core domain.
 - **Breaking:** migration's `sqlite` feature selects only the driver. Enable
   `entity-generation` for `open_entity_database` and its development binary.
+- **Breaking:** the agent rules a product's skill restates change. Rule 5
+  states the recording order, with a finished-step note even for a one-step
+  task. Rule 6 uploads each file the work produces for the person unless its
+  final content is in a pushed commit or a pull request, so a committed but
+  unpushed file is now uploaded, and the upload matches the final file.
+  Rule 9 records only new work after re-authorization, with no task for the
+  unrecorded stretch.
 - Core parses stored role names through `SpaceRole::try_from(&str)` with
   `SpaceRoleError` for invalid names.
 - Entity generation uses separate installer build directories for the two
