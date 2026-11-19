@@ -5,23 +5,23 @@ members = ["base", "cli", "lib/core", "lib/mcp", "lib/migration", "lib/types", "
 [workspace.dependencies]
 anyhow = "1.0.104"
 argon2 = "0.6.0"
-axum = { version = "0.8.9", default-features = false, features = ["form", "http1", "json", "query", "tokio"] }
-base64 = { version = "0.23.1", default-features = false, features = ["std"] }
+axum = { version = "0.8.9", default-features = false, features = ["json"] }
+base64 = { version = "0.23.1", default-features = false, features = ["alloc"] }
 clap = { version = "4.6.7", features = ["derive"] }
 config = { version = "0.15.27", default-features = false, features = ["json"] }
 futures-util = "0.3.34"
 hmac = "0.13.0"
-getrandom = { version = "0.4.3", features = ["std"] }
+getrandom = "0.4.3"
 http = "1.5.0"
 httpdate = "1.0.3"
 hyper = { version = "1.12.0", features = ["http1", "server"] }
 hyper-util = { version = "0.1.21", features = ["service", "tokio"] }
 jsonwebtoken = { version = "12.0.0", default-features = false, features = ["rust_crypto"] }
 lorebay-base = { path = "base" }
-lorebay-lib-core = { path = "lib/core" }
-lorebay-lib-mcp = { path = "lib/mcp" }
-lorebay-lib-migration = { path = "lib/migration" }
-lorebay-lib-types = { path = "lib/types" }
+lorebay-lib-core = { path = "lib/core", version = "=0.1.0" }
+lorebay-lib-mcp = { path = "lib/mcp", version = "=0.1.0" }
+lorebay-lib-migration = { path = "lib/migration", version = "=0.1.0" }
+lorebay-lib-types = { path = "lib/types", version = "=0.1.0" }
 lorebayd-migration = { path = "lorebayd/migration" }
 mise-dotenv = "2026.11.0"
 reqwest = { version = "0.13.5", default-features = false, features = ["form", "json"] }
@@ -35,7 +35,7 @@ serde_yaml_ng = "0.10.0"
 sha2 = "0.11.1"
 tempfile = "3.27.0"
 thiserror = "2.0.21"
-tokio = { version = "1.54.1", features = ["fs", "io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+tokio = { version = "1.54.1", features = ["macros"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt", "json"] }
 typed-builder = "0.23.2"

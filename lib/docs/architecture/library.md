@@ -135,7 +135,8 @@ in its own subfolder and named `lorebay-lib-<subfolder>`:
   except the playbook: a doc may link to a fragment, and an `AGENTS.md` may
   import one. The root Cargo workspace settings and the toolchain are
   shared too. A check that `moon ci` runs fails on a dependency, or a link
-  outside the playbook, that leaves the folder.
+  outside the playbook, that leaves the folder, and on a root `[patch]` or
+  Cargo config, which a product depending on the library would not get.
 - **The build tool finds the crates** through a glob in
   `.moon/workspace.yml`, `lib/*/moon.yml`, since `*/moon.yml` matches
   only top-level folders. With
@@ -157,11 +158,17 @@ in its own subfolder and named `lorebay-lib-<subfolder>`:
   The migration crate's `sqlite` feature also builds the entity generation
   helper and binary, which open a disposable SQLite file in development.
 - **Versions are declared once,** in the root `[workspace.dependencies]`,
-  which declares SeaORM and its migration crate with no driver feature. A
-  consumer in another repository pins all library crates it uses to the
-  same git `rev` and sets `features = ["postgres"]` or `features = ["sqlite"]`
-  on the crates that select a driver. See the
-  [manifest example](../../core/README.md#usage).
+  which declares SeaORM and its migration crate with no driver feature. Its
+  entries carry only the features every crate that inherits them needs,
+  and each crate adds its own, so a product's choices do not reach the
+  library's dependencies.
+- **The four crates share one version.** A consumer in another repository
+  pins all library crates it uses to the same release tag, or to the same
+  commit, and sets `features = ["postgres"]` or `features = ["sqlite"]` on
+  the crates that select a driver. See the
+  [manifest example](../../README.md#usage). A second check that `moon ci`
+  runs packages the four crates and builds each from its own package, as a
+  product outside the repository would.
 - **Four dependencies are public.** The public API exposes SeaORM connections
   and transactions, the SeaORM migration trait implemented by `Migrator`,
   `http` request headers, and the axum MCP router. Consumers use compatible

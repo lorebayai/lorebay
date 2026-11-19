@@ -12,7 +12,7 @@ publish.workspace = true
 anyhow.workspace = true
 lorebay-lib-migration = { workspace = true, features = ["sqlite"] }
 sea-orm-migration = { workspace = true, features = ["sqlx-sqlite"] }
-tokio.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread"] }
 
 [[bin]]
 name = "prepare-lorebay-entity-database"

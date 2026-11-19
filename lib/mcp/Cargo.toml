@@ -1,12 +1,12 @@
 [package]
 name = "lorebay-lib-mcp"
 description = "The MCP tools and router for the Lorebay library."
-version.workspace = true
+version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-publish.workspace = true
+publish = true
 
 [features]
 default = []

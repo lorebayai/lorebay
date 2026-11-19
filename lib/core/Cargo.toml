@@ -1,12 +1,12 @@
 [package]
 name = "lorebay-lib-core"
 description = "Spaces, tasks, and artifact operations for a product."
-version.workspace = true
+version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-publish.workspace = true
+publish = true
 
 [features]
 default = []
@@ -30,7 +30,7 @@ uuid.workspace = true
 [dev-dependencies]
 lorebay-lib-migration = { workspace = true, features = ["postgres"] }
 sea-orm-migration.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["rt", "sync", "time"] }
 lorebay-lib-core = { path = ".", features = ["postgres"] }
 
 [[test]]

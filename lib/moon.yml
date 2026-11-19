@@ -8,5 +8,19 @@ tasks:
       - '/Cargo.toml'
       - '/Cargo.lock'
       - '/.moon/check-lib-boundary.sh'
+      - '/.cargo/**/*'
+    options:
+      runFromWorkspaceRoot: true
+  package:
+    deps: ['~:boundary']
+    script: |
+      set -e
+      cargo package --locked --allow-dirty -p lorebay-lib-types -p lorebay-lib-core -p lorebay-lib-mcp -p lorebay-lib-migration
+      cargo package --locked --allow-dirty -p lorebay-lib-types -p lorebay-lib-core -p lorebay-lib-mcp -p lorebay-lib-migration --features lorebay-lib-core/postgres,lorebay-lib-mcp/postgres,lorebay-lib-migration/postgres
+    inputs:
+      - '/lib/**/*'
+      - '/Cargo.toml'
+      - '/Cargo.lock'
+      - '/rust-toolchain.toml'
     options:
       runFromWorkspaceRoot: true

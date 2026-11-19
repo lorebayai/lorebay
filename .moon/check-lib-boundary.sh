@@ -98,6 +98,21 @@ for package in metadata["packages"]:
         elif dependency["name"] in product_crates:
             errors.append(f"{manifest.relative_to(root)}: dependency on product crate {dependency['name']}")
 
+library_versions = {
+    package["name"]: package["version"] for package in metadata["packages"]
+    if Path(package["manifest_path"]).resolve().is_relative_to(library)
+}
+if len(set(library_versions.values())) > 1:
+    listed = ", ".join(f"{name} {version}" for name, version in sorted(library_versions.items()))
+    errors.append(f"library crates must share one version: {listed}")
+
+# A git dependency ignores the root manifest's [patch] and the repository's Cargo config.
+if re.search(r'^\s*\[patch[.\]]', (root / "Cargo.toml").read_text(), re.MULTILINE):
+    errors.append("Cargo.toml: [patch] does not apply to a product that depends on the library")
+for config in (root / ".cargo" / "config.toml", root / ".cargo" / "config"):
+    if config.exists():
+        errors.append(f"{config.relative_to(root)}: Cargo config does not apply to a product that depends on the library")
+
 if errors:
     print("Library boundary violations:", file=sys.stderr)
     for error in errors:

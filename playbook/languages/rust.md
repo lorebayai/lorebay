@@ -19,6 +19,9 @@
   `Cargo.toml` `[workspace.dependencies]`. Crates must inherit it with
   `name = { workspace = true }`, adding `features` when needed; a crate
   must not declare a dependency version.
+- A `[workspace.dependencies]` entry carries only the features every crate
+  that inherits it needs, with `default-features = false` where a crate
+  does not need the defaults. Each crate adds its own features.
 - Before adding or porting a dependency, its author must run
   `cargo info <crate>` and use its latest stable release. Ported code must
   adapt to that release rather than copy a version from another repository.
@@ -30,9 +33,12 @@
   `Cargo.lock` must be committed.
 - Crates must inherit package fields from `[workspace.package]` and lints
   with `[lints] workspace = true`; they must not define their own lint tables.
+  The library's crates set their own `version` and `publish`, as
+  [lib/AGENTS.md](../../lib/AGENTS.md) says.
 - `rust-toolchain.toml` pins one stable Rust release, and `rust-version` in
   `[workspace.package]` names the same release. A toolchain bump changes
-  both in one pull request.
+  both, and the minimum Rust release in [lib/README.md](../../lib/README.md),
+  in one pull request.
 - A crate must not declare Cargo `[features]` unless a consumer must be able
   to omit a heavy optional dependency.
 - Rust projects must declare `language: rust` and their layer in `moon.yml`.
