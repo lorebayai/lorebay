@@ -42,6 +42,10 @@ It does not cover:
 
 - **No external dependencies by default.** `lorebayd` starts with a data
   directory that holds the SQLite file and the artifact files.
+- **An earlier data directory must be recreated when startup refuses it.**
+  Move the old directory aside and start with an empty one. Keep the users
+  file outside the old directory so `lorebayd` can recreate the accounts.
+  Stored work and authorizations stay in the old directory.
 - **One database holds the library's tables and Lorebay's.** `lorebayd`
   turns on the library's backend that matches its database, and hands the
   library the transactions it opens.
