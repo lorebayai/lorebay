@@ -166,7 +166,7 @@ pub async fn create_space(
     if number <= 0 {
         return Err(SpaceInputError::InvalidNumber.into());
     }
-    let caller_person = caller_person(write.state(), write.handle(), caller).await?;
+    let caller_person = name_for(write.state(), write.handle(), caller).await?;
     let now = now_millis()?;
     let repository = SpaceRepository::builder()
         .connection(write.transaction())
@@ -224,7 +224,7 @@ pub async fn list_spaces(
     let after_number = space_position(caller, &options)?;
     state
         .run_read(async |handle| {
-            let caller_person = caller_person(state, handle, caller).await?;
+            let caller_person = name_for(state, handle, caller).await?;
             let request = MembershipPage {
                 person_id: caller.person_id(),
                 owner_id: &caller.owner_id,
@@ -284,7 +284,7 @@ pub async fn read_space(
     state
         .run_read(async |handle| {
             let authorized = check_space(state, handle, caller, key, READ_ROLES).await?;
-            let caller_person = caller_person(state, handle, caller).await?;
+            let caller_person = name_for(state, handle, caller).await?;
             Ok((authorized, caller_person).into())
         })
         .await
@@ -299,7 +299,7 @@ pub async fn change_space(
     write.begin_operation(Some(caller))?;
     caller.person()?;
     let authorized = check_space(write.state(), write.handle(), caller, key, CHANGE_ROLES).await?;
-    let caller_person = caller_person(write.state(), write.handle(), caller).await?;
+    let caller_person = name_for(write.state(), write.handle(), caller).await?;
     let mut model = authorized.space.into_active_model();
     if let Some(name) = changes.name {
         model.name = Set(name);
@@ -327,7 +327,7 @@ pub async fn change_space(
 const CURSOR_VERSION: &str = "spaces-v1";
 const CHANGE_ROLES: &[SpaceRole] = &[SpaceRole::Owner, SpaceRole::Admin];
 
-async fn caller_person(
+async fn name_for(
     state: &LibraryState,
     handle: OperationHandle<'_>,
     caller: &Caller,
