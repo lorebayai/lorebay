@@ -206,5 +206,5 @@ instead of creating one. In a new session, find it by rule 3.
 If you are working on another task at the time, end it first, with its
 unfinished work in Open, so only one task is `in progress` at a time.
 
-After reopening, first write the reopening note of rule 5. When it is fixed,
-update the result and end the task.
+After reopening, first write the reopening note of rule 5. When the missed work
+is fixed, update the result and end the task.
