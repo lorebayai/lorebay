@@ -6,13 +6,14 @@ use sea_orm::DbErr;
 use thiserror::Error;
 
 use crate::repository::ArtifactRepository;
-use crate::{LibraryState, WriteOperation};
+use crate::{LibraryState, Write, WriteOperation};
 
 use super::time::now_millis;
 
 pub const ARTIFACT_CLEANUP_BATCH_SIZE: usize = 100;
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum ArtifactCleanupError {
     #[error(transparent)]
     Database(#[from] DbErr),
@@ -26,24 +27,28 @@ impl ArtifactCleanupError {
     }
 }
 
-pub async fn remove_abandoned_artifacts(state: &LibraryState) -> Result<u64, ArtifactCleanupError> {
-    let age = i64::try_from(state.settings().abandoned_artifact_lifetime.as_millis())
-        .map_err(anyhow::Error::from)?;
+pub async fn remove_abandoned_artifacts(
+    write: &mut Write<'_>,
+) -> Result<u64, ArtifactCleanupError> {
+    write.begin_operation(None)?;
+    let age = i64::try_from(
+        write
+            .state()
+            .settings()
+            .abandoned_artifact_lifetime
+            .as_millis(),
+    )
+    .map_err(anyhow::Error::from)?;
     let before = now_millis()?.saturating_sub(age);
-    state
-        .run_write(None, async |write| {
-            write.begin_operation()?;
-            let locations = ArtifactRepository::builder()
-                .connection(write.transaction())
-                .build()
-                .delete_abandoned(before, ARTIFACT_CLEANUP_BATCH_SIZE as u64)
-                .await?;
-            let removed = locations.len() as u64;
-            write.delete.extend(locations);
-            write.record(WriteOperation::RemoveAbandonedArtifacts, None);
-            Ok(removed)
-        })
-        .await
+    let locations = ArtifactRepository::builder()
+        .connection(write.transaction())
+        .build()
+        .delete_abandoned(before, ARTIFACT_CLEANUP_BATCH_SIZE as u64)
+        .await?;
+    let removed = locations.len() as u64;
+    write.delete.extend(locations);
+    write.record(WriteOperation::RemoveAbandonedArtifacts, None);
+    Ok(removed)
 }
 
 pub async fn remove_orphaned_files(state: &LibraryState) -> Result<u64, ArtifactCleanupError> {

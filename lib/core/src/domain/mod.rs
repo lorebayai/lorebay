@@ -2,7 +2,9 @@ pub use artifact_cleanup::*;
 pub use artifact_input::*;
 pub use artifacts::*;
 pub use pagination::{DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, Page, PageOptions, PageSizeError};
-pub use space_access::{SpaceAccessError, SpaceReference, SpaceRole, resolve_space};
+pub use space_access::{
+    SpaceAccessError, SpaceReference, SpaceRole, SpaceRoleError, resolve_space,
+};
 pub use spaces::*;
 pub use task_access::TaskAccessError;
 pub use task_filter::*;
@@ -12,6 +14,7 @@ pub use tasks::*;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum CallerError {
     #[error("An agent is required")]
     AgentRequired,

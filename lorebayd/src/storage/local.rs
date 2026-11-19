@@ -9,10 +9,9 @@ use futures_util::future::BoxFuture;
 use futures_util::stream::BoxStream;
 use futures_util::{Stream, StreamExt};
 use lorebay_lib_core::{
-    DownloadRequest, DownloadSpec, FileStorage, StoredFile as LibraryFile, UploadRequest,
-    UploadSpec,
+    DownloadRequest, DownloadSpec, FileStorage, StoredFile, UploadRequest, UploadSpec,
 };
-use lorebay_lib_types::{Secret, unix_millis};
+use lorebay_lib_types::Secret;
 use tempfile::{Builder, TempPath};
 use thiserror::Error;
 use tokio::fs::{self, File};
@@ -24,10 +23,11 @@ use url::Url;
 use uuid::Uuid;
 
 use crate::Config;
+use crate::time::now_millis;
 
 use super::listing::{list_files, storage_directory};
 use super::signature::{load_key, sign, verify};
-use super::{FileOperation, StoredFile, StoredFileKind};
+use super::{FileOperation, LocalFile, StoredFileKind};
 
 #[derive(Debug, Error)]
 pub(crate) enum StorageError {
@@ -267,7 +267,7 @@ impl FileStorage for LocalDirectory {
         })
     }
 
-    fn list(&self) -> BoxStream<'_, Result<LibraryFile>> {
+    fn list(&self) -> BoxStream<'_, Result<StoredFile>> {
         list_files(self.files.clone(), StoredFileKind::Artifact)
             .filter_map(async |entry| match entry {
                 Ok(file) => file
@@ -276,7 +276,7 @@ impl FileStorage for LocalDirectory {
                     .ok()
                     .filter(|name| valid_location(name))
                     .map(|location| {
-                        Ok(LibraryFile {
+                        Ok(StoredFile {
                             location,
                             modified: file.modified,
                         })
@@ -308,7 +308,7 @@ impl LocalDirectory {
         Ok(removed)
     }
 
-    async fn remove_listed(&self, file: &StoredFile) -> Result<bool> {
+    async fn remove_listed(&self, file: &LocalFile) -> Result<bool> {
         let directory = match file.kind {
             StoredFileKind::Artifact => &self.files,
             StoredFileKind::Temporary => &self.temporary,
@@ -339,8 +339,4 @@ impl LocalDirectory {
 fn valid_location(location: &str) -> bool {
     Uuid::parse_str(location)
         .is_ok_and(|id| id.get_version_num() == 7 && id.to_string() == location)
-}
-
-fn now_millis() -> Result<i64> {
-    Ok(unix_millis(SystemTime::now())?)
 }

@@ -20,10 +20,12 @@ use crate::repository::login_session::LoginSessionRepository;
 use crate::repository::oauth_code::OauthCodeRepository;
 use crate::repository::refresh_token_history::RefreshTokenHistoryRepository;
 
+use crate::time::now_millis;
+
 use super::authorization::CLI_CLIENT_ID;
 use super::device_sign_in::{DeviceError, exchange_device_code};
 use super::login_session::{
-    self, Identity, LoginError, Tokens, issue_tokens, new_refresh_token, now_millis, session_expiry,
+    self, Identity, LoginError, Tokens, issue_tokens, new_refresh_token, session_expiry,
 };
 use super::token::{TokenKind, TokenSubject};
 use super::{primary_key, random_id};

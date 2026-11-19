@@ -23,6 +23,7 @@ pub const SPACE_NAME_MAX_BYTES: usize = 256;
 pub const SPACE_SUMMARY_MAX_BYTES: usize = 4096;
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum SpaceError {
     #[error(transparent)]
     Access(#[from] SpaceAccessError),
@@ -56,6 +57,7 @@ impl SpaceError {
 }
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum SpaceInputError {
     #[error("Must not be empty.")]
     Empty(&'static str),
@@ -152,12 +154,12 @@ pub async fn highest_space_number(
 
 pub async fn create_space(
     write: &mut Write<'_>,
-    owner_id: &str,
+    caller: &Caller,
     number: i64,
     creator_role: SpaceRole,
     input: NewSpace,
 ) -> Result<(Space, SpaceReference), SpaceError> {
-    write.begin_operation()?;
+    write.begin_operation(Some(caller))?;
     if number <= 0 {
         return Err(SpaceInputError::InvalidNumber.into());
     }
@@ -169,7 +171,7 @@ pub async fn create_space(
         .insert(space::ActiveModel {
             id: Set(primary_key()),
             number: Set(number),
-            owner_id: Set(owner_id.to_owned()),
+            owner_id: Set(caller.owner_id.clone()),
             name: Set(input.name),
             summary: Set(input.summary),
             next_task_number: Set(1),
@@ -283,7 +285,7 @@ pub async fn change_space(
     key: &str,
     changes: SpaceChanges,
 ) -> Result<Space, SpaceError> {
-    write.begin_operation()?;
+    write.begin_operation(Some(caller))?;
     caller.person()?;
     let authorized = check_space(write.state(), write.handle(), caller, key, CHANGE_ROLES).await?;
     let mut model = authorized.space.into_active_model();

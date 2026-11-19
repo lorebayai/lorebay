@@ -6,6 +6,7 @@ pub const RESULT_MAX_CHARACTERS: usize = 100_000;
 pub const TITLE_MAX_CHARACTERS: usize = 200;
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum TaskTextError {
     #[error("Must not be empty.")]
     Empty,

@@ -8,12 +8,12 @@ use thiserror::Error;
 use typed_builder::TypedBuilder;
 
 use crate::entity::participant;
-use crate::library::{parse_role, read_role};
 use crate::repository::account::AccountRepository;
 use crate::repository::participant::{ParticipantRecord, ParticipantRepository, RosterAfter};
 
-use super::caller::{CallerError, VerifiedCaller};
-use super::login_session::now_millis;
+use crate::time::now_millis;
+
+use super::caller::{PersonSessionError, VerifiedCaller};
 use super::pagination::{Page, PageOptions, decode_cursor, encode_cursor};
 use super::primary_key;
 
@@ -24,7 +24,7 @@ pub(crate) enum ParticipantError {
     #[error("The person is already in the space")]
     AlreadyExists,
     #[error(transparent)]
-    Caller(#[from] CallerError),
+    Caller(#[from] PersonSessionError),
     #[error(transparent)]
     Database(#[from] DbErr),
     #[error(transparent)]
@@ -90,6 +90,22 @@ impl From<&RosterPosition> for RosterAfter {
             .agent_name(&position.agent_name)
             .build()
     }
+}
+
+pub(crate) async fn read_role(
+    transaction: &DatabaseTransaction,
+    person_id: &str,
+    space_id: &str,
+) -> Result<Option<SpaceRole>, DbErr> {
+    ParticipantRepository::builder()
+        .connection(transaction)
+        .build()
+        .by_space_and_account(space_id, person_id)
+        .await?
+        .map(|row| {
+            SpaceRole::try_from(row.role.as_str()).map_err(|error| DbErr::Type(error.to_string()))
+        })
+        .transpose()
 }
 
 pub(crate) async fn list_participants(
@@ -243,7 +259,8 @@ const READ_ROLES: &[SpaceRole] = &[
 const MANAGE_ROLES: &[SpaceRole] = &[SpaceRole::Owner, SpaceRole::Admin];
 
 fn participant_from_record(record: ParticipantRecord) -> Result<Participant, DbErr> {
-    let mut role = parse_role(record.role.as_str())?;
+    let mut role = SpaceRole::try_from(record.role.as_str())
+        .map_err(|error| DbErr::Type(error.to_string()))?;
     if matches!(
         ParticipantKind::try_from(record.kind.as_str())?,
         ParticipantKind::Agent
@@ -292,7 +309,8 @@ async fn mutation_target(
         .by_space_and_account(&authorized.space.id, &account.id)
         .await?
         .ok_or(ParticipantError::NotFound)?;
-    let target_role = parse_role(target.role.as_str())?;
+    let target_role = SpaceRole::try_from(target.role.as_str())
+        .map_err(|error| DbErr::Type(error.to_string()))?;
     if target_role == SpaceRole::Owner
         || role == Some(SpaceRole::Owner)
         || (authorized.role != SpaceRole::Owner

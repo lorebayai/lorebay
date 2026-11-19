@@ -14,11 +14,11 @@ use crate::entity::device_sign_in_request::{ActiveModel, Model};
 use crate::repository::account::AccountRepository;
 use crate::repository::device_sign_in_request::DeviceSignInRequestRepository;
 
+use crate::time::now_millis;
+
 use super::authorization::CLI_CLIENT_ID;
-use super::caller::{CallerError, VerifiedCaller};
-use super::login_session::{
-    Identity, LoginError, Tokens, create_session, new_refresh_token, now_millis,
-};
+use super::caller::{PersonSessionError, VerifiedCaller};
+use super::login_session::{Identity, LoginError, Tokens, create_session, new_refresh_token};
 use super::primary_key;
 
 #[derive(Clone, Copy, Debug)]
@@ -34,7 +34,7 @@ pub(crate) enum DeviceError {
     #[error("Authorization is pending")]
     AuthorizationPending,
     #[error(transparent)]
-    Caller(#[from] CallerError),
+    Caller(#[from] PersonSessionError),
     #[error(transparent)]
     Database(#[from] DbErr),
     #[error("The request has expired")]

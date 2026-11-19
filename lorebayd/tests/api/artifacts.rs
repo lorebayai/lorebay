@@ -778,7 +778,7 @@ async fn complete_artifact_fails_when_file_exceeds_size_limit() {
     assert_problem(
         complete(&server, &agent, &task, "AR-1").await,
         StatusCode::CONFLICT,
-        "artifact.not_uploaded",
+        "artifact.refused",
     )
     .await;
     server.stop().await;

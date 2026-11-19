@@ -20,6 +20,8 @@ pub(crate) use participants::*;
 pub(crate) use spaces::*;
 pub(crate) use user_directory::*;
 
+pub(crate) const OWNER_ID: &str = "lorebay";
+
 mod credential_cleanup;
 mod id;
 mod metadata;

@@ -9,7 +9,7 @@ cli="$(entity_generator "$repo_root/target/lorebayd-migration-tools")"
 schema_dir="$(mktemp -d "${TMPDIR:-/tmp}/lorebay-product-entities.XXXXXX")"
 trap 'rm -rf -- "$schema_dir"' EXIT
 database="$schema_dir/product.sqlite3"
-cargo run -p lorebayd-migration --locked --bin prepare-lorebay-entity-database -- "$database"
+cargo run -p lorebayd-migration --locked --features entity-generation --bin prepare-lorebay-entity-database -- "$database"
 
 python3 - "$database" <<'PY'
 from contextlib import closing

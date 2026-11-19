@@ -5,6 +5,7 @@ use typed_builder::TypedBuilder;
 use super::{TaskKeyword, TaskStatus};
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum TaskFilterError {
     #[error("Own open tasks cannot be combined with a person filter.")]
     PersonConflict,
@@ -42,7 +43,7 @@ impl TaskFilters {
         Ok(())
     }
 
-    pub fn cursor_version(&self, space: &str) -> Result<String, serde_json::Error> {
+    pub(super) fn cursor_version(&self, space: &str) -> Result<String, serde_json::Error> {
         let scope = serde_json::to_string(&(
             space,
             &self.person,

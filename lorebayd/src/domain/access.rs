@@ -5,7 +5,8 @@ use typed_builder::TypedBuilder;
 use crate::repository::account::AccountRepository;
 use crate::repository::agent_authorization::AgentAuthorizationRepository;
 
-use super::login_session::now_millis;
+use crate::time::now_millis;
+
 use super::token::{Claims, TokenKind};
 
 #[derive(Debug, Error)]
@@ -28,7 +29,7 @@ pub(crate) struct AgentCaller {
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
-pub(crate) struct Caller {
+pub(crate) struct PersonSession {
     pub account_id: String,
     pub login_session_id: String,
 }

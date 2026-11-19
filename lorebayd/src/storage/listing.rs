@@ -5,12 +5,12 @@ use anyhow::{Result, bail};
 use futures_util::{Stream, stream};
 use tokio::fs::{self, DirEntry, ReadDir};
 
-use super::{StoredFile, StoredFileKind};
+use super::{LocalFile, StoredFileKind};
 
 pub(super) fn list_files(
     directory: PathBuf,
     kind: StoredFileKind,
-) -> impl Stream<Item = Result<StoredFile>> + Send {
+) -> impl Stream<Item = Result<LocalFile>> + Send {
     stream::try_unfold(
         (Some(directory), None::<ReadDir>),
         move |(directory, entries)| async move {
@@ -39,7 +39,7 @@ pub(super) async fn storage_directory(path: &Path) -> Result<()> {
     Ok(())
 }
 
-async fn stored_file(entry: DirEntry, kind: StoredFileKind) -> Result<Option<StoredFile>> {
+async fn stored_file(entry: DirEntry, kind: StoredFileKind) -> Result<Option<LocalFile>> {
     let metadata = match fs::symlink_metadata(entry.path()).await {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
@@ -49,7 +49,7 @@ async fn stored_file(entry: DirEntry, kind: StoredFileKind) -> Result<Option<Sto
         return Ok(None);
     }
     Ok(Some(
-        StoredFile::builder()
+        LocalFile::builder()
             .name(entry.file_name())
             .kind(kind)
             .modified(metadata.modified()?)

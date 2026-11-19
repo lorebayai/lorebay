@@ -25,6 +25,7 @@ use super::{
 };
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum TaskError {
     #[error(transparent)]
     Access(#[from] TaskAccessError),
@@ -46,8 +47,6 @@ pub enum TaskError {
     NotFound,
     #[error("Note not found")]
     NoteNotFound,
-    #[error(transparent)]
-    Space(#[from] SpaceAccessError),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
@@ -190,6 +189,12 @@ impl From<note::Model> for Note {
     }
 }
 
+impl From<SpaceAccessError> for TaskError {
+    fn from(error: SpaceAccessError) -> Self {
+        Self::Access(error.into())
+    }
+}
+
 impl TaskError {
     pub const fn code(&self) -> &'static str {
         match self {
@@ -202,7 +207,6 @@ impl TaskError {
             Self::NoChanges(_) => "request.invalid_body",
             Self::NotFound => "task.not_found",
             Self::NoteNotFound => "note.not_found",
-            Self::Space(error) => error.code(),
         }
     }
 }
@@ -239,7 +243,7 @@ pub async fn create_task(
     space: &str,
     title: TaskTitle,
 ) -> Result<CreatedTask, TaskError> {
-    write.begin_operation()?;
+    write.begin_operation(Some(caller))?;
     let agent = caller.agent()?;
     let authorized = check_space(write.state(), write.handle(), caller, space, WRITE_ROLES).await?;
     let transaction = write.transaction();
@@ -283,7 +287,7 @@ pub async fn add_note(
     target: TaskTarget<'_>,
     content: NoteContent,
 ) -> Result<NoteAdded, TaskError> {
-    write.begin_operation()?;
+    write.begin_operation(Some(caller))?;
     caller.agent()?;
     let task = check_task(
         write.state(),
@@ -334,7 +338,7 @@ pub async fn change_task(
     target: TaskTarget<'_>,
     changes: TaskChanges,
 ) -> Result<TaskRead, TaskError> {
-    write.begin_operation()?;
+    write.begin_operation(Some(caller))?;
     changes.validate()?;
     let action = if changes.title.is_none()
         && changes.result.is_none()
@@ -363,7 +367,7 @@ pub async fn delete_task(
     caller: &Caller,
     target: TaskTarget<'_>,
 ) -> Result<(), TaskError> {
-    write.begin_operation()?;
+    write.begin_operation(Some(caller))?;
     caller.person()?;
     let task = check_task(
         write.state(),
@@ -394,7 +398,7 @@ pub async fn delete_note(
     target: TaskTarget<'_>,
     time: i64,
 ) -> Result<(), TaskError> {
-    write.begin_operation()?;
+    write.begin_operation(Some(caller))?;
     caller.person()?;
     let task = check_task(
         write.state(),

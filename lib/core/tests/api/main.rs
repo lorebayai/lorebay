@@ -4,15 +4,18 @@ use std::sync::atomic::Ordering;
 use futures_util::future::join_all;
 use lorebay_lib_core::{
     Caller, NewSpace, NoteContent, SpaceError, SpaceInputError, SpaceRole, TaskChanges, TaskStatus,
-    add_note, change_task, complete_artifact, create_space, delete_task, get_artifact_download_url,
-    highest_space_number, list_tasks, read_task, remove_abandoned_artifacts,
+    WriteOperation, add_note, change_task, complete_artifact as record_completion, create_space,
+    delete_task, get_artifact_download_url, highest_space_number, list_tasks,
+    prepare_artifact_completion, read_task, register_artifact, remove_orphaned_files,
+    resolve_space,
 };
 use sea_orm::TransactionTrait;
 use tokio::sync::{Barrier, mpsc};
 
 use helpers::{
-    Gates, Pause, SPACE, append, filters, new_task, next_pid, now_millis, page, register, target,
-    wait_until_after, with_postgres,
+    Gates, Pause, Records, SPACE, append, artifact_input, cleanup as remove_abandoned_artifacts,
+    complete as complete_artifact, delete as remove_artifact, filters, new_task, next_pid,
+    now_millis, page, register, spawn_completion, target, wait_until_after, with_postgres,
 };
 
 #[expect(
@@ -25,21 +28,48 @@ use helpers::{
 mod helpers;
 
 #[tokio::test]
+async fn complete_artifact_refuses_registration_after_oversize_report() {
+    with_postgres(async |fixture| {
+        fixture.space().await;
+        let task = fixture.task("Final oversize refusal").await;
+        let item = register(&fixture.state, &fixture.agent, &task).await;
+        let location = fixture.storage.upload(&item, &[0; 101]);
+        fixture.storage.fail_next_delete();
+        let error = complete_artifact(&fixture.state, &fixture.agent, target(&task), &item.key)
+            .await
+            .unwrap_err();
+        assert_eq!(error.code(), "artifact.too_large");
+        assert!(fixture.storage.contains(&location, &[0; 101]));
+        let error = complete_artifact(&fixture.state, &fixture.agent, target(&task), &item.key)
+            .await
+            .unwrap_err();
+        assert_eq!(error.code(), "artifact.refused");
+        assert!(fixture.read(&task).await.artifacts.is_empty());
+        let cleaner = fixture.state_with(Gates::default(), true);
+        wait_until_after(now_millis() + 2).await;
+        assert_eq!(remove_abandoned_artifacts(&cleaner).await.unwrap(), 0);
+        fixture.storage.age();
+        assert_eq!(remove_orphaned_files(&fixture.state).await.unwrap(), 1);
+        assert!(!fixture.storage.contains(&location, &[0; 101]));
+        fixture.storage.upload(&item, b"retry");
+        let error = complete_artifact(&fixture.state, &fixture.agent, target(&task), &item.key)
+            .await
+            .unwrap_err();
+        assert_eq!(error.code(), "artifact.refused");
+        assert!(fixture.storage.contains(&location, b"retry"));
+    })
+    .await;
+}
+
+#[tokio::test]
 async fn create_space_refuses_nonpositive_numbers() {
     with_postgres(async |fixture| {
         for number in [0, -1] {
             let input = NewSpace::new("Research".to_owned(), "Shared work".to_owned()).unwrap();
             let error = fixture
                 .state
-                .run_write(Some(&fixture.person), async |write| {
-                    create_space(
-                        write,
-                        &fixture.person.owner_id,
-                        number,
-                        SpaceRole::Owner,
-                        input,
-                    )
-                    .await
+                .run_write(async |write| {
+                    create_space(write, &fixture.person, number, SpaceRole::Owner, input).await
                 })
                 .await
                 .unwrap_err();
@@ -182,7 +212,7 @@ async fn add_note_fails_when_task_ends_concurrently() {
         let closing = task.clone();
         let close = tokio::spawn(async move {
             closer
-                .run_write(Some(&issuer), async |write| {
+                .run_write(async |write| {
                     change_task(write, &issuer, target(&closing), ended()).await
                 })
                 .await
@@ -201,7 +231,7 @@ async fn add_note_fails_when_task_ends_concurrently() {
         let appending = task.clone();
         let append = tokio::spawn(async move {
             appender
-                .run_write(Some(&writer), async |write| {
+                .run_write(async |write| {
                     let content = NoteContent::try_from("After closure".to_owned()).unwrap();
                     add_note(write, &writer, target(&appending), content).await
                 })
@@ -340,7 +370,7 @@ async fn list_tasks_matches_keyword_when_ascii_case_differs() {
         let result = fixture.task("Other title").await;
         fixture
             .state
-            .run_write(Some(&fixture.agent), async |write| {
+            .run_write(async |write| {
                 change_task(
                     write,
                     &fixture.agent,
@@ -394,7 +424,7 @@ async fn delete_task_keeps_rows_and_files_when_product_rolls_back() {
 
         let outcome: anyhow::Result<()> = fixture
             .state
-            .run_write(Some(&fixture.person), async |write| {
+            .run_write(async |write| {
                 delete_task(write, &fixture.person, target(&task)).await?;
                 assert!(fixture.storage.contains(&location, b"keep"));
                 anyhow::bail!("product deliberately abandoned the write");
@@ -445,9 +475,7 @@ async fn get_task_fails_as_not_found_when_space_has_another_owner() {
         assert_eq!(read.code(), "space.not_found");
         let write = fixture
             .state
-            .run_write(Some(&outside), async |write| {
-                change_task(write, &outside, target(&task), ended()).await
-            })
+            .run_write(async |write| change_task(write, &outside, target(&task), ended()).await)
             .await
             .unwrap_err();
         assert_eq!(write.code(), "task.not_found");
@@ -456,6 +484,340 @@ async fn get_task_fails_as_not_found_when_space_has_another_owner() {
             .await
             .unwrap();
         assert_eq!(read.task.status, TaskStatus::InProgress);
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn complete_artifact_refuses_second_report_when_oversize_reports_race() {
+    with_postgres(async |fixture| {
+        fixture.space().await;
+        let task = fixture.task("Concurrent oversize reports").await;
+        let item = register(&fixture.state, &fixture.agent, &task).await;
+        let location = fixture.storage.upload(&item, &[0; 101]);
+        let held = Pause::default();
+        let first = fixture.state_with(
+            Gates {
+                before_commit: Some(held.gate()),
+                ..Gates::default()
+            },
+            false,
+        );
+        let report = spawn_completion(first, &fixture.agent, &task, &item.key);
+        held.reached().await;
+        let (report_pid, mut pid) = mpsc::unbounded_channel();
+        let second = fixture.state_with(
+            Gates {
+                report_pid: Some(report_pid),
+                ..Gates::default()
+            },
+            false,
+        );
+        let duplicate = spawn_completion(second, &fixture.agent, &task, &item.key);
+        fixture.wait_for_lock(next_pid(&mut pid).await).await;
+        held.release();
+        assert_eq!(
+            report.await.unwrap().unwrap_err().code(),
+            "artifact.too_large"
+        );
+        assert_eq!(
+            duplicate.await.unwrap().unwrap_err().code(),
+            "artifact.refused"
+        );
+        assert_eq!(fixture.storage.deletes(), 1);
+        assert!(!fixture.storage.contains(&location, &[0; 101]));
+        assert!(fixture.read(&task).await.artifacts.is_empty());
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn complete_artifact_preserves_replacement_when_refusal_delete_is_delayed() {
+    with_postgres(async |fixture| {
+        fixture.space().await;
+        let task = fixture.task("Delayed refusal deletion").await;
+        let item = register(&fixture.state, &fixture.agent, &task).await;
+        let location = fixture.storage.upload(&item, &[0; 101]);
+        let pending = Pause::default();
+        let stale = fixture.state_with(
+            Gates {
+                before_begin: Some(pending.gate()),
+                ..Gates::default()
+            },
+            false,
+        );
+        let stale = spawn_completion(stale, &fixture.agent, &task, &item.key);
+        pending.reached().await;
+        let deleting = Pause::default();
+        fixture.storage.pause_delete(deleting.gate());
+        let first = fixture.state.clone();
+        let report = spawn_completion(first, &fixture.agent, &task, &item.key);
+        deleting.reached().await;
+        pending.release();
+        assert_eq!(stale.await.unwrap().unwrap_err().code(), "artifact.refused");
+        let replacement = register(&fixture.state, &fixture.agent, &task).await;
+        let replacement_location = fixture.storage.upload(&replacement, b"valid");
+        assert_ne!(replacement_location, location);
+        let completed = complete_artifact(
+            &fixture.state,
+            &fixture.agent,
+            target(&task),
+            &replacement.key,
+        )
+        .await
+        .unwrap();
+        assert_eq!(completed.artifact.size, 5);
+        deleting.release();
+        assert_eq!(
+            report.await.unwrap().unwrap_err().code(),
+            "artifact.too_large"
+        );
+        let read = fixture.read(&task).await;
+        assert_eq!(read.artifacts.len(), 1);
+        assert_eq!(read.artifacts[0].key, replacement.key);
+        assert_eq!(read.artifacts[0].size, 5);
+        let download =
+            get_artifact_download_url(&fixture.state, &fixture.person, SPACE, &replacement.key)
+                .await
+                .unwrap();
+        assert_eq!(download.url.expose(), &replacement_location);
+        assert!(fixture.storage.contains(&replacement_location, b"valid"));
+        assert!(!fixture.storage.contains(&location, &[0; 101]));
+        assert_eq!(fixture.storage.deletes(), 1);
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn register_artifact_fails_when_task_is_deleted_concurrently() {
+    with_postgres(async |fixture| {
+        fixture.space().await;
+        let task = fixture.task("Delete before registration").await;
+        let held = Pause::default();
+        let deleter = fixture.state_with(
+            Gates {
+                before_commit: Some(held.gate()),
+                ..Gates::default()
+            },
+            false,
+        );
+        let person = fixture.person.clone();
+        let deleting = task.clone();
+        let deletion = tokio::spawn(async move {
+            deleter
+                .run_write(async |write| delete_task(write, &person, target(&deleting)).await)
+                .await
+        });
+        held.reached().await;
+        let (report_pid, mut pid) = mpsc::unbounded_channel();
+        let registrar = fixture.state_with(
+            Gates {
+                report_pid: Some(report_pid),
+                ..Gates::default()
+            },
+            false,
+        );
+        let agent = fixture.agent.clone();
+        let registering = task.clone();
+        let registration = tokio::spawn(async move {
+            registrar
+                .run_write(async |write| {
+                    register_artifact(write, &agent, target(&registering), artifact_input()).await
+                })
+                .await
+        });
+        fixture.wait_for_lock(next_pid(&mut pid).await).await;
+        held.release();
+        deletion.await.unwrap().unwrap();
+        assert_eq!(
+            registration.await.unwrap().unwrap_err().code(),
+            "task.not_found"
+        );
+        assert_eq!(
+            read_task(&fixture.state, &fixture.person, SPACE, &task.key, None)
+                .await
+                .unwrap_err()
+                .code(),
+            "task.not_found"
+        );
+        assert_eq!(fixture.storage.deletes(), 0);
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn complete_artifact_fails_when_artifact_is_deleted_concurrently() {
+    with_postgres(async |fixture| {
+        fixture.space().await;
+        let task = fixture.task("Delete before repeat completion").await;
+        let item = register(&fixture.state, &fixture.agent, &task).await;
+        let location = fixture.storage.upload(&item, b"file");
+        let pending = Pause::default();
+        let first = fixture.state_with(
+            Gates {
+                before_commit: Some(pending.gate()),
+                ..Gates::default()
+            },
+            false,
+        );
+        let completion = spawn_completion(first, &fixture.agent, &task, &item.key);
+        pending.reached().await;
+        let error = remove_artifact(&fixture.state, &fixture.person, target(&task), &item.key)
+            .await
+            .unwrap_err();
+        assert_eq!(error.code(), "artifact.not_found");
+        assert!(fixture.storage.contains(&location, b"file"));
+        pending.release();
+        assert_eq!(completion.await.unwrap().unwrap().artifact.key, item.key);
+        let held = Pause::default();
+        let deleter = fixture.state_with(
+            Gates {
+                before_commit: Some(held.gate()),
+                ..Gates::default()
+            },
+            false,
+        );
+        let person = fixture.person.clone();
+        let deleting = task.clone();
+        let key = item.key.clone();
+        let deletion = tokio::spawn(async move {
+            remove_artifact(&deleter, &person, target(&deleting), &key).await
+        });
+        held.reached().await;
+        let (report_pid, mut pid) = mpsc::unbounded_channel();
+        let completer = fixture.state_with(
+            Gates {
+                report_pid: Some(report_pid),
+                ..Gates::default()
+            },
+            false,
+        );
+        let completion = spawn_completion(completer, &fixture.agent, &task, &item.key);
+        fixture.wait_for_lock(next_pid(&mut pid).await).await;
+        held.release();
+        deletion.await.unwrap().unwrap();
+        assert_eq!(
+            completion.await.unwrap().unwrap_err().code(),
+            "artifact.not_found"
+        );
+        assert!(fixture.read(&task).await.artifacts.is_empty());
+        assert!(!fixture.storage.contains(&location, b"file"));
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn complete_artifact_records_caller_once_when_reports_race() {
+    with_postgres(async |fixture| {
+        fixture.space().await;
+        let task = fixture.task("One completion record").await;
+        let item = register(&fixture.state, &fixture.agent, &task).await;
+        let location = fixture.storage.upload(&item, b"file");
+        let records = Records::default();
+        let held = Pause::default();
+        let first = fixture.state_with(
+            Gates {
+                before_commit: Some(held.gate()),
+                records: Some(records.clone()),
+                ..Gates::default()
+            },
+            false,
+        );
+        let report = spawn_completion(first, &fixture.agent, &task, &item.key);
+        held.reached().await;
+        let (report_pid, mut pid) = mpsc::unbounded_channel();
+        let second = fixture.state_with(
+            Gates {
+                report_pid: Some(report_pid),
+                records: Some(records.clone()),
+                ..Gates::default()
+            },
+            false,
+        );
+        let duplicate = spawn_completion(second, &fixture.agent, &task, &item.key);
+        fixture.wait_for_lock(next_pid(&mut pid).await).await;
+        held.release();
+        let first = report.await.unwrap().unwrap();
+        let second = duplicate.await.unwrap().unwrap();
+        assert_eq!(
+            serde_json::to_value(first).unwrap(),
+            serde_json::to_value(second).unwrap()
+        );
+        let records = records.lock().unwrap().clone();
+        assert_eq!(records.len(), 2);
+        assert_eq!(records.iter().filter(|record| record.is_none()).count(), 1);
+        let record = records.iter().flatten().next().unwrap();
+        assert_eq!(record.operation, WriteOperation::CompleteArtifact);
+        let caller = record.caller.as_ref().unwrap();
+        assert_eq!(caller.person_id, fixture.agent.person_id);
+        assert_eq!(caller.agent_name, fixture.agent.agent_name);
+        assert_eq!(caller.owner_id, fixture.agent.owner_id);
+        let transaction = fixture.database.begin().await.unwrap();
+        let space = resolve_space(&transaction, &fixture.person, SPACE)
+            .await
+            .unwrap();
+        transaction.commit().await.unwrap();
+        assert_eq!(record.space_id.as_deref(), Some(space.id.as_str()));
+        assert_eq!(fixture.read(&task).await.artifacts.len(), 1);
+        assert!(fixture.storage.contains(&location, b"file"));
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn run_write_preserves_registration_and_refusal_atomicity_when_product_abandons() {
+    with_postgres(async |fixture| {
+        fixture.space().await;
+        let task = fixture.task("Compose artifact writes").await;
+        let records = Records::default();
+        let state = fixture.state_with(
+            Gates {
+                records: Some(records.clone()),
+                ..Gates::default()
+            },
+            false,
+        );
+        let registration: anyhow::Result<()> = state
+            .run_write(async |write| {
+                register_artifact(write, &fixture.agent, target(&task), artifact_input()).await?;
+                anyhow::bail!("product abandoned registration");
+            })
+            .await;
+        assert_eq!(
+            registration.unwrap_err().to_string(),
+            "product abandoned registration"
+        );
+        let item = register(&fixture.state, &fixture.agent, &task).await;
+        assert_eq!(item.key, "AR-1");
+        let location = fixture.storage.upload(&item, &[0; 101]);
+        let prepared =
+            prepare_artifact_completion(&state, &fixture.agent, target(&task), &item.key)
+                .await
+                .unwrap();
+        let refusal: anyhow::Result<()> = state
+            .run_write(async |write| {
+                let outcome =
+                    record_completion(write, &fixture.agent, target(&task), prepared).await?;
+                assert_eq!(
+                    outcome.into_result().unwrap_err().code(),
+                    "artifact.too_large"
+                );
+                anyhow::bail!("product abandoned refusal");
+            })
+            .await;
+        assert_eq!(
+            refusal.unwrap_err().to_string(),
+            "product abandoned refusal"
+        );
+        assert!(records.lock().unwrap().is_empty());
+        assert!(fixture.storage.contains(&location, &[0; 101]));
+        assert_eq!(fixture.storage.deletes(), 0);
+        let error = complete_artifact(&fixture.state, &fixture.agent, target(&task), &item.key)
+            .await
+            .unwrap_err();
+        assert_eq!(error.code(), "artifact.too_large");
+        assert!(!fixture.storage.contains(&location, &[0; 101]));
+        assert!(fixture.read(&task).await.artifacts.is_empty());
     })
     .await;
 }

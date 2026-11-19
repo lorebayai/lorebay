@@ -1,10 +1,12 @@
-use crate::library::OWNER_ID;
+use lorebay_lib_core::Caller;
+
+use super::OWNER_ID;
 use thiserror::Error;
 
-use super::access::{AgentCaller, Caller};
+use super::access::{AgentCaller, PersonSession};
 
 #[derive(Debug, Error)]
-pub(crate) enum CallerError {
+pub(crate) enum PersonSessionError {
     #[error("A login session is required")]
     PersonRequired,
 }
@@ -12,16 +14,16 @@ pub(crate) enum CallerError {
 #[derive(Clone, Debug)]
 pub(crate) enum VerifiedCaller {
     Agent(AgentCaller),
-    Person(Caller),
+    Person(PersonSession),
 }
 
 impl VerifiedCaller {
-    pub fn library_caller(&self) -> lorebay_lib_core::Caller {
+    pub fn library_caller(&self) -> Caller {
         let agent_name = match self {
             Self::Agent(caller) => Some(caller.name.clone()),
             Self::Person(_) => None,
         };
-        lorebay_lib_core::Caller {
+        Caller {
             person_id: self.account_id().to_owned(),
             agent_name,
             owner_id: OWNER_ID.to_owned(),
@@ -35,9 +37,9 @@ impl VerifiedCaller {
         }
     }
 
-    pub fn person(&self) -> Result<&Caller, CallerError> {
+    pub fn person(&self) -> Result<&PersonSession, PersonSessionError> {
         match self {
-            Self::Agent(_) => Err(CallerError::PersonRequired),
+            Self::Agent(_) => Err(PersonSessionError::PersonRequired),
             Self::Person(caller) => Ok(caller),
         }
     }

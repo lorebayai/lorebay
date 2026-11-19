@@ -6,7 +6,7 @@ entity_generator() {
   if [[ ! -x "$cli" ]] || [[ "$("$cli" --version)" != "sea-orm-cli $version" ]]; then
     cargo install sea-orm-cli --version "$version" --locked --no-default-features \
       --features codegen,sqlx-sqlite,runtime-tokio --root "$tools" \
-      --target-dir "$repo_root/target/tools-build" >&2 || return
+      --target-dir "${tools}-build" >&2 || return
   fi
   printf '%s\n' "$cli"
 }

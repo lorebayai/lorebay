@@ -1,7 +1,7 @@
 use lorebay_lib_core::{
     Caller, LibraryState, NoteContent, Page, TaskRead, TaskTarget, TaskTitle, add_note,
     change_task, complete_artifact, create_task, get_artifact_download_url, list_spaces,
-    list_tasks, read_task, register_artifact,
+    list_tasks, prepare_artifact_completion, read_task, register_artifact,
 };
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -37,24 +37,8 @@ pub(super) async fn call(
             .await?,
         ),
         ToolName::AddNote => append(state, caller, &arguments).await,
-        ToolName::CreateArtifact => value(
-            register_artifact(
-                state,
-                caller,
-                target(&arguments.string("task_id")?),
-                arguments.artifact()?,
-            )
-            .await?,
-        ),
-        ToolName::CompleteArtifact => value(
-            complete_artifact(
-                state,
-                caller,
-                target(&arguments.string("task_id")?),
-                &arguments.string("key")?,
-            )
-            .await?,
-        ),
+        ToolName::CreateArtifact => register(state, caller, &arguments).await,
+        ToolName::CompleteArtifact => complete(state, caller, &arguments).await,
         ToolName::GetArtifactUrl => value(
             get_artifact_download_url(
                 state,
@@ -67,6 +51,33 @@ pub(super) async fn call(
     }
 }
 
+async fn register(
+    state: &LibraryState,
+    caller: &Caller,
+    arguments: &Arguments,
+) -> Result<Value, ToolError> {
+    let task_id = arguments.string("task_id")?;
+    let input = arguments.artifact()?;
+    let registration = state
+        .run_write(async |write| register_artifact(write, caller, target(&task_id), input).await)
+        .await?;
+    value(registration.issue_upload(state).await?)
+}
+
+async fn complete(
+    state: &LibraryState,
+    caller: &Caller,
+    arguments: &Arguments,
+) -> Result<Value, ToolError> {
+    let task_id = arguments.string("task_id")?;
+    let key = arguments.string("key")?;
+    let prepared = prepare_artifact_completion(state, caller, target(&task_id), &key).await?;
+    let completion = state
+        .run_write(async |write| complete_artifact(write, caller, target(&task_id), prepared).await)
+        .await?;
+    value(completion.into_result()?)
+}
+
 async fn create(
     state: &LibraryState,
     caller: &Caller,
@@ -76,9 +87,7 @@ async fn create(
         .map_err(|error| ToolError::task_text("title", error))?;
     let space = arguments.string("space")?;
     let task = state
-        .run_write(Some(caller), async |write| {
-            create_task(write, caller, &space, title).await
-        })
+        .run_write(async |write| create_task(write, caller, &space, title).await)
         .await?;
     value(task)
 }
@@ -91,9 +100,7 @@ async fn update(
     let task_id = arguments.string("task_id")?;
     let changes = arguments.changes()?;
     let read = state
-        .run_write(Some(caller), async |write| {
-            change_task(write, caller, target(&task_id), changes).await
-        })
+        .run_write(async |write| change_task(write, caller, target(&task_id), changes).await)
         .await?;
     let task_title = read.task.title.clone();
     let mut response = task_response(read)?;
@@ -110,9 +117,7 @@ async fn append(
     let content = NoteContent::try_from(arguments.string("content")?)
         .map_err(|error| ToolError::task_text("content", error))?;
     let note = state
-        .run_write(Some(caller), async |write| {
-            add_note(write, caller, target(&task_id), content).await
-        })
+        .run_write(async |write| add_note(write, caller, target(&task_id), content).await)
         .await?;
     value(note)
 }

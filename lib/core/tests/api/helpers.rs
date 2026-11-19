@@ -1,7 +1,7 @@
 use lorebay_lib_core::{TaskRead, read_task};
 use std::collections::HashMap;
 use std::panic::{AssertUnwindSafe, resume_unwind};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -11,11 +11,13 @@ use futures_util::stream::{self, BoxStream};
 use futures_util::{FutureExt, StreamExt};
 use http::HeaderMap;
 use lorebay_lib_core::{
-    Caller, CallerResolver, CreatedTask, DatabaseTransactions, DownloadRequest, DownloadSpec,
-    FileStorage, LibraryInterfaces, LibrarySettings, LibraryState, Membership, MembershipPage,
-    NewArtifact, NewSpace, NoteAdded, OperationHandle, PageOptions, PersonNames, SpaceRole,
-    SpaceRoles, StoredFile, TaskFilters, TaskTarget, UploadRequest, UploadSpec, WriteRecord,
-    add_note, create_space, create_task, register_artifact,
+    ArtifactCleanupError, ArtifactCompleted, ArtifactError, ArtifactRegistered, Caller,
+    CallerResolver, CreatedTask, DatabaseTransactions, DownloadRequest, DownloadSpec, FileStorage,
+    LibraryInterfaces, LibrarySettings, LibraryState, Membership, MembershipPage, NewArtifact,
+    NewSpace, NoteAdded, OperationHandle, PageOptions, PersonNames, SpaceRole, SpaceRoles,
+    StoredFile, TaskFilters, TaskTarget, UploadRequest, UploadSpec, WriteOperation, WriteRecord,
+    add_note, complete_artifact, create_space, create_task, delete_artifact,
+    prepare_artifact_completion, register_artifact, remove_abandoned_artifacts,
 };
 use lorebay_lib_migration::Migrator;
 use lorebay_lib_types::Secret;
@@ -26,8 +28,9 @@ use sea_orm::{
 };
 use sea_orm_migration::MigratorTrait;
 use tokio::sync::{Notify, mpsc};
-use tokio::task::yield_now;
+use tokio::task::{JoinHandle, yield_now};
 use tokio::time::timeout;
+use typed_builder::TypedBuilder;
 use uuid::Uuid;
 
 pub const TIMEOUT: Duration = Duration::from_secs(20);
@@ -48,10 +51,10 @@ pub struct Fixture {
 impl Fixture {
     pub async fn space(&self) {
         self.state
-            .run_write(Some(&self.person), async |write| {
+            .run_write(async |write| {
                 create_space(
                     write,
-                    &self.person.owner_id,
+                    &self.person,
                     1,
                     SpaceRole::Owner,
                     NewSpace::new("Team".to_owned(), "Shared work".to_owned()).unwrap(),
@@ -151,6 +154,7 @@ pub struct Gates {
     pub before_begin: Option<Arc<Gate>>,
     pub before_commit: Option<Arc<Gate>>,
     pub report_pid: Option<mpsc::UnboundedSender<i32>>,
+    pub records: Option<Records>,
 }
 
 #[derive(Default)]
@@ -193,17 +197,46 @@ impl Gate {
     }
 }
 
-pub struct Files(Mutex<HashMap<String, Vec<u8>>>);
+#[derive(Clone, Debug, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+pub struct RecordedWrite {
+    pub operation: WriteOperation,
+    pub caller: Option<Caller>,
+    pub space_id: Option<String>,
+}
+
+pub type Records = Arc<Mutex<Vec<Option<RecordedWrite>>>>;
+
+#[derive(Default)]
+pub struct Files {
+    files: Mutex<HashMap<String, Vec<u8>>>,
+    delete_gate: Mutex<Option<Arc<Gate>>>,
+    fail_delete: AtomicBool,
+    old_files: AtomicBool,
+    deletes: AtomicUsize,
+}
 
 impl Files {
-    pub fn upload(
-        &self,
-        registration: &lorebay_lib_core::ArtifactRegistered,
-        bytes: &[u8],
-    ) -> String {
+    pub fn pause_delete(&self, gate: Arc<Gate>) {
+        *self.delete_gate.lock().unwrap() = Some(gate);
+    }
+
+    pub fn fail_next_delete(&self) {
+        self.fail_delete.store(true, Ordering::Relaxed);
+    }
+
+    pub fn age(&self) {
+        self.old_files.store(true, Ordering::Relaxed);
+    }
+
+    pub fn deletes(&self) -> usize {
+        self.deletes.load(Ordering::Relaxed)
+    }
+
+    pub fn upload(&self, registration: &ArtifactRegistered, bytes: &[u8]) -> String {
         let location = registration.upload.url.expose().clone();
         let old = self
-            .0
+            .files
             .lock()
             .unwrap()
             .insert(location.clone(), bytes.to_vec());
@@ -212,7 +245,7 @@ impl Files {
     }
 
     pub fn contains(&self, location: &str, bytes: &[u8]) -> bool {
-        self.0
+        self.files
             .lock()
             .unwrap()
             .get(location)
@@ -247,7 +280,7 @@ impl FileStorage for Files {
     fn size<'a>(&'a self, location: &'a str) -> BoxFuture<'a, Result<Option<u64>>> {
         Box::pin(async move {
             Ok(self
-                .0
+                .files
                 .lock()
                 .unwrap()
                 .get(location)
@@ -257,14 +290,23 @@ impl FileStorage for Files {
 
     fn delete<'a>(&'a self, location: &'a str) -> BoxFuture<'a, Result<()>> {
         Box::pin(async move {
-            self.0.lock().unwrap().remove(location);
+            self.deletes.fetch_add(1, Ordering::Relaxed);
+            let gate = self.delete_gate.lock().unwrap().take();
+            if let Some(gate) = gate {
+                gate.hold().await?;
+            }
+            anyhow::ensure!(
+                !self.fail_delete.swap(false, Ordering::Relaxed),
+                "storage deletion failed"
+            );
+            self.files.lock().unwrap().remove(location);
             Ok(())
         })
     }
 
     fn list(&self) -> BoxStream<'_, Result<StoredFile>> {
         let files = self
-            .0
+            .files
             .lock()
             .unwrap()
             .keys()
@@ -272,7 +314,11 @@ impl FileStorage for Files {
             .map(|location| {
                 Ok(StoredFile {
                     location,
-                    modified: SystemTime::now(),
+                    modified: if self.old_files.load(Ordering::Relaxed) {
+                        SystemTime::now() - Duration::from_secs(3600)
+                    } else {
+                        SystemTime::now()
+                    },
                 })
             })
             .collect::<Vec<_>>();
@@ -371,13 +417,23 @@ impl DatabaseTransactions for Transactions {
     fn commit_write<'a>(
         &'a self,
         transaction: DatabaseTransaction,
-        _record: WriteRecord<'a>,
+        record: Option<WriteRecord<'a>>,
     ) -> BoxFuture<'a, Result<()>> {
         Box::pin(async move {
             if let Some(gate) = &self.gates.before_commit {
                 gate.hold().await?;
             }
-            Ok(transaction.commit().await?)
+            transaction.commit().await?;
+            if let Some(records) = &self.gates.records {
+                records.lock().unwrap().push(record.map(|record| {
+                    RecordedWrite::builder()
+                        .operation(record.operation)
+                        .caller(record.caller.cloned())
+                        .space_id(record.space_id)
+                        .build()
+                }));
+            }
+            Ok(())
         })
     }
 
@@ -389,9 +445,7 @@ impl DatabaseTransactions for Transactions {
 pub async fn new_task(state: &LibraryState, caller: &Caller, title: &str) -> CreatedTask {
     let title = title.to_owned().try_into().unwrap();
     state
-        .run_write(Some(caller), async |write| {
-            create_task(write, caller, SPACE, title).await
-        })
+        .run_write(async |write| create_task(write, caller, SPACE, title).await)
         .await
         .unwrap()
 }
@@ -400,18 +454,74 @@ pub async fn register(
     state: &LibraryState,
     caller: &Caller,
     task: &CreatedTask,
-) -> lorebay_lib_core::ArtifactRegistered {
-    register_artifact(
-        state,
-        caller,
-        target(task),
-        NewArtifact {
-            file_name: "report.txt".to_owned().try_into().unwrap(),
-            summary: "Result".to_owned().try_into().unwrap(),
-        },
-    )
-    .await
-    .unwrap()
+) -> ArtifactRegistered {
+    state
+        .run_write(async |write| {
+            register_artifact(
+                write,
+                caller,
+                target(task),
+                NewArtifact {
+                    file_name: "report.txt".to_owned().try_into().unwrap(),
+                    summary: "Result".to_owned().try_into().unwrap(),
+                },
+            )
+            .await
+        })
+        .await
+        .unwrap()
+        .issue_upload(state)
+        .await
+        .unwrap()
+}
+
+pub async fn complete(
+    state: &LibraryState,
+    caller: &Caller,
+    target: TaskTarget<'_>,
+    key: &str,
+) -> Result<ArtifactCompleted, ArtifactError> {
+    let prepared = prepare_artifact_completion(state, caller, target, key).await?;
+    state
+        .run_write(async |write| complete_artifact(write, caller, target, prepared).await)
+        .await?
+        .into_result()
+}
+
+pub fn spawn_completion(
+    state: LibraryState,
+    caller: &Caller,
+    task: &CreatedTask,
+    key: &str,
+) -> JoinHandle<Result<ArtifactCompleted, ArtifactError>> {
+    let caller = caller.clone();
+    let task = task.clone();
+    let key = key.to_owned();
+    tokio::spawn(async move { complete(&state, &caller, target(&task), &key).await })
+}
+
+pub fn artifact_input() -> NewArtifact {
+    NewArtifact {
+        file_name: "report.txt".to_owned().try_into().unwrap(),
+        summary: "Result".to_owned().try_into().unwrap(),
+    }
+}
+
+pub async fn delete(
+    state: &LibraryState,
+    caller: &Caller,
+    target: TaskTarget<'_>,
+    key: &str,
+) -> Result<(), ArtifactError> {
+    state
+        .run_write(async |write| delete_artifact(write, caller, target, key).await)
+        .await
+}
+
+pub async fn cleanup(state: &LibraryState) -> Result<u64, ArtifactCleanupError> {
+    state
+        .run_write(async |write| remove_abandoned_artifacts(write).await)
+        .await
 }
 
 pub fn target(task: &CreatedTask) -> TaskTarget<'_> {
@@ -452,9 +562,7 @@ pub async fn append(
 ) -> NoteAdded {
     let content = content.to_owned().try_into().unwrap();
     state
-        .run_write(Some(caller), async |write| {
-            add_note(write, caller, target(task), content).await
-        })
+        .run_write(async |write| add_note(write, caller, target(task), content).await)
         .await
         .unwrap()
 }
@@ -499,7 +607,7 @@ async fn database_command(connection: &DatabaseConnection, sql: String) -> Resul
 }
 
 fn fixture(database: DatabaseConnection) -> Fixture {
-    let storage = Arc::new(Files(Mutex::default()));
+    let storage = Arc::new(Files::default());
     let roles = Arc::new(Identity::default());
     let person = Caller {
         person_id: "alice".to_owned(),
@@ -540,26 +648,26 @@ fn state(
         Duration::from_secs(30)
     };
     LibraryState::new(
-        LibrarySettings {
-            public_url: "http://localhost".to_owned(),
-            mcp_path: "/mcp".to_owned(),
-            server_name: "test".to_owned(),
-            server_version: "0".to_owned(),
-            authorization_server: "http://localhost".to_owned(),
-            upload_size_limit: 100,
-            upload_url_lifetime: lifetime,
-            download_url_lifetime: lifetime,
-            inline_content_types: Vec::new(),
-            abandoned_artifact_lifetime: lifetime * 2,
-            orphaned_file_lifetime: lifetime * 2,
-        },
-        LibraryInterfaces {
-            caller: roles.clone(),
-            database: Arc::new(Transactions { database, gates }),
-            names: roles.clone(),
-            roles,
-            storage,
-        },
+        LibrarySettings::builder()
+            .public_url("http://localhost".to_owned())
+            .mcp_path("/mcp".to_owned())
+            .server_name("test".to_owned())
+            .server_version("0".to_owned())
+            .authorization_server("http://localhost".to_owned())
+            .upload_size_limit(100_u64)
+            .upload_url_lifetime(lifetime)
+            .download_url_lifetime(lifetime)
+            .inline_content_types(Vec::new())
+            .abandoned_artifact_lifetime(lifetime * 2)
+            .orphaned_file_lifetime(lifetime * 2)
+            .build(),
+        LibraryInterfaces::builder()
+            .caller(roles.clone())
+            .database(Arc::new(Transactions { database, gates }))
+            .names(roles.clone())
+            .roles(roles)
+            .storage(storage)
+            .build(),
     )
     .unwrap()
 }
