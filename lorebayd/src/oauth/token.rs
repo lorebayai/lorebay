@@ -9,7 +9,7 @@ use typed_builder::TypedBuilder;
 
 use crate::domain::login_session::Tokens;
 use crate::domain::oauth_token::{CodeExchange, TokenGrant, TokenRefresh, grant_tokens};
-use crate::domain::{authorization_server_metadata, protected_resource_metadata};
+use crate::domain::{authorization_server_metadata, mcp_resource};
 
 use super::error::{OAuthError, no_store_headers};
 use super::{AUTHORIZATION_CODE_GRANT, OAuthState, REFRESH_TOKEN_GRANT};
@@ -31,7 +31,7 @@ impl TokenRequest {
     fn validate(self, public_url: &str) -> Result<TokenGrant, OAuthError> {
         if self.resource.as_deref().is_some_and(|resource| {
             resource != authorization_server_metadata(public_url).issuer
-                && resource != protected_resource_metadata(public_url).resource
+                && resource != mcp_resource(public_url)
         }) {
             return Err(OAuthError::InvalidTarget);
         }

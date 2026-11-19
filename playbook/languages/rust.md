@@ -2,17 +2,19 @@
 
 ## Crates and dependencies
 
-- The root `Cargo.toml` is the workspace. Each crate is a top-level folder
-  listed in its `members`, as the
-  [repository layout](../../README.md#repository-layout) shows, except the
-  library's crates, which are subfolders of `lib/`. The crate that builds
-  the `lorebayd` executable is named `lorebayd`; a crate in `lib/` is
-  named `lorebay-lib-<subfolder>`; any other crate is named
-  `lorebay-<folder>`.
-- A new crate gets a `moon.yml`, a `README.md` per
-  [documentation.md](../core/documentation.md#readmes), and an `AGENTS.md`
-  importing this fragment, with `ln -s AGENTS.md CLAUDE.md` beside it, in the
-  change that creates it.
+- The root `Cargo.toml` lists every crate in its workspace `members`.
+  Crates live in top-level folders, in subfolders of `lib/`, or in a
+  subfolder of the product crate that owns them. See the
+  [repository layout](../../README.md#repository-layout).
+- The crate that builds the `lorebayd` executable is named `lorebayd`.
+  A crate in `lib/` is named `lorebay-lib-<subfolder>`. A product-owned
+  nested crate is named `<product>-<subfolder>`, such as
+  `lorebayd-migration`. Other top-level crates are named `lorebay-<folder>`.
+- A new crate gets a `moon.yml` and a `README.md` per
+  [documentation.md](../core/documentation.md#readmes) in the change that
+  creates it. It also gets an `AGENTS.md` importing this fragment, with
+  `ln -s AGENTS.md CLAUDE.md` beside it, unless a parent folder's
+  `AGENTS.md` already imports the fragment.
 - Every third-party dependency version must be declared once in the root
   `Cargo.toml` `[workspace.dependencies]`. Crates must inherit it with
   `name = { workspace = true }`, adding `features` when needed; a crate
@@ -90,8 +92,9 @@
 - Data structs, including configuration, DTOs, requests, responses and
   options, must derive `TypedBuilder`, `Clone` and `Debug`, with
   `#[builder(field_defaults(setter(into)))]`. Structs holding no data may
-  omit `TypedBuilder`. Generated SeaORM entities follow the
-  [entity rules](../topics/seaorm.md#entities).
+  omit `TypedBuilder`. Validated inputs use checked constructors when a
+  generated builder would bypass their validation. Generated SeaORM entities
+  follow the [entity rules](../topics/seaorm.md#entities).
 - Every enum must order variants alphabetically, A to Z, as checked by
   `clippy::arbitrary_source_item_ordering`. An enum whose declaration order
   carries meaning, such as one deriving `PartialOrd` or `Ord`, must preserve

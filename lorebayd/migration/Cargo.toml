@@ -1,0 +1,22 @@
+[package]
+name = "lorebayd-migration"
+description = "Schema migrations for Lorebay."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+lorebay-lib-migration = { workspace = true, features = ["sqlite"] }
+sea-orm-migration = { workspace = true, features = ["sqlx-sqlite"] }
+tokio.workspace = true
+
+[[bin]]
+name = "prepare-lorebay-entity-database"
+path = "src/bin/prepare-lorebay-entity-database.rs"
+
+[lints]
+workspace = true

@@ -1,0 +1,7 @@
+language: 'rust'
+layer: 'library'
+
+fileGroups:
+  rust:
+    - '/lib/core/src/**/*'
+    - '/lib/types/src/**/*'

@@ -2,16 +2,9 @@
 
 pub mod account;
 pub mod agent_authorization;
-pub mod artifact;
 pub mod device_sign_in_request;
-pub mod knowledge;
-pub mod knowledge_version;
 pub mod login_session;
-pub mod note;
 pub mod oauth_client;
 pub mod oauth_code;
 pub mod participant;
-pub mod proposal;
 pub mod refresh_token_history;
-pub mod space;
-pub mod task;

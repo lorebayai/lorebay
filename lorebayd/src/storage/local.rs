@@ -2,11 +2,17 @@ use std::collections::BTreeMap;
 use std::io::{Error, ErrorKind};
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime};
 
 use anyhow::{Context, Result, bail};
+use futures_util::future::BoxFuture;
+use futures_util::stream::BoxStream;
 use futures_util::{Stream, StreamExt};
-use lorebay_lib_types::Secret;
+use lorebay_lib_core::{
+    DownloadRequest, DownloadSpec, FileStorage, StoredFile as LibraryFile, UploadRequest,
+    UploadSpec,
+};
+use lorebay_lib_types::{Secret, unix_millis};
 use tempfile::{Builder, TempPath};
 use thiserror::Error;
 use tokio::fs::{self, File};
@@ -21,9 +27,7 @@ use crate::Config;
 
 use super::listing::{list_files, storage_directory};
 use super::signature::{load_key, sign, verify};
-use super::{
-    DownloadRequest, FileOperation, FileStorage, StoredFile, StoredFileKind, UploadRequest,
-};
+use super::{FileOperation, StoredFile, StoredFileKind};
 
 #[derive(Debug, Error)]
 pub(crate) enum StorageError {
@@ -52,14 +56,13 @@ pub(crate) struct LocalDirectory {
     temporary: PathBuf,
     key: Secret<Vec<u8>>,
     origin: String,
-    lifetime_millis: i64,
     pub size_limit: u64,
     slots: Arc<Semaphore>,
     idle_timeout: Duration,
 }
 
 impl LocalDirectory {
-    pub async fn open(config: &Config) -> Result<Self> {
+    pub async fn open(config: &Config, size_limit: u64) -> Result<Self> {
         let files = config.data_directory.join("artifacts");
         let temporary = config.data_directory.join("uploads");
         fs::create_dir_all(&files).await?;
@@ -72,8 +75,7 @@ impl LocalDirectory {
             .temporary(temporary)
             .key(load_key(&config.data_directory)?)
             .origin(config.public_url.trim_end_matches('/'))
-            .lifetime_millis(i64::try_from(config.upload_url_lifetime_seconds)? * 1000)
-            .size_limit(config.upload_size_limit_bytes)
+            .size_limit(size_limit)
             .idle_timeout(Duration::from_secs(config.upload_idle_timeout_seconds))
             .slots(Arc::new(Semaphore::new(
                 config.upload_concurrency_limit as usize,
@@ -183,10 +185,15 @@ impl LocalDirectory {
         result
     }
 
-    fn signed_url(&self, operation: FileOperation<'_>, location: &str) -> Result<(Url, i64)> {
+    fn signed_url(
+        &self,
+        operation: FileOperation<'_>,
+        location: &str,
+        lifetime: Duration,
+    ) -> Result<(Url, i64)> {
         self.resolve(location)?;
         let expiry = now_millis()?
-            .checked_add(self.lifetime_millis)
+            .checked_add(i64::try_from(lifetime.as_millis())?)
             .context("file URL expiry overflow")?;
         let signature = sign(self.key.expose(), operation, location, expiry)?;
         let mut url = Url::parse(&format!("{}/files/{location}", self.origin))?;
@@ -205,43 +212,103 @@ impl LocalDirectory {
 }
 
 impl FileStorage for LocalDirectory {
-    async fn download_url(&self, location: &str, file_name: &str) -> Result<DownloadRequest> {
-        let (mut url, expires_at) =
-            self.signed_url(FileOperation::Download(file_name), location)?;
-        url.query_pairs_mut().append_pair("file_name", file_name);
-        Ok(DownloadRequest::builder()
-            .url(Secret::from(String::from(url)))
-            .expires_at(expires_at)
-            .build())
+    fn download_url<'a>(
+        &'a self,
+        download: DownloadSpec<'a>,
+    ) -> BoxFuture<'a, Result<DownloadRequest>> {
+        Box::pin(async move {
+            let file_name = download.presentation.file_name;
+            let (mut url, expires_at) = self.signed_url(
+                FileOperation::Download(&file_name),
+                download.location,
+                download.lifetime,
+            )?;
+            url.query_pairs_mut().append_pair("file_name", &file_name);
+            Ok(DownloadRequest {
+                url: Secret::from(String::from(url)),
+                expires_at,
+            })
+        })
     }
 
-    async fn upload_url(&self, location: &str) -> Result<UploadRequest> {
-        let (url, expiry) = self.signed_url(FileOperation::Upload, location)?;
-        Ok(UploadRequest::builder()
-            .method("PUT")
-            .url(Secret::from(String::from(url)))
-            .headers(BTreeMap::from([(
-                "If-None-Match".to_owned(),
-                "*".to_owned(),
-            )]))
-            .expires_at(expiry)
-            .build())
+    fn upload_url<'a>(&'a self, upload: UploadSpec<'a>) -> BoxFuture<'a, Result<UploadRequest>> {
+        Box::pin(async move {
+            let (url, expires_at) =
+                self.signed_url(FileOperation::Upload, upload.location, upload.lifetime)?;
+            Ok(UploadRequest {
+                method: "PUT".to_owned(),
+                url: Secret::from(String::from(url)),
+                headers: BTreeMap::from([("If-None-Match".to_owned(), "*".to_owned())]),
+                expires_at,
+            })
+        })
     }
 
-    async fn size(&self, location: &str) -> Result<Option<u64>> {
-        match fs::symlink_metadata(self.resolve(location)?).await {
-            Ok(metadata) if metadata.is_file() => Ok(Some(metadata.len())),
-            Ok(_) => bail!("artifact storage location is not a regular file"),
-            Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
-            Err(error) => Err(error.into()),
+    fn size<'a>(&'a self, location: &'a str) -> BoxFuture<'a, Result<Option<u64>>> {
+        Box::pin(async move {
+            match fs::symlink_metadata(self.resolve(location)?).await {
+                Ok(metadata) if metadata.is_file() => Ok(Some(metadata.len())),
+                Ok(_) => bail!("artifact storage location is not a regular file"),
+                Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
+                Err(error) => Err(error.into()),
+            }
+        })
+    }
+
+    fn delete<'a>(&'a self, location: &'a str) -> BoxFuture<'a, Result<()>> {
+        Box::pin(async move {
+            storage_directory(&self.files).await?;
+            match fs::remove_file(self.resolve(location)?).await {
+                Ok(()) => File::open(&self.files).await?.sync_all().await?,
+                Err(error) if error.kind() == ErrorKind::NotFound => {}
+                Err(error) => return Err(error.into()),
+            }
+            Ok(())
+        })
+    }
+
+    fn list(&self) -> BoxStream<'_, Result<LibraryFile>> {
+        list_files(self.files.clone(), StoredFileKind::Artifact)
+            .filter_map(async |entry| match entry {
+                Ok(file) => file
+                    .name
+                    .into_string()
+                    .ok()
+                    .filter(|name| valid_location(name))
+                    .map(|location| {
+                        Ok(LibraryFile {
+                            location,
+                            modified: file.modified,
+                        })
+                    }),
+                Err(error) => Some(Err(error)),
+            })
+            .boxed()
+    }
+}
+
+impl LocalDirectory {
+    pub async fn remove_local_leftovers(&self, lifetime: Duration) -> Result<u64> {
+        let cutoff = SystemTime::now()
+            .checked_sub(lifetime)
+            .context("Local file cleanup cutoff is out of range")?;
+        let uploads = list_files(self.temporary.clone(), StoredFileKind::Temporary);
+        let artifacts = list_files(self.files.clone(), StoredFileKind::Artifact);
+        let mut entries = uploads.chain(artifacts).boxed();
+        let mut removed = 0;
+        while let Some(file) = entries.next().await {
+            let file = file?;
+            if file.modified < cutoff
+                && (file.kind == StoredFileKind::Temporary
+                    || !file.name.to_str().is_some_and(valid_location))
+            {
+                removed += u64::from(self.remove_listed(&file).await?);
+            }
         }
+        Ok(removed)
     }
 
-    fn list(&self) -> impl Stream<Item = Result<StoredFile>> + Send {
-        list_files(self.files.clone(), self.temporary.clone())
-    }
-
-    async fn delete_listed(&self, file: &StoredFile) -> Result<bool> {
+    async fn remove_listed(&self, file: &StoredFile) -> Result<bool> {
         let directory = match file.kind {
             StoredFileKind::Artifact => &self.files,
             StoredFileKind::Temporary => &self.temporary,
@@ -267,16 +334,6 @@ impl FileStorage for LocalDirectory {
         }
         Ok(true)
     }
-
-    async fn delete(&self, location: &str) -> Result<()> {
-        storage_directory(&self.files).await?;
-        match fs::remove_file(self.resolve(location)?).await {
-            Ok(()) => File::open(&self.files).await?.sync_all().await?,
-            Err(error) if error.kind() == ErrorKind::NotFound => {}
-            Err(error) => return Err(error.into()),
-        }
-        Ok(())
-    }
 }
 
 fn valid_location(location: &str) -> bool {
@@ -285,7 +342,5 @@ fn valid_location(location: &str) -> bool {
 }
 
 fn now_millis() -> Result<i64> {
-    Ok(i64::try_from(
-        SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis(),
-    )?)
+    Ok(unix_millis(SystemTime::now())?)
 }

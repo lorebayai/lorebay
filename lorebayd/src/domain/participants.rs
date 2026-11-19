@@ -1,3 +1,4 @@
+use lorebay_lib_core::{SpaceAccessError, SpaceReference, SpaceRole, resolve_space};
 use sea_orm::{
     DatabaseConnection, DatabaseTransaction, DbErr, IntoActiveModel, Set, SqliteTransactionMode,
     TransactionOptions, TransactionTrait,
@@ -7,13 +8,14 @@ use thiserror::Error;
 use typed_builder::TypedBuilder;
 
 use crate::entity::participant;
+use crate::library::{parse_role, read_role};
 use crate::repository::account::AccountRepository;
 use crate::repository::participant::{ParticipantRecord, ParticipantRepository, RosterAfter};
 
 use super::caller::{CallerError, VerifiedCaller};
 use super::login_session::now_millis;
 use super::pagination::{Page, PageOptions, decode_cursor, encode_cursor};
-use super::{SpaceAccessError, SpaceRole, check_space, primary_key};
+use super::primary_key;
 
 #[derive(Debug, Error)]
 pub(crate) enum ParticipantError {
@@ -174,6 +176,7 @@ pub(crate) async fn add_participant(
             id: Set(primary_key()),
             space_id: Set(authorized.space.id),
             account_id: Set(account.id),
+            space_number: Set(authorized.space.number),
             role: Set(role.as_str().to_owned()),
             created_at: Set(now),
             updated_at: Set(now),
@@ -240,7 +243,7 @@ const READ_ROLES: &[SpaceRole] = &[
 const MANAGE_ROLES: &[SpaceRole] = &[SpaceRole::Owner, SpaceRole::Admin];
 
 fn participant_from_record(record: ParticipantRecord) -> Result<Participant, DbErr> {
-    let mut role = SpaceRole::try_from(record.role.as_str())?;
+    let mut role = parse_role(record.role.as_str())?;
     if matches!(
         ParticipantKind::try_from(record.kind.as_str())?,
         ParticipantKind::Agent
@@ -289,7 +292,7 @@ async fn mutation_target(
         .by_space_and_account(&authorized.space.id, &account.id)
         .await?
         .ok_or(ParticipantError::NotFound)?;
-    let target_role = SpaceRole::try_from(target.role.as_str())?;
+    let target_role = parse_role(target.role.as_str())?;
     if target_role == SpaceRole::Owner
         || role == Some(SpaceRole::Owner)
         || (authorized.role != SpaceRole::Owner
@@ -307,4 +310,30 @@ async fn write_transaction(database: &DatabaseConnection) -> Result<DatabaseTran
             ..Default::default()
         })
         .await
+}
+
+struct AuthorizedSpace {
+    space: SpaceReference,
+    role: SpaceRole,
+}
+
+async fn check_space(
+    transaction: &DatabaseTransaction,
+    caller: &VerifiedCaller,
+    key: &str,
+    allowed: &[SpaceRole],
+) -> Result<AuthorizedSpace, SpaceAccessError> {
+    let space = resolve_space(transaction, &caller.library_caller(), key).await?;
+    let role = read_role(transaction, caller.account_id(), &space.id)
+        .await?
+        .ok_or(SpaceAccessError::NotFound)?;
+    let role = if matches!(caller, VerifiedCaller::Agent(_)) {
+        role.for_agent()
+    } else {
+        role
+    };
+    if !allowed.contains(&role) {
+        return Err(SpaceAccessError::PermissionRequired);
+    }
+    Ok(AuthorizedSpace { space, role })
 }

@@ -2,15 +2,17 @@ use axum::Json;
 use axum::extract::rejection::{JsonRejection, PathRejection, QueryRejection};
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
+use lorebay_lib_core::SpaceRole;
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 
 use crate::api::{ApiError, Envelope, FieldError, ListQuery, Meta, invalid_query};
 use crate::domain::caller::VerifiedCaller;
 use crate::domain::{
-    Participant, ParticipantError, SpaceRole, add_participant, change_participant_role,
-    list_participants, remove_participant,
+    Participant, ParticipantError, add_participant, change_participant_role, list_participants,
+    remove_participant,
 };
+use crate::library::parse_role;
 use crate::server::ServerState;
 
 use super::login_session::invalid_json;
@@ -47,7 +49,7 @@ impl TryFrom<RoleRequest> for SpaceRole {
     type Error = ApiError;
 
     fn try_from(request: RoleRequest) -> Result<Self, Self::Error> {
-        Self::try_from(request.role.as_str()).map_err(|_| invalid_role())
+        parse_role(request.role.as_str()).map_err(|_| invalid_role())
     }
 }
 

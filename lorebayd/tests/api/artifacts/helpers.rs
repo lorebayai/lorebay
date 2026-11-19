@@ -165,7 +165,7 @@ pub async fn age_registration(server: &Server, key: &str) {
     .unwrap();
     let number = key.strip_prefix("AR-").unwrap().parse::<i64>().unwrap();
     let statement = Query::update()
-        .table(Alias::new("artifact"))
+        .table(Alias::new("space_artifact"))
         .value(Alias::new("created_at"), Expr::value(0_i64))
         .and_where(Expr::col(Alias::new("number")).eq(number))
         .to_owned();

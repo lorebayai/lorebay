@@ -1,4 +1,12 @@
+#[cfg(unix)]
+use std::ffi::OsStr;
+#[cfg(unix)]
+use std::fs::{self, File, FileTimes};
+#[cfg(unix)]
+use std::os::unix::{ffi::OsStrExt, fs::symlink};
 use std::time::Duration;
+#[cfg(unix)]
+use std::time::UNIX_EPOCH;
 
 use reqwest::{Method, StatusCode};
 use serde_json::{Value, json};
@@ -9,6 +17,7 @@ use url::Url;
 
 use crate::helpers::{
     Server, TEST_PASSWORD, TEST_TIMEOUT, assert_problem, authorize_for, create_space, login,
+    request,
 };
 use crate::tasks::helpers::{SPACE, append, create, participant, read, setup};
 
@@ -732,6 +741,97 @@ async fn upload_file_releases_slot_when_upload_stalls() {
             .unwrap()
             .len(),
         2
+    );
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn complete_artifact_fails_when_file_exceeds_size_limit() {
+    let server = Server::start().await;
+    let (person, agent, task) = prepare(&server).await;
+    let registration = register(&server, &agent, &task).await;
+    upload_ok(&server, &registration, "12345").await;
+
+    let directory = server.stop().await;
+    let server =
+        Server::restart_configured(directory, |config| config.upload_size_limit_bytes = 4).await;
+    assert_problem(
+        complete(&server, &agent, &task, "AR-1").await,
+        StatusCode::CONFLICT,
+        "artifact.too_large",
+    )
+    .await;
+    assert_eq!(read(&server, &person, "TK-1").await["artifacts"], json!([]));
+    assert_problem(
+        request(
+            &server,
+            &person,
+            Method::GET,
+            "/api/v1/spaces/SPACE-1/artifacts/AR-1/url",
+            Value::Null,
+        )
+        .await,
+        StatusCode::NOT_FOUND,
+        "artifact.not_found",
+    )
+    .await;
+    assert_problem(
+        complete(&server, &agent, &task, "AR-1").await,
+        StatusCode::CONFLICT,
+        "artifact.not_uploaded",
+    )
+    .await;
+    server.stop().await;
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn orphan_cleanup_removes_old_unreferenced_regular_files() {
+    let server = Server::configured(|config| config.artifact_cleanup_interval_seconds = 1).await;
+    let (person, agent, task) = prepare(&server).await;
+    let registration = register(&server, &agent, &task).await;
+    upload_ok(&server, &registration, "Referenced").await;
+    assert_eq!(
+        complete(&server, &agent, &task, "AR-1").await.status(),
+        StatusCode::OK
+    );
+    let stored = server.directory.path().join("data/artifacts");
+    let referenced = fs::read_dir(&stored)
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    let old_times = FileTimes::new().set_modified(UNIX_EPOCH);
+    File::open(&referenced)
+        .unwrap()
+        .set_times(old_times)
+        .unwrap();
+    let old_files = [
+        stored.join("41000000-0000-7000-8000-000000000001"),
+        stored.join("old-orphan.txt"),
+        stored.join(OsStr::from_bytes(b"orphan-\xff")),
+    ];
+    for orphan in &old_files {
+        File::create(orphan).unwrap().set_times(old_times).unwrap();
+    }
+    let young = stored.join("young-orphan.txt");
+    fs::write(&young, b"Young").unwrap();
+    let link = stored.join("orphan-link");
+    symlink(&referenced, &link).unwrap();
+    timeout(TEST_TIMEOUT, async {
+        while old_files.iter().any(|path| path.exists()) {
+            sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(fs::read(young).unwrap(), b"Young");
+    assert!(fs::symlink_metadata(link).unwrap().is_symlink());
+    assert_eq!(fs::read(referenced).unwrap(), b"Referenced");
+    assert_eq!(
+        read(&server, &person, "TK-1").await["artifacts"][0]["key"],
+        "AR-1"
     );
     server.stop().await;
 }

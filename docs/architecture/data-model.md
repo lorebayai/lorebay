@@ -39,8 +39,9 @@ It does not cover:
   [conventions](../../lib/docs/architecture/data-model.md#3-conventions)**
   for names, types, times, primary keys, statuses and case-insensitive
   uniqueness, without its two exceptions: their names carry no prefix, and
-  every reference is a declared foreign key, the one from `participant` to
-  the library's `space` included.
+  every reference between tables is a declared foreign key, the one from
+  `participant` to the library's `space` included. `oauth_code.client_id`
+  is the one exception ([section 5.4](#54-oauth_code)).
 - **Table names avoid SQL reserved words.** `user` and `authorization` are
   reserved in Postgres, so the tables are `account` and
   `agent_authorization`. The latter also tells an agent's credential apart
@@ -214,8 +215,7 @@ The clients registered through Dynamic Client Registration; see
 - **The first successful authorization is remembered permanently.** The code
   exchange sets `first_authorized_at` in the transaction that creates the
   agent authorization, only when it is null. Revocation, replacement and
-  expiry never clear it. When upgrading, clients with an agent authorization
-  take the earliest authorization's `created_at`.
+  expiry never clear it.
 - **Only unused clients are deleted.** The background job removes a client
   older than `unused_client_lifetime_seconds` only when
   `first_authorized_at` is null and no unexpired, unexchanged authorization
@@ -303,7 +303,15 @@ computer; see [Identity](identity.md#5-sign-in).
 - **`space_number` is set when the row is inserted** and never changes,
   because a space's number never does. Creating a space sets it to the
   number Lorebay gives the space; adding a participant sets it to the number
-  the library returns when it resolves the space key.
+  the library returns when it resolves the space key. No foreign key ties
+  it to `space.number`: both insert paths take the number from the library.
+- **Lorebay numbers its spaces by the highest number plus one,** read
+  through the library inside the write that creates the space; see
+  [Library architecture](../../lib/docs/architecture/library.md#8-scope-and-space-numbers).
+  Lorebay's write transaction holds the database's write lock, so two
+  creations cannot take one number. Highest-plus-one would reuse the number
+  of a deleted space; no space can be deleted, so a counter, which would
+  need a ninth table of Lorebay's, buys nothing.
 - **`(account_id, space_number)` is unique.** A person has one row per
   space, and its index lists a person's memberships after a given space
   number in increasing space number, so Lorebay answers the

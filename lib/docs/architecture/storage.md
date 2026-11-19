@@ -47,10 +47,10 @@ It does not cover:
   it.
 - **The size limit is checked after the upload**, as
   [Library architecture](library.md#9-files) states.
-- **The interface lists the stored files.** The cleanup round that deletes
-  files no record points to finds them in that list, and the round that
-  removes abandoned registrations deletes their files. A backend's own
-  leftovers, such as partial uploads, are its own to remove.
+- **The interface lists the stored files.** The orphaned-file round finds
+  them in that list, and the abandoned-registration round deletes the files
+  of the registrations it removes. A backend's own leftovers, such as
+  partial uploads, are its own to remove.
 - **Only the configured types open in the browser.** The library works out
   a download's content type from the file name's extension and serves only
   the types the product configures inline. Every other file, HTML and SVG
@@ -69,10 +69,12 @@ It does not cover:
   that spans several tables, such as approving a proposal, deleting a task,
   or taking the next key for a new record, writes inside it; see
   [Library architecture](library.md#7-writes-and-transactions).
-- **Files are outside transactions.** Deleting a task or an artifact commits
-  the database first, then deletes the files. A file left behind is removed
-  by the cleanup round for files without a record.
+- **Task and artifact deletion remove files after commit.** A file left
+  behind is removed by the orphaned-file round. The
+  [oversize refusal](library.md#71-run-one-write) rolls back before
+  deleting the file, leaving the registration incomplete.
 - **Keyword search is substring matching.** It uses SQL `LIKE`, not
   full-text search. This is enough at team scale, and it matches Chinese
-  text without splitting it into words. How it treats case on both backends
-  is in [Library architecture](library.md#13-concurrent-writers).
+  text without splitting it into words. On both backends it treats ASCII
+  letters in either case as equal and every other character exactly, with
+  `%`, `_` and `\` taken literally.

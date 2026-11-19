@@ -14,6 +14,18 @@ process as the `lorebay-lib-*` crates.
 in, who belongs to which space, its own entry points and its deployment.
 Lorebay is the first product.
 
+**Operation**: One thing the library does for a caller, such as creating a
+task, run as one read or one write.
+
+**Interface**: One of the five traits a product implements for the library:
+caller, person names, space roles, database and file storage.
+
+**Entry point**: A way callers reach the library's operations, such as the
+MCP layer or a product's own Web API.
+
+**MCP layer**: The library's entry point that serves its operations as MCP
+tools, inside the product's process.
+
 **Caller**: Who calls an operation: a person, the agent when an agent calls,
 and the scope.
 
@@ -30,6 +42,8 @@ Knowledge and proposals. A product holds many spaces.
 
 **Membership**: A person's role in one space, which the product records and
 the library reads.
+
+**Member**: A person with a membership in a space.
 
 **Role**: What a person may do in one space: owner, admin, contributor or
 viewer. A person's role differs from space to space.
@@ -78,6 +92,16 @@ summary, or its deletion.
 
 **Proposal**: A request to create, change or delete a knowledge entry. It
 takes effect only when a person approves it.
+
+**Cleanup round**: A library function with no caller that a product runs on
+its own schedule to remove what interrupted writes leave behind. There are
+two: the abandoned-registration round and the orphaned-file round.
+
+**Abandoned-registration round**: The cleanup round that removes artifact
+registrations whose upload was never reported complete, and their files.
+
+**Orphaned-file round**: The cleanup round that deletes stored files that no
+record points to.
 
 ## Identifiers
 

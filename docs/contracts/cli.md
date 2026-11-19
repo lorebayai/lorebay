@@ -20,9 +20,9 @@
 ## 1. Purpose
 
 A person in a terminal reads a space's content and performs the operations
-that need a person, through the same Web API as the pages. Where another
-contract says a person does something "on the web", the CLI offers the same
-operation through that API, subject to the scope below.
+that need a person, through the same Web API as the pages. Where a library
+contract says a person does something, Lorebay offers it on the web pages
+and, through the same Web API, in the CLI, subject to the scope below.
 
 ## 2. Scope
 
@@ -62,8 +62,9 @@ It does not cover:
 In the table, `<space>` is a space key, `<task>` a task key, `<task-id>` a
 task ID, `<entry>` a knowledge entry's name or key, `<version>` a version
 returned by its history, `<artifact>` an artifact key, `<proposal>` a
-proposal key, and `<note>` the note's time as the Scratchpad shows it.
-Note times are strictly increasing within a task.
+proposal key, and `<note>` the note's time as the Scratchpad shows it,
+which names one note; see
+[Tasks](../../lib/docs/contracts/tasks.md#4-scratchpad).
 `<name>` in an agent command is the person's agent name, quoted when it
 contains spaces. Optional arguments appear in brackets. List rows follow
 [section 6](#6-lists); all output follows [section 5](#5-output-and-failures).

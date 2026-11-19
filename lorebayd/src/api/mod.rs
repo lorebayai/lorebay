@@ -4,14 +4,10 @@ use axum::body::Bytes;
 use axum::extract::rejection::BytesRejection;
 use axum::http::StatusCode;
 
+pub(crate) use auth::bearer;
 pub(crate) use envelope::*;
 pub(crate) use pagination::*;
 pub(crate) use problem::*;
-pub(crate) use v1::{
-    ArtifactCompletedResponse, ArtifactDownloadResponse, ArtifactRegisteredResponse,
-    ChangeTaskRequest, ListTasksQuery, NoteAddedResponse, ReadTaskQuery, RegisterArtifactRequest,
-    SpaceResponse, TaskResponse, TaskSummaryResponse, invalid_text,
-};
 
 pub(crate) fn router() -> Router<ServerState> {
     v1::router().fallback(not_found)

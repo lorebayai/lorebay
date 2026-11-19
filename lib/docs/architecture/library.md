@@ -2,6 +2,11 @@
 
 - **Status:** Proposed
 - **Level:** System
+- **Parent:** [Library](../product/library.md)
+- **Related:** [Entry points](entry-points.md), [Storage](storage.md),
+  [Data model](data-model.md),
+  [Access control](../contracts/access-control.md),
+  [MCP tools](../contracts/mcp-tools.md)
 
 > The library holds the features every product shares. A product holds
 > identity, teams, its entry points and its deployment, and reaches the
@@ -103,22 +108,23 @@ eight tables.
 
 ## 4. Crates
 
-The library lives in the top-level folder `lib/`, as three crates, each
+The library lives in the top-level folder `lib/`, as four crates, each
 in its own subfolder and named `lorebay-lib-<subfolder>`:
 
 | Crate | Folder | Holds | Depends on |
 | --- | --- | --- | --- |
-| `lorebay-lib-types` | `lib/types/` | The secret type and the hash helper | No database, MCP or async crate |
-| `lorebay-lib-core` | `lib/core/` | Operations, rules, interfaces, settings, result types, data layer, migrations, the storage interface | `lorebay-lib-types`, SeaORM |
+| `lorebay-lib-types` | `lib/types/` | The secret type, hash helper, cursor codec and Unix time conversion | No database, MCP or async crate |
+| `lorebay-lib-core` | `lib/core/` | Operations, rules, interfaces, settings, result types, data layer, the storage interface | `lorebay-lib-types`, SeaORM |
+| `lorebay-lib-migration` | `lib/migration/` | The library schema and its migrator | SeaORM migration |
 | `lorebay-lib-mcp` | `lib/mcp/` | The MCP layer, its tools, the MCP authorization challenge and metadata | `lorebay-lib-core`, the MCP SDK, axum |
 
-- **Three crates, not one.** A client that needs only the secret type, such
-  as a command-line tool, depends on `lorebay-lib-types` and builds no
-  database and no MCP layer. The MCP layer is its own crate so the compiler
-  holds that it reaches only the public operations, as a product's own entry
-  point does. One crate with features to drop the database and MCP layers
-  was rejected: it would use features for a purpose other than leaving out a
-  backend, and nothing would stop the MCP layer from calling internals.
+- **The library has four crates.** A client that needs only the secret type,
+  such as a command-line tool, depends on `lorebay-lib-types` and builds no
+  database or MCP layer. The MCP crate can call only the core's public
+  operations, as a product's entry point does. The migration crate lets a
+  product apply the schema separately from building the server or MCP layer.
+  A single crate with layer-selecting features would use Cargo features for
+  more than driver selection and let MCP code reach core internals.
 - **The folder is `lib/` and the crates carry `lib-`.** The folder holds
   the shared library, not one feature of it. A product's workspace may hold
   its own `core` or `mcp` crate, and a name such as `lorebay-core` says
@@ -133,30 +139,34 @@ in its own subfolder and named `lorebay-lib-<subfolder>`:
 - **The build tool finds the crates** through a glob in
   `.moon/workspace.yml`, `lib/*/moon.yml`, since `*/moon.yml` matches
   only top-level folders. With
-  source-path IDs the projects are `lib/types`, `lib/core` and
-  `lib/mcp`, and each is in the `library` layer, so no library crate can
-  depend on an application.
+  source-path IDs the projects are `lib/types`, `lib/core`, `lib/migration`
+  and `lib/mcp`. They use the `library` layer, which cannot depend on an
+  application.
 
 ### 4.1 Database backends and dependencies
 
 - **The library picks no backend.** `lorebay-lib-core` has two features,
-  `sqlite` and `postgres`, and no default; each turns on the matching driver
-  of SeaORM and its migration crate. `lorebay-lib-mcp` forwards the same
-  two features. A consumer turns on the backend it runs, Lorebay `sqlite`,
-  so a consumer on Postgres builds no SQLite driver.
-- **Features choose drivers, not code paths.** The library never connects:
-  the product hands it connections. Where a statement must differ between
-  the backends, such as keyword search, the data layer picks the form from
-  the connection's backend at run time, and one build with both features on
-  serves both.
+  `sqlite` and `postgres`, and no default. Each turns on the matching SeaORM
+  driver. `lorebay-lib-mcp` forwards those features to core.
+  `lorebay-lib-migration` has its own `sqlite` and `postgres` features without
+  a default. Consumers select the driver they use. Lorebay selects `sqlite`.
+- **Backend features select drivers.** The product supplies the runtime
+  connections. Where a statement must differ between the backends, such as
+  keyword search, the data layer picks the form from the connection's
+  backend at run time, and one build with both features on serves both.
+  The migration crate's `sqlite` feature also builds the entity generation
+  helper and binary, which open a disposable SQLite file in development.
 - **Versions are declared once,** in the root `[workspace.dependencies]`,
   which declares SeaORM and its migration crate with no driver feature. A
-  consumer in another repository takes a git dependency on one commit.
-- **Three dependencies are public.** The public API exposes SeaORM's
-  connections and transactions, the `http` request headers, and the axum
-  router of the MCP layer. A consumer uses semver-compatible releases of
-  SeaORM, `http` and axum, which Cargo then unifies; every other dependency
-  of the library is private.
+  consumer in another repository pins all library crates it uses to the
+  same git `rev` and sets `features = ["postgres"]` or `features = ["sqlite"]`
+  on the crates that select a driver. See the
+  [manifest example](../../core/README.md#usage).
+- **Four dependencies are public.** The public API exposes SeaORM connections
+  and transactions, the SeaORM migration trait implemented by `Migrator`,
+  `http` request headers, and the axum MCP router. Consumers use compatible
+  releases of `sea-orm` and `sea-orm-migration` 2, `http` 1, and `axum` 0.8
+  so Cargo can unify those dependencies.
 
 ## 5. Public API
 
@@ -164,7 +174,8 @@ The library makes public what a product needs to build its entry points
 and its implementations, and nothing more:
 
 - `lorebay-lib-types`: the secret type, whose debug output is redacted,
-  and `sha256_hex`, the lowercase hexadecimal SHA-256 of a string.
+  `sha256_hex`, the cursor codec shared by list operations, and conversion
+  from a caller-supplied `SystemTime` to Unix milliseconds.
 - `lorebay-lib-core`:
   - the library state and its settings ([section 11](#11-settings));
   - the five interfaces and the types they exchange
@@ -178,8 +189,11 @@ and its implementations, and nothing more:
   - the read that resolves a space key for a caller, inside the transaction
     it is handed: it checks the scope, answers a missing space or one of
     another owner as not found, and returns the space's ID and number
-    ([section 7.1](#71-run-one-write));
-  - the library's migrator ([section 12](#12-data)).
+    ([section 7.1](#71-run-one-write)).
+- `lorebay-lib-migration`: the library's `Migrator`, which products import
+  directly to apply the library schema, and `open_entity_database` with the
+  `sqlite` feature for the disposable database used in entity generation
+  ([section 12](#12-data)).
 - `lorebay-lib-mcp`: one function that returns the router a product
   mounts at the root of its origin.
 
@@ -195,9 +209,10 @@ reaches data only through the operations and the reads above.
   MCP layer may not depend on a product, and copying them into the MCP crate
   lets the two entry points drift.
 - **Inputs validate themselves.** Input types, such as a task title or a
-  note, check their own length and format when built, and the page-size
-  limits are public constants, so every entry point refuses the same input
-  the same way. Page sizes and input lengths are not settings.
+  note, check their own length and format when built. Task changes, statuses
+  and page sizes have shared validation and field errors. Each entry point
+  maps those errors to its protocol. Page sizes and input lengths are
+  constants.
 - **Errors carry codes, not HTTP.** Each area of operations has one error
   enum with no HTTP status and no response body. Each error has a stable
   code, such as `task.not_found`, which the MCP layer puts in the tool error
@@ -205,8 +220,7 @@ reaches data only through the operations and the reads above.
   credential; a product's entry point writes the text about its own
   credentials.
 - **The hash helper is `sha256_hex`.** It names what it computes, for any
-  input. It keeps its output, so cursors issued before the rename still
-  decode.
+  input. Its output is part of the cursor format and must not change.
 
 ## 6. Interfaces
 
@@ -260,7 +274,8 @@ Every implementation:
 **A person's role in a space, and the person's memberships in a scope.**
 The product keeps memberships wherever it likes: in the library's database,
 in its own, or in a directory it asks. The library sees them only through
-two methods, and no database type, query or table crosses the interface.
+two methods; no query or table crosses the interface, and the only
+database type is the transaction the operation handle carries.
 
 | Method | Takes | Answers |
 | --- | --- | --- |
@@ -321,9 +336,13 @@ methods:
 
 - **The product opens, commits and rolls back.** The library writes inside
   the transaction it is handed and never commits or rolls back.
-- **The record says what was written:** the operation, the caller and the
-  space. A product adds its own rows from it, such as an audit record, so
-  what it adds holds for a tool call as for its own entry point.
+- **On SQLite the product enables foreign key checks** on every
+  connection it hands to the library. Task deletion relies on the cascade
+  to its notes and on clearing the source task from proposals.
+- **The operation supplies the write label and space.** The write entry adds
+  the caller and passes the record to the commit hook. A product can use
+  the record to add its own rows, such as an audit record, for writes from
+  either entry point.
 - **A write transaction serializes with every write it could conflict
   with.** On SQLite it takes the write lock before its first statement, the
   immediate mode of the
@@ -341,8 +360,9 @@ methods:
 ### 6.5 File storage
 
 **Issues upload and download URLs, reports a file's size, deletes, and
-lists.** A file is named by its location, which the library generates and
-never takes from a file name.
+lists.** The library generates each location as a UUIDv7 in the canonical
+text form of the [Data model](data-model.md#3-conventions). A backend can
+use it as a single path segment or object key.
 
 | Method | Does |
 | --- | --- |
@@ -350,7 +370,7 @@ never takes from a file name.
 | Download URL | Issues a URL that serves the file with the content type and disposition the library chose, expiring when the library says |
 | Size | Reports a file's size, or that no file is there |
 | Delete | Deletes a file; a missing file is not an error |
-| List | Lists every stored file as its location and last-modified time |
+| List | Lists each stored file's location and last-modified time |
 
 Every implementation:
 
@@ -358,14 +378,14 @@ Every implementation:
   written once;
 - refuses an upload without the headers the tool descriptions promise;
 - expires its URLs;
-- holds only the library's files: the orphaned-file round deletes every
-  listed file that no record points to.
+- lists only the library's files: the orphaned-file round deletes every
+  listed file old enough that no record points to.
 
-The library decides every rule, the size limit, the lifetimes, the content
-type and whether a browser opens the file inline, and passes it to the
-backend, which carries it out and decides none. A backend's own leftovers,
-such as partial uploads, are its own to remove; the list shows only
-finished files.
+At startup the product gives its storage backend the same upload size limit
+it supplies to the library. The backend enforces it when receiving uploads,
+and the library checks it again when recording completion. The library
+passes URL lifetimes and download presentation with each request to the
+backend. The backend removes its own leftovers and lists finished files.
 
 **The storage is a trait object.** A generic parameter was rejected: it
 would spread through every operation, the state, the MCP layer and the
@@ -386,9 +406,14 @@ sequenceDiagram
     Operation->>Database: Begin write
     Database-->>Operation: Transaction
     Operation->>Operation: Inside: permission check, then writes
-    Operation->>Database: Commit write, with the record
-    Database->>Database: Product rows, then commit
-    Operation->>Storage: After: issue URLs, delete files
+    alt Write succeeds
+        Operation->>Database: Commit write, with the record
+        Database->>Database: Product rows, then commit
+        Operation->>Storage: After commit: issue URLs, delete files
+    else Oversize refusal
+        Operation->>Database: Roll back
+        Operation->>Storage: After rollback: delete oversized file
+    end
     Operation-->>EntryPoint: Result
 ```
 
@@ -399,19 +424,21 @@ sequenceDiagram
 - **After-commit work is handed back.** The inside part returns its result
   together with the files to delete. The entry deletes them only after the
   product's commit succeeds, and drops them after a rollback or a failed
-  commit. A deletion that fails or never runs leaves a file no record
-  points to, which the orphaned-file round removes.
-- **Storage calls stay outside the transaction.** Each operation that calls
-  storage is divided like this:
+  commit. An after-commit deletion that fails or never runs leaves a file
+  no record points to, which the orphaned-file round removes.
+- **Storage calls run outside the transaction.** A completion reads the
+  size before the write, decides under the task and artifact locks, and
+  deletes an oversized file after rolling back the refused write
+  ([section 9](#9-files)).
 
   | Operation | Before | Inside | After |
   | --- | --- | --- | --- |
   | Register an artifact | | Check the task, take the number, insert the registration | Issue the upload URL |
-  | Report an upload complete | Check the registration, ask storage for the size; over the limit, delete the file and refuse | Check again, then record the size and the time | |
+  | Report an upload complete | Check the registration and read the stored size | Lock the task and artifact, check whether the registration is still incomplete, and record completion or refuse the oversized file | Delete an oversized file after rollback |
   | Issue a download URL | Check the space, read the completed record | | Issue the download URL |
   | Delete a task or an artifact | | Check, then delete the rows | Delete the files |
   | Remove abandoned registrations | | Delete the rows still incomplete | Delete their files |
-  | Remove orphaned files | List the files, read which have records | | Delete the files without one |
+  | Remove orphaned files | List the files, read which have records | | Delete the files without records |
 
 - **A product may compose its own write** through the same entry, adding
   its rows inside, as it does when it creates a space with its owner's
@@ -441,9 +468,10 @@ is called outside it, never another connection:
 | Database | To begin and end a read, and to begin, commit or abandon a write | |
 | File storage | Before or after the transaction | |
 
-- **An implementation uses the connection it is handed.** Lorebay's
-  database has one connection, so an implementation that took another
-  while a transaction is open would wait until it timed out.
+- **An implementation uses the connection it is handed.** In a product
+  whose database has one connection, as Lorebay's has, an implementation
+  that took another while a transaction is open would wait until it timed
+  out.
 - **Names are looked up in batches:** one call for the people of a page,
   never one per row.
 
@@ -456,6 +484,9 @@ the commit and the after-commit work:
   complete, which the abandoned-registration round removes;
 - a crash after deleting a task, an artifact or abandoned registrations
   leaves their files, which the orphaned-file round removes;
+- a crash after an oversize refusal and before its deletion leaves the
+  file with its incomplete registration; the next report refuses and deletes
+  it, or the abandoned-registration round removes both;
 - a crash after deleting an oversized file leaves its registration
   incomplete, and reporting it complete again answers that the file was not
   uploaded.
@@ -473,38 +504,33 @@ Both rounds are safe to run again.
   the scope, and answers a space of another owner, and anything in it, as
   not found, before it asks for the role. Listing spaces passes the scope
   to the memberships method and returns only spaces of that owner.
-- **A product gives each new space its number.** The library checks that
-  the number is unused, refuses it otherwise, and derives the key in the
-  fixed format, such as `SPACE-1`. The product keeps numbers unique and
-  never reuses one.
+- **A product gives each new space its number.** The library refuses a
+  number that is not positive as invalid input (`request.invalid_body`,
+  field `number`) and a number already used with `space.number_taken`, and
+  derives the key in the fixed format, such as `SPACE-1`. The product
+  keeps numbers unique and never reuses one.
 - **Creating a space is a step a product composes.** It runs inside a write
   the product runs through the entry, because its number, its owner and the
-  owner's membership are the product's. The library inserts the space; the
-  product checks who may create one before, and adds the membership inside
-  the same transaction.
-- **Lorebay numbers its spaces by the highest number plus one,** read
-  through the library inside the write that creates the space. Its write
-  transaction holds the database's write lock, so two creations cannot take
-  one number. Highest-plus-one would reuse the number of a deleted space;
-  no space can be deleted, so a counter, which would need a ninth table of
-  Lorebay's, buys nothing.
+  owner's membership are the product's. The product authorizes creation,
+  supplies the creator's role for the result and adds the membership in
+  the same transaction. Lorebay uses the owner role for both the result
+  and membership.
 
 ## 9. Files
 
 - **The size limit is checked after the upload.** When an upload is
-  reported complete, the library asks storage for the file's size. Over the
-  limit, it refuses with `artifact.too_large`, deletes the file and leaves
-  the registration incomplete, so nobody can download it. A backend that
-  can refuse an oversized upload itself still does; the check after the
-  upload is what holds on a backend that cannot, and when the limit was
-  lowered after the upload.
+  reported complete, the library reads the file's size before the write
+  transaction. Inside the transaction it locks the task and artifact and
+  checks that the registration is still incomplete. If the observed size
+  exceeds the limit, it refuses with `artifact.too_large`, rolls back and
+  then deletes the file. A later report with no file returns
+  `artifact.not_uploaded`. A backend can also enforce the limit at upload.
+  The completion check covers backends that defer it and a limit lowered
+  after the upload.
 - **A download URL may outlive its content.** A URL issued before its
   content was deleted may work until it expires or the file is gone.
   Lorebay serves its own file URLs and checks the record on every download,
   through the library's read.
-- **Inline or attachment is the library's choice.** It works out the
-  content type from the file name and serves only the configured types
-  inline; every other file is an attachment.
 
 ## 10. MCP layer
 
@@ -532,7 +558,7 @@ state:
 | The MCP entry's public address and path | Allowed origins, the challenge and the metadata |
 | The MCP server's name and version | The server information agents see |
 | Where to authorize | The authorization server the metadata names |
-| The artifact size limit | The check after the upload, and the upload URL |
+| The artifact size limit | Startup policy for receiving uploads and the check at completion |
 | The upload and download URL lifetimes | The URLs storage issues |
 | The types a browser may open inline | Download URLs |
 | The age after which an incomplete registration is abandoned | The abandoned-registration round |
@@ -561,22 +587,22 @@ The library has seven tables: `space`, `space_task`, `space_note`,
 - **The owner ID** of a space is text with no foreign key.
 - **Two groups of migrations share one database.** The library's migrator
   records its history in its own table, `space_migration`, and a product's
-  migrator keeps SeaORM's default table. The product runs the library's
-  migrator first, then its own, at startup. With one shared history table,
-  each migrator would stop at the other group's versions, which it does not
-  know.
+  migrator keeps SeaORM's default table. At startup Lorebay imports the
+  library's migrator from `lorebay-lib-migration` and its own from
+  `lorebayd-migration`. It applies the library group first and its own
+  second in one transaction, before serving.
 - **A product's table may refer to a library table,** as Lorebay's
   memberships refer to `space`. The foreign key is declared in the
   product's migration.
-- **Each group's entities are generated from its own tables.** The
-  library's are generated from a database that ran only the library's
-  migrations. A product's are generated with only its own tables selected,
-  so a product entity carries no relation to a library entity, and the
-  generator emits none. A product joins its rows to a space through the
-  space ID the library returns, never through a library entity. Generating
-  the product's entities with the library's included was rejected: they
-  would duplicate the library's, and removing them would mean editing
-  generated code.
+- **Each group generates its own entities.** Each migration crate has its own
+  entity generation entry. The library builds a disposable SQLite database
+  from only its migrations. Lorebay applies both groups and selects only its
+  own tables. Generating library entities alongside Lorebay's would duplicate
+  the library's models and require hand-editing generated code to remove the
+  duplicates. Generated relations stay within their group. A product joins
+  its rows to a space through the space ID the library returns. The
+  [SeaORM rules](../../../playbook/topics/seaorm.md#entities) describe the
+  generation commands and the projection.
 
 ## 13. Concurrent writers
 
@@ -608,7 +634,7 @@ both.
 | Delete a note | None | It deletes by task and time; a task's person never changes, so the party check needs no lock; a deleted time stays below the task's last activity and is never given again |
 | Delete a task | Task | A registration or note waiting on the task finds it gone; the files deleted are those of the rows deleted |
 | Register an artifact | Task, then space counter | The state is checked under the lock; numbers are distinct |
-| Report an upload complete | Task, then artifact | A second report finds the artifact complete; the task's last activity becomes the later of its current value and the completion |
+| Report an upload complete | Task, then artifact | A second report of a completed registration returns the existing result. Reports that observed the same oversized size refuse while the registration remains incomplete. Each refusal deletes after rollback, and deleting an already absent file succeeds. The task's last activity becomes the later of its current value and the completion. |
 | Delete an artifact | None | One statement deletes the row only if complete and returns its location |
 | Remove abandoned registrations | Each deleted row | One statement deletes only rows still incomplete when it deletes them and returns their locations; only those files are deleted |
 | Remove orphaned files | None | A record commits before any URL for its location exists, and locations are never reused, so a file old enough with no record never gets one |
@@ -616,23 +642,25 @@ both.
 | Submit a proposal | Task, when it names one; then space counter | The task cannot be deleted before the proposal refers to it; the base version is a snapshot by design |
 | Approve or reject a proposal | Proposal, then entry, then space counter for a new entry | The status is checked under the lock, so a proposal is decided once |
 
+The oversize refusal uses the size read before taking the locks. If a new
+upload replaces the oversized file at the same location before a pending
+deletion runs, that deletion can remove the replacement, even one a later
+report has recorded as complete; that artifact then has a record and no
+file, and its download fails.
+
 The Knowledge and proposal writes follow the same rules when they are
 built.
-
-- **Keyword search** treats ASCII letters in either case as equal and every
-  other character exactly, with `%`, `_` and `\` taken literally, on both
-  backends.
 
 ## 14. Rules for library code
 
 - **The library names nothing of one product.** No identifier in the
   library names a database engine, a storage backend or its temporary
   files, a product's record of people or of memberships, or a kind of
-  credential, and no code branches for one product. The two exceptions name
-  a database backend, of which the library supports two, and are not about
-  one product: the `sqlite` and `postgres` features
-  ([section 4.1](#41-database-backends-and-dependencies)), and the code that
-  picks a statement's form by the connection's backend.
+  credential, and no code branches for one product. Three exceptions name
+  a database backend. They are the `sqlite` and `postgres` features, the
+  code that picks a statement's form by the connection's backend, and the
+  disposable SQLite database used for entity generation
+  ([section 4.1](#41-database-backends-and-dependencies)).
 - **Lorebay uses the same interfaces as any other product.** It has no
   shortcut into the library's internals.
 - **A second product must be able to run the library** on Postgres, with
@@ -641,7 +669,9 @@ built.
 
 ## 15. Tests on Postgres
 
-What only Postgres can show, such as two writers racing, is tested against
+What only Postgres can show, such as two writers racing, and what no
+Lorebay entry point can reach (a write the product abandons, another
+owner's space, a space number that is not positive) is tested against
 Postgres through the public API of `lorebay-lib-core`, with test
 implementations of the interfaces the tested operations call. The tests
 keep the [testing rules](../../../playbook/topics/testing.md#black-box) as

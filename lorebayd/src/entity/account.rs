@@ -19,16 +19,12 @@ pub enum Relation {
     AgentAuthorization,
     #[sea_orm(has_many = "super::device_sign_in_request::Entity")]
     DeviceSignInRequest,
-    #[sea_orm(has_many = "super::knowledge_version::Entity")]
-    KnowledgeVersion,
     #[sea_orm(has_many = "super::login_session::Entity")]
     LoginSession,
     #[sea_orm(has_many = "super::oauth_code::Entity")]
     OauthCode,
     #[sea_orm(has_many = "super::participant::Entity")]
     Participant,
-    #[sea_orm(has_many = "super::task::Entity")]
-    Task,
 }
 
 impl Related<super::agent_authorization::Entity> for Entity {
@@ -40,12 +36,6 @@ impl Related<super::agent_authorization::Entity> for Entity {
 impl Related<super::device_sign_in_request::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::DeviceSignInRequest.def()
-    }
-}
-
-impl Related<super::knowledge_version::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::KnowledgeVersion.def()
     }
 }
 
@@ -64,12 +54,6 @@ impl Related<super::oauth_code::Entity> for Entity {
 impl Related<super::participant::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Participant.def()
-    }
-}
-
-impl Related<super::task::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Task.def()
     }
 }
 

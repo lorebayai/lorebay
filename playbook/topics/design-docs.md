@@ -55,6 +55,11 @@ Then number the top-level sections, in this order:
   section that owns it.
 - Add a term to the folder's glossary once more than one doc uses it.
 - Link with relative paths, to a section anchor when citing one rule.
+- Give each technology choice the reason for it. Keep a rejected
+  alternative only as the trade-off a reader needs to understand the choice.
+- Write status values as inline code, exactly as stored: `in progress` and
+  `ended` for tasks; `pending`, `approved` and `rejected` for proposals.
+- Name objects in examples by key, such as `TK-12` or `#KN-1`.
 - Draw a Mermaid diagram when a structure, sequence or flow reads more
   clearly as a picture, and keep it in agreement with the prose. Label each
   node, edge and message with a few words and leave the details to the

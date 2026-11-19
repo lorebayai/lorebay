@@ -11,6 +11,7 @@ pub struct Model {
     pub space_id: String,
     #[sea_orm(column_type = "Text")]
     pub account_id: String,
+    pub space_number: i64,
     #[sea_orm(column_type = "Text")]
     pub role: String,
     pub created_at: i64,
@@ -27,25 +28,11 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     Account,
-    #[sea_orm(
-        belongs_to = "super::space::Entity",
-        from = "Column::SpaceId",
-        to = "super::space::Column::Id",
-        on_update = "NoAction",
-        on_delete = "NoAction"
-    )]
-    Space,
 }
 
 impl Related<super::account::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Account.def()
-    }
-}
-
-impl Related<super::space::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Space.def()
     }
 }
 

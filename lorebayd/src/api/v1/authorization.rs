@@ -15,7 +15,7 @@ use crate::domain::authorization::{
     AuthorizationInput,
 };
 use crate::domain::caller::VerifiedCaller;
-use crate::domain::{authorization_server_metadata, protected_resource_metadata};
+use crate::domain::{authorization_server_metadata, mcp_resource};
 use crate::oauth::no_store_headers;
 use crate::server::ServerState;
 
@@ -70,7 +70,7 @@ impl AuthorizationRequest {
         }
         if self.resource.as_deref().is_some_and(|resource| {
             resource != authorization_server_metadata(public_url).issuer
-                && resource != protected_resource_metadata(public_url).resource
+                && resource != mcp_resource(public_url)
         }) {
             return Err(invalid_parameter("resource"));
         }

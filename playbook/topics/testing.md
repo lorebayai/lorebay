@@ -38,8 +38,9 @@ Each integration test is one **scenario**: the calls a real client makes to
 reach one outcome the contract promises.
 
 - A scenario verifies one promise of the contract: a success path, a
-  documented rejection, or a permission boundary from
-  [Access control](../../docs/contracts/access-control.md#4-permissions).
+  documented rejection, or a permission boundary from the library's
+  [permission matrix](../../lib/docs/contracts/access-control.md#4-permissions)
+  or Lorebay's [own rows](../../docs/contracts/access-control.md#4-permissions).
 - A scenario asserts the whole observable outcome: the response or returned
   value, and the state read back through the API.
 - Input validation gets one scenario per error the contract documents, not

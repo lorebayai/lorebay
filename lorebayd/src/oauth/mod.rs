@@ -13,8 +13,8 @@ use typed_builder::TypedBuilder;
 use crate::Config;
 use crate::domain::login_session::Identity;
 use crate::domain::{
-    AUTHORIZATION_PATH, DEVICE_AUTHORIZATION_PATH, DEVICE_VERIFICATION_PATH,
-    PROTECTED_RESOURCE_METADATA_PATH, REGISTRATION_PATH, TOKEN_PATH,
+    AUTHORIZATION_PATH, DEVICE_AUTHORIZATION_PATH, DEVICE_VERIFICATION_PATH, REGISTRATION_PATH,
+    TOKEN_PATH,
 };
 use crate::pages;
 
@@ -66,10 +66,6 @@ pub(crate) fn router(state: OAuthState) -> Router {
         .route(
             AUTHORIZATION_METADATA_PATH,
             get(metadata::authorization_server),
-        )
-        .route(
-            PROTECTED_RESOURCE_METADATA_PATH,
-            get(metadata::protected_resource),
         )
         .route(
             REGISTRATION_PATH,

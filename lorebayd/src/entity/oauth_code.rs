@@ -42,7 +42,7 @@ pub enum Relation {
     Account,
     #[sea_orm(
         belongs_to = "super::agent_authorization::Entity",
-        from = "Column::AgentAuthorizationId",
+        from = "Column::ReplacesAuthorizationId",
         to = "super::agent_authorization::Column::Id",
         on_update = "NoAction",
         on_delete = "SetNull"
@@ -50,7 +50,7 @@ pub enum Relation {
     AgentAuthorization2,
     #[sea_orm(
         belongs_to = "super::agent_authorization::Entity",
-        from = "Column::ReplacesAuthorizationId",
+        from = "Column::AgentAuthorizationId",
         to = "super::agent_authorization::Column::Id",
         on_update = "NoAction",
         on_delete = "SetNull"

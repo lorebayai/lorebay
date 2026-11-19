@@ -79,7 +79,7 @@ flowchart TD
     approved["Approved"]
     rejected["Rejected"]
     applied["Change takes effect"]
-    agent -- "once its person confirms" --> pending
+    agent -- "submits" --> pending
     contributor --> pending
     pending -- "a person approves" --> approved
     pending -- "a person rejects" --> rejected

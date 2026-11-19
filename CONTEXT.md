@@ -39,5 +39,5 @@ Lorebay, each agent is one OAuth authorization a person grants to a client,
 such as Claude Code; external programs that call the Web API are agents
 too.
 
-**Skill**: Lorebay's agent skill. It tells Lorebay's agents when and how to
-call the MCP tools.
+**Skill**: The skill Lorebay ships, as the
+[library's glossary](lib/CONTEXT.md) defines it.

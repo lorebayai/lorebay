@@ -1,7 +1,7 @@
 use sea_orm::sea_query::{Cond, Expr, ExprTrait, Order, Query, SelectStatement, UnionType};
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DbErr, DeriveIden, EntityTrait,
-    FromQueryResult, QueryFilter,
+    FromQueryResult, QueryFilter, QueryOrder, QuerySelect,
 };
 use typed_builder::TypedBuilder;
 
@@ -92,6 +92,21 @@ impl<C: ConnectionTrait> ParticipantRepository<'_, C> {
             .filter(Column::SpaceId.eq(space_id))
             .filter(Column::AccountId.eq(account_id))
             .one(self.connection)
+            .await
+    }
+
+    pub async fn memberships(
+        &self,
+        account_id: &str,
+        after: i64,
+        limit: u64,
+    ) -> Result<Vec<Model>, DbErr> {
+        Entity::find()
+            .filter(Column::AccountId.eq(account_id))
+            .filter(Column::SpaceNumber.gt(after))
+            .order_by_asc(Column::SpaceNumber)
+            .limit(limit)
+            .all(self.connection)
             .await
     }
 

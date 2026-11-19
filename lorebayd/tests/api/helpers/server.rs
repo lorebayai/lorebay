@@ -43,14 +43,18 @@ impl ServerTask {
     }
 
     pub async fn finish_shutdown(&mut self, budget: Duration) {
+        self.wait_for_exit(budget).await.unwrap();
+    }
+
+    pub async fn wait_for_exit(&mut self, budget: Duration) -> Result<()> {
         let deadline = Instant::now() + budget;
         while !self.thread.as_ref().unwrap().is_finished() {
             if Instant::now() >= deadline {
-                self.fail("server did not shut down before the deadline");
+                self.fail("server did not exit before the deadline");
             }
             sleep(POLL_INTERVAL).await;
         }
-        self.join().unwrap();
+        self.join()
     }
 
     pub fn fail(&mut self, message: &str) -> ! {

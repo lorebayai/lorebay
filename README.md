@@ -23,6 +23,8 @@ Install [rustup](https://rustup.rs), then install the Rust release that
 rustup toolchain install
 ```
 
+Install Python 3.9 or later for the library boundary check and entity generation.
+
 Install moon, then add `~/.moon/bin` to `PATH`:
 
 ```bash
@@ -30,10 +32,21 @@ bash <(curl -fsSL https://moonrepo.dev/install/moon.sh)
 ```
 
 moon installs the Node.js and pnpm releases that `.moon/toolchains.yml` pins
-the first time a task needs them. Run every check from the repo root:
+the first time a task needs them. Start the Postgres service for the library
+integration tests. The tests use the fixed loopback address below.
+
+```bash
+docker run --rm -d --name lorebay-test-postgres \
+  -e POSTGRES_USER=lorebay_test -e POSTGRES_PASSWORD=lorebay_test \
+  -e POSTGRES_DB=postgres -p 127.0.0.1:55432:5432 postgres:18.7@sha256:2ea8630df176ad090ec92136dee850397c5af8781e4bcf2e4162593691c61bbc
+docker exec lorebay-test-postgres pg_isready -h 127.0.0.1 -U lorebay_test -d postgres
+```
+
+Once Postgres is ready, run every check from the repo root:
 
 ```bash
 moon ci
+docker stop lorebay-test-postgres
 ```
 
 ## Repository layout
@@ -42,7 +55,8 @@ moon ci
 - `cli/`: the Rust crate that builds the `lorebay` command-line client.
 - `docs/`: product and system design docs.
 - `lib/`: the library crates and design for features every product shares.
-- `lorebayd/`: the Rust crate that builds the `lorebayd` executable.
+- `lorebayd/`: the Rust crate that builds the `lorebayd` executable and
+  the home of its `migration/` crate.
 - `playbook/`: conventions for coding agents, imported from `AGENTS.md`
   files.
 - `web/`: the TypeScript web pages embedded by `lorebayd`.

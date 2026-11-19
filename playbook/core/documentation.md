@@ -16,9 +16,9 @@ change in the repo.
 | Playbook fragments | `playbook/` | Conventions shared by several folders |
 | Drafts, plans, reviews | `docs/superpowers/` and `.superpowers/` (gitignored) | Local working files |
 
-A **project folder** is a top-level folder, a crate folder under `lib/`,
-or a test suite under `tests/`, with its own manifest (`Cargo.toml` or
-`package.json`), such as `lorebayd/`.
+A **project folder** has its own manifest (`Cargo.toml` or `package.json`).
+It can be a top-level folder, a crate under `lib/`, a product-owned nested
+crate such as `lorebayd/migration/`, or a test suite under `tests/`.
 
 - Each fact has one home. Link to it instead of copying it.
 - Write in American English, using the terms of the folder's glossary
@@ -36,10 +36,10 @@ or a test suite under `tests/`, with its own manifest (`Cargo.toml` or
 design docs and its glossary. It is a second home for design docs, under
 the same rules, plus one:
 
-- Nothing in `lib/` depends on or links to `lorebayd/`, `cli/`, `web/`,
-  `base/` or the root `docs/`. The root Cargo workspace settings, the
-  playbook and the toolchain stay shared, so an `AGENTS.md` there may import
-  a playbook fragment and a doc may link to one.
+- Nothing in `lib/` depends on, or links to, a file outside `lib/`, except
+  the playbook, which an `AGENTS.md` there may import and a doc may link to.
+  The root Cargo workspace settings and the toolchain stay shared.
+  `moon run lib:boundary` checks it.
 
 ## READMEs
 

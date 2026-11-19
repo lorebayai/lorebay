@@ -14,11 +14,14 @@ use hyper::server::conn::http1;
 use hyper_util::rt::TokioIo;
 use hyper_util::service::TowerToHyperService;
 use lorebay_base::{RateLimiter, SystemClock};
+use lorebay_lib_core::LibraryState;
+use lorebay_lib_migration::Migrator as LibraryMigrator;
+use lorebayd_migration::Migrator as ProductMigrator;
 use sea_orm::{
-    ConnectOptions, Database, DatabaseConnection, SqliteTransactionMode, TransactionOptions,
-    TransactionTrait,
+    ConnectOptions, Database, DatabaseConnection, DatabaseTransaction, EntityName, EntityTrait,
+    SqliteTransactionMode, TransactionOptions, TransactionTrait,
 };
-use sea_orm_migration::MigratorTrait;
+use sea_orm_migration::{MigratorTrait, SchemaManager, seaql_migrations};
 use tokio::fs;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::watch;
@@ -33,10 +36,9 @@ use crate::domain::token::TokenSigner;
 use crate::domain::user_store::UserStore;
 use crate::domain::users::FileUserStore;
 use crate::domain::{account, login_session};
-use crate::migration::Migrator;
 use crate::oauth::{self, OAuthState};
 use crate::storage::LocalDirectory;
-use crate::{files, mcp, worker};
+use crate::{files, library, worker};
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
@@ -44,6 +46,7 @@ pub(crate) struct ServerState {
     pub database: DatabaseConnection,
     pub storage: Arc<LocalDirectory>,
     pub identity: Arc<Identity>,
+    pub library: LibraryState,
     ready: Arc<AtomicBool>,
     oauth: OAuthState,
 }
@@ -66,8 +69,11 @@ pub async fn run(
     let database = open_database(&config.data_directory).await?;
     account::sync(&database, users.as_ref(), login_session::now_millis()?).await?;
     let identity = Arc::new(identity(config.clone(), users)?);
-    let storage = Arc::new(LocalDirectory::open(&config).await?);
+    let settings = library::settings(&config);
+    let storage = Arc::new(LocalDirectory::open(&config, settings.upload_size_limit).await?);
+    let library = library::state(settings, &database, identity.clone(), storage.clone())?;
     let state = ServerState::builder()
+        .library(library)
         .storage(storage)
         .oauth(OAuthState::new(
             &config,
@@ -96,6 +102,7 @@ const READINESS_PATH: &str = "/readyz";
 const API_PREFIX: &str = "/api/v1";
 const ACCEPT_RETRY_DELAY: Duration = Duration::from_millis(100);
 const DATABASE_FILE: &str = "lorebay.sqlite3";
+const EARLIER_SCHEMA_MIGRATION: &str = "m20261116_000001_create_tables";
 const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
 fn identity(config: Config, users: Arc<dyn UserStore>) -> Result<Identity> {
@@ -152,7 +159,11 @@ async fn open_database(directory: &Path) -> Result<DatabaseConnection> {
         })
         .await
         .context("could not begin database migration transaction")?;
-    Migrator::up(&transaction, None)
+    reject_earlier_data_directory(&transaction, directory).await?;
+    LibraryMigrator::up(&transaction, None)
+        .await
+        .with_context(|| format!("could not migrate library database {}", path.display()))?;
+    ProductMigrator::up(&transaction, None)
         .await
         .with_context(|| format!("could not migrate database {}", path.display()))?;
     transaction
@@ -160,6 +171,27 @@ async fn open_database(directory: &Path) -> Result<DatabaseConnection> {
         .await
         .context("could not commit database migrations")?;
     Ok(database)
+}
+
+async fn reject_earlier_data_directory(
+    transaction: &DatabaseTransaction,
+    directory: &Path,
+) -> Result<()> {
+    let schema = SchemaManager::new(transaction);
+    if schema
+        .has_table(seaql_migrations::Entity.table_name())
+        .await?
+        && seaql_migrations::Entity::find_by_id(EARLIER_SCHEMA_MIGRATION)
+            .one(transaction)
+            .await?
+            .is_some()
+    {
+        anyhow::bail!(
+            "Data directory {} was created by an earlier lorebayd build and must be recreated. Move it aside and restart with an empty data directory.",
+            directory.display()
+        );
+    }
+    Ok(())
 }
 
 async fn serve_until_shutdown(
@@ -214,17 +246,20 @@ fn start_workers(state: &ServerState, stopped: watch::Receiver<bool>) -> JoinSet
         Duration::from_secs(config.unused_client_lifetime_seconds),
         stopped.clone(),
     ));
+    let interval = Duration::from_secs(config.artifact_cleanup_interval_seconds);
     workers.spawn(worker::remove_abandoned_artifacts(
-        state.database.clone(),
-        state.storage.clone(),
-        Duration::from_secs(config.artifact_cleanup_interval_seconds),
-        Duration::from_secs(config.abandoned_artifact_lifetime_seconds),
+        state.library.clone(),
+        interval,
         stopped.clone(),
     ));
     workers.spawn(worker::remove_orphaned_files(
-        state.database.clone(),
+        state.library.clone(),
+        interval,
+        stopped.clone(),
+    ));
+    workers.spawn(worker::remove_local_leftovers(
         state.storage.clone(),
-        Duration::from_secs(config.artifact_cleanup_interval_seconds),
+        interval,
         Duration::from_secs(config.orphaned_file_lifetime_seconds),
         stopped,
     ));
@@ -243,7 +278,7 @@ async fn finish_workers(workers: &mut JoinSet<()>) {
 
 fn router(state: ServerState) -> Result<Router> {
     let oauth = oauth::router(state.oauth.clone());
-    let mcp = mcp::router(state.clone())?;
+    let mcp = lorebay_lib_mcp::router(state.library.clone())?;
     Ok(Router::new()
         .route(HEALTH_PATH, get(health))
         .route(READINESS_PATH, get(readiness))

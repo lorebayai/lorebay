@@ -1,18 +1,13 @@
-use std::sync::Arc;
 use std::time::Duration;
 
 use lorebay_base::run_job;
-use sea_orm::DatabaseConnection;
 use tokio::sync::watch;
 
-use crate::domain;
-use crate::storage::LocalDirectory;
+use lorebay_lib_core::{self as library, LibraryState};
 
 pub(crate) async fn remove_abandoned_artifacts(
-    database: DatabaseConnection,
-    storage: Arc<LocalDirectory>,
+    state: LibraryState,
     interval: Duration,
-    lifetime: Duration,
     mut stopped: watch::Receiver<bool>,
 ) {
     run_job(
@@ -22,7 +17,7 @@ pub(crate) async fn remove_abandoned_artifacts(
         },
         || async {
             tracing::debug!("abandoned artifact cleanup started");
-            match remove_round(&database, storage.as_ref(), lifetime).await {
+            match remove_round(&state).await {
                 Ok(removed) => tracing::info!(removed, "abandoned artifact cleanup finished"),
                 Err(error) => tracing::error!(%error, "abandoned artifact cleanup failed"),
             }
@@ -31,16 +26,12 @@ pub(crate) async fn remove_abandoned_artifacts(
     .await;
 }
 
-async fn remove_round(
-    database: &DatabaseConnection,
-    storage: &LocalDirectory,
-    lifetime: Duration,
-) -> Result<u64, domain::ArtifactCleanupError> {
+async fn remove_round(state: &LibraryState) -> Result<u64, library::ArtifactCleanupError> {
     let mut removed = 0;
     loop {
-        let batch = domain::remove_abandoned_artifacts(database, storage, lifetime).await?;
+        let batch = library::remove_abandoned_artifacts(state).await?;
         removed += batch;
-        if batch < domain::ARTIFACT_CLEANUP_BATCH_SIZE as u64 {
+        if batch < library::ARTIFACT_CLEANUP_BATCH_SIZE as u64 {
             return Ok(removed);
         }
     }

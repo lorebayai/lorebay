@@ -1,0 +1,21 @@
+language: 'rust'
+layer: 'library'
+
+tasks:
+  build:
+    args: ['--features', 'sqlite']
+  lint:
+    command: 'cargo clippy --all-targets --locked --features sqlite -- -D warnings'
+    options:
+      mergeArgs: 'replace'
+  test:
+    args: ['--features', 'sqlite']
+  generate-entities:
+    command: 'bash lib/migration/scripts/generate-entities.sh'
+    inputs:
+      - '@group(rust)'
+      - 'scripts/**/*'
+    options:
+      cache: false
+      runInCI: false
+      runFromWorkspaceRoot: true

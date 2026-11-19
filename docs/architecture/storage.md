@@ -42,9 +42,12 @@ It does not cover:
 
 - **No external dependencies by default.** `lorebayd` starts with a data
   directory that holds the SQLite file and the artifact files.
-- **One database holds the library's tables and Lorebay's.** `lorebayd`
-  turns on the library's backend that matches its database, and hands the
-  library the transactions it opens.
+- **A data directory made by an earlier build is refused at startup, not
+  upgraded.**
+- **One database holds the library's tables and Lorebay's.** On SQLite,
+  `lorebayd` holds one connection to it. It turns on the library's backend
+  that matches its database, and hands the library the transactions it
+  opens.
 - **A deployment runs on one host.** Every backend assumes a single
   `lorebayd` process.
 - **Backups of the data directory need the service stopped.** Copy it only
@@ -59,7 +62,9 @@ It does not cover:
   which fails if a file is already there, and removes the temporary file. It
   rejects an upload without the header the upload URL came with, and an
   upload over the size limit. An interrupted upload leaves only the
-  temporary file, which a background job removes; see
+  temporary file. A background job removes old temporary uploads and old
+  regular artifact files with names outside the library's location format.
+  It rechecks file type and modification time before deleting. See
   [System architecture](system.md#6-background-jobs).
 - **Every download is checked against its record.** The file URLs
   `lorebayd` serves ask the library whether the artifact is still recorded,
@@ -70,9 +75,10 @@ It does not cover:
   existing object.
 - **An artifact must not exceed 5 GB**, the limit of a single S3 upload, and
   the most the size limit can be set to.
-- **PNG, JPEG, GIF and WebP images and PDFs open in the browser**: they are
-  the types Lorebay configures by default, under the library's
-  [inline rule](../../lib/docs/architecture/storage.md#3-file-storage).
+- **PNG, JPEG, GIF and WebP images and PDFs open in the browser.** Lorebay
+  gives the library this fixed list, under the library's
+  [inline rule](../../lib/docs/architecture/storage.md#3-file-storage). No
+  setting changes it.
 
 ## 5. References
 

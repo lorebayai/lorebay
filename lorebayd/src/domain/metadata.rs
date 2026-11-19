@@ -1,8 +1,6 @@
 use typed_builder::TypedBuilder;
 
 pub(crate) const MCP_PATH: &str = "/mcp";
-pub(crate) const PROTECTED_RESOURCE_METADATA_PATH: &str =
-    "/.well-known/oauth-protected-resource/mcp";
 pub(crate) const AUTHORIZATION_PATH: &str = "/oauth/authorize";
 pub(crate) const TOKEN_PATH: &str = "/oauth/token";
 pub(crate) const DEVICE_AUTHORIZATION_PATH: &str = "/oauth/device";
@@ -19,13 +17,6 @@ pub(crate) struct AuthorizationServer {
     pub device_authorization_endpoint: String,
 }
 
-#[derive(Clone, Debug, TypedBuilder)]
-#[builder(field_defaults(setter(into)))]
-pub(crate) struct ProtectedResource {
-    pub resource: String,
-    pub authorization_server: String,
-}
-
 pub(crate) fn authorization_server_metadata(public_url: &str) -> AuthorizationServer {
     let issuer = public_url.trim_end_matches('/');
     AuthorizationServer::builder()
@@ -37,10 +28,6 @@ pub(crate) fn authorization_server_metadata(public_url: &str) -> AuthorizationSe
         .build()
 }
 
-pub(crate) fn protected_resource_metadata(public_url: &str) -> ProtectedResource {
-    let issuer = public_url.trim_end_matches('/');
-    ProtectedResource::builder()
-        .resource(format!("{issuer}{MCP_PATH}"))
-        .authorization_server(issuer)
-        .build()
+pub(crate) fn mcp_resource(public_url: &str) -> String {
+    format!("{}{MCP_PATH}", public_url.trim_end_matches('/'))
 }

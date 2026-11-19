@@ -80,13 +80,13 @@ A task holds:
 
 The Scratchpad records how the agent did the work. It holds notes only.
 
-- **A note** is a short Markdown entry with a time, rendered as Markdown. A
+- **A note** is a short Markdown entry with a time, rendered as Markdown.
+  Times strictly increase within a task, so a note's time names it. A
   task's Scratchpad is its notes in time order.
 - **The Scratchpad is append-only.** A note cannot be edited. A person may
   delete single notes in their own tasks; agents cannot delete notes.
 - **One tool for every harness.** The library offers one MCP tool for writing
-  notes, and the skill a product ships says when to write them and what to
-  write. The same skill and tool serve every harness.
+  notes. The tool serves every harness.
 - **Notes belong to the agent's current task.**
 
 ## 5. Artifacts
@@ -115,8 +115,7 @@ documents or data.
   `artifact.not_uploaded`.
 - **Each artifact has a file name and a one-sentence summary.**
 - **Artifacts are immutable.** To update one, upload a new one.
-- **An artifact must not exceed the size limit the product sets.** How
-  browsers show artifacts is in
+- **How browsers show artifacts** is in
   [Storage](../architecture/storage.md#3-file-storage).
 - **An artifact belongs to the agent's current task.** Opening a task shows
   its Scratchpad and artifacts.

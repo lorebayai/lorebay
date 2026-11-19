@@ -29,6 +29,13 @@ impl<C: ConnectionTrait> AccountRepository<'_, C> {
         Entity::find().all(self.connection).await
     }
 
+    pub async fn by_ids(&self, ids: &[String]) -> Result<Vec<Model>, DbErr> {
+        Entity::find()
+            .filter(Column::Id.is_in(ids.to_vec()))
+            .all(self.connection)
+            .await
+    }
+
     pub async fn by_id(&self, id: &str) -> Result<Option<Model>, DbErr> {
         Entity::find_by_id(id).one(self.connection).await
     }

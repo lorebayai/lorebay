@@ -1,0 +1,13 @@
+language: 'rust'
+layer: 'library'
+
+fileGroups:
+  rust:
+    - '/lib/types/src/**/*'
+
+tasks:
+  integration:
+    inputs:
+      - '/lib/migration/**/*'
+    options:
+      cache: false

@@ -1,7 +1,11 @@
+use std::fs;
 use std::time::{Duration, Instant};
 
 use reqwest::{Client, StatusCode};
+use sea_orm::sea_query::{Alias, ColumnDef, Query, Table};
+use sea_orm::{ConnectOptions, ConnectionTrait, Database};
 use serde_json::{Value, json};
+use tempfile::TempDir;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::time::timeout;
 
@@ -114,4 +118,49 @@ async fn shut_down_finishes_when_client_stalls() {
         matches!(read, Ok(0) | Err(_)),
         "stalled connection remains open"
     );
+}
+
+#[tokio::test]
+async fn startup_refuses_earlier_data_directory_without_changing_database() {
+    let directory = TempDir::new().unwrap();
+    let data = directory.path().join("data");
+    fs::create_dir(&data).unwrap();
+    let path = data.join("lorebay.sqlite3");
+    let filename = path.clone();
+    let mut options = ConnectOptions::new("sqlite://");
+    options.map_sqlx_sqlite_opts(move |sqlite| sqlite.filename(&filename).create_if_missing(true));
+    let database = Database::connect(options).await.unwrap();
+    let history = Alias::new("seaql_migrations");
+    let version = Alias::new("version");
+    let applied_at = Alias::new("applied_at");
+    let table = Table::create()
+        .table(history.clone())
+        .col(
+            ColumnDef::new(version.clone())
+                .text()
+                .not_null()
+                .primary_key(),
+        )
+        .col(ColumnDef::new(applied_at.clone()).big_integer().not_null())
+        .to_owned();
+    database.execute(&table).await.unwrap();
+    let row = Query::insert()
+        .into_table(history)
+        .columns([version, applied_at])
+        .values_panic(["m20261116_000001_create_tables".into(), 0_i64.into()])
+        .to_owned();
+    database.execute(&row).await.unwrap();
+    database.close().await.unwrap();
+    let bytes = fs::read(&path).unwrap();
+    let error = Server::startup_error(directory.path()).await;
+    assert!(error.contains(data.to_str().unwrap()), "{error}");
+    assert!(
+        error.contains("was created by an earlier lorebayd build and must be recreated"),
+        "{error}"
+    );
+    assert!(
+        error.contains("Move it aside and restart with an empty data directory"),
+        "{error}"
+    );
+    assert_eq!(fs::read(path).unwrap(), bytes);
 }
