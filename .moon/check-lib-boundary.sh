@@ -10,12 +10,34 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import tomllib
 from urllib.parse import unquote, urlsplit
 
 root = Path.cwd().resolve()
 library = root / "lib"
 playbook = root / "playbook"
 errors = []
+
+
+def fail_if_errors():
+    if errors:
+        print("Library boundary violations:", file=sys.stderr)
+        for error in errors:
+            print(error, file=sys.stderr)
+        sys.exit(1)
+
+
+# Cargo reads config from the invocation directory and its ancestors.
+# A downstream git dependency uses the consumer's config and patches.
+with (root / "Cargo.toml").open("rb") as manifest:
+    if "patch" in tomllib.load(manifest):
+        errors.append("Cargo.toml: [patch] does not apply to a product that depends on the library")
+for config_dir in (root / ".cargo", *sorted(library.rglob(".cargo"))):
+    for filename in ("config.toml", "config"):
+        config = config_dir / filename
+        if config.exists():
+            errors.append(f"{config.relative_to(root)}: Cargo config does not apply to a product that depends on the library")
+fail_if_errors()
 
 
 def check_path(source, target, kind, allow_playbook=False):
@@ -106,17 +128,6 @@ if len(set(library_versions.values())) > 1:
     listed = ", ".join(f"{name} {version}" for name, version in sorted(library_versions.items()))
     errors.append(f"library crates must share one version: {listed}")
 
-# A git dependency ignores the root manifest's [patch] and the repository's Cargo config.
-if re.search(r'^\s*\[patch[.\]]', (root / "Cargo.toml").read_text(), re.MULTILINE):
-    errors.append("Cargo.toml: [patch] does not apply to a product that depends on the library")
-for config in (root / ".cargo" / "config.toml", root / ".cargo" / "config"):
-    if config.exists():
-        errors.append(f"{config.relative_to(root)}: Cargo config does not apply to a product that depends on the library")
-
-if errors:
-    print("Library boundary violations:", file=sys.stderr)
-    for error in errors:
-        print(error, file=sys.stderr)
-    sys.exit(1)
+fail_if_errors()
 print("Library boundary check passed.")
 PY
