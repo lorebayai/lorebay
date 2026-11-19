@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::slice::from_ref;
 
 use lorebay_lib_types::{decode_cursor, encode_cursor};
 use sea_orm::{DatabaseTransaction, DbErr, IntoActiveModel, Set};
@@ -8,7 +9,7 @@ use typed_builder::TypedBuilder;
 
 use crate::entity::space;
 use crate::repository::SpaceRepository;
-use crate::{Caller, LibraryState, MembershipPage, Write, WriteOperation};
+use crate::{Caller, LibraryState, MembershipPage, OperationHandle, Write, WriteOperation};
 
 use super::CallerError;
 use super::id::primary_key;
@@ -108,15 +109,17 @@ pub struct Space {
     pub name: String,
     pub summary: String,
     pub role: SpaceRole,
+    pub caller_person: String,
 }
 
-impl From<AuthorizedSpace> for Space {
-    fn from(authorized: AuthorizedSpace) -> Self {
+impl From<(AuthorizedSpace, String)> for Space {
+    fn from((authorized, caller_person): (AuthorizedSpace, String)) -> Self {
         Self {
             key: format_key("SPACE", authorized.space.number),
             name: authorized.space.name,
             summary: authorized.space.summary,
             role: authorized.role,
+            caller_person,
         }
     }
 }
@@ -163,6 +166,7 @@ pub async fn create_space(
     if number <= 0 {
         return Err(SpaceInputError::InvalidNumber.into());
     }
+    let caller_person = name_for(write.state(), write.handle(), caller).await?;
     let now = now_millis()?;
     let repository = SpaceRepository::builder()
         .connection(write.transaction())
@@ -199,11 +203,14 @@ pub async fn create_space(
     };
     write.record(WriteOperation::CreateSpace, Some(space.id.clone()));
     Ok((
-        AuthorizedSpace {
-            space,
-            role: creator_role,
-        }
-        .into(),
+        (
+            AuthorizedSpace {
+                space,
+                role: creator_role,
+            },
+            caller_person,
+        )
+            .into(),
         reference,
     ))
 }
@@ -217,6 +224,7 @@ pub async fn list_spaces(
     let after_number = space_position(caller, &options)?;
     state
         .run_read(async |handle| {
+            let caller_person = name_for(state, handle, caller).await?;
             let request = MembershipPage {
                 person_id: caller.person_id(),
                 owner_id: &caller.owner_id,
@@ -252,11 +260,14 @@ pub async fn list_spaces(
                         .remove(&membership.space_id)
                         .filter(|space| space.owner_id == caller.owner_id)?;
                     Some(
-                        AuthorizedSpace {
-                            space,
-                            role: membership.role.for_caller(caller),
-                        }
-                        .into(),
+                        (
+                            AuthorizedSpace {
+                                space,
+                                role: membership.role.for_caller(caller),
+                            },
+                            caller_person.clone(),
+                        )
+                            .into(),
                     )
                 })
                 .collect();
@@ -272,9 +283,9 @@ pub async fn read_space(
 ) -> Result<Space, SpaceError> {
     state
         .run_read(async |handle| {
-            Ok(check_space(state, handle, caller, key, READ_ROLES)
-                .await?
-                .into())
+            let authorized = check_space(state, handle, caller, key, READ_ROLES).await?;
+            let caller_person = name_for(state, handle, caller).await?;
+            Ok((authorized, caller_person).into())
         })
         .await
 }
@@ -288,6 +299,7 @@ pub async fn change_space(
     write.begin_operation(Some(caller))?;
     caller.person()?;
     let authorized = check_space(write.state(), write.handle(), caller, key, CHANGE_ROLES).await?;
+    let caller_person = name_for(write.state(), write.handle(), caller).await?;
     let mut model = authorized.space.into_active_model();
     if let Some(name) = changes.name {
         model.name = Set(name);
@@ -302,15 +314,32 @@ pub async fn change_space(
         .update(model)
         .await?;
     write.record(WriteOperation::ChangeSpace, Some(space.id.clone()));
-    Ok(AuthorizedSpace {
-        space,
-        role: authorized.role,
-    }
-    .into())
+    Ok((
+        AuthorizedSpace {
+            space,
+            role: authorized.role,
+        },
+        caller_person,
+    )
+        .into())
 }
 
 const CURSOR_VERSION: &str = "spaces-v1";
 const CHANGE_ROLES: &[SpaceRole] = &[SpaceRole::Owner, SpaceRole::Admin];
+
+async fn name_for(
+    state: &LibraryState,
+    handle: OperationHandle<'_>,
+    caller: &Caller,
+) -> Result<String, SpaceError> {
+    let person_id = caller.person_id().to_owned();
+    state
+        .names()
+        .names(handle, from_ref(&person_id))
+        .await?
+        .remove(&person_id)
+        .ok_or_else(|| DbErr::Type("Missing caller person name".into()).into())
+}
 
 fn space_position(caller: &Caller, options: &PageOptions) -> Result<i64, SpaceError> {
     options

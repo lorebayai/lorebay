@@ -221,7 +221,7 @@ contains spaces. Optional arguments appear in brackets. List rows follow
 An example page in `json` mode:
 
 ```json
-{"data":[{"key":"SPACE-1","name":"Team","summary":"Team work","role":"owner"}],"meta":{"next_cursor":"opaque-cursor"}}
+{"data":[{"key":"SPACE-1","name":"Team","summary":"Team work","role":"owner","caller_person":"alice"}],"meta":{"next_cursor":"opaque-cursor"}}
 ```
 
 Exit codes:

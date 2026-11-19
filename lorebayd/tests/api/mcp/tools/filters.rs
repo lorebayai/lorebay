@@ -45,6 +45,7 @@ async fn call_list_tasks_returns_own_party_tasks_not_ended() {
         rows.iter()
             .all(|row| row["person"] == "alice" && row["status"] == "in progress")
     );
+    assert_party_tasks(&server, &agent).await;
     let note = call(
         &server,
         &agent,
@@ -149,6 +150,27 @@ async fn add_bob_agent(server: &Server, person: &Value) -> Value {
     let bob = login(server, "bob").await;
     tasks::participant(server, person, Method::POST, "contributor").await;
     authorize_for(server, &bob, "Research agent").await
+}
+
+async fn assert_party_tasks(server: &Server, agent: &Value) {
+    let spaces = call(server, agent, "list_spaces", json!({})).await;
+    let person = &spaces["data"][0]["caller_person"];
+    assert_eq!(person, "alice");
+    let arguments = json!({"space":SPACE, "person":person});
+    let page = call(server, agent, "list_tasks", arguments.clone()).await;
+    assert_api_page(server, agent, &arguments, &page).await;
+    let rows = page["data"].as_array().unwrap();
+    let mut titles = rows
+        .iter()
+        .map(|row| row["title"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    titles.sort_unstable();
+    assert_eq!(titles, ["Own ended", "Own first", "Own second"]);
+    assert!(rows.iter().all(|row| row["person"] == *person));
+    assert!(
+        rows.iter()
+            .any(|row| row["title"] == "Own ended" && row["status"] == "ended")
+    );
 }
 
 async fn assert_bound_cursor(

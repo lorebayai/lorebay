@@ -93,7 +93,7 @@ async fn space_create_repeats_json_body_when_session_refreshes_after_unauthorize
         ])
         .await;
     assert_success(&output);
-    let expected = json!({"data": {"key": "SPACE-1", "name": "Retry team", "summary": "Real body", "role": "owner"}, "meta": {}});
+    let expected = json!({"data": {"key": "SPACE-1", "name": "Retry team", "summary": "Real body", "role": "owner", "caller_person": proxy.server.username}, "meta": {}});
     assert_eq!(body(&output), expected);
     let requests = proxy.requests.lock().await;
     assert_eq!(requests.len(), 2);

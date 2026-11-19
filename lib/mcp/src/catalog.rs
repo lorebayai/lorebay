@@ -48,7 +48,7 @@ fn build_catalog() -> Vec<(ToolName, Tool)> {
     vec![
         tool(
             ToolName::ListSpaces,
-            "List your spaces with keys, names, summaries and your agent role. Follow next_cursor with cursor to read the next page.",
+            "List your spaces with keys, names, summaries, your agent role and caller_person, the name of the person you act for. Pass caller_person as person to list_tasks to find that person's tasks, including ended tasks. Follow next_cursor with cursor to read the next page.",
             paged(json!({})),
             &[],
             true,
