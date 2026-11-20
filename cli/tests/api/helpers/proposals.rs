@@ -80,10 +80,21 @@ pub async fn submit_agent_proposal(
     task: &Value,
 ) -> Value {
     let task_id = task["task_id"].as_str().unwrap();
-    server.json(Method::POST, &format!("/api/v1/spaces/{space}/tasks/{task_id}/proposals"), json!({"kind": "create", "name": "agent.md", "summary": "Agent guide", "content": "# Shared\n\tcontent"}), agent["access_token"].as_str()).await["data"].clone()
+    server
+        .json(
+            Method::POST,
+            &format!("/api/v1/spaces/{space}/tasks/{task_id}/proposals"),
+            json!({
+                "kind": "create", "name": "agent.md", "summary": "Agent guide",
+                "content": "# Shared\n\tcontent",
+            }),
+            agent["access_token"].as_str(),
+        )
+        .await["data"]
+        .clone()
 }
 
-pub fn assert_proposal_fields(output: &Output, proposal: &Value) {
+pub fn assert_proposal_fields(output: &Output, proposal: &Value, target: &str) {
     assert_success(output);
     assert!(output.stderr.is_empty());
     let mut expected = String::new();
@@ -105,10 +116,11 @@ pub fn assert_proposal_fields(output: &Output, proposal: &Value) {
         ("Decided at", "decided_at"),
         ("Rejection reason", "reject_reason"),
     ] {
-        let value = match &proposal[field] {
-            Value::Null => String::new(),
-            Value::String(text) => text.clone(),
-            value => value.to_string(),
+        let value = match (field, &proposal[field]) {
+            ("target", _) => target.to_owned(),
+            (_, Value::Null) => String::new(),
+            (_, Value::String(text)) => text.clone(),
+            (_, value) => value.to_string(),
         };
         let escaped: String = value
             .chars()
@@ -127,12 +139,12 @@ pub fn assert_proposal_fields(output: &Output, proposal: &Value) {
     assert_eq!(String::from_utf8_lossy(&output.stdout), expected);
 }
 
-pub async fn assert_proposal_pages(server: &Server, command: &[&str], expected: &[&str]) {
+pub async fn assert_proposal_pages(server: &Server, command: &[&str], expected: &[(&str, &str)]) {
     for mode in ["human", "json"] {
         let mut arguments = command.to_vec();
         arguments.extend(["--page-size", "1", "--output", mode]);
         let mut output = server.run(&arguments).await;
-        for (index, key) in expected.iter().enumerate() {
+        for (index, (key, target)) in expected.iter().enumerate() {
             assert_success(&output);
             let proposal = show_proposal(server, command[2], key).await;
             if mode == "json" {
@@ -155,7 +167,11 @@ pub async fn assert_proposal_pages(server: &Server, command: &[&str], expected: 
                 let text = String::from_utf8_lossy(&output.stdout);
                 assert_eq!(text.lines().count(), 2);
                 assert!(text.starts_with("Key\tKind\tStatus\tTarget\tProposed summary\n"));
-                assert!(text.contains(key));
+                assert_eq!(text.lines().nth(1).unwrap().split('\t').next(), Some(*key));
+                assert_eq!(
+                    text.lines().nth(1).unwrap().split('\t').nth(3),
+                    Some(*target)
+                );
             }
             let hint = String::from_utf8(output.stderr.clone()).unwrap();
             assert_eq!(hint.is_empty(), index + 1 == expected.len());

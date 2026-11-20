@@ -31,7 +31,10 @@ pub(super) async fn run(
             summary,
             content: source,
         } => {
-            let body = json!({"kind": "create", "name": name, "summary": summary, "content": content::read(source)?});
+            let body = json!({
+                "kind": "create", "name": name, "summary": summary,
+                "content": content::read(source)?,
+            });
             submit(store, &space, &body).await
         }
         ProposalCommand::Delete { space, entry } => {
@@ -136,9 +139,26 @@ async fn list(
             .query(query)
             .columns(vec!["Key", "Kind", "Status", "Target", "Proposed summary"])
             .fields(vec!["key", "kind", "status", "target", "new_summary"])
+            .display_field(proposal_field as fn(&Value, &str) -> String)
             .build(),
     )
     .await
+}
+
+fn proposal_field(proposal: &Value, field: &str) -> String {
+    if field != "target" {
+        return display_value(&proposal[field]);
+    }
+    let target = &proposal["target"];
+    if target.is_object() {
+        format!(
+            "{} {}",
+            display_value(&target["key"]),
+            display_value(&target["name"])
+        )
+    } else {
+        display_value(&proposal["new_name"])
+    }
 }
 
 async fn request(
@@ -168,7 +188,7 @@ async fn request(
     ]
     .into_iter()
     .map(|(label, field)| {
-        let value = display_value(&body[DATA][field]);
+        let value = proposal_field(&body[DATA], field);
         if field == "new_content" {
             Field::Multiline(label, value)
         } else {

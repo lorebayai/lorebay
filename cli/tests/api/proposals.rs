@@ -39,7 +39,7 @@ async fn proposal_create_submits_pending_proposal() {
     assert_eq!(proposal["changed_since_proposed"], false);
     assert_eq!(show_proposal(&server, &space, "PP-1").await, proposal);
     let shown = server.run(&["proposal", "show", &space, "PP-1"]).await;
-    assert_proposal_fields(&shown, &proposal);
+    assert_proposal_fields(&shown, &proposal, "guide.md");
     let text = String::from_utf8(shown.stdout).unwrap();
     assert!(text.contains("Proposed summary: Summary\\n\\t\\u{1b}[31m\n"));
     assert!(text.contains("Content: # Guide\n\t**source**\\r\\u{1b}[31m\\u{202e}\n"));
@@ -57,7 +57,11 @@ async fn proposal_create_submits_pending_proposal() {
             content,
         ])
         .await;
-    assert_proposal_fields(&created, &show_proposal(&server, &space, "PP-2").await);
+    assert_proposal_fields(
+        &created,
+        &show_proposal(&server, &space, "PP-2").await,
+        "human.md",
+    );
 }
 
 #[tokio::test]
@@ -66,12 +70,12 @@ async fn proposal_delete_submits_proposal_without_confirmation() {
     let first = create_entry(&server, &space, "guides/a ?#%+.md", "First", "Keep").await;
     let second = create_entry(&server, &space, "KN-1", "Key-shaped name", "Second").await;
     let third = create_entry(&server, &space, "KN-01", "Name", "Third").await;
-    for (index, (entry, expected)) in [
-        ("guides/A ?#%+.md", &first),
-        ("KN-1", &first),
-        ("KN-2", &second),
-        ("kn-1", &second),
-        ("KN-01", &third),
+    for (index, (entry, expected, target)) in [
+        ("guides/A ?#%+.md", &first, "KN-1 guides/a ?#%+.md"),
+        ("KN-1", &first, "KN-1 guides/a ?#%+.md"),
+        ("KN-2", &second, "KN-2 KN-1"),
+        ("kn-1", &second, "KN-2 KN-1"),
+        ("KN-01", &third, "KN-3 KN-01"),
     ]
     .into_iter()
     .enumerate()
@@ -97,7 +101,7 @@ async fn proposal_delete_submits_proposal_without_confirmation() {
         if mode == "json" {
             assert_eq!(body(&output), json!({"data": proposal, "meta": {}}));
         } else {
-            assert_proposal_fields(&output, &proposal);
+            assert_proposal_fields(&output, &proposal, target);
         }
     }
     proposal_json(&server, &["approve", &space, "PP-1"]).await;
@@ -157,7 +161,8 @@ async fn proposal_change_proposes_old_version_as_rollback() {
 #[tokio::test]
 async fn proposal_list_filters_by_status() {
     let (mut server, space) = knowledge_context().await;
-    create_entry(&server, &space, "guide.md", "Guide", "Keep").await;
+    let name = r#"guide "quoted"\path.md"#;
+    create_entry(&server, &space, name, "Guide", "Keep").await;
     for name in ["one.md", "two.md", "three.md", "four.md"] {
         create_proposal(&server, &space, name, "Summary", "Content").await;
     }
@@ -173,10 +178,28 @@ async fn proposal_list_filters_by_status() {
     )
     .await;
     proposal_json(&server, &["delete", &space, "KN-1"]).await;
+    create_proposal(
+        &server,
+        &space,
+        r#"draft "quoted"\new.md"#,
+        "Draft",
+        "Content",
+    )
+    .await;
     for (status, expected) in [
-        ("pending", vec!["PP-6", "PP-5"]),
-        ("approved", vec!["PP-2", "PP-1"]),
-        ("rejected", vec!["PP-4", "PP-3"]),
+        (
+            "pending",
+            vec![
+                ("PP-7", r#"draft "quoted"\new.md"#),
+                ("PP-6", r#"KN-1 guide "quoted"\path.md"#),
+                ("PP-5", r#"KN-1 guide "quoted"\path.md"#),
+            ],
+        ),
+        (
+            "approved",
+            vec![("PP-2", "KN-3 two.md"), ("PP-1", "KN-2 one.md")],
+        ),
+        ("rejected", vec![("PP-4", "four.md"), ("PP-3", "three.md")]),
     ] {
         assert_proposal_pages(
             &server,
@@ -191,8 +214,8 @@ async fn proposal_list_filters_by_status() {
     assert_success(&list);
     let text = String::from_utf8(list.stdout).unwrap();
     assert!(text.starts_with("Key\tKind\tStatus\tTarget\tProposed summary\n"));
-    assert!(text.contains("KN-1"));
-    assert!(text.contains("guide.md"));
+    assert!(text.contains(r#"KN-1 guide "quoted"\path.md"#));
+    assert!(text.contains("PP-7\tcreate\tpending\tdraft \"quoted\"\\new.md\tDraft"));
     assert!(text.contains("New\\n\\t\\u{1b}[31m"));
     assert_proposal_usage(&mut server, &space).await;
 }
@@ -221,7 +244,13 @@ async fn proposal_list_filters_by_keyword() {
     assert_proposal_pages(
         &server,
         &["proposal", "list", &space, "--keyword", keyword],
-        &["PP-6", "PP-5", "PP-3", "PP-2", "PP-1"],
+        &[
+            ("PP-6", r"KN-2 needle 'quoted' %_\ &?"),
+            ("PP-5", r"KN-2 needle 'quoted' %_\ &?"),
+            ("PP-3", r"needle 'quoted' %_\ &?"),
+            ("PP-2", "two.md"),
+            ("PP-1", "KN-1 one.md"),
+        ],
     )
     .await;
     assert_proposal_pages(
@@ -235,7 +264,11 @@ async fn proposal_list_filters_by_keyword() {
             "--keyword",
             keyword,
         ],
-        &["PP-6", "PP-5", "PP-3"],
+        &[
+            ("PP-6", r"KN-2 needle 'quoted' %_\ &?"),
+            ("PP-5", r"KN-2 needle 'quoted' %_\ &?"),
+            ("PP-3", r"needle 'quoted' %_\ &?"),
+        ],
     )
     .await;
     assert_empty_proposal_search(&server, &space).await;
@@ -274,13 +307,20 @@ async fn proposal_create_reads_content_from_file() {
 #[tokio::test]
 async fn proposal_show_marks_changed_since_proposed() {
     let (server, space) = knowledge_context().await;
-    create_entry(&server, &space, "guides/a ?#%+.md", "Original", "Old").await;
+    create_entry(
+        &server,
+        &space,
+        r#"guides/a "quoted"\path ?#%+.md"#,
+        "Original",
+        "Old",
+    )
+    .await;
     let proposal = proposal_json(
         &server,
         &[
             "change",
             &space,
-            "guides/A ?#%+.md",
+            r#"guides/A "quoted"\path ?#%+.md"#,
             "--name",
             "renamed.md",
             "--content",
@@ -299,7 +339,7 @@ async fn proposal_show_marks_changed_since_proposed() {
     let shown = show_proposal(&server, &space, "PP-1").await;
     assert_eq!(shown["changed_since_proposed"], true);
     let human = server.run(&["proposal", "show", &space, "PP-1"]).await;
-    assert_proposal_fields(&human, &shown);
+    assert_proposal_fields(&human, &shown, r#"KN-1 guides/a "quoted"\path ?#%+.md"#);
     assert!(
         String::from_utf8(human.stdout)
             .unwrap()
@@ -307,7 +347,7 @@ async fn proposal_show_marks_changed_since_proposed() {
     );
     let approved = server.run(&["proposal", "approve", &space, "PP-1"]).await;
     let decided = show_proposal(&server, &space, "PP-1").await;
-    assert_proposal_fields(&approved, &decided);
+    assert_proposal_fields(&approved, &decided, "KN-1 renamed.md");
     assert_eq!(decided["status"], "approved");
     assert_eq!(decided["decided_by"], server.username);
     assert!(decided["decided_at"].is_i64());
@@ -334,7 +374,7 @@ async fn proposal_approve_makes_agent_proposal_readable_as_knowledge() {
     assert_eq!(proposal["from_task_key"], task["key"]);
     assert_eq!(show_proposal(&server, &space, "PP-1").await, proposal);
     let human = server.run(&["proposal", "show", &space, "PP-1"]).await;
-    assert_proposal_fields(&human, &proposal);
+    assert_proposal_fields(&human, &proposal, "agent.md");
     assert!(
         String::from_utf8(human.stdout)
             .unwrap()
@@ -433,10 +473,10 @@ async fn proposal_reject_withdraws_own_proposal() {
         if mode == "json" {
             assert_eq!(body(&output), json!({"data": proposal, "meta": {}}));
         } else {
-            assert_proposal_fields(&output, &proposal);
+            assert_proposal_fields(&output, &proposal, "guide.md");
         }
         let shown = server.run(&["proposal", "show", &space, &key]).await;
-        assert_proposal_fields(&shown, &proposal);
+        assert_proposal_fields(&shown, &proposal, "guide.md");
         assert!(
             String::from_utf8(shown.stdout)
                 .unwrap()
