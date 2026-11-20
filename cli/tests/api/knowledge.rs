@@ -4,9 +4,11 @@ use serde_json::json;
 
 use crate::helpers::{
     SECOND_USERNAME, assert_cancelled, assert_content_file_limits, assert_empty_knowledge_search,
-    assert_knowledge_error, assert_knowledge_prefix_pages, assert_other_content_sources,
-    assert_success, assert_usage, assert_viewer_reads_knowledge, body, content_input, create_entry,
-    knowledge_context, pages, piped_yes, show_entry,
+    assert_history_errors, assert_history_pages, assert_key_history, assert_knowledge_error,
+    assert_knowledge_prefix_pages, assert_other_content_sources, assert_rollback_content,
+    assert_rollback_refusals, assert_success, assert_usage, assert_version_usage,
+    assert_viewer_reads_history, assert_viewer_reads_knowledge, body, content_input, create_entry,
+    knowledge_context, knowledge_json, pages, piped_yes, read_entry_version, show_entry,
 };
 
 #[tokio::test]
@@ -51,9 +53,10 @@ async fn knowledge_create_then_show_prints_content() {
 }
 
 #[tokio::test]
-async fn knowledge_change_updates_latest_content_and_version() {
+async fn knowledge_change_adds_version_shown_in_history() {
     let (server, space) = knowledge_context().await;
-    create_entry(&server, &space, "guide.md", "Original", "Old content").await;
+    let original = create_entry(&server, &space, "guide.md", "Original", "Old content").await;
+    let mut versions = vec![original];
     for (option, value, version, summary, content) in [
         (
             "--content",
@@ -70,25 +73,13 @@ async fn knowledge_change_updates_latest_content_and_version() {
             "# New\n\tcontent",
         ),
     ] {
-        let changed = server
-            .run(&[
-                "knowledge",
-                "change",
-                &space,
-                "guide.md",
-                option,
-                value,
-                "--output",
-                "json",
-            ])
-            .await;
-        assert_success(&changed);
-        assert!(changed.stderr.is_empty());
+        let changed = knowledge_json(&server, &["change", &space, "guide.md", option, value]).await;
         let latest = show_entry(&server, &space, "KN-1").await;
-        assert_eq!(body(&changed), json!({"data": latest, "meta": {}}));
+        assert_eq!(changed, latest);
         assert_eq!(latest["version"], version);
         assert_eq!(latest["summary"], summary);
         assert_eq!(latest["content"], content);
+        versions.push(latest);
     }
     let changed = server
         .run(&[
@@ -108,7 +99,12 @@ async fn knowledge_change_updates_latest_content_and_version() {
             .unwrap()
             .contains("Content: # Human\n\tcontent\n")
     );
-    assert_eq!(show_entry(&server, &space, "KN-1").await["version"], 4);
+    let latest = show_entry(&server, &space, "KN-1").await;
+    assert_eq!(latest["version"], 4);
+    versions.push(latest);
+    for entry in ["guide.md", "KN-1"] {
+        assert_history_pages(&server, &space, entry, &versions).await;
+    }
 }
 
 #[tokio::test]
@@ -507,6 +503,7 @@ async fn knowledge_show_reads_key_form_as_key() {
         let entry = create_entry(&server, &space, name, "Name", "Named content").await;
         assert_eq!(show_entry(&server, &space, name).await, entry);
     }
+    assert_key_history(&server, &space).await;
     let changed = server
         .run(&[
             "knowledge",
@@ -534,6 +531,210 @@ async fn knowledge_show_reads_key_form_as_key() {
         show_entry(&server, &space, "KN-01").await["kind"],
         "deletion"
     );
+}
+
+#[tokio::test]
+async fn knowledge_show_prints_old_version() {
+    let (server, space) = knowledge_context().await;
+    let name = "guides/'quoted' ?#&%+\u{00e9}.md";
+    let original = create_entry(
+        &server,
+        &space,
+        name,
+        "Old\n\t\u{1b}[31m",
+        "# Old\n\t**raw**\r\u{1b}[31m",
+    )
+    .await;
+    let changed = knowledge_json(
+        &server,
+        &[
+            "change",
+            &space,
+            name,
+            "--summary",
+            "New",
+            "--content",
+            "New content",
+        ],
+    )
+    .await;
+    for entry in [name, "KN-1"] {
+        assert_eq!(
+            read_entry_version(&server, &space, entry, 1).await,
+            original
+        );
+        assert_eq!(show_entry(&server, &space, entry).await, changed);
+    }
+    let old = server
+        .run(&["knowledge", "show", &space, name, "--version", "1"])
+        .await;
+    assert_success(&old);
+    assert!(old.stderr.is_empty());
+    let text = String::from_utf8(old.stdout).unwrap();
+    assert!(text.contains("Summary: Old\\n\\t\\u{1b}[31m\n"));
+    assert!(text.contains("Content: # Old\n\t**raw**\\r\\u{1b}[31m\n"));
+    assert!(!text.contains('\u{1b}'));
+    let deleted = knowledge_json(&server, &["delete", &space, name, "--yes"]).await;
+    assert_eq!(deleted["version"], 3);
+    for entry in [name, "KN-1"] {
+        assert_eq!(read_entry_version(&server, &space, entry, 3).await, deleted);
+        assert_eq!(
+            read_entry_version(&server, &space, entry, 1).await,
+            original
+        );
+    }
+    let deletion = server
+        .run(&["knowledge", "show", &space, "KN-1", "--version", "3"])
+        .await;
+    assert_success(&deletion);
+    let text = String::from_utf8(deletion.stdout).unwrap();
+    assert!(text.contains("Kind: deletion\nSummary: \nContent: \n"));
+    assert!(text.contains(&format!(
+        "Applied by: {}\nApplied at: {}\n",
+        server.username, deleted["applied_at"]
+    )));
+    assert_history_pages(&server, &space, name, &[original, changed, deleted]).await;
+    assert_history_errors(&server, &space).await;
+}
+
+#[tokio::test]
+async fn knowledge_deleted_lists_deleted_entry() {
+    let (server, space) = knowledge_context().await;
+    let names = ["first.md", "KN-99", "last.md"];
+    let mut expected = Vec::new();
+    for name in names {
+        let entry = create_entry(&server, &space, name, "Delete", "Old content").await;
+        let key = entry["key"].as_str().unwrap();
+        let deleted = knowledge_json(&server, &["delete", &space, key, "--yes"]).await;
+        expected.push(json!({"name": name, "key": key, "deleted_by": deleted["applied_by"], "deleted_at": deleted["applied_at"]}));
+    }
+    let live = create_entry(&server, &space, "live.md", "Keep", "Live content").await;
+    let items = pages(&server, &["knowledge", "deleted", &space], "name", &names).await;
+    assert_eq!(items, expected);
+    let human = server.run(&["knowledge", "deleted", &space]).await;
+    assert_success(&human);
+    assert!(human.stderr.is_empty());
+    let text = String::from_utf8(human.stdout).unwrap();
+    assert!(text.starts_with("Name\tKey\tDeleted by\tDeleted at\n"));
+    for item in &expected {
+        assert!(text.contains(&format!(
+            "{}\t{}\t{}\t{}\n",
+            item["name"].as_str().unwrap(),
+            item["key"].as_str().unwrap(),
+            server.username,
+            item["deleted_at"]
+        )));
+        let entry = read_entry_version(&server, &space, item["key"].as_str().unwrap(), 1).await;
+        assert_eq!(entry["content"], "Old content");
+    }
+    assert!(!text.contains("live.md"));
+    assert_eq!(show_entry(&server, &space, "live.md").await, live);
+}
+
+#[tokio::test]
+async fn knowledge_rollback_restores_old_content() {
+    let (server, space) = knowledge_context().await;
+    let original = create_entry(
+        &server,
+        &space,
+        "guide.md",
+        "First summary",
+        "# First\n\ttext",
+    )
+    .await;
+    let name = "guides/renamed ?#&%+\u{00e9}.md";
+    let changed = knowledge_json(
+        &server,
+        &[
+            "change",
+            &space,
+            "KN-1",
+            "--name",
+            name,
+            "--summary",
+            "Second summary",
+            "--content",
+            "# Second\n\ttext",
+        ],
+    )
+    .await;
+    let deleted = knowledge_json(&server, &["delete", &space, "KN-1", "--yes"]).await;
+    assert_rollback_refusals(&server, &space, &deleted).await;
+    let restored = knowledge_json(&server, &["rollback", &space, name, "1"]).await;
+    assert_rollback_content(&restored, &original, name, 4);
+    assert_eq!(show_entry(&server, &space, "KN-1").await, restored);
+    assert_eq!(
+        knowledge_json(&server, &["deleted", &space]).await,
+        json!([])
+    );
+    let human = server
+        .run(&["knowledge", "rollback", &space, "KN-1", "2"])
+        .await;
+    assert_success(&human);
+    assert!(human.stderr.is_empty());
+    assert!(
+        String::from_utf8(human.stdout)
+            .unwrap()
+            .contains("Content: # Second\n\ttext\n")
+    );
+    let latest = show_entry(&server, &space, "KN-1").await;
+    assert_rollback_content(&latest, &changed, name, 5);
+    let found = knowledge_json(&server, &["list", &space, "--keyword", "Second summary"]).await;
+    assert_eq!(
+        found,
+        json!([{"name": name, "key": "KN-1", "summary": "Second summary"}])
+    );
+    assert_history_pages(
+        &server,
+        &space,
+        "KN-1",
+        &[original, changed, deleted, restored, latest],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn knowledge_rollback_fails_with_server_error_when_caller_is_contributor() {
+    let (mut server, space) = knowledge_context().await;
+    let original = create_entry(&server, &space, "guide.md", "Summary", "Keep content").await;
+    server.login_as(SECOND_USERNAME).await;
+    assert_success(
+        &server
+            .run(&[
+                "participant",
+                "add",
+                &space,
+                SECOND_USERNAME,
+                "--role",
+                "contributor",
+            ])
+            .await,
+    );
+    for mode in ["human", "json"] {
+        for entry in ["guide.md", "KN-1"] {
+            let output = server
+                .run_as(
+                    SECOND_USERNAME,
+                    &[
+                        "knowledge",
+                        "rollback",
+                        &space,
+                        entry,
+                        "1",
+                        "--output",
+                        mode,
+                    ],
+                )
+                .await;
+            assert_knowledge_error(&output, mode, "space.permission_required");
+        }
+    }
+    assert_eq!(show_entry(&server, &space, "KN-1").await, original);
+    let history = knowledge_json(&server, &["history", &space, "KN-1"]).await;
+    assert_eq!(history.as_array().unwrap().len(), 1);
+    assert_eq!(history[0]["version"], 1);
+    assert_viewer_reads_history(&server, &space, &original).await;
+    assert_version_usage(&mut server, &space).await;
 }
 
 #[tokio::test]

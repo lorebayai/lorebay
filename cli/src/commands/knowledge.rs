@@ -2,7 +2,7 @@ use reqwest::Method;
 use serde_json::{Value, json};
 use url::form_urlencoded;
 
-use crate::args::{ContentOptions, KnowledgeCommand, OutputMode, Page};
+use crate::args::{ContentOptions, KnowledgeChanges, KnowledgeCommand, OutputMode, Page};
 use crate::constants::DATA;
 use crate::credentials::Store;
 use crate::error::Result;
@@ -20,22 +20,8 @@ pub(super) async fn run(
         KnowledgeCommand::Change {
             space,
             entry,
-            name,
-            summary,
-            content: source,
-        } => {
-            change(
-                store,
-                &space,
-                &entry,
-                [
-                    ("name", name),
-                    ("summary", summary),
-                    ("content", content::read(source)?),
-                ],
-            )
-            .await
-        }
+            changes,
+        } => change(store, &space, &entry, changes).await,
         KnowledgeCommand::Create {
             space,
             name,
@@ -45,12 +31,16 @@ pub(super) async fn run(
         KnowledgeCommand::Delete { space, entry, yes } => {
             delete(
                 store,
-                &entry_path(&space, &entry)?,
+                &entry_path(&space, &entry, &[])?,
                 &format!("knowledge entry {entry} in {space}"),
                 yes,
                 "Knowledge entry deleted.",
             )
             .await
+        }
+        KnowledgeCommand::Deleted { space, page } => deleted(store, &space, page, mode).await,
+        KnowledgeCommand::History { space, entry, page } => {
+            history(store, &space, &entry, page, mode).await
         }
         KnowledgeCommand::List {
             space,
@@ -67,9 +57,16 @@ pub(super) async fn run(
             )
             .await
         }
-        KnowledgeCommand::Show { space, entry } => {
-            request(store, Method::GET, &entry_path(&space, &entry)?, None).await
-        }
+        KnowledgeCommand::Rollback {
+            space,
+            entry,
+            version,
+        } => rollback(store, &space, &entry, version).await,
+        KnowledgeCommand::Show {
+            space,
+            entry,
+            version,
+        } => show(store, &space, &entry, version).await,
     }
 }
 
@@ -80,8 +77,13 @@ async fn change(
     store: &Store,
     space: &str,
     entry: &str,
-    fields: [(&str, Option<String>); 3],
+    changes: KnowledgeChanges,
 ) -> Result<Outcome> {
+    let fields = [
+        ("name", changes.name),
+        ("summary", changes.summary),
+        ("content", content::read(changes.content)?),
+    ];
     let body = fields
         .into_iter()
         .filter_map(|(field, value)| value.map(|value| (field.to_owned(), json!(value))))
@@ -89,7 +91,7 @@ async fn change(
     request(
         store,
         Method::PATCH,
-        &entry_path(space, entry)?,
+        &entry_path(space, entry, &[])?,
         Some(&Value::Object(body)),
     )
     .await
@@ -108,6 +110,58 @@ async fn create(
         Method::POST,
         &api_path(&[SPACES, space, KNOWLEDGE])?,
         Some(&body),
+    )
+    .await
+}
+
+async fn deleted(store: &Store, space: &str, page: Page, mode: OutputMode) -> Result<Outcome> {
+    list_page(
+        store,
+        page,
+        mode,
+        Listing::builder()
+            .path(api_path(&[SPACES, space, KNOWLEDGE, "deleted"])?)
+            .command(format!("knowledge deleted {}", output::shell_word(space)))
+            .columns(vec!["Name", "Key", "Deleted by", "Deleted at"])
+            .fields(vec!["name", "key", "deleted_by", "deleted_at"])
+            .build(),
+    )
+    .await
+}
+
+async fn history(
+    store: &Store,
+    space: &str,
+    entry: &str,
+    page: Page,
+    mode: OutputMode,
+) -> Result<Outcome> {
+    list_page(
+        store,
+        page,
+        mode,
+        Listing::builder()
+            .path(entry_path(space, entry, &["versions"])?)
+            .command(format!(
+                "knowledge history {} {}",
+                output::shell_word(space),
+                output::shell_word(entry)
+            ))
+            .columns(vec![
+                "Version",
+                "Kind",
+                "Applied by",
+                "Applied at",
+                "Proposal",
+            ])
+            .fields(vec![
+                "version",
+                "kind",
+                "applied_by",
+                "applied_at",
+                "proposal_key",
+            ])
+            .build(),
     )
     .await
 }
@@ -142,21 +196,44 @@ async fn list(
     .await
 }
 
-fn entry_path(space: &str, entry: &str) -> Result<String> {
-    if entry
+fn entry_path(space: &str, entry: &str, suffix: &[&str]) -> Result<String> {
+    let key = entry
         .strip_prefix("KN-")
         .and_then(|number| number.parse::<i64>().ok())
-        .is_some_and(|number| number > 0 && entry == format!("KN-{number}"))
-    {
-        return api_path(&[SPACES, space, KNOWLEDGE, "by-key", entry]);
+        .is_some_and(|number| number > 0 && entry == format!("KN-{number}"));
+    let mut segments = vec![SPACES, space, KNOWLEDGE];
+    if key {
+        segments.extend(["by-key", entry]);
+    } else {
+        segments.push("entry");
+    }
+    segments.extend_from_slice(suffix);
+    let path = api_path(&segments)?;
+    if key {
+        return Ok(path);
     }
     let query = form_urlencoded::Serializer::new(String::new())
         .append_pair("name", entry)
         .finish();
-    Ok(format!(
-        "{}?{query}",
-        api_path(&[SPACES, space, KNOWLEDGE, "entry"])?
-    ))
+    Ok(format!("{path}?{query}"))
+}
+
+async fn rollback(store: &Store, space: &str, entry: &str, version: i64) -> Result<Outcome> {
+    request(
+        store,
+        Method::POST,
+        &entry_path(space, entry, &["rollback"])?,
+        Some(&json!({"version": version})),
+    )
+    .await
+}
+
+async fn show(store: &Store, space: &str, entry: &str, version: Option<i64>) -> Result<Outcome> {
+    let path = match version {
+        Some(version) => entry_path(space, entry, &["versions", &version.to_string()])?,
+        None => entry_path(space, entry, &[])?,
+    };
+    request(store, Method::GET, &path, None).await
 }
 
 async fn request(

@@ -92,6 +92,27 @@ pub async fn assert_filter_errors(server: &mut Server, space: &str) {
     }
 }
 
+pub async fn run_list_hint(server: &Server, hint: &str) -> Output {
+    let arguments = hint.trim_end().strip_prefix("Next page: lorebay ").unwrap();
+    timeout(
+        WAIT,
+        Command::new("/bin/sh")
+            .arg("-c")
+            .arg(format!("exec \"$TASK_CLI\" {arguments}"))
+            .env_clear()
+            .env("TASK_CLI", env!("CARGO_BIN_EXE_lorebay"))
+            .env("HOME", server.directory.path().join("home"))
+            .env("LOREBAY_HOME", server.home())
+            .current_dir(server.directory.path())
+            .stdin(Stdio::null())
+            .kill_on_drop(true)
+            .output(),
+    )
+    .await
+    .unwrap()
+    .unwrap()
+}
+
 async fn create_filter_fixtures(
     server: &Server,
     space: &str,
@@ -129,27 +150,6 @@ async fn create_filter_fixtures(
                 .await;
         }
     }
-}
-
-async fn run_list_hint(server: &Server, hint: &str) -> Output {
-    let arguments = hint.trim_end().strip_prefix("Next page: lorebay ").unwrap();
-    timeout(
-        WAIT,
-        Command::new("/bin/sh")
-            .arg("-c")
-            .arg(format!("exec \"$TASK_CLI\" {arguments}"))
-            .env_clear()
-            .env("TASK_CLI", env!("CARGO_BIN_EXE_lorebay"))
-            .env("HOME", server.directory.path().join("home"))
-            .env("LOREBAY_HOME", server.home())
-            .current_dir(server.directory.path())
-            .stdin(Stdio::null())
-            .kill_on_drop(true)
-            .output(),
-    )
-    .await
-    .unwrap()
-    .unwrap()
 }
 
 fn page_keys(output: &Output, mode: &str) -> Vec<String> {

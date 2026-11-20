@@ -60,8 +60,8 @@ It does not cover:
   and Lorebay's [own rows](access-control.md#4-permissions).
 
 In the table, `<space>` is a space key, `<task>` a task key, `<task-id>` a
-task ID, `<entry>` a knowledge entry's name or key, `<version>` a version
-returned by its history, `<artifact>` an artifact key, `<proposal>` a
+task ID, `<entry>` a knowledge entry's name or key, `<version>` an integer
+version returned by its history, `<artifact>` an artifact key, `<proposal>` a
 proposal key, and `<note>` the note's time as the Scratchpad shows it,
 which names one note; see
 [Tasks](../../lib/docs/contracts/tasks.md#4-scratchpad).

@@ -93,12 +93,8 @@ pub(crate) enum KnowledgeCommand {
     Change {
         space: String,
         entry: String,
-        #[arg(long)]
-        name: Option<String>,
-        #[arg(long)]
-        summary: Option<String>,
         #[command(flatten)]
-        content: ContentOptions,
+        changes: KnowledgeChanges,
     },
     /// Create a knowledge entry directly.
     #[command(group(ArgGroup::new("source").required(true)
@@ -118,6 +114,19 @@ pub(crate) enum KnowledgeCommand {
         #[arg(long)]
         yes: bool,
     },
+    /// List one page of deleted entries.
+    Deleted {
+        space: String,
+        #[command(flatten)]
+        page: Page,
+    },
+    /// List one page of an entry's versions, newest first.
+    History {
+        space: String,
+        entry: String,
+        #[command(flatten)]
+        page: Page,
+    },
     /// List one page of entries and prefixes, or search by keyword.
     List {
         space: String,
@@ -128,8 +137,20 @@ pub(crate) enum KnowledgeCommand {
         #[command(flatten)]
         page: Page,
     },
-    /// Show an entry's latest version by name or key.
-    Show { space: String, entry: String },
+    /// Restore the content and summary of an old version.
+    Rollback {
+        space: String,
+        entry: String,
+        #[arg(allow_negative_numbers = true)]
+        version: i64,
+    },
+    /// Show an entry's latest or chosen version by name or key.
+    Show {
+        space: String,
+        entry: String,
+        #[arg(long, allow_negative_numbers = true)]
+        version: Option<i64>,
+    },
 }
 
 #[derive(Clone, Debug, Subcommand)]
@@ -275,6 +296,18 @@ pub(crate) struct ContentOptions {
     /// Read UTF-8 content from a file, or '-' for standard input.
     #[arg(long, value_name = "PATH|-")]
     pub content_file: Option<PathBuf>,
+}
+
+#[derive(Args, Clone, Debug, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+#[group(multiple = true)]
+pub(crate) struct KnowledgeChanges {
+    #[arg(long)]
+    pub name: Option<String>,
+    #[arg(long)]
+    pub summary: Option<String>,
+    #[command(flatten)]
+    pub content: ContentOptions,
 }
 
 #[derive(Args, Clone, Debug, TypedBuilder)]

@@ -49,8 +49,8 @@ pub(crate) async fn list_page(
     listing: Listing,
 ) -> Result<Outcome> {
     let mut url = Url::parse(API_ROOT)
+        .and_then(|url| url.join(&listing.path))
         .map_err(|_| Failure::local(CLI_USAGE, "Could not construct the list path."))?;
-    url.set_path(&listing.path);
     for (name, value) in &listing.query {
         url.query_pairs_mut().append_pair(name, value);
     }
