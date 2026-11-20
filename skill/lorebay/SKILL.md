@@ -91,10 +91,13 @@ went to the right task. When a write is refused:
 
 ### 4. Read Knowledge
 
-List the top level of the space's Knowledge with `list_knowledge`, go down
-level by level by name, and read the entries that bear on this work with
-`read_knowledge`. While the Knowledge tools are not in the tool list, skip
-this rule and rule 11.
+List the top level of the space's Knowledge with `list_knowledge`, then go
+down level by level by name or search by keyword, whichever finds the entries
+that bear on this work, and read those entries with `read_knowledge`.
+
+When a result holds only part of an entry, such as one cut short with a
+truncation notice or saved elsewhere by the harness, read the rest where the
+harness lets you before relying on the entry.
 
 ## While working
 
@@ -102,7 +105,8 @@ this rule and rule 11.
 
 Record in this order: the task; the plan, before the work it describes; each
 step, then its note; then, once every edit and check is done, the uploads
-(rule 6), the result (rule 10) and the end (rule 12).
+(rule 6), the result (rule 10) and the end (rule 12), with a proposal (rule
+11) after the result, before or after the end.
 
 Write notes with `add_note`:
 
@@ -155,9 +159,10 @@ cannot be edited, so append a note that corrects it.
 ### 8. Choose where knowledge goes
 
 Content about one repository, such as how to build it or its code conventions,
-stays in that repository's files, such as its agent instructions files.
-Content that spans repositories, concerns the team, or is unrelated to code
-goes into Knowledge.
+stays in that repository's files, such as its agent instructions files, and
+is never proposed as Knowledge. Content that spans repositories, concerns the
+team, or is unrelated to code goes into Knowledge through a proposal (rule
+11).
 
 ### 9. Keep working when the MCP server is unreachable
 
@@ -196,13 +201,25 @@ needs only the latest task.
 
 ### 11. Propose Knowledge
 
-When you stop to update the result and have learned something later sessions
-can use, first tell the person in the harness what you intend to propose, and
-submit the proposal with `create_proposal` only after the person confirms.
+When the work has taught something later sessions can use that belongs in
+Knowledge (rule 8), propose it after the result is written: first tell the
+person in the harness what you intend to propose, and submit it with
+`create_proposal` only after the person confirms.
 
-Before proposing, check with `list_proposals` for a `pending` or `rejected`
-proposal about the same thing: don't repeat a `pending` one; for a `rejected`
-one, tell the person its reason and let them decide whether to propose again.
+The task may be `ended` by then: the confirmation answers your question and is
+no request for more work, so submit from the task without reopening it, then
+add the proposal's reference, such as `#PP-3`, to the result's Deliverables. A
+session with no task proposes nothing: tell the person what you would have
+proposed.
+
+Before proposing, look for a `pending` or `rejected` proposal about the same
+thing with `list_proposals` by keyword, and read a likely match with
+`get_proposal`: don't repeat a `pending` one; for a `rejected` one, tell the
+person its reason and let them decide whether to propose again.
+
+Never propose a change to the content of an entry you have not read in full,
+since the proposed content replaces the whole entry on approval: tell the
+person instead.
 
 ### 12. End the task
 
