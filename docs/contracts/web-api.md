@@ -52,7 +52,8 @@ POST /api/v1/spaces/{space}/proposals/{key}/approve
   its grant; device sign-in follows
   [Identity](../architecture/identity.md#5-sign-in).
 - **Artifact file URLs are outside `/api/v1`.** They are short-lived URLs
-  that point at `lorebayd` with a local directory, and at S3 with S3.
+  that point at `lorebayd` with a local directory, and at S3 with S3, a
+  backend not yet built ([Storage](../architecture/storage.md)).
 - **Health checks are outside `/api/v1`** and need no credential. `/healthz`
   answers while the process runs. `/readyz` answers once startup has
   finished and until shutdown begins, so a proxy in front of `lorebayd`

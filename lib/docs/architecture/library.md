@@ -12,7 +12,8 @@
 > identity, teams, its entry points and its deployment, and reaches the
 > library only through the library's public API and five interfaces.
 >
-> The library never commits a transaction, never issues or verifies a
+> The library never commits or rolls back the transaction it is handed,
+> only a savepoint it opens inside it; it never issues or verifies a
 > credential, and names nothing of one product.
 
 ## 1. Purpose
@@ -356,7 +357,9 @@ methods:
 | Abandon write | Receives the transaction of a failed write and rolls it back |
 
 - **The product opens, commits and rolls back.** The library writes inside
-  the transaction it is handed and never commits or rolls back.
+  the transaction it is handed and never commits or rolls back that
+  transaction. It may commit or roll back a savepoint it opens inside it,
+  as approving a proposal that creates an entry does when the name is taken.
 - **On SQLite the product enables foreign key checks** on every
   connection it hands to the library. Task deletion relies on the cascade
   to its notes and on clearing the source task from proposals.
@@ -692,8 +695,7 @@ report can complete. A replacement is a new registration at a new
 location, so the delayed deletion never reaches a completed artifact's
 file.
 
-The Knowledge and proposal writes follow the same rules when they are
-built.
+The Knowledge and proposal writes follow the same rules.
 
 ## 14. Rules for library code
 
@@ -730,8 +732,8 @@ they stand:
 - **No Postgres fails the tests.** The helper fails with a message that
   says how to start one; no test is skipped.
 - **Pull request CI** starts Postgres as a service container of the
-  workflow, its image pinned by full version, and the root README names the
-  same image for developers.
+  workflow, its image pinned by full version, and the root
+  `CONTRIBUTING.md` names the same image for developers.
 - **The test build alone turns on `postgres`**, through a dev-dependency.
 
 ## 16. References

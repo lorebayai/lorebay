@@ -6,8 +6,9 @@
 - **Related:** [Data model](data-model.md),
   [Library storage](../../lib/docs/architecture/storage.md)
 
-> A default deployment runs with no external services: SQLite and a local
-> directory, both in one data directory.
+> `v0.1.0` runs SQLite and a local directory only, both in one data
+> directory, with no external services. The Postgres and S3 backends this
+> doc describes are designed but not built, and no setting chooses them.
 >
 > Storage backends are chosen at deployment and never change afterward.
 
@@ -42,8 +43,9 @@ It does not cover:
 
 - **No external dependencies by default.** `lorebayd` starts with a data
   directory that holds the SQLite file and the artifact files.
-- **A data directory made by an earlier build is refused at startup, not
-  upgraded.**
+- **A data directory made by `v0.1.0` or a later release is upgraded in
+  place at startup**, by the migrations it lacks. One made by a build before
+  `v0.1.0` is refused.
 - **One database holds the library's tables and Lorebay's.** On SQLite,
   `lorebayd` holds one connection to it. It turns on the library's backend
   that matches its database, and hands the library the transactions it

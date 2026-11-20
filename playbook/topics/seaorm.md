@@ -52,11 +52,11 @@ by the `AGENTS.md` of every Rust project that uses SeaORM.
   or database default, as
   [Data model](../../lib/docs/architecture/data-model.md#3-conventions)
   requires.
-- Until the first deployment whose data must be kept, a migration merged to
-  `main` may be rewritten instead of followed by a new one; a database made
-  by an earlier build is then rebuilt, not upgraded. From that deployment
-  on, a merged migration is never edited, renamed or reordered, and a schema
-  change is a new migration.
+- `v0.1.0` is the first deployment whose data must be kept. A migration
+  merged before its tag may still be rewritten instead of followed by a new
+  one; a database made by a build before `v0.1.0` is refused, not upgraded.
+  A migration in `v0.1.0` or merged after it is never edited, renamed or
+  reordered, and a schema change is a new migration.
 - `down` reverses `up` and runs only against disposable databases.
 - `run` applies the library migrations first and the product migrations
   second in one transaction before it serves any request. Each group

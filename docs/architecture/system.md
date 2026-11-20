@@ -55,6 +55,9 @@ flowchart TD
     impls --> store
 ```
 
+`v0.1.0` keeps artifact files in a local directory; the S3 backend is
+designed but not built ([Storage](storage.md)).
+
 | Caller | Entry point | Credential |
 | --- | --- | --- |
 | Person, in a browser | Web API and web pages | Login session |
@@ -73,8 +76,9 @@ flowchart TD
   answers who is calling through Lorebay's credentials; see
   [Identity](identity.md#4-credentials).
 - **Artifact files bypass MCP and `/api/v1`.** With a local directory,
-  `lorebayd` serves the file URLs itself; with S3, files go straight to S3
-  and never pass through `lorebayd`. See [Storage](storage.md#4-file-storage).
+  `lorebayd` serves the file URLs itself; with S3, once
+  [built](storage.md), files go straight to S3 and never pass through
+  `lorebayd`. See [Storage](storage.md#4-file-storage).
 
 ## 5. Technology
 

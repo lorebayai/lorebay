@@ -53,10 +53,11 @@ It does not cover:
   partial uploads, are its own to remove.
 - **Only the configured types open in the browser.** The library works out
   a download's content type from the file name's extension and serves only
-  the types the product configures inline. Every other file, HTML and SVG
-  included, is served as a download, never opened in the browser, so an
-  uploaded file can never run inside a product's pages with a person's
-  credential. The configured types are ones a browser runs no script in.
+  the types the product configures inline. The product chooses them among
+  the five the library offers: GIF, JPEG, PDF, PNG and WebP. Every other
+  file, HTML and SVG included, is served as a download, never opened in the
+  browser, so an uploaded file can never run inside a product's pages with a
+  person's credential. A browser runs no script in any of the five.
 
 ## 4. Database
 
