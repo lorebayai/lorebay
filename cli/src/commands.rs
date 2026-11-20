@@ -21,6 +21,7 @@ mod knowledge;
 mod notes;
 mod pages;
 mod participants;
+mod proposals;
 mod spaces;
 mod tasks;
 mod users;
@@ -46,6 +47,7 @@ pub(crate) async fn run(command: Command, mode: OutputMode) -> Result<Outcome> {
             Ok(Outcome::completion("Signed in."))
         }
         Command::Participant { command } => participants::run(command, &store, mode).await,
+        Command::Proposal { command } => proposals::run(command, &store, mode).await,
         Command::Note { command } => notes::run(command, &store).await,
         Command::Space { command } => spaces::run(command, &store, mode).await,
         Command::Task { command } => tasks::run(command, &store, mode).await,

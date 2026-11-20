@@ -103,10 +103,10 @@ contains spaces. Optional arguments appear in brackets. List rows follow
 | `knowledge change <space> <entry> [--name <name>] [--summary <summary>] [--content <content> \| --content-file <path\|->]` | Change a knowledge entry directly | Updated entry |
 | `knowledge delete <space> <entry>` | Delete a knowledge entry directly | Deletion result |
 | `knowledge rollback <space> <entry> <version>` | Roll back a knowledge entry directly | Entry with the new version |
-| `proposal list <space> [--status <status>]` | List proposals | Proposal keys, kinds and statuses |
+| `proposal list <space> [--status <status>] [--keyword <text>]` | List proposals | Proposal keys, kinds, statuses, target entries and proposed summaries |
 | `proposal show <space> <proposal>` | Read a proposal | Its fields, content, status and rejection reason, when present |
-| `proposal create <space> <name> --summary <summary> --content <content>` | Submit a create proposal | Submitted proposal |
-| `proposal change <space> <entry> [--name <name>] [--summary <summary>] [--content <content>]` | Submit a change proposal | Submitted proposal |
+| `proposal create <space> <name> --summary <summary> (--content <content> \| --content-file <path\|->)` | Submit a create proposal | Submitted proposal |
+| `proposal change <space> <entry> [--name <name>] [--summary <summary>] [--content <content> \| --content-file <path\|->]` | Submit a change proposal | Submitted proposal |
 | `proposal delete <space> <entry>` | Submit a delete proposal | Submitted proposal |
 | `proposal approve <space> <proposal>` | Approve a proposal | Decided proposal |
 | `proposal reject <space> <proposal> --reason <reason>` | Reject a proposal, including withdrawing one's own party's | Decided proposal |
