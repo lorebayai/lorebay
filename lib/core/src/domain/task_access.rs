@@ -46,6 +46,7 @@ pub(super) enum TaskAction {
     DeleteArtifact,
     DeleteNote,
     RegisterArtifact,
+    SubmitProposal,
 }
 
 #[derive(Clone, Copy, Debug, typed_builder::TypedBuilder)]

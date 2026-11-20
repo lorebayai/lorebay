@@ -27,6 +27,7 @@ use helpers::{
 )]
 mod helpers;
 mod knowledge;
+mod proposals;
 
 #[tokio::test]
 async fn complete_artifact_refuses_registration_after_oversize_report() {

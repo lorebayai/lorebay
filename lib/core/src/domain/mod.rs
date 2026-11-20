@@ -7,6 +7,10 @@ pub use knowledge_history::*;
 pub use knowledge_input::*;
 pub use knowledge_list::*;
 pub use pagination::{DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, Page, PageOptions, PageSizeError};
+pub use proposal_apply::*;
+pub use proposal_input::*;
+pub use proposal_list::*;
+pub use proposals::*;
 pub use space_access::{
     SpaceAccessError, SpaceReference, SpaceRole, SpaceRoleError, resolve_space,
 };
@@ -47,6 +51,10 @@ mod knowledge_history;
 mod knowledge_input;
 mod knowledge_list;
 mod pagination;
+mod proposal_apply;
+mod proposal_input;
+mod proposal_list;
+mod proposals;
 mod space_access;
 mod spaces;
 mod task_access;

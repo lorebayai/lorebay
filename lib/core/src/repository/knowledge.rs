@@ -1,6 +1,6 @@
 use sea_orm::sea_query::{
-    Alias, Expr, ExprTrait, Func, IntoColumnRef, JoinType, LikeExpr, OnConflict, Order, Query,
-    SelectStatement,
+    Alias, ColumnRef, Expr, ExprTrait, Func, IntoColumnRef, JoinType, LikeExpr, OnConflict, Order,
+    Query, SelectStatement,
 };
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, DbBackend, DbErr, DeriveIden,
@@ -47,6 +47,16 @@ pub(crate) struct DeletedKnowledgeRow {
 }
 
 impl<C: ConnectionTrait> KnowledgeRepository<'_, C> {
+    pub async fn lock_by_id(&self, id: &str) -> Result<Option<Model>, DbErr> {
+        let query = Entity::find_by_id(id);
+        let query = if self.connection.get_database_backend() == DbBackend::Postgres {
+            query.lock_exclusive()
+        } else {
+            query
+        };
+        query.one(self.connection).await
+    }
+
     pub async fn by_name(&self, space: &str, name_key: &str) -> Result<Option<Model>, DbErr> {
         Entity::find()
             .filter(Column::SpaceId.eq(space))
@@ -159,6 +169,40 @@ impl<C: ConnectionTrait> KnowledgeRepository<'_, C> {
     }
 }
 
+pub(crate) fn keyword_condition(
+    backend: DbBackend,
+    keyword: &str,
+    columns: impl IntoIterator<Item = ColumnRef>,
+) -> Condition {
+    let keyword = if backend == DbBackend::Postgres {
+        keyword.to_ascii_lowercase()
+    } else {
+        keyword.to_owned()
+    };
+    let escaped = keyword
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_");
+    let pattern = LikeExpr::new(format!("%{escaped}%")).escape('\\');
+    columns
+        .into_iter()
+        .fold(Condition::any(), |condition, column| {
+            let expression = Expr::col(column);
+            let expression = if backend == DbBackend::Postgres {
+                Func::cust(Alias::new("translate"))
+                    .args([
+                        expression,
+                        Expr::value("ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+                        Expr::value("abcdefghijklmnopqrstuvwxyz"),
+                    ])
+                    .into()
+            } else {
+                expression
+            };
+            condition.add(collated(backend, expression).like(pattern.clone()))
+        })
+}
+
 #[derive(DeriveIden)]
 enum KnowledgePage {
     Number,
@@ -254,38 +298,15 @@ fn level_position(backend: DbBackend, prefix: Option<&str>) -> Expr {
 }
 
 fn keyword_match(backend: DbBackend, keyword: &str) -> Condition {
-    let keyword = if backend == DbBackend::Postgres {
-        keyword.to_ascii_lowercase()
-    } else {
-        keyword.to_owned()
-    };
-    let escaped = keyword
-        .replace('\\', "\\\\")
-        .replace('%', "\\%")
-        .replace('_', "\\_");
-    let pattern = LikeExpr::new(format!("%{escaped}%")).escape('\\');
-    let columns = [
-        (Entity, Column::Name).into_column_ref(),
-        (VersionEntity, VersionColumn::Summary).into_column_ref(),
-        (VersionEntity, VersionColumn::Content).into_column_ref(),
-    ];
-    columns
-        .into_iter()
-        .fold(Condition::any(), |condition, column| {
-            let expression = Expr::col(column);
-            let expression = if backend == DbBackend::Postgres {
-                Func::cust(Alias::new("translate"))
-                    .args([
-                        expression,
-                        Expr::value("ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
-                        Expr::value("abcdefghijklmnopqrstuvwxyz"),
-                    ])
-                    .into()
-            } else {
-                expression
-            };
-            condition.add(collated(backend, expression).like(pattern.clone()))
-        })
+    keyword_condition(
+        backend,
+        keyword,
+        [
+            (Entity, Column::Name).into_column_ref(),
+            (VersionEntity, VersionColumn::Summary).into_column_ref(),
+            (VersionEntity, VersionColumn::Content).into_column_ref(),
+        ],
+    )
 }
 
 #[expect(

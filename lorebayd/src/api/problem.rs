@@ -11,6 +11,7 @@ use super::invalid_query;
 use crate::domain::access::AccessError;
 use crate::domain::caller::PersonSessionError;
 use crate::domain::login_session::LoginError;
+use lorebay_lib_core::ProposalError;
 use lorebay_lib_core::{
     ArtifactError, CallerError as LibraryCallerError, SpaceAccessError, SpaceError,
     SpaceInputError, TaskAccessError, TaskError,
@@ -272,6 +273,34 @@ impl From<KnowledgeError> for ApiError {
             KnowledgeError::InvalidPageSize(_) => return invalid_query("page_size"),
             KnowledgeError::NameTaken { .. } => StatusCode::CONFLICT,
             KnowledgeError::NotFound | KnowledgeError::VersionNotFound => StatusCode::NOT_FOUND,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+        Self::library(status, error.code(), error)
+    }
+}
+
+impl From<ProposalError> for ApiError {
+    fn from(error: ProposalError) -> Self {
+        let status = match error {
+            ProposalError::Access(error) => return error.into(),
+            ProposalError::Caller(error) => return error.into(),
+            ProposalError::Input(error) => return error.into(),
+            ProposalError::Knowledge(error) => return error.into(),
+            ProposalError::Task(error) => return error.into(),
+            ProposalError::InvalidCursor => return invalid_query("cursor"),
+            ProposalError::InvalidFilter => return invalid_query("keyword"),
+            ProposalError::InvalidPageSize(_) => return invalid_query("page_size"),
+            ProposalError::InvalidReason => {
+                return Self::InvalidBody(vec![FieldError {
+                    field: "reason".to_owned(),
+                    code: "invalid".to_owned(),
+                    message: error.to_string(),
+                }]);
+            }
+            ProposalError::Decided => StatusCode::CONFLICT,
+            ProposalError::NameTaken => StatusCode::CONFLICT,
+            ProposalError::NotFound => StatusCode::NOT_FOUND,
+            ProposalError::OwnParty => StatusCode::FORBIDDEN,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
         Self::library(status, error.code(), error)
