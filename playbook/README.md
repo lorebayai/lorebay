@@ -30,7 +30,7 @@ Fragments:
 - [core/code-comments.md](core/code-comments.md): when code gets a comment,
   and how it reads.
 - [core/contribution.md](core/contribution.md): issues, worktrees, pull
-  requests, reviews, landing and cleanup.
+  requests, reviews, landing, cleanup and releases.
 - [core/documentation.md](core/documentation.md): where docs live, READMEs,
   `AGENTS.md` files.
 - [languages/rust.md](languages/rust.md): Rust crates, dependencies, lints

@@ -16,4 +16,5 @@ not to.
 
 ## Supported versions
 
-Lorebay has no release yet, so security fixes land only on `main`.
+Security fixes land on `main` and ship in the next release. Only the latest
+release is supported.
