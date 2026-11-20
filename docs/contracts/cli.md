@@ -60,11 +60,13 @@ It does not cover:
   and Lorebay's [own rows](access-control.md#4-permissions).
 
 In the table, `<space>` is a space key, `<task>` a task key, `<task-id>` a
-task ID, `<entry>` a knowledge entry's name or key, `<version>` a version
-returned by its history, `<artifact>` an artifact key, `<proposal>` a
+task ID, `<entry>` a knowledge entry's name or key, `<version>` an integer
+version returned by its history, `<artifact>` an artifact key, `<proposal>` a
 proposal key, and `<note>` the note's time as the Scratchpad shows it,
 which names one note; see
 [Tasks](../../lib/docs/contracts/tasks.md#4-scratchpad).
+An `<entry>` in the exact key form `KN-<n>` is sent as a key, and any other
+value as a name; an entry whose name has the key form is reachable by its own key.
 `<name>` in an agent command is the person's agent name, quoted when it
 contains spaces. Optional arguments appear in brackets. List rows follow
 [section 6](#6-lists); all output follows [section 5](#5-output-and-failures).
@@ -97,8 +99,8 @@ contains spaces. Optional arguments appear in brackets. List rows follow
 | `knowledge show <space> <entry> [--version <version>]` | Read the latest or an old knowledge version | Name, key, summary and content, or a deletion version |
 | `knowledge history <space> <entry>` | View a knowledge entry's history | Versions and their authors and times, including deletions |
 | `knowledge deleted <space>` | List deleted knowledge entries | Deleted entries and the information needed to read their history |
-| `knowledge create <space> <name> --summary <summary> --content <content>` | Create a knowledge entry directly | Created entry |
-| `knowledge change <space> <entry> [--name <name>] [--summary <summary>] [--content <content>]` | Change a knowledge entry directly | Updated entry |
+| `knowledge create <space> <name> --summary <summary> (--content <content> \| --content-file <path\|->)` | Create a knowledge entry directly | Created entry |
+| `knowledge change <space> <entry> [--name <name>] [--summary <summary>] [--content <content> \| --content-file <path\|->]` | Change a knowledge entry directly | Updated entry |
 | `knowledge delete <space> <entry>` | Delete a knowledge entry directly | Deletion result |
 | `knowledge rollback <space> <entry> <version>` | Roll back a knowledge entry directly | Entry with the new version |
 | `proposal list <space> [--status <status>]` | List proposals | Proposal keys, kinds and statuses |

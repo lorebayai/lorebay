@@ -15,7 +15,9 @@ use crate::login;
 use crate::output::{self, Outcome, Table};
 
 mod artifacts;
+mod content;
 mod deletion;
+mod knowledge;
 mod notes;
 mod pages;
 mod participants;
@@ -30,6 +32,7 @@ pub(crate) async fn run(command: Command, mode: OutputMode) -> Result<Outcome> {
     let store = Store::from_environment()?;
     match command {
         Command::Artifact { command } => artifacts::run(command, &store).await,
+        Command::Knowledge { command } => knowledge::run(command, &store, mode).await,
         Command::Login {
             server_url,
             no_browser,
