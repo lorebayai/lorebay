@@ -52,7 +52,7 @@ Every session has a task, even one that only answers questions, except when:
 - the person says not to record the session.
 
 In those cases, tell the person to delete a task already created with
-`lorebay task delete`.
+`lorebay task delete <space> <task-id>`, giving its space key and task ID.
 
 ### 3. Continue a task
 
