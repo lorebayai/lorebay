@@ -97,6 +97,11 @@ Version 0.1.0, the first version, not yet tagged.
   an entry not read in full gets no content change.
   Rule 8 never proposes repository content, and rule 5's order places the
   proposal after the result.
+- **Breaking:** the agent rules a product's skill restates change. Rule 11
+  looks for a `pending` or `rejected` proposal about the same thing before
+  the agent says anything to the person about a proposal. A `pending` match
+  is told as awaiting approval and not offered; a `rejected` match's reason
+  goes to the person, who decides whether to propose again.
 - Core parses stored role names through `SpaceRole::try_from(&str)` with
   `SpaceRoleError` for invalid names.
 - Entity generation uses separate installer build directories for the two
