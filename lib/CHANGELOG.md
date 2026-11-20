@@ -91,10 +91,10 @@ Version 0.1.0, the first version, not yet tagged.
   and 11 no longer skip Knowledge. Rule 4 reaches entries by name or by
   keyword search, and reads the rest of an entry a result holds only part of
   before relying on it. Rule 11 proposes after the result is written and the
-  person confirms, which a change the person asks for by name counts as,
-  from an `ended` task without reopening it, then adds the proposal's
-  reference to Deliverables; a session with no task tells the person
-  instead, and an entry not read in full gets no content change.
+  person confirms, from an `ended` task without reopening it, then adds the
+  proposal's reference to Deliverables. A change the person asks for by name
+  counts as confirmed, a session with no task tells the person instead, and
+  an entry not read in full gets no content change.
   Rule 8 never proposes repository content, and rule 5's order places the
   proposal after the result.
 - Core parses stored role names through `SpaceRole::try_from(&str)` with

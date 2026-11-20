@@ -201,7 +201,7 @@ needs only the latest task.
 
 ### 11. Propose Knowledge
 
-When the work has taught something later sessions can use that belongs in
+When you have learned something later sessions can use that belongs in
 Knowledge (rule 8), propose it after the result is written: first tell the
 person in the harness what you intend to propose, and submit it with
 `create_proposal` only after the person confirms. A change the person asks for
