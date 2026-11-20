@@ -20,7 +20,6 @@ Version 0.1.0, the first version, not yet tagged.
   Decisions record the approver and source proposal in each new version;
   writes record their own operations. Errors include `proposal.not_found`,
   `proposal.decided` and `proposal.own_party`.
-
 - Core adds direct Knowledge create, change and delete operations,
   latest-version reads and paginated prefix or keyword lists, with
   separate name and key inputs. Writes record their own operations;
@@ -42,7 +41,8 @@ Version 0.1.0, the first version, not yet tagged.
   file deletion after commit. Its response remains `artifact.too_large`,
   including when deletion fails; later reports return `artifact.refused`
   and require a new registration. Refused files qualify for orphan cleanup.
-  Abandoned-registration cleanup retains refused registrations until task deletion.
+  Abandoned-registration cleanup retains refused registrations until task
+  deletion.
 - **Breaking:** the initial artifact migration includes `refused_at` and
   forbids a registration from being both completed and refused. Rebuild
   databases made before this untagged first release.
@@ -75,7 +75,6 @@ Version 0.1.0, the first version, not yet tagged.
   `SpaceRoleError` for invalid names.
 - Entity generation uses separate installer build directories for the two
   migration groups, allowing both generators to start together.
-
 - `lorebay-lib-types`: the secret type, `sha256_hex`, the cursor codec and
   the conversion from `SystemTime` to Unix milliseconds.
 - `lorebay-lib-core`: the library state and its settings, the five

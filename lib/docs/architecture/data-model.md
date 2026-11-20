@@ -327,8 +327,8 @@ One row per knowledge entry; its content is in `space_knowledge_version`.
   `decided_at`; any other has both; a `rejected` one has a `reject_reason`.
 - **Changed since proposed.** While a proposal is `pending`, a
   `base_version` that differs from the entry's `latest_version` marks the
-  proposal, so a product can show the difference; so does a create whose name already belongs to an entry. A
-  rename adds no version, so it goes undetected.
+  proposal, so a product can show the difference; so does a create whose name
+  already belongs to an entry. A rename adds no version, so it goes undetected.
 - **Approving** changes the status and writes `space_knowledge` and
   `space_knowledge_version` in one transaction. Content or summary that a
   change leaves out is copied from the entry's current version; when the

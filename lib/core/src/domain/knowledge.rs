@@ -338,6 +338,7 @@ pub(super) fn next_version(version: i64) -> Result<i64, KnowledgeError> {
         .checked_add(1)
         .ok_or_else(|| anyhow::anyhow!("Knowledge version exhausted").into())
 }
+
 async fn direct_space(
     write: &Write<'_>,
     caller: &Caller,
