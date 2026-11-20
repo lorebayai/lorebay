@@ -2,7 +2,7 @@ import argparse
 import json
 import os
 from pathlib import Path
-import shlex
+import re
 import shutil
 import subprocess
 from urllib.parse import quote
@@ -67,8 +67,10 @@ def clean_builds(build, sources):
         _, separator, dependencies = dep_info.read_text().partition(": ")
         if not separator:
             continue
-        dependencies = shlex.split(dependencies.splitlines()[0])
-        if not any(Path(source).is_relative_to(sources) for source in dependencies):
+        # rustc escapes spaces but leaves shell quotes and other backslashes literal.
+        dependencies = re.findall(r"(?:\\ |[^ ])+", dependencies.partition("\n")[0])
+        if not any(Path(source.replace(r"\ ", " ")).resolve().is_relative_to(sources)
+                   for source in dependencies):
             continue
         if (dep_info.parent.name == "out"
                 and dep_info.parent.parent.parent.name.startswith("lorebay-lib-")):
@@ -92,7 +94,7 @@ def main():
         ["cargo", "metadata", "--no-deps", "--format-version", "1", "--locked", "--offline"],
         text=True,
     ))
-    build = Path(metadata.get("build_directory", metadata["target_directory"])).resolve()
+    build = Path(metadata.get("build_directory", metadata["target_directory"]))
     registry = build / "package" / "tmp-registry"
     cargo_home = Path(os.environ.get("CARGO_HOME", Path.home() / ".cargo")).resolve()
     sources = cargo_home / "registry" / "src" / f"-{registry_hash(registry)}"
