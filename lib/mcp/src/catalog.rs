@@ -9,16 +9,23 @@ use lorebay_lib_core::{
 };
 use lorebay_lib_core::{DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};
 
+mod knowledge;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ToolName {
     AddNote,
     CompleteArtifact,
     CreateArtifact,
+    CreateProposal,
     CreateTask,
     GetArtifactUrl,
+    GetProposal,
     GetTask,
+    ListKnowledge,
+    ListProposals,
     ListSpaces,
     ListTasks,
+    ReadKnowledge,
     UpdateTask,
 }
 
@@ -28,11 +35,16 @@ impl ToolName {
             Self::AddNote => "add_note",
             Self::CompleteArtifact => "complete_artifact",
             Self::CreateArtifact => "create_artifact",
+            Self::CreateProposal => "create_proposal",
             Self::CreateTask => "create_task",
             Self::GetArtifactUrl => "get_artifact_url",
+            Self::GetProposal => "get_proposal",
             Self::GetTask => "get_task",
+            Self::ListKnowledge => "list_knowledge",
+            Self::ListProposals => "list_proposals",
             Self::ListSpaces => "list_spaces",
             Self::ListTasks => "list_tasks",
+            Self::ReadKnowledge => "read_knowledge",
             Self::UpdateTask => "update_task",
         }
     }
@@ -98,6 +110,11 @@ fn build_catalog() -> Vec<(ToolName, Tool)> {
         create_artifact(),
         complete_artifact(),
         get_artifact_url(),
+        knowledge::list_knowledge(),
+        knowledge::read_knowledge(),
+        knowledge::create_proposal(),
+        knowledge::list_proposals(),
+        knowledge::get_proposal(),
     ]
 }
 

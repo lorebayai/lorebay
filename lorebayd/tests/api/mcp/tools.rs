@@ -10,6 +10,8 @@ use super::{
 
 mod artifacts;
 mod filters;
+mod knowledge;
+mod proposals;
 mod update;
 
 #[tokio::test]

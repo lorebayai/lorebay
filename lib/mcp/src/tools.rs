@@ -10,6 +10,8 @@ use super::arguments::Arguments;
 use super::catalog::ToolName;
 use super::error::ToolError;
 
+mod knowledge;
+
 pub(super) async fn call(
     state: &LibraryState,
     caller: &Caller,
@@ -48,6 +50,11 @@ pub(super) async fn call(
             )
             .await?,
         ),
+        ToolName::ListKnowledge => knowledge::list(state, caller, &arguments).await,
+        ToolName::ReadKnowledge => knowledge::read(state, caller, &arguments).await,
+        ToolName::CreateProposal => knowledge::propose(state, caller, &arguments).await,
+        ToolName::ListProposals => knowledge::proposals(state, caller, &arguments).await,
+        ToolName::GetProposal => knowledge::proposal(state, caller, &arguments).await,
     }
 }
 

@@ -10,7 +10,7 @@ use crate::tasks::helpers::{create as create_task, participant};
 
 use helpers::*;
 
-mod helpers;
+pub(crate) mod helpers;
 
 #[tokio::test]
 async fn submit_proposal_returns_pending_proposal_with_key() {

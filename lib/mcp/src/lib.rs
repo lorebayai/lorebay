@@ -20,7 +20,9 @@ use serde::Serialize;
 use typed_builder::TypedBuilder;
 use url::Url;
 
-use lorebay_lib_core::{Caller, LibraryState};
+use lorebay_lib_core::{
+    Caller, KNOWLEDGE_FIELDS_MAX_JSON_BYTES, KNOWLEDGE_NAME_MAX_CHARACTERS, LibraryState,
+};
 
 use arguments::Arguments;
 use catalog::catalog;
@@ -37,6 +39,7 @@ pub fn router(state: LibraryState) -> Result<Router> {
     let config = StreamableHttpServerConfig::default()
         .with_legacy_session_mode(false)
         .with_json_response(true)
+        .with_max_request_body_bytes(MCP_REQUEST_BODY_MAX_BYTES)
         .disable_allowed_hosts()
         .with_allowed_origins([origin]);
     let server_state = state.clone();
@@ -61,6 +64,9 @@ pub fn router(state: LibraryState) -> Result<Router> {
         .with_state(state))
 }
 
+const MCP_ENVELOPE_MAX_BYTES: usize = 4096;
+const MCP_REQUEST_BODY_MAX_BYTES: usize =
+    KNOWLEDGE_FIELDS_MAX_JSON_BYTES + KNOWLEDGE_NAME_MAX_CHARACTERS * 12 + MCP_ENVELOPE_MAX_BYTES;
 const PROTOCOL_VERSION_HEADER: &str = "mcp-protocol-version";
 const SUPPORTED_VERSIONS: &[ProtocolVersion] = &[
     ProtocolVersion::V_2025_03_26,
