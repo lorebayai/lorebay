@@ -4,7 +4,7 @@ use lorebay_lib_core::{
 };
 
 use super::Arguments;
-use crate::error::ToolError;
+use crate::error::{ToolError, invalid_query};
 
 impl Arguments {
     pub fn knowledge_filters(&self) -> Result<KnowledgeFilters, ToolError> {
@@ -25,7 +25,8 @@ impl Arguments {
             .optional_string("status")
             .as_deref()
             .map(ProposalStatus::try_from)
-            .transpose()?;
+            .transpose()
+            .map_err(|_| invalid_query("status"))?;
         ProposalFilters::new(status, self.optional_string("keyword")).map_err(Into::into)
     }
 

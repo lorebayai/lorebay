@@ -282,27 +282,32 @@ async fn assert_invalid_proposals(server: &Server, agent: &Value, task: &Value) 
 }
 
 async fn assert_invalid_filters(server: &Server, agent: &Value) {
-    for extra in [
-        json!({"keyword":""}),
-        json!({"keyword":"x".repeat(201)}),
-        json!({"status":"invalid"}),
-        json!({"page_size":0}),
-        json!({"page_size":101}),
-        json!({"cursor":"invalid"}),
-        json!({"status":false}),
-        json!({"unknown":"refused"}),
+    for (extra, field) in [
+        (json!({"keyword":""}), Some("keyword")),
+        (json!({"keyword":"x".repeat(201)}), Some("keyword")),
+        (json!({"status":"invalid"}), Some("status")),
+        (json!({"page_size":0}), None),
+        (json!({"page_size":101}), None),
+        (json!({"cursor":"invalid"}), None),
+        (json!({"status":false}), None),
+        (json!({"unknown":"refused"}), None),
     ] {
         let mut arguments = json!({"space":SPACE});
         arguments
             .as_object_mut()
             .unwrap()
             .extend(extra.as_object().unwrap().clone());
+        let error = call_error(server, agent, "list_proposals", arguments).await;
         assert!(
-            call_error(server, agent, "list_proposals", arguments).await["code"]
+            error["code"]
                 .as_str()
                 .unwrap()
                 .starts_with("request.invalid_")
         );
+        if let Some(field) = field {
+            assert_eq!(error["code"], "request.invalid_query");
+            assert_eq!(error["errors"][0]["field"], field);
+        }
     }
 }
 
