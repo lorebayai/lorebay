@@ -4,7 +4,16 @@ The command-line client for people using Lorebay.
 
 ## Usage
 
-Run from the repo root:
+On Linux, get `lorebay` from a release, as the
+[root README](../README.md#getting-started) shows; elsewhere, install it
+with Cargo at the server's release tag:
+
+```bash
+cargo install --locked --git https://github.com/lorebayai/lorebay --tag v0.1.0 lorebay-cli
+```
+
+The installed `lorebay` takes the arguments below in place of
+`cargo run -p lorebay-cli --`. Run these from the repo root:
 
 ```bash
 moon run cli:format cli:lint cli:build cli:integration
