@@ -100,19 +100,21 @@ this rule and rule 11.
 
 ### 5. Write notes
 
-Record in this order: the task; the plan, before the work it describes; the work
-and its notes; then, once every edit and check is done, the uploads (rule 6),
-the result (rule 10) and the end (rule 12).
+Record in this order: the task; the plan, before the work it describes; each
+step, then its note; then, once every edit and check is done, the uploads
+(rule 6), the result (rule 10) and the end (rule 12).
 
 Write notes with `add_note`:
 
-- **The plan,** in each session that starts work on the task: what the person
-  wants this time, then how you intend to do it.
-- **Reopening an `ended` task also starts with a note:** what the reopening
-  is for, such as what was missed or what the person now asks, and how you
-  will do it.
-- **After each finished step:** what you did, and why. A task of one step gets
-  this note too; the result does not replace it.
+- **The plan,** at the start of each session's work on the task and of each
+  reopening of an `ended` task: what was missed, when you reopen to fix it
+  (rule 13); what the person wants this time; then the steps you intend to
+  take.
+- **After each step:** what you did, and why. The steps are each thing the
+  person asks for this time, including a check they ask for, and each further
+  step the plan names. A task of one step gets this note too; the result does
+  not replace it. Continuing a task is no exception: the correction or further
+  work is a step, with its note before the result.
 - **No closing note:** the conclusion goes in the result.
 
 Never write secrets, such as keys, passwords, credentials, or upload and
@@ -232,5 +234,5 @@ instead of creating one. In a new session, find it by rule 3.
 If you are working on another task at the time, end it first, with its
 unfinished work in Open, so only one task is `in progress` at a time.
 
-After reopening, first write the reopening note of rule 5. When the missed work
-is fixed, update the result and end the task.
+After reopening, record the fix by rule 5, from the plan to the result, then
+end the task.
