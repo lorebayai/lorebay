@@ -316,12 +316,15 @@ impl Write<'_> {
 #[non_exhaustive]
 pub enum WriteOperation {
     AddNote,
+    ChangeKnowledgeEntry,
     ChangeSpace,
     ChangeTask,
     CompleteArtifact,
+    CreateKnowledgeEntry,
     CreateSpace,
     CreateTask,
     DeleteArtifact,
+    DeleteKnowledgeEntry,
     DeleteNote,
     DeleteTask,
     RefuseArtifact,

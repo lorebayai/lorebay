@@ -6,6 +6,7 @@ mod authorization;
 mod device_sign_in;
 mod health;
 mod helpers;
+mod knowledge;
 mod login_session;
 mod mcp;
 mod oauth;

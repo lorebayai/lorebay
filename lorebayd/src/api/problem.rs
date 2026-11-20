@@ -15,6 +15,7 @@ use lorebay_lib_core::{
     ArtifactError, CallerError as LibraryCallerError, SpaceAccessError, SpaceError,
     SpaceInputError, TaskAccessError, TaskError,
 };
+use lorebay_lib_core::{KnowledgeError, KnowledgeInputError};
 use lorebay_lib_core::{PageSizeError, TaskChangeError};
 
 #[derive(Debug, Error)]
@@ -247,6 +248,33 @@ impl From<SpaceInputError> for ApiError {
             code: error.field_code().to_owned(),
             message: error.to_string(),
         }])
+    }
+}
+
+impl From<KnowledgeInputError> for ApiError {
+    fn from(error: KnowledgeInputError) -> Self {
+        Self::InvalidBody(vec![FieldError {
+            field: error.field().to_owned(),
+            code: "invalid".to_owned(),
+            message: error.to_string(),
+        }])
+    }
+}
+
+impl From<KnowledgeError> for ApiError {
+    fn from(error: KnowledgeError) -> Self {
+        let status = match error {
+            KnowledgeError::Access(error) => return error.into(),
+            KnowledgeError::Caller(error) => return error.into(),
+            KnowledgeError::Input(error) => return error.into(),
+            KnowledgeError::InvalidCursor => return invalid_query("cursor"),
+            KnowledgeError::InvalidFilter => StatusCode::BAD_REQUEST,
+            KnowledgeError::InvalidPageSize(_) => return invalid_query("page_size"),
+            KnowledgeError::NameTaken { .. } => StatusCode::CONFLICT,
+            KnowledgeError::NotFound => StatusCode::NOT_FOUND,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+        Self::library(status, error.code(), error)
     }
 }
 
