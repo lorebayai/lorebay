@@ -817,3 +817,260 @@ async fn reject_proposal_withdraws_own_partys_proposal() {
         json!([])
     );
 }
+
+#[tokio::test]
+async fn approve_proposal_adds_version_with_approver_and_proposal() {
+    let (server, owner) = setup().await;
+    seed(&server, &owner, "Guide").await;
+    let before = versions(&server, &owner, "KN-1").await;
+    assert_eq!(before.as_array().unwrap().len(), 1);
+    assert_version(&before[0], 1, "content", "alice", None);
+    participant(&server, &owner, Method::POST, "contributor").await;
+    let bob = login(&server, "bob").await;
+    let agent = authorize_for(&server, &owner, "Writer").await;
+    let task = create_task(&server, &agent, "SPACE-1", "Revise guide").await;
+    let proposal = data(request(&server, &agent, Method::POST, &task_path(&task),
+        json!({"kind":"change","target_key":"KN-1","summary":"Approved summary","content":"Approved content"})).await,
+        StatusCode::CREATED).await;
+    assert_eq!(proposal["proposed_by"], "alice");
+    assert_eq!(proposal["task_title"], "Revise guide");
+    assert_eq!(approve(&server, &bob, "PP-1").await["decided_by"], "bob");
+    let latest = entry(&server, &agent, "KN-1").await;
+    assert_eq!(latest["content"], "Approved content");
+    assert_eq!(latest["summary"], "Approved summary");
+    let history = versions(&server, &bob, "KN-1").await;
+    assert_eq!(history.as_array().unwrap().len(), 2);
+    assert_version(&history[0], 2, "content", "bob", Some("PP-1"));
+    assert_eq!(history[0]["applied_at"], latest["applied_at"]);
+    assert_eq!(history[1], before[0]);
+    assert_eq!(
+        old_entry(&server, &bob, "KN-1", 1).await["content"],
+        "Content"
+    );
+}
+
+#[tokio::test]
+async fn approve_proposal_applies_proposal_content_when_entry_changed_since_proposed() {
+    let (server, owner) = setup().await;
+    seed(&server, &owner, "Guide").await;
+    submit(
+        &server,
+        &owner,
+        json!({"kind":"change","target_name":"guide","content":"Proposed content"}),
+    )
+    .await;
+    change_entry(
+        &server,
+        &owner,
+        "KN-1",
+        json!({"content":"Intervening content","summary":"Current summary"}),
+    )
+    .await;
+    let before = versions(&server, &owner, "KN-1").await;
+    assert_eq!(before.as_array().unwrap().len(), 2);
+    assert_version(&before[0], 2, "content", "alice", None);
+    assert_eq!(
+        read(&server, &owner, "PP-1").await["changed_since_proposed"],
+        true
+    );
+    approve(&server, &owner, "PP-1").await;
+    let latest = entry(&server, &owner, "KN-1").await;
+    assert_eq!(latest["content"], "Proposed content");
+    assert_eq!(latest["summary"], "Current summary");
+    let history = versions(&server, &owner, "KN-1").await;
+    assert_eq!(history.as_array().unwrap().len(), 3);
+    assert_version(&history[0], 3, "content", "alice", Some("PP-1"));
+    assert_eq!(
+        &history.as_array().unwrap()[1..],
+        before.as_array().unwrap()
+    );
+    let intervening = old_entry(&server, &owner, "KN-1", 2).await;
+    assert_eq!(intervening["content"], "Intervening content");
+    assert_eq!(intervening["summary"], "Current summary");
+    assert_eq!(
+        old_entry(&server, &owner, "KN-1", 1).await["content"],
+        "Content"
+    );
+}
+
+#[tokio::test]
+async fn approve_proposal_restores_deleted_entry_with_proposal_content() {
+    let (server, owner) = setup().await;
+    seed(&server, &owner, "Guide").await;
+    submit(
+        &server,
+        &owner,
+        json!({"kind":"change","target_key":"KN-1","content":"Restored content"}),
+    )
+    .await;
+    delete_entry(&server, &owner, "KN-1").await;
+    let before = versions(&server, &owner, "KN-1").await;
+    assert_version(&before[0], 2, "deletion", "alice", None);
+    approve(&server, &owner, "PP-1").await;
+    let agent = authorize_for(&server, &owner, "Reader").await;
+    let restored = entry(&server, &agent, "KN-1").await;
+    assert_eq!(restored["content"], "Restored content");
+    assert_eq!(restored["summary"], "Summary");
+    let history = versions(&server, &owner, "KN-1").await;
+    assert_eq!(history.as_array().unwrap().len(), 3);
+    assert_version(&history[0], 3, "content", "alice", Some("PP-1"));
+    assert_eq!(
+        &history.as_array().unwrap()[1..],
+        before.as_array().unwrap()
+    );
+    assert_eq!(
+        old_entry(&server, &owner, "KN-1", 2).await["kind"],
+        "deletion"
+    );
+    delete_entry(&server, &owner, "KN-1").await;
+    let before_rename = versions(&server, &owner, "KN-1").await;
+    let proposal = submit(
+        &server,
+        &owner,
+        json!({"kind":"change","target_name":"guide","name":"docs/Guide"}),
+    )
+    .await;
+    assert_eq!(proposal["base_version"], 4);
+    approve(&server, &owner, "PP-2").await;
+    let renamed = entry(&server, &agent, "KN-1").await;
+    assert_eq!(renamed["name"], "docs/Guide");
+    assert_eq!(renamed["content"], "Restored content");
+    assert_eq!(renamed["summary"], "Summary");
+    let history = versions(&server, &owner, "KN-1").await;
+    assert_eq!(history.as_array().unwrap().len(), 5);
+    assert_version(&history[0], 5, "content", "alice", Some("PP-2"));
+    assert_eq!(
+        &history.as_array().unwrap()[1..],
+        before_rename.as_array().unwrap()
+    );
+    assert_eq!(
+        list_page(&server, &owner, &format!("{KNOWLEDGE}/deleted"), &[]).await["data"],
+        json!([])
+    );
+}
+
+#[tokio::test]
+async fn approve_proposal_adds_version_when_create_name_already_exists() {
+    let (server, owner) = setup().await;
+    seed(&server, &owner, "Guide").await;
+    let before = versions(&server, &owner, "KN-1").await;
+    submit(&server, &owner, json!({"kind":"create","name":"gUIDE","summary":"Replacement summary","content":"Replacement content"})).await;
+    approve(&server, &owner, "PP-1").await;
+    let replaced = entry(&server, &owner, "KN-1").await;
+    assert_eq!(replaced["name"], "Guide");
+    assert_eq!(replaced["content"], "Replacement content");
+    assert_eq!(replaced["summary"], "Replacement summary");
+    let history = versions(&server, &owner, "KN-1").await;
+    assert_eq!(history.as_array().unwrap().len(), 2);
+    assert_version(&history[0], 2, "content", "alice", Some("PP-1"));
+    assert_eq!(history[1], before[0]);
+    delete_entry(&server, &owner, "KN-1").await;
+    let before_restore = versions(&server, &owner, "KN-1").await;
+    submit(&server, &owner, json!({"kind":"create","name":"GUIDE","summary":"Restored summary","content":"Restored content"})).await;
+    let approved = approve(&server, &owner, "PP-2").await;
+    assert_eq!(approved["target"], json!({"key":"KN-1","name":"Guide"}));
+    let restored = entry(&server, &owner, "KN-1").await;
+    assert_eq!(restored["name"], "Guide");
+    assert_eq!(restored["content"], "Restored content");
+    assert_eq!(restored["summary"], "Restored summary");
+    let history = versions(&server, &owner, "KN-1").await;
+    assert_eq!(history.as_array().unwrap().len(), 4);
+    assert_version(&history[0], 4, "content", "alice", Some("PP-2"));
+    assert_eq!(
+        &history.as_array().unwrap()[1..],
+        before_restore.as_array().unwrap()
+    );
+    let listed = list_page(&server, &owner, KNOWLEDGE, &[]).await;
+    assert_eq!(listed["data"].as_array().unwrap().len(), 1);
+    assert_eq!(listed["data"][0]["key"], "KN-1");
+}
+
+#[tokio::test]
+async fn approve_proposal_renames_entry_without_version() {
+    let (server, owner) = setup().await;
+    let original = seed(&server, &owner, "Guide").await;
+    let before = versions(&server, &owner, "KN-1").await;
+    submit(
+        &server,
+        &owner,
+        json!({"kind":"change","target_name":"Guide","name":"docs/Guide"}),
+    )
+    .await;
+    approve(&server, &owner, "PP-1").await;
+    let renamed = entry(&server, &owner, "KN-1").await;
+    assert_eq!(renamed["name"], "docs/Guide");
+    for field in [
+        "key",
+        "version",
+        "content",
+        "summary",
+        "applied_by",
+        "applied_at",
+    ] {
+        assert_eq!(renamed[field], original[field]);
+    }
+    assert_eq!(versions(&server, &owner, "KN-1").await, before);
+    let by_name = list_page(
+        &server,
+        &owner,
+        &format!("{KNOWLEDGE}/entry/versions"),
+        &[("name", "docs/Guide")],
+    )
+    .await;
+    assert_eq!(by_name["data"], before);
+    assert_version(&by_name["data"][0], 1, "content", "alice", None);
+}
+
+#[tokio::test]
+async fn approve_proposal_deletes_entry_when_kind_is_delete() {
+    let (server, owner) = setup().await;
+    seed(&server, &owner, "Guide").await;
+    let before = versions(&server, &owner, "KN-1").await;
+    submit(
+        &server,
+        &owner,
+        json!({"kind":"delete","target_key":"KN-1"}),
+    )
+    .await;
+    approve(&server, &owner, "PP-1").await;
+    let deleted = entry(&server, &owner, "KN-1").await;
+    assert_eq!(deleted["kind"], "deletion");
+    assert_eq!(deleted["content"], Value::Null);
+    assert_eq!(deleted["summary"], Value::Null);
+    let history = versions(&server, &owner, "KN-1").await;
+    assert_eq!(history.as_array().unwrap().len(), 2);
+    assert_version(&history[0], 2, "deletion", "alice", Some("PP-1"));
+    assert_eq!(history[1], before[0]);
+    assert_eq!(
+        old_entry(&server, &owner, "KN-1", 1).await["content"],
+        "Content"
+    );
+    let agent = authorize_for(&server, &owner, "Reader").await;
+    assert_problem(
+        request(
+            &server,
+            &agent,
+            Method::GET,
+            &format!("{KNOWLEDGE}/by-key/KN-1"),
+            Value::Null,
+        )
+        .await,
+        StatusCode::NOT_FOUND,
+        "knowledge.not_found",
+    )
+    .await;
+    let second = submit(
+        &server,
+        &owner,
+        json!({"kind":"delete","target_name":"guide"}),
+    )
+    .await;
+    assert_eq!(second["base_version"], 2);
+    assert_eq!(approve(&server, &owner, "PP-2").await["status"], "approved");
+    assert_eq!(versions(&server, &owner, "KN-1").await, history);
+    assert_eq!(entry(&server, &owner, "KN-1").await, deleted);
+    assert_eq!(
+        list_page(&server, &owner, KNOWLEDGE, &[]).await["data"],
+        json!([])
+    );
+}

@@ -160,3 +160,69 @@ pub async fn submit_deleted_targets(server: &Server, owner: &Value, agent: &Valu
         2
     );
 }
+
+pub async fn versions(server: &Server, caller: &Value, key: &str) -> Value {
+    list_page(
+        server,
+        caller,
+        &format!("{KNOWLEDGE}/by-key/{key}/versions"),
+        &[("page_size", "100")],
+    )
+    .await["data"]
+        .clone()
+}
+
+pub async fn old_entry(server: &Server, caller: &Value, key: &str, version: i64) -> Value {
+    list_page(
+        server,
+        caller,
+        &format!("{KNOWLEDGE}/by-key/{key}/versions/{version}"),
+        &[],
+    )
+    .await["data"]
+        .clone()
+}
+
+pub async fn change_entry(server: &Server, owner: &Value, key: &str, changes: Value) -> Value {
+    data(
+        request(
+            server,
+            owner,
+            Method::PATCH,
+            &format!("{KNOWLEDGE}/by-key/{key}"),
+            changes,
+        )
+        .await,
+        StatusCode::OK,
+    )
+    .await
+}
+
+pub async fn delete_entry(server: &Server, owner: &Value, key: &str) -> Value {
+    data(
+        request(
+            server,
+            owner,
+            Method::DELETE,
+            &format!("{KNOWLEDGE}/by-key/{key}"),
+            Value::Null,
+        )
+        .await,
+        StatusCode::OK,
+    )
+    .await
+}
+
+pub fn assert_version(
+    version: &Value,
+    number: i64,
+    kind: &str,
+    person: &str,
+    proposal: Option<&str>,
+) {
+    assert_eq!(version["version"], number);
+    assert_eq!(version["kind"], kind);
+    assert_eq!(version["applied_by"], person);
+    assert!(version["applied_at"].as_i64().unwrap() > 0);
+    assert_eq!(version["proposal_key"], json!(proposal));
+}
