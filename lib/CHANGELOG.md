@@ -15,6 +15,12 @@ Version 0.1.0, the first version, not yet tagged.
   `proposal_key`, and `DeletedKnowledgeEntry`.
   Rollback records `WriteOperation::RollBackKnowledgeEntry`,
   appends a content version, restores deleted entries and keeps their names.
+- Core adds Knowledge proposal submission, paginated status and keyword lists,
+  reads, approval and rejection, with task titles on agent submissions.
+  Decisions record the approver and source proposal in each new version;
+  writes record their own operations. Errors include `proposal.not_found`,
+  `proposal.decided` and `proposal.own_party`.
+
 - Core adds direct Knowledge create, change and delete operations,
   latest-version reads and paginated prefix or keyword lists, with
   separate name and key inputs. Writes record their own operations;

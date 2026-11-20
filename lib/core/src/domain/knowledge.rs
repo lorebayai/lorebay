@@ -63,6 +63,7 @@ pub async fn create_knowledge_entry(
         caller,
         &entry,
         Some((input.summary, input.content)),
+        None,
     )
     .await?;
     let result = named_entry(write.state(), write.handle(), entry, version).await?;
@@ -83,7 +84,7 @@ pub async fn change_knowledge_entry(
     if let Some(name) = &changes.name {
         ensure_name_available(write.transaction(), &space_id, name, Some(&entry.id)).await?;
     }
-    let entry = apply_changes(write.transaction(), caller, entry, changes).await?;
+    let entry = apply_changes(write.transaction(), caller, entry, changes, None).await?;
     let version = latest(write.transaction(), &entry).await?;
     let result = named_entry(write.state(), write.handle(), entry, version).await?;
     write.record(WriteOperation::ChangeKnowledgeEntry, Some(space_id));
@@ -109,7 +110,7 @@ pub async fn delete_knowledge_entry(
         .build()
         .update(model)
         .await?;
-    let version = append_version(write.transaction(), caller, &entry, None).await?;
+    let version = append_version(write.transaction(), caller, &entry, None, None).await?;
     let result = named_entry(write.state(), write.handle(), entry, version).await?;
     write.record(WriteOperation::DeleteKnowledgeEntry, Some(space_id));
     Ok(result)
@@ -162,7 +163,7 @@ pub async fn roll_back_knowledge_entry(
         .filter(|source| source.kind == "content")
         .ok_or(KnowledgeInputError::RollbackVersion)?;
     let changes = KnowledgeChanges::new(None, source.summary, source.content)?;
-    let entry = apply_changes(write.transaction(), caller, entry, changes).await?;
+    let entry = apply_changes(write.transaction(), caller, entry, changes, None).await?;
     let version = latest(write.transaction(), &entry).await?;
     let result = named_entry(write.state(), write.handle(), entry, version).await?;
     write.record(WriteOperation::RollBackKnowledgeEntry, Some(space_id));
@@ -196,20 +197,7 @@ pub(super) async fn named_entry(
     })
 }
 
-async fn direct_space(
-    write: &Write<'_>,
-    caller: &Caller,
-    space: &str,
-) -> Result<String, KnowledgeError> {
-    let authorized = check_space(write.state(), write.handle(), caller, space, READ_ROLES).await?;
-    caller.person()?;
-    if !matches!(authorized.role, SpaceRole::Owner | SpaceRole::Admin) {
-        return Err(super::SpaceAccessError::PermissionRequired.into());
-    }
-    Ok(authorized.space.id)
-}
-
-async fn ensure_name_available(
+pub(super) async fn ensure_name_available(
     transaction: &DatabaseTransaction,
     space: &str,
     name: &str,
@@ -228,7 +216,7 @@ async fn ensure_name_available(
     Ok(())
 }
 
-async fn insert_entry(
+pub(super) async fn insert_entry(
     transaction: &DatabaseTransaction,
     space_id: &str,
     name: &str,
@@ -262,41 +250,33 @@ async fn insert_entry(
     Ok(model)
 }
 
-async fn locked_entry(
-    transaction: &DatabaseTransaction,
-    space: &str,
-    target: &KnowledgeTarget,
-) -> Result<entry::Model, KnowledgeError> {
-    KnowledgeRepository::builder()
-        .connection(transaction)
-        .build()
-        .target(space, target, true)
-        .await?
-        .filter(|entry| entry.deleted_at.is_none())
-        .ok_or(KnowledgeError::NotFound)
-}
-
-async fn apply_changes(
+pub(super) async fn apply_changes(
     transaction: &DatabaseTransaction,
     caller: &Caller,
     entry: entry::Model,
     changes: KnowledgeChanges,
+    proposal_id: Option<&str>,
 ) -> Result<entry::Model, KnowledgeError> {
-    let content = if changes.content.is_some() || changes.summary.is_some() {
-        let previous = latest(transaction, &entry).await?;
-        Some((
-            changes
-                .summary
-                .or(previous.summary)
-                .ok_or_else(|| anyhow::anyhow!("Content version has no summary"))?,
-            changes
-                .content
-                .or(previous.content)
-                .ok_or_else(|| anyhow::anyhow!("Content version has no content"))?,
-        ))
-    } else {
-        None
-    };
+    let content =
+        if changes.content.is_some() || changes.summary.is_some() || entry.deleted_at.is_some() {
+            let previous = KnowledgeVersionRepository::builder()
+                .connection(transaction)
+                .build()
+                .last_content(&entry.id)
+                .await?;
+            Some((
+                changes
+                    .summary
+                    .or(previous.summary)
+                    .ok_or_else(|| anyhow::anyhow!("Content version has no summary"))?,
+                changes
+                    .content
+                    .or(previous.content)
+                    .ok_or_else(|| anyhow::anyhow!("Content version has no content"))?,
+            ))
+        } else {
+            None
+        };
     let mut model = entry.into_active_model();
     if let Some(name) = changes.name {
         model.name_key = Set(name.to_lowercase());
@@ -320,16 +300,17 @@ async fn apply_changes(
             }
         })?;
     if let Some(content) = content {
-        append_version(transaction, caller, &entry, Some(content)).await?;
+        append_version(transaction, caller, &entry, Some(content), proposal_id).await?;
     }
     Ok(entry)
 }
 
-async fn append_version(
+pub(super) async fn append_version(
     transaction: &DatabaseTransaction,
     caller: &Caller,
     entry: &entry::Model,
     content: Option<(String, String)>,
+    proposal_id: Option<&str>,
 ) -> Result<version::Model, KnowledgeError> {
     let (kind, summary, content) = match content {
         Some((summary, content)) => ("content", Some(summary), Some(content)),
@@ -346,10 +327,42 @@ async fn append_version(
             content: Set(content),
             summary: Set(summary),
             applied_by: Set(caller.person_id.clone()),
-            proposal_id: Set(None),
+            proposal_id: Set(proposal_id.map(str::to_owned)),
             created_at: Set(entry.updated_at),
         })
         .await?)
+}
+
+pub(super) fn next_version(version: i64) -> Result<i64, KnowledgeError> {
+    version
+        .checked_add(1)
+        .ok_or_else(|| anyhow::anyhow!("Knowledge version exhausted").into())
+}
+async fn direct_space(
+    write: &Write<'_>,
+    caller: &Caller,
+    space: &str,
+) -> Result<String, KnowledgeError> {
+    let authorized = check_space(write.state(), write.handle(), caller, space, READ_ROLES).await?;
+    caller.person()?;
+    if !matches!(authorized.role, SpaceRole::Owner | SpaceRole::Admin) {
+        return Err(super::SpaceAccessError::PermissionRequired.into());
+    }
+    Ok(authorized.space.id)
+}
+
+async fn locked_entry(
+    transaction: &DatabaseTransaction,
+    space: &str,
+    target: &KnowledgeTarget,
+) -> Result<entry::Model, KnowledgeError> {
+    KnowledgeRepository::builder()
+        .connection(transaction)
+        .build()
+        .target(space, target, true)
+        .await?
+        .filter(|entry| entry.deleted_at.is_none())
+        .ok_or(KnowledgeError::NotFound)
 }
 
 async fn latest(
@@ -361,10 +374,4 @@ async fn latest(
         .build()
         .by_number(&entry.id, entry.latest_version)
         .await?)
-}
-
-fn next_version(version: i64) -> Result<i64, KnowledgeError> {
-    version
-        .checked_add(1)
-        .ok_or_else(|| anyhow::anyhow!("Knowledge version exhausted").into())
 }

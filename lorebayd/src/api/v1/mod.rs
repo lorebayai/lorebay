@@ -11,6 +11,7 @@ pub(crate) fn router() -> Router<ServerState> {
         .route("/spaces", get(spaces::list).post(spaces::create))
         .route("/spaces/{space}", get(spaces::read).patch(spaces::change))
         .merge(knowledge_router())
+        .merge(proposals_router())
         .route(
             "/spaces/{space}/artifacts/{key}/url",
             get(artifacts::download_url),
@@ -73,9 +74,35 @@ mod device_sign_in;
 mod knowledge;
 mod login_session;
 mod participants;
+mod proposals;
 mod spaces;
 mod tasks;
 mod users;
+
+fn proposals_router() -> Router<ServerState> {
+    Router::new()
+        .route(
+            "/spaces/{space}/proposals",
+            get(proposals::list).merge(
+                post(proposals::submit_person)
+                    .layer(DefaultBodyLimit::max(knowledge::KNOWLEDGE_BODY_MAX_BYTES)),
+            ),
+        )
+        .route(
+            "/spaces/{space}/tasks/{task}/proposals",
+            post(proposals::submit_agent)
+                .layer(DefaultBodyLimit::max(knowledge::KNOWLEDGE_BODY_MAX_BYTES)),
+        )
+        .route("/spaces/{space}/proposals/{key}", get(proposals::read))
+        .route(
+            "/spaces/{space}/proposals/{key}/approve",
+            post(proposals::approve),
+        )
+        .route(
+            "/spaces/{space}/proposals/{key}/reject",
+            post(proposals::reject),
+        )
+}
 
 fn knowledge_router() -> Router<ServerState> {
     let by_entry = get(knowledge::read).delete(knowledge::delete).merge(

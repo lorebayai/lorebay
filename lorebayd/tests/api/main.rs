@@ -12,6 +12,7 @@ mod mcp;
 mod oauth;
 mod oauth_token;
 mod participants;
+mod proposals;
 mod spaces;
 mod tasks;
 mod users;

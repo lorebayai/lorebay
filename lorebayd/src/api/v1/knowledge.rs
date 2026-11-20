@@ -319,6 +319,8 @@ pub(crate) async fn roll_back(
     Ok(Envelope::builder().data(result).build())
 }
 
-fn present_string<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<String>, D::Error> {
+pub(super) fn present_string<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<String>, D::Error> {
     String::deserialize(deserializer).map(Some)
 }

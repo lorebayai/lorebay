@@ -24,6 +24,16 @@ pub(crate) struct KnowledgeVersionRow {
 }
 
 impl<C: ConnectionTrait> KnowledgeVersionRepository<'_, C> {
+    pub async fn last_content(&self, entry: &str) -> Result<Model, DbErr> {
+        Entity::find()
+            .filter(Column::KnowledgeId.eq(entry))
+            .filter(Column::Kind.eq("content"))
+            .order_by_desc(Column::Version)
+            .one(self.connection)
+            .await?
+            .ok_or_else(|| DbErr::Type("Knowledge content version is missing".to_owned()))
+    }
+
     pub async fn by_number(&self, entry: &str, version: i64) -> Result<Model, DbErr> {
         self.find_by_number(entry, version)
             .await?

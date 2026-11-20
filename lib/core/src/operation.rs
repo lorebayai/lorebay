@@ -316,6 +316,7 @@ impl Write<'_> {
 #[non_exhaustive]
 pub enum WriteOperation {
     AddNote,
+    ApproveProposal,
     ChangeKnowledgeEntry,
     ChangeSpace,
     ChangeTask,
@@ -329,8 +330,10 @@ pub enum WriteOperation {
     DeleteTask,
     RefuseArtifact,
     RegisterArtifact,
+    RejectProposal,
     RemoveAbandonedArtifacts,
     RollBackKnowledgeEntry,
+    SubmitProposal,
 }
 
 #[derive(Clone, Debug, TypedBuilder)]
