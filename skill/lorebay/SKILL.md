@@ -204,7 +204,8 @@ needs only the latest task.
 When the work has taught something later sessions can use that belongs in
 Knowledge (rule 8), propose it after the result is written: first tell the
 person in the harness what you intend to propose, and submit it with
-`create_proposal` only after the person confirms.
+`create_proposal` only after the person confirms. A change the person asks for
+by name counts as confirmed.
 
 The task may be `ended` by then: the confirmation answers your question and is
 no request for more work, so submit from the task without reopening it, then
