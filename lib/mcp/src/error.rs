@@ -1,8 +1,8 @@
 use std::fmt::Display;
 
 use lorebay_lib_core::{
-    ArtifactError, ArtifactTextError, PageSizeError, SpaceError, TaskChangeError, TaskError,
-    TaskTextError,
+    ArtifactError, ArtifactTextError, KnowledgeError, KnowledgeInputError, PageSizeError,
+    ProposalError, SpaceError, TaskChangeError, TaskError, TaskTextError,
 };
 use rmcp::model::CallToolResult;
 use serde_json::{Value, json};
@@ -93,6 +93,36 @@ impl ToolError {
 impl From<ArtifactError> for ToolError {
     fn from(error: ArtifactError) -> Self {
         Self::from_operation(error.code(), error)
+    }
+}
+
+impl From<KnowledgeInputError> for ToolError {
+    fn from(error: KnowledgeInputError) -> Self {
+        Self::body_field(error.field(), "invalid", &error.to_string())
+    }
+}
+
+impl From<KnowledgeError> for ToolError {
+    fn from(error: KnowledgeError) -> Self {
+        match error {
+            KnowledgeError::Input(error) => error.into(),
+            KnowledgeError::InvalidCursor => invalid_query("cursor"),
+            KnowledgeError::InvalidPageSize(_) => invalid_query(PageSizeError::FIELD),
+            error => Self::from_operation(error.code(), error),
+        }
+    }
+}
+
+impl From<ProposalError> for ToolError {
+    fn from(error: ProposalError) -> Self {
+        match error {
+            ProposalError::Input(error) => error.into(),
+            ProposalError::Knowledge(error) => error.into(),
+            ProposalError::InvalidCursor => invalid_query("cursor"),
+            ProposalError::InvalidFilter => invalid_query("keyword"),
+            ProposalError::InvalidPageSize(_) => invalid_query(PageSizeError::FIELD),
+            error => Self::from_operation(error.code(), error),
+        }
     }
 }
 

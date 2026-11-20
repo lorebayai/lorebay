@@ -9,7 +9,7 @@ use crate::tasks::helpers::participant;
 
 use helpers::*;
 
-mod helpers;
+pub(crate) mod helpers;
 
 #[tokio::test]
 async fn list_knowledge_versions_returns_every_version_with_who_applied_it() {

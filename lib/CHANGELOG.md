@@ -9,6 +9,12 @@ crates `lorebay-lib-types`, `lorebay-lib-core`, `lorebay-lib-migration` and
 
 Version 0.1.0, the first version, not yet tagged.
 
+- MCP adds `list_knowledge`, `read_knowledge`, `create_proposal`,
+  `list_proposals` and `get_proposal`, completing the 14-tool catalog.
+  Every MCP request observes a body limit derived from
+  `KNOWLEDGE_FIELDS_MAX_JSON_BYTES`, plus allowances for a target name and
+  the JSON-RPC envelope, tool name and task ID, so proposals accept 1 MiB
+  of content even when every byte is JSON-escaped.
 - Core adds paginated Knowledge history and deleted-entry lists, old-version
   reads with `knowledge.version_not_found`, and direct rollback for owners
   and admins. The new result types are `KnowledgeVersion`, with an optional

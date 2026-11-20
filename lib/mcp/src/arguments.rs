@@ -10,6 +10,8 @@ use lorebay_lib_core::{
 use crate::catalog::ToolName;
 use crate::error::{ToolError, invalid_query};
 
+mod knowledge;
+
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
 pub(crate) struct Arguments {

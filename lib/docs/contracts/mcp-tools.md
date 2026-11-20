@@ -52,11 +52,11 @@ It does not cover:
 | `create_artifact` | Task ID | Registers a file name and summary; returns a short-lived upload URL and the headers the upload must carry | Register an artifact |
 | `complete_artifact` | Task ID | Reports the upload finished; the library checks the file is in storage and within the size limit, and only then is the upload complete | Report an upload complete |
 | `get_artifact_url` | Space | Returns a short-lived download URL | Get a download URL |
-| `list_knowledge` | Space | Lists one level by name prefix: its entries, with names and summaries, and the next level's prefixes; no prefix lists the top level; a keyword searches names, summaries and content across the space | List Knowledge |
-| `read_knowledge` | Space | Reads one entry by name, latest version only | Read a knowledge entry |
+| `list_knowledge` | Space | Lists one level by name prefix: its entries, with names, keys and summaries, and the next level's prefixes; no prefix lists the top level; a keyword searches names, summaries and content across the space | List Knowledge |
+| `read_knowledge` | Space | Reads one entry by name or key, latest version only | Read a knowledge entry |
 | `create_proposal` | Task ID | Proposes creating, changing or deleting an entry | Submit a proposal |
-| `list_proposals` | Space | Lists proposals, filtered by status | List proposals |
-| `get_proposal` | Space | Reads one proposal: content, status, rejection reason | Read a proposal |
+| `list_proposals` | Space | Lists proposals, filtered by status and keyword | List proposals |
+| `get_proposal` | Space | Reads one proposal: content, status, the 'changed since proposed' mark, rejection reason | Read a proposal |
 
 - **Lists are paginated.** `list_spaces`, `list_tasks`, `list_knowledge`,
   `list_proposals` and the Scratchpad in `get_task` return pages, so no call puts an
