@@ -69,14 +69,18 @@ Version 0.1.0, the first version, not yet tagged.
   the same session, rule 12 reopens that task instead of creating one, also
   while another task is `in progress`, which ends first. Rule 3 lets the agent
   set it back, and its search for a lost task ID includes a task the agent
-  ended in this session. Rule 5's reopening note says what the reopening is
-  for. Rule 12's backstop says the choice is not checked.
+  ended in this session. Rule 12's backstop says the choice is not checked.
 - **Breaking:** the agent rules a product's skill restates change. Rule 6
   uploads no change to a repository's own content, a file tracked there or
   meant to be committed, even when it is unpushed or the person calls it the
   deliverable: commits and pull requests deliver it, the agent commits or
   pushes only as the person or the repository's rules ask, and until then
   the result names the repository, branch and changed files.
+- **Breaking:** agent rule 5 defines a step as each thing the person asks
+  for, a check included, and each further step the plan names. Each
+  reopening starts with a plan, which replaces the reopening note, and a
+  continued task's work gets a step's note. Rule 13 records the fix by rule
+  5. Rule 6's backstop names a repository change as unchecked.
 - Core parses stored role names through `SpaceRole::try_from(&str)` with
   `SpaceRoleError` for invalid names.
 - Entity generation uses separate installer build directories for the two
