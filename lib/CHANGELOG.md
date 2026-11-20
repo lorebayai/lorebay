@@ -58,6 +58,11 @@ Version 0.1.0, the first version, not yet tagged.
   unpushed file is now uploaded, and the upload matches the final file.
   Rule 9 records only new work after re-authorization, with no task for the
   unrecorded stretch.
+- **Breaking:** the agent rules a product's skill restates change. When the
+  person asks for more on the same work after the agent ended its task in
+  the same session, rule 12 reopens that task instead of creating one, and
+  rule 3 lets the agent set it back. Rule 5's reopening note says what the
+  reopening is for. Rule 12's backstop says the choice is not checked.
 - Core parses stored role names through `SpaceRole::try_from(&str)` with
   `SpaceRoleError` for invalid names.
 - Entity generation uses separate installer build directories for the two

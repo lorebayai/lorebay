@@ -80,9 +80,9 @@ went to the right task. When a write is refused:
 - **A task you wrote to before is not found:** a person deleted it. Tell the
   person once that the rest of this session goes unrecorded, and don't look
   for another task.
-- **The task is `ended`:** set it back only where this rule or rule 13 lets
-  you reopen it; if the person or another of their agents ended it while you
-  worked, ask the person first.
+- **The task is `ended`:** set it back only where this rule, rule 12 or
+  rule 13 lets you reopen it; if the person or another of their agents ended
+  it while you worked, ask the person first.
 - **Missing permission:** the task is another party's, or the person is now a
   viewer in that space. A viewer's agent records nothing more and tells the
   person once.
@@ -106,8 +106,9 @@ Write notes with `add_note`:
 
 - **The plan,** in each session that starts work on the task: what the person
   wants this time, then how you intend to do it.
-- **Reopening an `ended` task also starts with a note:** what was missed, and
-  how you will fix it.
+- **Reopening an `ended` task also starts with a note:** what the reopening
+  is for, such as what was missed or what the person now asks, and how you
+  will do it.
 - **After each finished step:** what you did, and why. A task of one step gets
   this note too; the result does not replace it.
 - **No closing note:** the conclusion goes in the result.
@@ -199,8 +200,12 @@ End the task with `update_task` in three cases:
 - the person says the work is done;
 - the work the person asked for is done and the result has no Open items; or
 - the person switches to unrelated work in the same session: end the current
-  task with its unfinished work in Open, then create a new one. If unsure
-  whether it is the same work, stay in the current task.
+  task with its unfinished work in Open, then create a new one.
+
+When the person asks for more on the same work after you ended its task in
+this session, set the task back to `in progress` and continue in it. Work is
+the same unless it is unrelated to what the task's title names; if unsure,
+treat it as the same work.
 
 `ended` means only that nobody is working on the task now; whether it is done
 shows in Open.
