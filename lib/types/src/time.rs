@@ -4,6 +4,7 @@ use std::time::{SystemTime, SystemTimeError, UNIX_EPOCH};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum UnixMillisError {
     #[error(transparent)]
     BeforeEpoch(#[from] SystemTimeError),

@@ -58,6 +58,8 @@ Version 0.1.0, the first version, not yet tagged.
 - **Breaking:** public core error enums, `WriteOperation`, `LibrarySettings`
   and `LibraryInterfaces` are non-exhaustive; construct settings and
   interfaces with their builders and handle future enum variants.
+- **Breaking:** `UnixMillisError` in types is non-exhaustive; handle future
+  variants.
 - **Breaking:** `TaskError` and `ArtifactError` route space access failures
   only through `TaskAccessError`; their outer `Space` variants are removed.
 - **Breaking:** `TaskFilters::cursor_version` is private to the core domain.
