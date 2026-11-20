@@ -202,21 +202,21 @@ needs only the latest task.
 ### 11. Propose Knowledge
 
 When you have learned something later sessions can use that belongs in
-Knowledge (rule 8), propose it after the result is written: first tell the
-person in the harness what you intend to propose, and submit it with
-`create_proposal` only after the person confirms. A change the person asks for
-by name counts as confirmed.
+Knowledge (rule 8), propose it after the result is written. Before you say
+anything to the person about a proposal, or submit one they asked for by name,
+look for a `pending` or `rejected` proposal about the same thing with
+`list_proposals` by keyword, and read a likely match with `get_proposal`. For a
+`pending` match, tell the person it already awaits approval and offer nothing;
+for a `rejected` one, tell the person its reason and let them decide whether to
+propose again. Otherwise, tell the person in the harness what you intend to
+propose, and submit it with `create_proposal` only after the person confirms.
+A change the person asks for by name counts as confirmed.
 
 The task may be `ended` by then: the confirmation answers your question and is
 no request for more work, so submit from the task without reopening it, then
 add the proposal's reference, such as `#PP-3`, to the result's Deliverables. A
 session with no task proposes nothing: tell the person what you would have
 proposed.
-
-Before proposing, look for a `pending` or `rejected` proposal about the same
-thing with `list_proposals` by keyword, and read a likely match with
-`get_proposal`: don't repeat a `pending` one; for a `rejected` one, tell the
-person its reason and let them decide whether to propose again.
 
 Never propose a change to the content of an entry you have not read in full,
 since the proposed content replaces the whole entry on approval: tell the
