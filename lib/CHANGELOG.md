@@ -14,6 +14,7 @@ Version 0.1.0, the first version, not yet tagged.
   Writes record their own operations; errors include `knowledge.not_found` and
   `knowledge.name_taken`. `KNOWLEDGE_FIELDS_MAX_JSON_BYTES` exports the maximal
   JSON string payload derived from the entry input limits for entry points.
+  List queries fetch only a bounded page, including grouped prefixes.
 
 - **Breaking:** `Space` gains `caller_person`, the name of the caller's
   person, on create, list, read and change results. `list_spaces` returns

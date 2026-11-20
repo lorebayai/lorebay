@@ -1,5 +1,5 @@
 pub(crate) use artifact::ArtifactRepository;
-pub(crate) use knowledge::{KnowledgeListRow, KnowledgeRepository};
+pub(crate) use knowledge::{KnowledgeListRequest, KnowledgeListRow, KnowledgeRepository};
 pub(crate) use knowledge_version::KnowledgeVersionRepository;
 pub(crate) use note::NoteRepository;
 pub(crate) use space::SpaceRepository;

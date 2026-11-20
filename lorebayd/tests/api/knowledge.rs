@@ -561,6 +561,9 @@ async fn list_knowledge_returns_entries_and_next_level_prefixes() {
             .len(),
         1
     );
+    for prefix in ["\u{77e5}\u{8bc6}", "\u{0130}"] {
+        unicode_level(&server, &owner, prefix).await;
+    }
 }
 
 #[tokio::test]
@@ -659,9 +662,8 @@ async fn list_knowledge_matches_keyword_in_name_summary_and_content() {
     )
     .await;
     seed(&server, &owner, "Unrelated").await;
-    let page = list_page(&server, &owner, PATH, &[("keyword", "NEEDLE")]).await;
-    assert_eq!(page["data"].as_array().unwrap().len(), 3);
-    assert_eq!(page["data"][1]["name"], "deploy/needle");
+    let matches = keyword_pages(&server, &owner, "NEEDLE", 3).await;
+    assert_eq!(matches[1]["name"], "deploy/needle");
     let chinese = list_page(&server, &owner, PATH, &[("keyword", "\u{77e5}\u{8bc6}")]).await;
     assert_eq!(chinese["data"][0]["key"], "KN-3");
     assert_eq!(chinese["data"].as_array().unwrap().len(), 1);

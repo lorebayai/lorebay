@@ -2,7 +2,7 @@ use reqwest::{Method, Response, StatusCode};
 use serde_json::{Value, json};
 use url::form_urlencoded::Serializer;
 
-use crate::helpers::{Server, create_space, request};
+use crate::helpers::{Server, create_space, list_page, request};
 
 pub const PATH: &str = "/api/v1/spaces/SPACE-1/knowledge";
 pub const CONTENT_LIMIT: usize = 1024 * 1024;
@@ -86,6 +86,44 @@ pub async fn delete(server: &Server, owner: &Value, path: &str) -> Value {
         StatusCode::OK,
     )
     .await
+}
+
+pub async fn keyword_pages(
+    server: &Server,
+    owner: &Value,
+    keyword: &str,
+    expected: usize,
+) -> Vec<Value> {
+    let mut rows = Vec::new();
+    let mut cursor: Option<String> = None;
+    loop {
+        let mut query = vec![("keyword", keyword), ("page_size", "1")];
+        if let Some(cursor) = &cursor {
+            query.push(("cursor", cursor));
+        }
+        let page = list_page(server, owner, PATH, &query).await;
+        let items = page["data"].as_array().unwrap();
+        assert!(items.len() <= 1);
+        rows.extend(items.iter().cloned());
+        assert!(rows.len() <= expected);
+        let Some(next) = page["meta"]["next_cursor"].as_str() else {
+            break;
+        };
+        assert_eq!(items.len(), 1);
+        assert_ne!(cursor.as_deref(), Some(next));
+        cursor = Some(next.to_owned());
+    }
+    assert_eq!(rows.len(), expected);
+    rows
+}
+
+pub async fn unicode_level(server: &Server, owner: &Value, prefix: &str) {
+    let entry = seed(server, owner, &format!("{prefix}/Next/entry")).await;
+    let page = list_page(server, owner, PATH, &[("prefix", prefix)]).await;
+    assert_eq!(page["data"], json!([{"name":format!("{prefix}/Next/")} ]));
+    let next = page["data"][0]["name"].as_str().unwrap();
+    let page = list_page(server, owner, PATH, &[("prefix", next)]).await;
+    assert_eq!(page["data"][0]["key"], entry["key"]);
 }
 
 pub async fn raw(
