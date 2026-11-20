@@ -9,6 +9,12 @@ crates `lorebay-lib-types`, `lorebay-lib-core`, `lorebay-lib-migration` and
 
 Version 0.1.0, the first version, not yet tagged.
 
+- Core adds direct Knowledge create, change and delete operations,
+  latest-version reads and paginated prefix or keyword lists, with
+  separate name and key inputs. Writes record their own operations;
+  errors include `knowledge.not_found` and `knowledge.name_taken`.
+  `KNOWLEDGE_FIELDS_MAX_JSON_BYTES` exports the maximal JSON string
+  payload derived from the entry input limits for entry points.
 - **Breaking:** `Space` gains `caller_person`, the name of the caller's
   person, on create, list, read and change results. `list_spaces` returns
   the same field, accepted as `person` by `list_tasks`.

@@ -26,6 +26,7 @@ use helpers::{
     reason = "this integration target uses fixture assertions that must fail the scenario"
 )]
 mod helpers;
+mod knowledge;
 
 #[tokio::test]
 async fn complete_artifact_refuses_registration_after_oversize_report() {

@@ -1,6 +1,10 @@
 pub use artifact_cleanup::*;
 pub use artifact_input::*;
 pub use artifacts::*;
+pub use knowledge::*;
+pub use knowledge_error::*;
+pub use knowledge_input::*;
+pub use knowledge_list::*;
 pub use pagination::{DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, Page, PageOptions, PageSizeError};
 pub use space_access::{
     SpaceAccessError, SpaceReference, SpaceRole, SpaceRoleError, resolve_space,
@@ -36,6 +40,10 @@ mod artifact_input;
 mod artifacts;
 mod id;
 mod key;
+mod knowledge;
+mod knowledge_error;
+mod knowledge_input;
+mod knowledge_list;
 mod pagination;
 mod space_access;
 mod spaces;

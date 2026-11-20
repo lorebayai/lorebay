@@ -1,5 +1,6 @@
 use axum::Router;
-use axum::routing::{delete, get, post};
+use axum::extract::DefaultBodyLimit;
+use axum::routing::{delete, get, patch, post};
 
 use crate::server::ServerState;
 
@@ -9,6 +10,7 @@ pub(crate) fn router() -> Router<ServerState> {
         .route("/agents/{name}", delete(agents::revoke))
         .route("/spaces", get(spaces::list).post(spaces::create))
         .route("/spaces/{space}", get(spaces::read).patch(spaces::change))
+        .merge(knowledge_router())
         .route(
             "/spaces/{space}/artifacts/{key}/url",
             get(artifacts::download_url),
@@ -68,8 +70,25 @@ mod agents;
 mod artifacts;
 mod authorization;
 mod device_sign_in;
+mod knowledge;
 mod login_session;
 mod participants;
 mod spaces;
 mod tasks;
 mod users;
+
+fn knowledge_router() -> Router<ServerState> {
+    let by_entry = get(knowledge::read).delete(knowledge::delete).merge(
+        patch(knowledge::change).layer(DefaultBodyLimit::max(knowledge::KNOWLEDGE_BODY_MAX_BYTES)),
+    );
+    Router::new()
+        .route(
+            "/spaces/{space}/knowledge",
+            get(knowledge::list).merge(
+                post(knowledge::create)
+                    .layer(DefaultBodyLimit::max(knowledge::KNOWLEDGE_BODY_MAX_BYTES)),
+            ),
+        )
+        .route("/spaces/{space}/knowledge/entry", by_entry.clone())
+        .route("/spaces/{space}/knowledge/by-key/{key}", by_entry)
+}
