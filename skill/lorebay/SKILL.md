@@ -71,8 +71,9 @@ read its result and its notes with `get_task`.
   is still in progress, and whose it is.
 
 A lost task ID, such as after the conversation is compacted, is found the same
-way: list your own party's tasks that are not `ended`, and pick by title and
-last activity time, asking the person if unsure.
+way: list your own party's tasks that are not `ended`, and also `ended` ones
+when you ended the task in this session, and pick by title and last activity
+time, asking the person if unsure.
 
 After every write, check the task title in the response to confirm the write
 went to the right task. When a write is refused:
@@ -203,9 +204,10 @@ End the task with `update_task` in three cases:
   task with its unfinished work in Open, then create a new one.
 
 When the person asks for more on the same work after you ended its task in
-this session, set the task back to `in progress` and continue in it. Work is
-the same unless it is unrelated to what the task's title names; if unsure,
-treat it as the same work.
+this session, set the task back to `in progress` and continue in it instead of
+creating one; if another task is `in progress`, end it first, as on a switch.
+Work is the same unless it is unrelated to what the task's title names; if
+unsure, treat it as the same work.
 
 `ended` means only that nobody is working on the task now; whether it is done
 shows in Open.
