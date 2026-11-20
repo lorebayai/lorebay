@@ -74,7 +74,7 @@ certificate at a fixed path, such as `~/.local/share/lorebay/ca.crt`, not in the
 system trust store; and every process that connects trusting it, as
 Configuration lists. The authority's key never leaves its machine. `bundle.pem`
 joins the certificate to the system's authorities, which `SSL_CERT_FILE`
-replaces; on Debian or Ubuntu:
+replaces; on Debian or Ubuntu, with `ca-certificates` installed:
 
 ```bash
 cd ~/.local/share/lorebay && cat /etc/ssl/certs/ca-certificates.crt ca.crt > bundle.pem
