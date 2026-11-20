@@ -15,12 +15,14 @@ use url::Url;
 
 mod artifacts;
 mod device;
+mod knowledge;
 mod task_deletion;
 mod task_filters;
 mod tasks;
 mod team;
 pub use artifacts::*;
 pub use device::*;
+pub use knowledge::*;
 pub use task_deletion::*;
 pub use task_filters::*;
 pub use tasks::*;

@@ -8,6 +8,7 @@ mod device;
     reason = "Scenario helpers fail fast; this module is compiled only into the integration test binary."
 )]
 mod helpers;
+mod knowledge;
 mod login;
 mod network;
 mod session;

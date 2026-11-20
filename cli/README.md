@@ -33,6 +33,14 @@ cargo run -p lorebay-cli -- task delete SPACE-1 '<task-id>' --yes
 cargo run -p lorebay-cli -- note delete SPACE-1 '<task-id>' '<note-time>' --yes
 cargo run -p lorebay-cli -- artifact url SPACE-1 AR-1
 cargo run -p lorebay-cli -- artifact delete SPACE-1 '<task-id>' AR-1 --yes
+cargo run -p lorebay-cli -- knowledge list SPACE-1 --prefix deploy/ --page-size 20
+cargo run -p lorebay-cli -- knowledge list SPACE-1 --keyword staging --output json
+cargo run -p lorebay-cli -- knowledge show SPACE-1 KN-1
+cargo run -p lorebay-cli -- knowledge create SPACE-1 deploy/staging.md --summary 'Staging steps' --content '# Staging'
+cargo run -p lorebay-cli -- knowledge create SPACE-1 deploy/production.md --summary 'Production steps' --content-file guide.md
+cargo run -p lorebay-cli -- knowledge change SPACE-1 KN-1 --name deploy/test.md --summary 'Test steps' --content '# Test'
+cargo run -p lorebay-cli -- knowledge change SPACE-1 deploy/test.md --content-file - < guide.md
+cargo run -p lorebay-cli -- knowledge delete SPACE-1 KN-1 --yes
 cargo run -p lorebay-cli -- logout
 cargo run -p lorebay-cli -- --help
 ```

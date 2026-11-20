@@ -1,4 +1,6 @@
-use clap::{Args, Parser, Subcommand, ValueEnum};
+use std::path::PathBuf;
+
+use clap::{ArgGroup, Args, Parser, Subcommand, ValueEnum};
 use typed_builder::TypedBuilder;
 
 use crate::constants::HUMAN_OUTPUT;
@@ -41,6 +43,11 @@ pub(crate) enum Command {
         #[command(subcommand)]
         command: ArtifactCommand,
     },
+    /// Read and change a space's Knowledge.
+    Knowledge {
+        #[command(subcommand)]
+        command: KnowledgeCommand,
+    },
     /// Sign in through a browser on this or another computer.
     Login {
         server_url: String,
@@ -76,6 +83,53 @@ pub(crate) enum Command {
         #[command(subcommand)]
         command: UserCommand,
     },
+}
+
+#[derive(Clone, Debug, Subcommand)]
+pub(crate) enum KnowledgeCommand {
+    /// Change an entry's name, summary or content.
+    #[command(group(ArgGroup::new("changes").required(true).multiple(true)
+        .args(["name", "summary", "content", "content_file"])))]
+    Change {
+        space: String,
+        entry: String,
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        summary: Option<String>,
+        #[command(flatten)]
+        content: ContentOptions,
+    },
+    /// Create a knowledge entry directly.
+    #[command(group(ArgGroup::new("source").required(true)
+        .args(["content", "content_file"])))]
+    Create {
+        space: String,
+        name: String,
+        #[arg(long)]
+        summary: String,
+        #[command(flatten)]
+        content: ContentOptions,
+    },
+    /// Delete an entry directly.
+    Delete {
+        space: String,
+        entry: String,
+        #[arg(long)]
+        yes: bool,
+    },
+    /// List one page of entries and prefixes, or search by keyword.
+    List {
+        space: String,
+        #[arg(long)]
+        prefix: Option<String>,
+        #[arg(long)]
+        keyword: Option<String>,
+        #[command(flatten)]
+        page: Page,
+    },
+    /// Show an entry's latest version by name or key.
+    Show { space: String, entry: String },
 }
 
 #[derive(Clone, Debug, Subcommand)]
@@ -211,6 +265,16 @@ pub(crate) struct Cli {
     pub output: OutputMode,
     #[command(subcommand)]
     pub command: Option<Command>,
+}
+
+#[derive(Args, Clone, Debug, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+pub(crate) struct ContentOptions {
+    #[arg(long, conflicts_with = "content_file")]
+    pub content: Option<String>,
+    /// Read UTF-8 content from a file, or '-' for standard input.
+    #[arg(long, value_name = "PATH|-")]
+    pub content_file: Option<PathBuf>,
 }
 
 #[derive(Args, Clone, Debug, TypedBuilder)]
