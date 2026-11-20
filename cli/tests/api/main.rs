@@ -11,6 +11,7 @@ mod helpers;
 mod knowledge;
 mod login;
 mod network;
+mod proposals;
 mod session;
 mod spaces;
 mod task_filters;

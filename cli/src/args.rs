@@ -68,6 +68,11 @@ pub(crate) enum Command {
         #[command(subcommand)]
         command: ParticipantCommand,
     },
+    /// Submit, read and decide Knowledge proposals.
+    Proposal {
+        #[command(subcommand)]
+        command: ProposalCommand,
+    },
     /// Manage your spaces.
     Space {
         #[command(subcommand)]
@@ -203,6 +208,60 @@ pub(crate) enum ParticipantCommand {
 pub(crate) enum AddedRole {
     Contributor,
     Viewer,
+}
+
+#[derive(Clone, Debug, Subcommand)]
+pub(crate) enum ProposalCommand {
+    /// Approve a proposal and apply its Knowledge change.
+    Approve { space: String, proposal: String },
+    /// Propose changes to an entry's name, summary or content.
+    #[command(group(ArgGroup::new("changes").required(true).multiple(true)
+        .args(["name", "summary", "content", "content_file"])))]
+    Change {
+        space: String,
+        entry: String,
+        #[command(flatten)]
+        changes: KnowledgeChanges,
+    },
+    /// Propose creating a knowledge entry.
+    #[command(group(ArgGroup::new("source").required(true)
+        .args(["content", "content_file"])))]
+    Create {
+        space: String,
+        name: String,
+        #[arg(long)]
+        summary: String,
+        #[command(flatten)]
+        content: ContentOptions,
+    },
+    /// Propose deletion without confirmation; approval deletes the entry.
+    Delete { space: String, entry: String },
+    /// List one page of proposals, optionally by status and keyword.
+    List {
+        space: String,
+        #[arg(long, value_enum)]
+        status: Option<ProposalStatus>,
+        #[arg(long)]
+        keyword: Option<String>,
+        #[command(flatten)]
+        page: Page,
+    },
+    /// Reject a proposal, or withdraw your own party's proposal.
+    Reject {
+        space: String,
+        proposal: String,
+        #[arg(long)]
+        reason: String,
+    },
+    /// Show a proposal's fields, content and decision.
+    Show { space: String, proposal: String },
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub(crate) enum ProposalStatus {
+    Approved,
+    Pending,
+    Rejected,
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -358,6 +417,16 @@ impl Role {
             Self::Admin => "admin",
             Self::Contributor => "contributor",
             Self::Viewer => "viewer",
+        }
+    }
+}
+
+impl ProposalStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Approved => "approved",
+            Self::Pending => "pending",
+            Self::Rejected => "rejected",
         }
     }
 }

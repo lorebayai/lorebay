@@ -70,6 +70,13 @@ pub(super) async fn run(
     }
 }
 
+pub(super) fn is_entry_key(entry: &str) -> bool {
+    entry
+        .strip_prefix("KN-")
+        .and_then(|number| number.parse::<i64>().ok())
+        .is_some_and(|number| number > 0 && entry == format!("KN-{number}"))
+}
+
 const KNOWLEDGE: &str = "knowledge";
 const SPACES: &str = "spaces";
 
@@ -197,10 +204,7 @@ async fn list(
 }
 
 fn entry_path(space: &str, entry: &str, suffix: &[&str]) -> Result<String> {
-    let key = entry
-        .strip_prefix("KN-")
-        .and_then(|number| number.parse::<i64>().ok())
-        .is_some_and(|number| number > 0 && entry == format!("KN-{number}"));
+    let key = is_entry_key(entry);
     let mut segments = vec![SPACES, space, KNOWLEDGE];
     if key {
         segments.extend(["by-key", entry]);

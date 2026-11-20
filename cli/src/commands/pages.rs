@@ -17,6 +17,8 @@ pub(crate) struct Listing {
     pub command: String,
     pub columns: Vec<&'static str>,
     pub fields: Vec<&'static str>,
+    #[builder(default = |item, field| display_value(&item[field]))]
+    pub display_field: fn(&Value, &str) -> String,
     #[builder(default = Vec::new())]
     pub query: Vec<(&'static str, String)>,
     #[builder(default = Vec::new())]
@@ -73,7 +75,7 @@ pub(crate) async fn list_page(
             listing
                 .fields
                 .iter()
-                .map(|field| display_value(&item[field]))
+                .map(|field| (listing.display_field)(item, field))
                 .collect::<Vec<_>>()
         })
         .collect();
