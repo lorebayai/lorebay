@@ -271,7 +271,7 @@ impl From<KnowledgeError> for ApiError {
             KnowledgeError::InvalidFilter => StatusCode::BAD_REQUEST,
             KnowledgeError::InvalidPageSize(_) => return invalid_query("page_size"),
             KnowledgeError::NameTaken { .. } => StatusCode::CONFLICT,
-            KnowledgeError::NotFound => StatusCode::NOT_FOUND,
+            KnowledgeError::NotFound | KnowledgeError::VersionNotFound => StatusCode::NOT_FOUND,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
         Self::library(status, error.code(), error)

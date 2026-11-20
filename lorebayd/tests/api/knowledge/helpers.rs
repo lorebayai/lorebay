@@ -2,7 +2,7 @@ use reqwest::{Method, Response, StatusCode};
 use serde_json::{Value, json};
 use url::form_urlencoded::Serializer;
 
-use crate::helpers::{Server, create_space, list_page, request};
+use crate::helpers::{Server, assert_problem, create_space, list_page, request};
 
 pub const PATH: &str = "/api/v1/spaces/SPACE-1/knowledge";
 pub const CONTENT_LIMIT: usize = 1024 * 1024;
@@ -57,6 +57,64 @@ pub fn by_name(name: &str) -> String {
         .append_pair("name", name)
         .finish();
     format!("{PATH}/entry?{query}")
+}
+
+pub fn resource(path: &str, suffix: &str) -> String {
+    path.split_once('?').map_or_else(
+        || format!("{path}/{suffix}"),
+        |(path, query)| format!("{path}/{suffix}?{query}"),
+    )
+}
+
+pub fn version_metadata(entry: &Value) -> Value {
+    json!({
+        "version": entry["version"], "kind": entry["kind"],
+        "applied_by": entry["applied_by"], "applied_at": entry["applied_at"],
+        "proposal_key": null,
+    })
+}
+
+pub async fn roll_back(server: &Server, caller: &Value, path: &str, version: i64) -> Value {
+    data(
+        request(
+            server,
+            caller,
+            Method::POST,
+            &resource(path, "rollback"),
+            json!({"version": version}),
+        )
+        .await,
+        StatusCode::OK,
+    )
+    .await
+}
+
+pub async fn assert_history_target_error(
+    server: &Server,
+    caller: &Value,
+    target: &str,
+    status: StatusCode,
+    code: &str,
+) {
+    for (method, suffix) in [
+        (Method::GET, "versions"),
+        (Method::GET, "versions/1"),
+        (Method::POST, "rollback"),
+    ] {
+        assert_problem(
+            request(
+                server,
+                caller,
+                method,
+                &resource(target, suffix),
+                json!({"version":1}),
+            )
+            .await,
+            status,
+            code,
+        )
+        .await;
+    }
 }
 
 pub fn padded_body(mut body: String, length: usize) -> String {

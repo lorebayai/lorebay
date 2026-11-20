@@ -330,6 +330,7 @@ pub enum WriteOperation {
     RefuseArtifact,
     RegisterArtifact,
     RemoveAbandonedArtifacts,
+    RollBackKnowledgeEntry,
 }
 
 #[derive(Clone, Debug, TypedBuilder)]

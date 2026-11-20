@@ -12,7 +12,9 @@ use super::id::primary_key;
 use super::key::format_key;
 use super::space_access::{READ_ROLES, SpaceRole, check_space};
 use super::time::now_millis;
-use super::{KnowledgeChanges, KnowledgeError, KnowledgeTarget, NewKnowledgeEntry};
+use super::{
+    KnowledgeChanges, KnowledgeError, KnowledgeInputError, KnowledgeTarget, NewKnowledgeEntry,
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -32,6 +34,18 @@ pub struct KnowledgeEntry {
     pub content: Option<String>,
     pub applied_by: String,
     pub applied_at: i64,
+}
+
+impl TryFrom<&str> for KnowledgeVersionKind {
+    type Error = anyhow::Error;
+
+    fn try_from(kind: &str) -> Result<Self, Self::Error> {
+        match kind {
+            "content" => Ok(Self::Content),
+            "deletion" => Ok(Self::Deletion),
+            _ => Err(anyhow::anyhow!("Invalid Knowledge version kind")),
+        }
+    }
 }
 
 pub async fn create_knowledge_entry(
@@ -123,6 +137,63 @@ pub async fn read_knowledge_entry(
             named_entry(state, handle, entry, version).await
         })
         .await
+}
+
+pub async fn roll_back_knowledge_entry(
+    write: &mut Write<'_>,
+    caller: &Caller,
+    space: &str,
+    target: KnowledgeTarget,
+    version: i64,
+) -> Result<KnowledgeEntry, KnowledgeError> {
+    write.begin_operation(Some(caller))?;
+    let space_id = direct_space(write, caller, space).await?;
+    let entry = KnowledgeRepository::builder()
+        .connection(write.transaction())
+        .build()
+        .target(&space_id, &target, true)
+        .await?
+        .ok_or(KnowledgeError::NotFound)?;
+    let source = KnowledgeVersionRepository::builder()
+        .connection(write.transaction())
+        .build()
+        .find_by_number(&entry.id, version)
+        .await?
+        .filter(|source| source.kind == "content")
+        .ok_or(KnowledgeInputError::RollbackVersion)?;
+    let changes = KnowledgeChanges::new(None, source.summary, source.content)?;
+    let entry = apply_changes(write.transaction(), caller, entry, changes).await?;
+    let version = latest(write.transaction(), &entry).await?;
+    let result = named_entry(write.state(), write.handle(), entry, version).await?;
+    write.record(WriteOperation::RollBackKnowledgeEntry, Some(space_id));
+    Ok(result)
+}
+
+pub(super) async fn named_entry(
+    state: &LibraryState,
+    handle: OperationHandle<'_>,
+    entry: entry::Model,
+    version: version::Model,
+) -> Result<KnowledgeEntry, KnowledgeError> {
+    let names = state
+        .names()
+        .names(handle, from_ref(&version.applied_by))
+        .await?;
+    let applied_by = names
+        .get(&version.applied_by)
+        .cloned()
+        .ok_or_else(|| anyhow::anyhow!("Person name is missing"))?;
+    let kind = KnowledgeVersionKind::try_from(version.kind.as_str())?;
+    Ok(KnowledgeEntry {
+        key: format_key("KN", entry.number),
+        name: entry.name,
+        version: version.version,
+        kind,
+        summary: version.summary,
+        content: version.content,
+        applied_by,
+        applied_at: version.created_at,
+    })
 }
 
 async fn direct_space(
@@ -233,6 +304,7 @@ async fn apply_changes(
     }
     if content.is_some() {
         model.latest_version = Set(next_version(*model.latest_version.as_ref())?);
+        model.deleted_at = Set(None);
     }
     model.updated_at = Set(now_millis()?);
     let entry = KnowledgeRepository::builder()
@@ -289,37 +361,6 @@ async fn latest(
         .build()
         .by_number(&entry.id, entry.latest_version)
         .await?)
-}
-
-async fn named_entry(
-    state: &LibraryState,
-    handle: OperationHandle<'_>,
-    entry: entry::Model,
-    version: version::Model,
-) -> Result<KnowledgeEntry, KnowledgeError> {
-    let names = state
-        .names()
-        .names(handle, from_ref(&version.applied_by))
-        .await?;
-    let applied_by = names
-        .get(&version.applied_by)
-        .cloned()
-        .ok_or_else(|| anyhow::anyhow!("Person name is missing"))?;
-    let kind = match version.kind.as_str() {
-        "content" => KnowledgeVersionKind::Content,
-        "deletion" => KnowledgeVersionKind::Deletion,
-        _ => return Err(anyhow::anyhow!("Invalid Knowledge version kind").into()),
-    };
-    Ok(KnowledgeEntry {
-        key: format_key("KN", entry.number),
-        name: entry.name,
-        version: version.version,
-        kind,
-        summary: version.summary,
-        content: version.content,
-        applied_by,
-        applied_at: version.created_at,
-    })
 }
 
 fn next_version(version: i64) -> Result<i64, KnowledgeError> {

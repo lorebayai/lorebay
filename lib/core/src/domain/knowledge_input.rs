@@ -23,6 +23,8 @@ pub enum KnowledgeInputError {
     Name,
     #[error("Provide content, summary or name.")]
     NoChanges,
+    #[error("Choose an existing content version to roll back to.")]
+    RollbackVersion,
     #[error("Must be at most {1} UTF-8 bytes.")]
     TooManyBytes(&'static str, usize),
     #[error("Must be at most {1} characters.")]
@@ -38,6 +40,7 @@ impl KnowledgeInputError {
             Self::InvalidTarget => "target",
             Self::Name => "name",
             Self::NoChanges => "body",
+            Self::RollbackVersion => "version",
         }
     }
 }
