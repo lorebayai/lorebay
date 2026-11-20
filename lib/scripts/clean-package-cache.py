@@ -1,15 +1,18 @@
+import argparse
 import json
 import os
 from pathlib import Path
 import shlex
 import shutil
 import subprocess
+from urllib.parse import quote
 
 
 def registry_hash(registry):
     # Cargo hashes LocalRegistry's discriminant and canonical URL with stable SipHash-1-3.
     # https://doc.rust-lang.org/nightly/nightly-rustc/src/cargo/sources/registry/mod.rs.html
-    data = b"\x04" + registry.as_uri().encode() + b"\xff"
+    url = "file://" + quote(os.fsencode(registry), safe="/!$&'()*+,;=:@[]^|~")
+    data = b"\x04" + url.encode() + b"\xff"
     mask = (1 << 64) - 1
     state = [
         0x736F6D6570736575, 0x646F72616E646F6D ^ 0xEE,
@@ -82,6 +85,9 @@ def clean_builds(build, sources):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--verify", action="store_true")
+    args = parser.parse_args()
     metadata = json.loads(subprocess.check_output(
         ["cargo", "metadata", "--no-deps", "--format-version", "1", "--locked", "--offline"],
         text=True,
@@ -90,6 +96,13 @@ def main():
     registry = build / "package" / "tmp-registry"
     cargo_home = Path(os.environ.get("CARGO_HOME", Path.home() / ".cargo")).resolve()
     sources = cargo_home / "registry" / "src" / f"-{registry_hash(registry)}"
+    if args.verify:
+        if not any(sources.glob("lorebay-lib-*/Cargo.toml")):
+            raise SystemExit(
+                f"Cargo registry source mismatch: expected packaged library sources in {sources}. "
+                "Check the pinned Cargo version's registry URL and hash."
+            )
+        return
     units = clean_builds(build, sources)
     packages = list(sources.glob("lorebay-lib-*"))
     for package in packages:
