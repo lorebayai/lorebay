@@ -1,0 +1,23 @@
+inheritedBy:
+  toolchain: 'rust'
+  layers: ['application']
+
+tasks:
+  release-notices:
+    command: 'python3 -B .moon/release.py notices $projectSource'
+    options:
+      cache: false
+      runInCI: false
+      runFromWorkspaceRoot: true
+  release-build:
+    command: 'python3 -B .moon/release.py build $projectSource'
+    options:
+      cache: false
+      runInCI: false
+      runFromWorkspaceRoot: true
+  release-package:
+    command: 'python3 -B .moon/release.py package $projectSource'
+    options:
+      cache: false
+      runInCI: false
+      runFromWorkspaceRoot: true

@@ -27,6 +27,8 @@
   adapt to that release rather than copy a version from another repository.
   An older pin may be used only when adaptation is impossible, with a
   one-line comment in the root `Cargo.toml` naming the cause.
+- Before adding or porting a dependency, its license must be on the allow
+  list in `deny.toml`, and `moon run lorebayd:deny cli:deny` must pass.
 - After changing workspace members or dependencies, its author must refresh
   `Cargo.lock` with `cargo update --workspace` before running locked checks.
   It adds missing entries without upgrading the ones already locked.

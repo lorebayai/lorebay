@@ -2,6 +2,12 @@ language: 'rust'
 layer: 'application'
 
 tasks:
+  deny:
+    command: 'python3 -B .moon/release.py deny cli'
+    options:
+      cache: false
+      runInCI: false
+      runFromWorkspaceRoot: true
   build:
     outputs: ['/target/debug/lorebay']
   integration:
