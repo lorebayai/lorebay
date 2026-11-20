@@ -4,7 +4,7 @@ use sea_orm::sea_query::{
 };
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, DbBackend, DbErr, DeriveIden,
-    EntityTrait, FromQueryResult, QueryFilter, QuerySelect,
+    EntityTrait, FromQueryResult, QueryFilter, QueryOrder, QuerySelect,
 };
 use typed_builder::TypedBuilder;
 
@@ -35,6 +35,15 @@ pub(crate) struct KnowledgeListRequest<'a> {
     pub keyword: Option<&'a str>,
     pub after: Option<&'a str>,
     pub limit: u64,
+}
+
+#[derive(Clone, Debug, FromQueryResult, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+pub(crate) struct DeletedKnowledgeRow {
+    pub number: i64,
+    pub name: String,
+    pub applied_by: String,
+    pub deleted_at: i64,
 }
 
 impl<C: ConnectionTrait> KnowledgeRepository<'_, C> {
@@ -79,6 +88,42 @@ impl<C: ConnectionTrait> KnowledgeRepository<'_, C> {
 
     pub async fn update(&self, model: ActiveModel) -> Result<Model, DbErr> {
         model.update(self.connection).await
+    }
+
+    pub async fn list_deleted(
+        &self,
+        space: &str,
+        after: Option<i64>,
+        limit: u64,
+    ) -> Result<Vec<DeletedKnowledgeRow>, DbErr> {
+        let mut query = Entity::find()
+            .select_only()
+            .columns([Column::Number, Column::Name, Column::DeletedAt])
+            .column(VersionColumn::AppliedBy)
+            .join(
+                JoinType::InnerJoin,
+                Entity::belongs_to(VersionEntity)
+                    .from(Column::Id)
+                    .to(VersionColumn::KnowledgeId)
+                    .on_condition(|_, _| {
+                        Condition::all().add(
+                            Expr::col((Entity, Column::LatestVersion))
+                                .eq(Expr::col((VersionEntity, VersionColumn::Version))),
+                        )
+                    })
+                    .into(),
+            )
+            .filter(Column::SpaceId.eq(space))
+            .filter(Column::DeletedAt.is_not_null());
+        if let Some(after) = after {
+            query = query.filter(Column::Number.gt(after));
+        }
+        query
+            .order_by_asc(Column::Number)
+            .limit(limit)
+            .into_model()
+            .all(self.connection)
+            .await
     }
 
     pub async fn list(

@@ -91,4 +91,29 @@ fn knowledge_router() -> Router<ServerState> {
         )
         .route("/spaces/{space}/knowledge/entry", by_entry.clone())
         .route("/spaces/{space}/knowledge/by-key/{key}", by_entry)
+        .route("/spaces/{space}/knowledge/deleted", get(knowledge::deleted))
+        .route(
+            "/spaces/{space}/knowledge/by-key/{key}/versions",
+            get(knowledge::versions),
+        )
+        .route(
+            "/spaces/{space}/knowledge/entry/versions",
+            get(knowledge::versions),
+        )
+        .route(
+            "/spaces/{space}/knowledge/by-key/{key}/versions/{version}",
+            get(knowledge::read_version),
+        )
+        .route(
+            "/spaces/{space}/knowledge/entry/versions/{version}",
+            get(knowledge::read_version),
+        )
+        .route(
+            "/spaces/{space}/knowledge/by-key/{key}/rollback",
+            post(knowledge::roll_back),
+        )
+        .route(
+            "/spaces/{space}/knowledge/entry/rollback",
+            post(knowledge::roll_back),
+        )
 }

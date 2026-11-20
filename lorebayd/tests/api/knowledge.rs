@@ -12,6 +12,505 @@ use helpers::*;
 mod helpers;
 
 #[tokio::test]
+async fn list_knowledge_versions_returns_every_version_with_who_applied_it() {
+    let server = two_people().await;
+    let owner = server.tokens().await;
+    create_space(&server, &owner, "Team", "Shared").await;
+    participant(&server, &owner, Method::POST, "contributor").await;
+    participant(&server, &owner, Method::PATCH, "admin").await;
+    let bob = login(&server, "bob").await;
+    let first = seed(&server, &owner, "Guide").await;
+    let second = change(&server, &bob, &by_key("KN-1"), json!({"summary":"Updated"})).await;
+    let third = delete(&server, &owner, &by_key("KN-1")).await;
+    seed(&server, &owner, "Other").await;
+    let path = resource(&by_key("KN-1"), "versions");
+    let expected = vec![
+        version_metadata(&third),
+        version_metadata(&second),
+        version_metadata(&first),
+    ];
+    for size in ["1", "2", "100"] {
+        assert_eq!(walk(&server, &owner, &path, size, 3).await, expected);
+    }
+    assert_eq!(
+        list(&server, &owner, &resource(&by_name("guide"), "versions")).await,
+        json!(expected)
+    );
+    let page = list_page(&server, &owner, &path, &[("page_size", "1")]).await;
+    let cursor = page["meta"]["next_cursor"].as_str().unwrap();
+    for (caller, other) in [
+        (&owner, resource(&by_key("KN-2"), "versions")),
+        (&bob, path.clone()),
+        (&owner, format!("{PATH}/deleted")),
+    ] {
+        assert_problem(
+            list_response(&other, &server, caller, &[("cursor", cursor)]).await,
+            StatusCode::BAD_REQUEST,
+            "request.invalid_query",
+        )
+        .await;
+    }
+    for query in [
+        vec![("cursor", "invalid")],
+        vec![("page_size", "0")],
+        vec![("page_size", "101")],
+    ] {
+        assert_problem(
+            list_response(&path, &server, &owner, &query).await,
+            StatusCode::BAD_REQUEST,
+            "request.invalid_query",
+        )
+        .await;
+    }
+}
+
+#[tokio::test]
+async fn list_knowledge_versions_succeeds_when_caller_is_viewer() {
+    let server = two_people().await;
+    let owner = server.tokens().await;
+    create_space(&server, &owner, "Team", "Shared").await;
+    participant(&server, &owner, Method::POST, "viewer").await;
+    let bob = login(&server, "bob").await;
+    let first = seed(&server, &owner, "Guide").await;
+    let deleted = delete(&server, &owner, &by_key("KN-1")).await;
+    assert_eq!(
+        list(&server, &bob, &resource(&by_name("guide"), "versions")).await,
+        json!([version_metadata(&deleted), version_metadata(&first)])
+    );
+    assert_eq!(
+        read(&server, &bob, &resource(&by_key("KN-1"), "versions/1")).await,
+        first
+    );
+    assert_eq!(
+        list(&server, &bob, &format!("{PATH}/deleted")).await[0]["key"],
+        "KN-1"
+    );
+    create_space(&server, &owner, "Private", "Other space").await;
+    let agent = authorize_for(&server, &bob, "Reader").await;
+    for caller in [&bob, &agent] {
+        assert_history_target_error(
+            &server,
+            caller,
+            "/api/v1/spaces/SPACE-2/knowledge/by-key/KN-1",
+            StatusCode::NOT_FOUND,
+            "space.not_found",
+        )
+        .await;
+        assert_problem(
+            request(
+                &server,
+                caller,
+                Method::GET,
+                "/api/v1/spaces/SPACE-2/knowledge/deleted",
+                Value::Null,
+            )
+            .await,
+            StatusCode::NOT_FOUND,
+            "space.not_found",
+        )
+        .await;
+    }
+}
+
+#[tokio::test]
+async fn list_knowledge_versions_fails_when_caller_is_agent() {
+    let (server, owner) = setup().await;
+    let first = seed(&server, &owner, "Guide").await;
+    let agent = authorize_for(&server, &owner, "Reader").await;
+    for target in [by_key("KN-1"), by_name("Guide")] {
+        for suffix in ["versions", "versions/1"] {
+            assert_problem(
+                request(
+                    &server,
+                    &agent,
+                    Method::GET,
+                    &resource(&target, suffix),
+                    Value::Null,
+                )
+                .await,
+                StatusCode::FORBIDDEN,
+                "auth.person_required",
+            )
+            .await;
+        }
+        assert_problem(
+            request(
+                &server,
+                &agent,
+                Method::POST,
+                &resource(&target, "rollback"),
+                json!({"version":1}),
+            )
+            .await,
+            StatusCode::FORBIDDEN,
+            "auth.person_required",
+        )
+        .await;
+    }
+    assert_eq!(read(&server, &agent, &by_key("KN-1")).await, first);
+    delete(&server, &owner, &by_key("KN-1")).await;
+    assert_problem(
+        request(
+            &server,
+            &agent,
+            Method::GET,
+            &resource(&by_key("KN-1"), "versions/1"),
+            Value::Null,
+        )
+        .await,
+        StatusCode::FORBIDDEN,
+        "auth.person_required",
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn read_knowledge_version_returns_old_content() {
+    let (server, owner) = setup().await;
+    let name = "docs/KN-2 #?&+.md";
+    let first = seed(&server, &owner, name).await;
+    let second = change(
+        &server,
+        &owner,
+        &by_key("KN-1"),
+        json!({"summary":"Changed","content":"New"}),
+    )
+    .await;
+    for target in [by_key("KN-1"), by_name(name)] {
+        assert_eq!(
+            read(&server, &owner, &resource(&target, "versions/1")).await,
+            first
+        );
+        for version in ["0", "-1", "999"] {
+            assert_problem(
+                request(
+                    &server,
+                    &owner,
+                    Method::GET,
+                    &resource(&target, &format!("versions/{version}")),
+                    Value::Null,
+                )
+                .await,
+                StatusCode::NOT_FOUND,
+                "knowledge.version_not_found",
+            )
+            .await;
+        }
+    }
+    for target in [by_key("KN-99"), by_name("Missing")] {
+        assert_history_target_error(
+            &server,
+            &owner,
+            &target,
+            StatusCode::NOT_FOUND,
+            "knowledge.not_found",
+        )
+        .await;
+    }
+    for target in [
+        format!("{PATH}/entry"),
+        format!("{}?name=Guide", by_key("KN-1")),
+    ] {
+        assert_history_target_error(
+            &server,
+            &owner,
+            &target,
+            StatusCode::BAD_REQUEST,
+            "request.invalid_body",
+        )
+        .await;
+    }
+    assert_eq!(read(&server, &owner, &by_key("KN-1")).await, second);
+}
+
+#[tokio::test]
+async fn read_knowledge_version_returns_deletion_version() {
+    let (server, owner) = setup().await;
+    let first = seed(&server, &owner, "Guide").await;
+    let deleted = delete(&server, &owner, &by_name("Guide")).await;
+    for target in [by_key("KN-1"), by_name("guide")] {
+        let old = read(&server, &owner, &resource(&target, "versions/2")).await;
+        assert_eq!(old, deleted);
+        assert_eq!(old["kind"], "deletion");
+        assert_eq!(old["applied_by"], "alice");
+        assert!(old["applied_at"].as_i64().unwrap() > 0);
+        assert!(old["summary"].is_null());
+        assert!(old["content"].is_null());
+        assert_eq!(
+            read(&server, &owner, &resource(&target, "versions/1")).await,
+            first
+        );
+    }
+}
+
+#[tokio::test]
+async fn list_deleted_knowledge_returns_deleted_entries_only() {
+    let server = two_people().await;
+    let owner = server.tokens().await;
+    create_space(&server, &owner, "Team", "Shared").await;
+    participant(&server, &owner, Method::POST, "contributor").await;
+    participant(&server, &owner, Method::PATCH, "admin").await;
+    let bob = login(&server, "bob").await;
+    let path = format!("{PATH}/deleted");
+    assert_eq!(list(&server, &owner, &path).await, json!([]));
+    for name in ["Zed", "Live", "Alpha", "Restored"] {
+        seed(&server, &owner, name).await;
+    }
+    let third = delete(&server, &owner, &by_key("KN-3")).await;
+    let first = delete(&server, &bob, &by_key("KN-1")).await;
+    delete(&server, &owner, &by_key("KN-4")).await;
+    roll_back(&server, &owner, &by_key("KN-4"), 1).await;
+    let expected = json!([
+        {"key":"KN-1","name":"Zed","deleted_by":"bob","deleted_at":first["applied_at"]},
+        {"key":"KN-3","name":"Alpha","deleted_by":"alice","deleted_at":third["applied_at"]}
+    ]);
+    for size in ["1", "100"] {
+        assert_eq!(json!(walk(&server, &owner, &path, size, 2).await), expected);
+    }
+    assert_eq!(
+        list(&server, &owner, PATH).await.as_array().unwrap().len(),
+        2
+    );
+    let page = list_page(&server, &owner, &path, &[("page_size", "1")]).await;
+    let cursor = page["meta"]["next_cursor"].as_str().unwrap();
+    create_space(&server, &owner, "Second", "Other").await;
+    for other in [
+        resource(&by_key("KN-1"), "versions"),
+        "/api/v1/spaces/SPACE-2/knowledge/deleted".to_owned(),
+    ] {
+        assert_problem(
+            list_response(&other, &server, &owner, &[("cursor", cursor)]).await,
+            StatusCode::BAD_REQUEST,
+            "request.invalid_query",
+        )
+        .await;
+    }
+}
+
+#[tokio::test]
+async fn list_deleted_knowledge_fails_when_caller_is_agent() {
+    let (server, owner) = setup().await;
+    let agent = authorize_for(&server, &owner, "Reader").await;
+    let path = format!("{PATH}/deleted");
+    assert_problem(
+        request(&server, &agent, Method::GET, &path, Value::Null).await,
+        StatusCode::FORBIDDEN,
+        "auth.person_required",
+    )
+    .await;
+    seed(&server, &owner, "Guide").await;
+    delete(&server, &owner, &by_key("KN-1")).await;
+    assert_problem(
+        request(&server, &agent, Method::GET, &path, Value::Null).await,
+        StatusCode::FORBIDDEN,
+        "auth.person_required",
+    )
+    .await;
+    assert_eq!(list(&server, &agent, PATH).await, json!([]));
+}
+
+#[tokio::test]
+async fn roll_back_knowledge_entry_adds_version_copying_old_content() {
+    let server = two_people().await;
+    let owner = server.tokens().await;
+    create_space(&server, &owner, "Team", "Shared").await;
+    participant(&server, &owner, Method::POST, "contributor").await;
+    participant(&server, &owner, Method::PATCH, "admin").await;
+    let bob = login(&server, "bob").await;
+    let first = seed(&server, &owner, "Guide").await;
+    let second = change(
+        &server,
+        &owner,
+        &by_key("KN-1"),
+        json!({"summary":"Changed summary"}),
+    )
+    .await;
+    let third = change(
+        &server,
+        &owner,
+        &by_key("KN-1"),
+        json!({"content":"Changed content"}),
+    )
+    .await;
+    let rolled = roll_back(&server, &bob, &by_key("KN-1"), 1).await;
+    assert_eq!(rolled["key"], first["key"]);
+    assert_eq!(rolled["version"], 4);
+    assert_eq!(rolled["content"], first["content"]);
+    assert_eq!(rolled["summary"], first["summary"]);
+    assert_eq!(rolled["applied_by"], "bob");
+    assert!(rolled["applied_at"].as_i64().unwrap() >= third["applied_at"].as_i64().unwrap());
+    assert_eq!(read(&server, &owner, &by_key("KN-1")).await, rolled);
+    for (version, expected) in [(1, first.clone()), (2, second), (3, third)] {
+        assert_eq!(
+            read(
+                &server,
+                &owner,
+                &resource(&by_key("KN-1"), &format!("versions/{version}"))
+            )
+            .await,
+            expected
+        );
+    }
+    let history = list(&server, &owner, &resource(&by_key("KN-1"), "versions")).await;
+    assert_eq!(
+        history
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| row["version"].as_i64().unwrap())
+            .collect::<Vec<_>>(),
+        vec![4, 3, 2, 1]
+    );
+    assert!(history[0]["proposal_key"].is_null());
+    assert_eq!(
+        roll_back(&server, &owner, &by_key("KN-1"), 4).await["version"],
+        5
+    );
+}
+
+#[tokio::test]
+async fn roll_back_knowledge_entry_restores_deleted_entry_as_new_version() {
+    let (server, owner) = setup().await;
+    let first = seed(&server, &owner, "KN-99").await;
+    let deleted = delete(&server, &owner, &by_key("KN-1")).await;
+    let rolled = roll_back(&server, &owner, &by_name("kn-99"), 1).await;
+    assert_eq!(rolled["version"], 3);
+    assert_eq!(rolled["kind"], "content");
+    assert_eq!(rolled["name"], "KN-99");
+    assert_eq!(rolled["content"], first["content"]);
+    assert_eq!(rolled["summary"], first["summary"]);
+    let agent = authorize_for(&server, &owner, "Reader").await;
+    assert_eq!(read(&server, &agent, &by_key("KN-1")).await, rolled);
+    assert_eq!(
+        list(&server, &owner, &format!("{PATH}/deleted")).await,
+        json!([])
+    );
+    assert_eq!(list(&server, &agent, PATH).await[0]["key"], "KN-1");
+    assert_eq!(
+        list(&server, &owner, &resource(&by_name("KN-99"), "versions")).await,
+        json!([
+            version_metadata(&rolled),
+            version_metadata(&deleted),
+            version_metadata(&first)
+        ])
+    );
+}
+
+#[tokio::test]
+async fn roll_back_knowledge_entry_keeps_current_name() {
+    let (server, owner) = setup().await;
+    let first = seed(&server, &owner, "Old").await;
+    change(
+        &server,
+        &owner,
+        &by_key("KN-1"),
+        json!({"summary":"Changed"}),
+    )
+    .await;
+    let page = list_page(
+        &server,
+        &owner,
+        &resource(&by_key("KN-1"), "versions"),
+        &[("page_size", "1")],
+    )
+    .await;
+    let cursor = page["meta"]["next_cursor"].as_str().unwrap();
+    change(&server, &owner, &by_key("KN-1"), json!({"name":"docs/New"})).await;
+    let next = list_page(
+        &server,
+        &owner,
+        &resource(&by_name("docs/New"), "versions"),
+        &[("cursor", cursor)],
+    )
+    .await;
+    assert_eq!(next["data"], json!([version_metadata(&first)]));
+    let rolled = roll_back(&server, &owner, &by_key("KN-1"), 1).await;
+    assert_eq!(rolled["name"], "docs/New");
+    assert_eq!(rolled["key"], first["key"]);
+    assert_eq!(rolled["version"], 3);
+    assert_eq!(rolled["summary"], first["summary"]);
+    assert_eq!(read(&server, &owner, &by_name("docs/new")).await, rolled);
+    assert_eq!(
+        read(
+            &server,
+            &owner,
+            &resource(&by_name("docs/new"), "versions/1")
+        )
+        .await["name"],
+        "docs/New"
+    );
+    assert_problem(
+        request(&server, &owner, Method::GET, &by_name("Old"), Value::Null).await,
+        StatusCode::NOT_FOUND,
+        "knowledge.not_found",
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn roll_back_knowledge_entry_fails_when_version_is_deletion() {
+    let (server, owner) = setup().await;
+    let first = seed(&server, &owner, "Guide").await;
+    let deleted = delete(&server, &owner, &by_key("KN-1")).await;
+    let path = resource(&by_key("KN-1"), "rollback");
+    for body in [
+        json!({"version":2}),
+        json!({"version":999}),
+        json!({"version":0}),
+        json!({"version":-1}),
+        json!({}),
+        json!({"version":"1"}),
+    ] {
+        assert_problem(
+            request(&server, &owner, Method::POST, &path, body).await,
+            StatusCode::BAD_REQUEST,
+            "request.invalid_body",
+        )
+        .await;
+    }
+    assert_eq!(read(&server, &owner, &by_key("KN-1")).await, deleted);
+    assert_eq!(
+        list(&server, &owner, &resource(&by_key("KN-1"), "versions")).await,
+        json!([version_metadata(&deleted), version_metadata(&first)])
+    );
+}
+
+#[tokio::test]
+async fn roll_back_knowledge_entry_fails_when_caller_is_contributor() {
+    let server = two_people().await;
+    let owner = server.tokens().await;
+    create_space(&server, &owner, "Team", "Shared").await;
+    participant(&server, &owner, Method::POST, "contributor").await;
+    let bob = login(&server, "bob").await;
+    let first = seed(&server, &owner, "Guide").await;
+    for role in ["contributor", "viewer"] {
+        participant(&server, &owner, Method::PATCH, role).await;
+        assert_eq!(
+            read(&server, &bob, &resource(&by_name("Guide"), "versions/1")).await,
+            first
+        );
+        assert_problem(
+            request(
+                &server,
+                &bob,
+                Method::POST,
+                &resource(&by_name("Guide"), "rollback"),
+                json!({"version":1}),
+            )
+            .await,
+            StatusCode::FORBIDDEN,
+            "space.permission_required",
+        )
+        .await;
+    }
+    assert_eq!(read(&server, &owner, &by_key("KN-1")).await, first);
+    assert_eq!(
+        list(&server, &owner, &resource(&by_key("KN-1"), "versions")).await,
+        json!([version_metadata(&first)])
+    );
+}
+
+#[tokio::test]
 async fn create_knowledge_entry_returns_key_and_first_version() {
     let (server, owner) = setup().await;
     let created = seed(&server, &owner, "deploy/Guide.md").await;

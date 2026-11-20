@@ -3,10 +3,12 @@ use axum::extract::rejection::{JsonRejection, PathRejection, QueryRejection};
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use lorebay_lib_core::{
-    KNOWLEDGE_FIELDS_MAX_JSON_BYTES, KNOWLEDGE_NAME_MAX_CHARACTERS, KnowledgeChanges,
-    KnowledgeEntry, KnowledgeFilters, KnowledgeInputError, KnowledgeListItem, KnowledgeTarget,
-    NewKnowledgeEntry, PageOptions, change_knowledge_entry, create_knowledge_entry,
-    delete_knowledge_entry, list_knowledge, read_knowledge_entry,
+    DeletedKnowledgeEntry, KNOWLEDGE_FIELDS_MAX_JSON_BYTES, KNOWLEDGE_NAME_MAX_CHARACTERS,
+    KnowledgeChanges, KnowledgeEntry, KnowledgeFilters, KnowledgeInputError, KnowledgeListItem,
+    KnowledgeTarget, KnowledgeVersion, NewKnowledgeEntry, PageOptions, change_knowledge_entry,
+    create_knowledge_entry, delete_knowledge_entry, list_deleted_knowledge, list_knowledge,
+    list_knowledge_versions, read_knowledge_entry, read_knowledge_version,
+    roll_back_knowledge_entry,
 };
 use serde::{Deserialize, Deserializer};
 use typed_builder::TypedBuilder;
@@ -63,6 +65,39 @@ pub(crate) struct TargetQuery {
 pub(crate) struct KnowledgeQuery {
     prefix: Option<String>,
     keyword: Option<String>,
+    page_size: Option<String>,
+    cursor: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+#[serde(deny_unknown_fields)]
+pub(crate) struct VersionsQuery {
+    name: Option<String>,
+    key: Option<String>,
+    page_size: Option<String>,
+    cursor: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+pub(crate) struct VersionPath {
+    space: String,
+    key: Option<String>,
+    version: i64,
+}
+
+#[derive(Clone, Debug, Deserialize, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+#[serde(deny_unknown_fields)]
+pub(crate) struct RollbackRequest {
+    version: i64,
+}
+
+#[derive(Clone, Debug, Deserialize, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+#[serde(deny_unknown_fields)]
+pub(crate) struct DeletedQuery {
     page_size: Option<String>,
     cursor: Option<String>,
 }
@@ -192,6 +227,96 @@ pub(crate) async fn list(
         .data(page.items)
         .meta(Meta::builder().next_cursor(page.next_cursor).build())
         .build())
+}
+
+pub(crate) async fn versions(
+    State(state): State<ServerState>,
+    caller: VerifiedCaller,
+    path: Result<Path<EntryPath>, PathRejection>,
+    query: Result<Query<VersionsQuery>, QueryRejection>,
+) -> Result<Envelope<Vec<KnowledgeVersion>>, ApiError> {
+    let Path(path) = path.map_err(|_| invalid_query("path"))?;
+    let Query(query) = query.map_err(|_| invalid_query("query"))?;
+    let target = path.target(TargetQuery {
+        name: query.name,
+        key: query.key,
+    })?;
+    let options = PageOptions::from_text(query.page_size.as_deref(), query.cursor)
+        .map_err(|_| invalid_query("page_size"))?;
+    let page = list_knowledge_versions(
+        &state.library,
+        &caller.library_caller(),
+        &path.space,
+        target,
+        options,
+    )
+    .await?;
+    Ok(Envelope::builder()
+        .data(page.items)
+        .meta(Meta::builder().next_cursor(page.next_cursor).build())
+        .build())
+}
+
+pub(crate) async fn read_version(
+    State(state): State<ServerState>,
+    caller: VerifiedCaller,
+    path: Result<Path<VersionPath>, PathRejection>,
+    query: Result<Query<TargetQuery>, QueryRejection>,
+) -> Result<Envelope<KnowledgeEntry>, ApiError> {
+    let Path(path) = path.map_err(|_| invalid_query("path"))?;
+    let Query(query) = query.map_err(|_| invalid_query("query"))?;
+    let entry = EntryPath {
+        space: path.space,
+        key: path.key,
+    };
+    let result = read_knowledge_version(
+        &state.library,
+        &caller.library_caller(),
+        &entry.space,
+        entry.target(query)?,
+        path.version,
+    )
+    .await?;
+    Ok(Envelope::builder().data(result).build())
+}
+
+pub(crate) async fn deleted(
+    State(state): State<ServerState>,
+    caller: VerifiedCaller,
+    path: Result<Path<String>, PathRejection>,
+    query: Result<Query<DeletedQuery>, QueryRejection>,
+) -> Result<Envelope<Vec<DeletedKnowledgeEntry>>, ApiError> {
+    let Path(space) = path.map_err(|_| invalid_query("space"))?;
+    let Query(query) = query.map_err(|_| invalid_query("query"))?;
+    let options = PageOptions::from_text(query.page_size.as_deref(), query.cursor)
+        .map_err(|_| invalid_query("page_size"))?;
+    let page =
+        list_deleted_knowledge(&state.library, &caller.library_caller(), &space, options).await?;
+    Ok(Envelope::builder()
+        .data(page.items)
+        .meta(Meta::builder().next_cursor(page.next_cursor).build())
+        .build())
+}
+
+pub(crate) async fn roll_back(
+    State(state): State<ServerState>,
+    caller: VerifiedCaller,
+    path: Result<Path<EntryPath>, PathRejection>,
+    query: Result<Query<TargetQuery>, QueryRejection>,
+    request: Result<Json<RollbackRequest>, JsonRejection>,
+) -> Result<Envelope<KnowledgeEntry>, ApiError> {
+    let Path(path) = path.map_err(|_| invalid_query("path"))?;
+    let Query(query) = query.map_err(|_| invalid_query("query"))?;
+    let Json(request) = request.map_err(invalid_json)?;
+    let target = path.target(query)?;
+    let caller = caller.library_caller();
+    let result = state
+        .library
+        .run_write(async |write| {
+            roll_back_knowledge_entry(write, &caller, &path.space, target, request.version).await
+        })
+        .await?;
+    Ok(Envelope::builder().data(result).build())
 }
 
 fn present_string<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<String>, D::Error> {

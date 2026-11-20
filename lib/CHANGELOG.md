@@ -9,6 +9,12 @@ crates `lorebay-lib-types`, `lorebay-lib-core`, `lorebay-lib-migration` and
 
 Version 0.1.0, the first version, not yet tagged.
 
+- Core adds paginated Knowledge history and deleted-entry lists, old-version
+  reads with `knowledge.version_not_found`, and direct rollback for owners
+  and admins. The new result types are `KnowledgeVersion`, with an optional
+  `proposal_key`, and `DeletedKnowledgeEntry`.
+  Rollback records `WriteOperation::RollBackKnowledgeEntry`,
+  appends a content version, restores deleted entries and keeps their names.
 - Core adds direct Knowledge create, change and delete operations,
   latest-version reads and paginated prefix or keyword lists, with
   separate name and key inputs. Writes record their own operations;

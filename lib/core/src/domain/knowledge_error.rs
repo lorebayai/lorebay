@@ -26,6 +26,8 @@ pub enum KnowledgeError {
     NameTaken { deleted: bool },
     #[error("Knowledge entry not found")]
     NotFound,
+    #[error("Knowledge version not found")]
+    VersionNotFound,
 }
 
 impl KnowledgeError {
@@ -40,6 +42,7 @@ impl KnowledgeError {
             }
             Self::NameTaken { .. } => "knowledge.name_taken",
             Self::NotFound => "knowledge.not_found",
+            Self::VersionNotFound => "knowledge.version_not_found",
         }
     }
 }
