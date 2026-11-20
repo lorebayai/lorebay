@@ -59,9 +59,9 @@ Version 0.1.0, the first version, not yet tagged.
   `entity-generation` for `open_entity_database` and its development binary.
 - **Breaking:** the agent rules a product's skill restates change. Rule 5
   states the recording order, with a finished-step note even for a one-step
-  task. Rule 6 uploads each file the work produces for the person unless its
-  final content is in a pushed commit or a pull request, so a committed but
-  unpushed file is now uploaded, and the upload matches the final file.
+  task. Rule 6 uploads each file the work produces for the person to take
+  away, also an unpushed one inside a Git folder, and the upload matches the
+  final file.
   Rule 9 records only new work after re-authorization, with no task for the
   unrecorded stretch.
 - **Breaking:** the agent rules a product's skill restates change. When the
@@ -71,6 +71,12 @@ Version 0.1.0, the first version, not yet tagged.
   set it back, and its search for a lost task ID includes a task the agent
   ended in this session. Rule 5's reopening note says what the reopening is
   for. Rule 12's backstop says the choice is not checked.
+- **Breaking:** the agent rules a product's skill restates change. Rule 6
+  uploads no change to a repository's own content, a file tracked there or
+  meant to be committed, even when it is unpushed or the person calls it the
+  deliverable: commits and pull requests deliver it, the agent commits or
+  pushes only as the person or the repository's rules ask, and until then
+  the result names the repository, branch and changed files.
 - Core parses stored role names through `SpaceRole::try_from(&str)` with
   `SpaceRoleError` for invalid names.
 - Entity generation uses separate installer build directories for the two
