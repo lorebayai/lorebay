@@ -122,14 +122,21 @@ summary. A person can delete a note that holds a secret with
 
 ### 6. Upload artifacts
 
-Upload each file the work produces for the person, such as a report, an image,
-an exported document or data, also when the person never says "deliverable" or
-"upload", or only asks to save it. A file only on local disk counts, also an
-untracked or uncommitted one inside a Git folder. Only when a file's final
-content is in a pushed commit or a pull request, link that in Deliverables
-instead. The uploaded bytes must match the final file: if a file changes after
-its upload, upload it again as a new artifact and reference that one in the
-result.
+Upload each file the work produces for the person to take away, such as a
+report, an image, an exported document or data, also when the person never says
+"deliverable" or "upload", or only asks to save it, and also when it is saved
+inside a Git folder. The uploaded bytes must match the final file: if a file
+changes after its upload, upload it again as a new artifact and reference that
+one in the result.
+
+Don't upload a change to a repository's own content, a file tracked there or
+meant to be committed, such as source code, tests or docs, even when the person
+calls it the deliverable: commits and pull requests deliver it. Never commit or
+push only for this rule; commit and push as the person asks and the
+repository's own rules say. Until the change is in a pushed commit or a pull
+request, the result names the repository, the branch and the changed files,
+and says whether the change is committed; once it is there, link the commit or
+pull request in Deliverables.
 
 Upload with the URL and headers that `create_artifact` returns, then call
 `complete_artifact`, also when the upload returns 412: the file is already
