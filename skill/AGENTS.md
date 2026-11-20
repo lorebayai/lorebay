@@ -16,8 +16,8 @@ Folder orientation:
   `../.agents/plugins/marketplace.json` for Codex each list only it, that its
   manifests `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json` are
   identical and point `skills` at `./lorebay`, and that none of the four has
-  a `version`, so each harness's update follows `main`, or declares an MCP
-  server.
+  a `version`, so each harness's update follows the ref the person
+  installed, or declares an MCP server.
 - Plugin files stay out of `lorebay/`.
 - The skill's text uses no harness-specific syntax, such as a tool namespace
   or a skill mention, so one copy serves every harness. It names the tools by
