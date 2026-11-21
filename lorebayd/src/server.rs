@@ -104,6 +104,8 @@ const API_PREFIX: &str = "/api/v1";
 const ACCEPT_RETRY_DELAY: Duration = Duration::from_millis(100);
 const DATABASE_FILE: &str = "lorebay.sqlite3";
 const EARLIER_SCHEMA_MIGRATION: &str = "m20261116_000001_create_tables";
+const ARTIFACT_TABLE: &str = "space_artifact";
+const REFUSED_ARTIFACT_COLUMN: &str = "refused_at";
 const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
 fn identity(config: Config, users: Arc<dyn UserStore>) -> Result<Identity> {
@@ -178,14 +180,8 @@ async fn reject_earlier_data_directory(
     transaction: &DatabaseTransaction,
     directory: &Path,
 ) -> Result<()> {
-    let schema = SchemaManager::new(transaction);
-    if schema
-        .has_table(seaql_migrations::Entity.table_name())
-        .await?
-        && seaql_migrations::Entity::find_by_id(EARLIER_SCHEMA_MIGRATION)
-            .one(transaction)
-            .await?
-            .is_some()
+    if has_earlier_schema_migration(transaction).await?
+        || lacks_refused_artifact_column(transaction).await?
     {
         anyhow::bail!(
             "Data directory {} was created by an earlier lorebayd build and must be recreated. Move it aside and restart with an empty data directory.",
@@ -193,6 +189,27 @@ async fn reject_earlier_data_directory(
         );
     }
     Ok(())
+}
+
+async fn has_earlier_schema_migration(transaction: &DatabaseTransaction) -> Result<bool> {
+    let schema = SchemaManager::new(transaction);
+    Ok(schema
+        .has_table(seaql_migrations::Entity.table_name())
+        .await?
+        && seaql_migrations::Entity::find_by_id(EARLIER_SCHEMA_MIGRATION)
+            .one(transaction)
+            .await?
+            .is_some())
+}
+
+// Builds before v0.1.0 recorded the library's first migration over a schema without this column;
+// a migration that drops or renames it must retire this check.
+async fn lacks_refused_artifact_column(transaction: &DatabaseTransaction) -> Result<bool> {
+    let schema = SchemaManager::new(transaction);
+    Ok(schema.has_table(ARTIFACT_TABLE).await?
+        && !schema
+            .has_column(ARTIFACT_TABLE, REFUSED_ARTIFACT_COLUMN)
+            .await?)
 }
 
 async fn serve_until_shutdown(

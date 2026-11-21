@@ -1,59 +1,56 @@
 # lorebayd
 
-The Lorebay server: one executable that serves the web pages, the Web API
-and the MCP server. Product identity and delivery live in this crate.
-The embedded library owns space content and serves the MCP tools.
+The Lorebay server: one executable that serves the web pages, the Web API and
+the MCP server. Product identity and delivery live in this crate. The embedded
+library owns space content and serves the MCP tools.
 
 ## Usage
 
-Run these commands from the repo root:
+Run moon and Cargo from the repo root. Cargo needs the web files that
+`moon run web:build` builds; the moon tasks run it first. A release's
+executable takes the same arguments, as the last two lines show:
 
 ```bash
 moon run lorebayd:format lorebayd:lint lorebayd:build lorebayd:test lorebayd:integration
-moon run web:build
+moon run lorebayd/migration:generate-entities
 cargo run -p lorebayd -- hash-password < /path/to/password.txt
 cargo run -p lorebayd -- --config /path/to/lorebayd.json --dotenv /path/to/lorebayd.env
+lorebayd hash-password < /path/to/password.txt
+lorebayd --config /path/to/lorebayd.json --dotenv /path/to/lorebayd.env
 ```
 
-Startup applies the library's migrations first, then Lorebay's. If startup
-refuses a data directory from an earlier build, move it aside and start with
-an empty one; the users file recreates the accounts.
+The second command regenerates Lorebay's entities. Startup applies the
+library's migrations, then Lorebay's, so a data directory made by `v0.1.0` or
+a later release is upgraded in place; one made by a build before `v0.1.0` is
+refused: move it aside and start with an empty one, and the users file
+recreates the accounts. Open the metadata's `/oauth/authorize` endpoint with
+the client's authorization parameters to sign in and consent. The CLI's
+client ID is `lorebay-cli`; it accepts loopback redirects on any port and
+takes no agent name.
 
-`moon run web:build` builds the static web files before direct Cargo commands.
-The server build, lint and test tasks run it as a dependency.
-Run `moon run lorebayd/migration:generate-entities` to regenerate Lorebay's entities.
-
-Open the metadata's `/oauth/authorize` endpoint with the client's authorization
-parameters to sign in and consent. The built-in CLI client ID is `lorebay-cli`;
-it accepts loopback redirects on any port and takes no agent name.
-
-`hash-password` reads a password from standard input and prints an Argon2id
-PHC hash. It removes one final line ending and starts no server.
-It accepts no password argument.
-
-Set `users_file` before starting the server without a subcommand. Both flags
-are optional. The users file is a YAML list or a JSON array with these fields:
+`hash-password` reads a password from standard input, removes one final line
+ending and prints an Argon2id PHC hash; it starts no server and accepts no
+password argument. Set `users_file` before starting the server without a
+subcommand. Both flags are optional. The users file is a YAML list or a JSON
+array with the fields below, each hash the command's complete output. Usernames
+must be unique, nonempty and have no leading or trailing whitespace. All hashes
+in one file must use the same Argon2 parameters. Restart the server after
+editing the file. Changing a hash does not end existing login sessions or agent
+authorizations; to end them, remove the username, restart, add it back and
+restart.
 
 ```yaml
 - username: alice
   password_hash: '$argon2id$v=19$m=19456,t=2,p=1$...'
 ```
 
-Replace the abbreviated hash with the command's complete output. Usernames
-must be unique, nonempty and have no leading or trailing whitespace.
-All hashes in one file must use the same Argon2 parameters.
-Edit this file and restart the server to add or remove accounts.
-Changing a hash does not end existing login sessions or agent authorizations;
-to end them, remove the username, restart, add it back and restart.
-
 ## Configuration
 
-Values are loaded from defaults, the `--config` JSON file, the `--dotenv`
-file and the process environment, in that order. Later values win.
-Only `LOREBAYD__` process variables are read. Nested keys use `__`.
-Dotenv does not change the process environment. Its substitutions use earlier
-assignments, then the supplied configuration environment.
-Relative paths resolve against the working directory.
+Values load from defaults, the `--config` JSON file, the `--dotenv` file and the
+process environment, in that order; later values win. Only `LOREBAYD__` process
+variables are read, and nested keys use `__`. Dotenv does not change the process
+environment; its substitutions use earlier assignments, then the supplied
+configuration environment. Relative paths resolve against the working directory.
 
 | JSON key | Environment variable | Default | Values |
 | --- | --- | --- | --- |
@@ -88,12 +85,15 @@ Relative paths resolve against the working directory.
 | `orphaned_file_lifetime_seconds` | `LOREBAYD__ORPHANED_FILE_LIFETIME_SECONDS` | `86400` | 1..315360000 seconds; longer than `upload_url_lifetime_seconds` and `upload_idle_timeout_seconds`; also the age for the local directory's temporary uploads and out-of-format files |
 | `logging.level` | `LOREBAYD__LOGGING__LEVEL` | `info` | `off`, `error`, `warn`, `info`, `debug`, `trace` |
 
-Set `public_url` to the origin clients reach, including through a TLS proxy
-or port forward. Use HTTPS for harness connections outside loopback.
-The rate limits group peers by IPv4 address or IPv6 /64. Behind a reverse proxy every
-caller shares one rate limit; limits per caller belong on the proxy.
-The signing key is kept in `data_directory/signing.key` with mode 0600.
-Logs are JSON on stderr and exclude configuration dumps and credentials.
+Set `public_url` to the origin clients reach, including through a TLS proxy or
+port forward. Use HTTPS for harness connections outside loopback. The rate
+limits group peers by IPv4 address or IPv6 /64. Behind a reverse proxy every
+caller shares one rate limit; limits per caller belong on the proxy. Logs are
+JSON on stderr and exclude configuration dumps and credentials. The data
+directory holds two keys with mode 0600: `signing.key` for tokens and
+`file-url-signing.key` for file URLs. Losing them ends every login session,
+agent authorization and file URL; anyone who reads them can forge those. Back up
+the data directory only while `lorebayd` is stopped.
 
 ## Docs
 

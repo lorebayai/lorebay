@@ -7,47 +7,70 @@ Web API and the MCP server that people and agents use.
 
 ## Getting started
 
-Clone the repo:
+`lorebayd` runs on one server host for the whole team. Each person runs the
+`lorebay` CLI and an agent harness, Claude Code or Codex, on their own machine,
+and both reach the server over HTTPS.
+
+On the server host, download the `lorebayd` archive for its architecture from
+the latest release, check it against `SHA256SUMS` and unpack it; on Debian,
+install `curl` and `ca-certificates` first. The archives run on Linux, on
+x86_64 or aarch64, in any distribution.
 
 ```bash
-git clone git@github.com:lorebayai/lorebay.git
+base=https://github.com/lorebayai/lorebay/releases/latest/download
+archive=lorebayd-$(uname -m)-unknown-linux-musl.tar.gz
+curl -fsSL -O "$base/$archive" -O "$base/SHA256SUMS"
+sha256sum -c --ignore-missing SHA256SUMS && tar -xzf "$archive"
 ```
 
-Make each change in its own worktree, as
-[contribution.md](playbook/core/contribution.md#worktrees) describes.
+Write a configuration file, such as `lorebayd.json`;
+[lorebayd/README.md](lorebayd/README.md#configuration) lists every key. Then
+create the users file: hash each person's password and list each username with
+its hash, in single quotes, as [lorebayd/README.md](lorebayd/README.md#usage)
+shows:
 
-Install [rustup](https://rustup.rs), then install the Rust release that
-`rust-toolchain.toml` pins, before moon runs tasks in parallel:
+```json
+{
+  "public_url": "https://lorebay.example.com",
+  "data_directory": "/var/lib/lorebay",
+  "users_file": "/etc/lorebay/users.yaml"
+}
+```
 
 ```bash
-rustup toolchain install
+mkdir -p -m 0700 /etc/lorebay /var/lib/lorebay
+./lorebayd hash-password < alice-password.txt
 ```
 
-Install Python 3.11 or later for the library boundary check and entity generation.
+Start `./lorebayd --config lorebayd.json` behind a reverse proxy that
+terminates HTTPS at `public_url` and forwards to `listen_address`,
+`127.0.0.1:8080` by default; harnesses refuse OAuth over plain HTTP outside
+loopback. Uploads pass through the proxy, so let it accept request bodies up to
+`upload_size_limit_bytes`, 5 GB by default. Set limits per caller on the proxy,
+and give it `/healthz` and `/readyz` as health checks. Keep the data directory
+on a local file system, readable only by the user that runs `lorebayd`: it
+holds the database and the signing keys. Back it up only while `lorebayd` is
+stopped ([Storage](docs/architecture/storage.md#3-layers)).
 
-Install moon, then add `~/.moon/bin` to `PATH`:
+On each person's machine, get `lorebay` from the same release on Linux, as
+above with `lorebay-$(uname -m)-unknown-linux-musl.tar.gz`, and install it with
+the first command below; elsewhere, use the second, which needs Rust. A server
+whose certificate comes from a private authority needs `SSL_CERT_FILE`, as
+[skill/README.md](skill/README.md#usage) describes. Then sign in, with
+`--device` on a machine without a browser, and create a space:
 
 ```bash
-bash <(curl -fsSL https://moonrepo.dev/install/moon.sh)
+install -m 0755 lorebay /usr/local/bin/
+cargo install --locked --git https://github.com/lorebayai/lorebay --tag v0.1.0 lorebay-cli
+lorebay login https://lorebay.example.com
+lorebay space create --name Team --summary 'Team work'
 ```
 
-moon installs the Node.js and pnpm releases that `.moon/toolchains.yml` pins
-the first time a task needs them. Start the Postgres service for the library
-integration tests. The tests use the fixed loopback address below.
+Install the skill and connect each person's agent as
+[skill/README.md](skill/README.md) describes.
 
-```bash
-docker run --rm -d --name lorebay-test-postgres \
-  -e POSTGRES_USER=lorebay_test -e POSTGRES_PASSWORD=lorebay_test \
-  -e POSTGRES_DB=postgres -p 127.0.0.1:55432:5432 postgres:18.7@sha256:2ea8630df176ad090ec92136dee850397c5af8781e4bcf2e4162593691c61bbc
-docker exec lorebay-test-postgres pg_isready -h 127.0.0.1 -U lorebay_test -d postgres
-```
-
-Once Postgres is ready, run every check from the repo root:
-
-```bash
-moon ci
-docker stop lorebay-test-postgres
-```
+To change Lorebay, set up the tools as
+[CONTRIBUTING.md](CONTRIBUTING.md#set-up-the-tools) describes.
 
 ## Repository layout
 

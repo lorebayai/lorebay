@@ -21,8 +21,9 @@
 
 A person in a terminal reads a space's content and performs the operations
 that need a person, through the same Web API as the pages. Where a library
-contract says a person does something, Lorebay offers it on the web pages
-and, through the same Web API, in the CLI, subject to the scope below.
+contract says a person does something, Lorebay offers it in the CLI, subject
+to the scope below, and on the web pages once they are built
+([Lorebay](../product/lorebay.md#3-what-a-deployment-carries)).
 
 ## 2. Scope
 

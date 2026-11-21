@@ -1,9 +1,12 @@
 use std::fs;
+use std::path::Path;
 use std::time::{Duration, Instant};
 
 use reqwest::{Client, StatusCode};
-use sea_orm::sea_query::{Alias, ColumnDef, Query, Table};
-use sea_orm::{ConnectOptions, ConnectionTrait, Database};
+use sea_orm::sea_query::{
+    Alias, ColumnDef, Expr, ForeignKey, ForeignKeyAction, Index, Query, Table, TableCreateStatement,
+};
+use sea_orm::{ConnectOptions, ConnectionTrait, Database, DatabaseConnection, ExprTrait};
 use serde_json::{Value, json};
 use tempfile::TempDir;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -163,4 +166,101 @@ async fn startup_refuses_earlier_data_directory_without_changing_database() {
         "{error}"
     );
     assert_eq!(fs::read(path).unwrap(), bytes);
+}
+
+#[tokio::test]
+async fn startup_refuses_data_directory_without_refused_artifact_column() {
+    let directory = Server::start().await.stop().await;
+    let data = directory.path().join("data");
+    let path = data.join("lorebay.sqlite3");
+    let database = connect_without_foreign_keys(&path).await;
+    replace_artifact_table_with_earlier_schema(&database).await;
+    database.close().await.unwrap();
+    let bytes = fs::read(&path).unwrap();
+    let error = Server::startup_error(directory.path()).await;
+    assert!(error.contains(data.to_str().unwrap()), "{error}");
+    assert!(
+        error.contains("was created by an earlier lorebayd build and must be recreated"),
+        "{error}"
+    );
+    assert!(
+        error.contains("Move it aside and restart with an empty data directory"),
+        "{error}"
+    );
+    assert_eq!(fs::read(path).unwrap(), bytes);
+}
+
+async fn connect_without_foreign_keys(path: &Path) -> DatabaseConnection {
+    let filename = path.to_path_buf();
+    let mut options = ConnectOptions::new("sqlite://");
+    options.map_sqlx_sqlite_opts(move |sqlite| sqlite.filename(&filename).foreign_keys(false));
+    Database::connect(options).await.unwrap()
+}
+
+async fn replace_artifact_table_with_earlier_schema(database: &DatabaseConnection) {
+    let artifact = Alias::new("space_artifact");
+    database
+        .execute(&Table::drop().table(artifact.clone()).to_owned())
+        .await
+        .unwrap();
+    database.execute(&earlier_artifact_table()).await.unwrap();
+    let index = Index::create()
+        .name("space_artifact_task")
+        .table(artifact)
+        .col(Alias::new("task_id"))
+        .to_owned();
+    database.execute(&index).await.unwrap();
+}
+
+fn earlier_artifact_table() -> TableCreateStatement {
+    let artifact = Alias::new("space_artifact");
+    let [space_id, task_id, number, size, completed_at] =
+        ["space_id", "task_id", "number", "size", "completed_at"].map(Alias::new);
+    Table::create()
+        .table(artifact.clone())
+        .col(
+            ColumnDef::new(Alias::new("id"))
+                .text()
+                .not_null()
+                .primary_key(),
+        )
+        .col(ColumnDef::new(space_id.clone()).text().not_null())
+        .col(ColumnDef::new(task_id.clone()).text().not_null())
+        .col(ColumnDef::new(number.clone()).big_integer().not_null())
+        .col(ColumnDef::new(Alias::new("file_name")).text().not_null())
+        .col(ColumnDef::new(Alias::new("summary")).text().not_null())
+        .col(
+            ColumnDef::new(Alias::new("storage_key"))
+                .text()
+                .not_null()
+                .unique_key(),
+        )
+        .col(ColumnDef::new(size.clone()).big_integer())
+        .col(
+            ColumnDef::new(Alias::new("created_at"))
+                .big_integer()
+                .not_null(),
+        )
+        .col(ColumnDef::new(completed_at.clone()).big_integer())
+        .index(Index::create().unique().col(space_id.clone()).col(number))
+        .check(
+            Expr::col(completed_at)
+                .is_null()
+                .eq(Expr::col(size).is_null()),
+        )
+        .foreign_key(
+            ForeignKey::create()
+                .from(artifact.clone(), space_id.clone())
+                .to(Alias::new("space"), Alias::new("id")),
+        )
+        .foreign_key(
+            ForeignKey::create()
+                .from(artifact, (task_id, space_id))
+                .to(
+                    Alias::new("space_task"),
+                    (Alias::new("id"), Alias::new("space_id")),
+                )
+                .on_delete(ForeignKeyAction::Cascade),
+        )
+        .to_owned()
 }

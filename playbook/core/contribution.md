@@ -1,7 +1,7 @@
 # Contribution
 
-How a change lands in Lorebay: issues, worktrees, pull requests, reviews,
-landing and cleanup. Applies to every change in the repo.
+How a change lands and ships in Lorebay: issues, worktrees, pull requests,
+reviews, landing, cleanup and releases. Applies to every change in the repo.
 
 ## Issues
 
@@ -138,3 +138,13 @@ git push origin --delete "$BRANCH" || true
   anything worth keeping lands in the PR, as a doc or as code.
 - `git branch -D` is expected: a squash-merged branch looks unmerged to git.
 - Clean up only the worktree and branch of the PR you merged.
+
+## Releases
+
+- One PR sets `version` in the root `Cargo.toml` and the tag the READMEs'
+  commands name, adds the release's `CHANGELOG.md` section and merges last.
+- A maintainer runs `moon run lorebayd:deny cli:deny` on its merge commit,
+  the head of `main`, tags it `v<version>` and pushes the tag. The release
+  workflow repeats the check and leaves a draft release to check and publish.
+- A tag is never moved or reused. `lib-v` tags belong to the library
+  ([lib/README.md](../../lib/README.md#usage)).
