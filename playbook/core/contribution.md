@@ -141,8 +141,8 @@ git push origin --delete "$BRANCH" || true
 
 ## Releases
 
-- One PR sets `version` in the root `Cargo.toml` and adds the release's
-  `CHANGELOG.md` section; it merges after everything meant for the release.
+- One PR sets `version` in the root `Cargo.toml` and the tag the READMEs'
+  commands name, adds the release's `CHANGELOG.md` section and merges last.
 - A maintainer runs `moon run lorebayd:deny cli:deny` on its merge commit,
   the head of `main`, tags it `v<version>` and pushes the tag. The release
   workflow repeats the check and leaves a draft release to check and publish.
