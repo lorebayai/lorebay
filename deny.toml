@@ -1,0 +1,25 @@
+[graph]
+targets = ["x86_64-unknown-linux-musl", "aarch64-unknown-linux-musl"]
+
+[advisories]
+yanked = "deny"
+unmaintained = "all"
+unsound = "all"
+ignore = [
+    { id = "RUSTSEC-2026-0459", reason = "SQLx 0.9 requires libsqlite3-sys 0.37; only server-owned database/WAL files are opened." },
+    { id = "RUSTSEC-2026-0543", reason = "SeaORM 2.0.4 requires chrono; no maintained compatible replacement is available." },
+    { id = "RUSTSEC-2024-0449", reason = "serde_yaml_ng 0.10.0 requires unsafe-libyaml for the supported YAML users file format." },
+]
+
+[licenses]
+allow = ["Apache-2.0", "BSD-3-Clause", "ISC", "MIT", "Unicode-3.0", "Zlib"]
+
+[bans]
+multiple-versions = "allow"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

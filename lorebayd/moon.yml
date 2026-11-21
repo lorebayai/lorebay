@@ -13,6 +13,32 @@ fileGroups:
     - '/lib/types/src/**/*'
 
 tasks:
+  deny:
+    command: 'python3 -B .moon/release.py deny lorebayd'
+    options:
+      cache: false
+      runInCI: false
+      runFromWorkspaceRoot: true
+  release-version:
+    command: 'python3 -B .moon/release.py version'
+    options:
+      cache: false
+      runInCI: false
+      runFromWorkspaceRoot: true
+  release-build:
+    deps: ['web:build']
+  release-setup:
+    command: 'python3 -B .moon/release.py setup'
+    options:
+      cache: false
+      runInCI: false
+      runFromWorkspaceRoot: true
+  release-publish:
+    command: 'python3 -B .moon/release.py publish'
+    options:
+      cache: false
+      runInCI: false
+      runFromWorkspaceRoot: true
   build:
     deps: ['web:build']
     outputs: ['/target/debug/lorebayd']

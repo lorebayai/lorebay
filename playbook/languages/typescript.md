@@ -14,6 +14,9 @@
   version, in the `catalog` of `pnpm-workspace.yaml`. Packages must reference
   it with `"catalog:"` and must not declare a version; workspace packages
   depend on each other with `"workspace:*"`.
+- `web/package.json` must declare development dependencies only: the pages
+  ship no npm package at runtime. Shipping an npm package requires the
+  release check to cover npm licenses first.
 - Before adding a dependency, its author must run
   `npm view <package> dist-tags.latest` from outside the repo and use that
   release. An older pin may be used only when the latest cannot work, with a
