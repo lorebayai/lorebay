@@ -50,8 +50,8 @@ It does not cover:
 - **Skill.** Lorebay writes and ships its own skill, which states the
   library's [agent rules](../../lib/docs/contracts/agent-rules.md) and
   Lorebay's additions in [Agent skill](../contracts/agent-skill.md). The
-  web pages explain how to install the skill and connect an agent's MCP
-  client.
+  skill's [README](../../skill/README.md) explains how to install the skill
+  and connect an agent's MCP client.
 
 ## 4. Creating a space
 
