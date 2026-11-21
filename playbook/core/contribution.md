@@ -143,8 +143,8 @@ git push origin --delete "$BRANCH" || true
 
 - One PR sets `version` in the root `Cargo.toml` and adds the release's
   `CHANGELOG.md` section; it merges after everything meant for the release.
-- A maintainer tags its merge commit, the head of `main`, `v<version>` and
-  pushes the tag. The release workflow builds a draft release, which the
-  maintainer checks and publishes.
+- A maintainer runs `moon run lorebayd:deny cli:deny` on its merge commit,
+  the head of `main`, tags it `v<version>` and pushes the tag. The release
+  workflow repeats the check and leaves a draft release to check and publish.
 - A tag is never moved or reused. `lib-v` tags belong to the library
   ([lib/README.md](../../lib/README.md#usage)).
