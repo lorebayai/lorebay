@@ -202,7 +202,8 @@ async fn has_earlier_schema_migration(transaction: &DatabaseTransaction) -> Resu
             .is_some())
 }
 
-// Some builds before v0.1.0 recorded the library's first migration over a schema without this column.
+// Builds before v0.1.0 recorded the library's first migration over a schema without this column;
+// a migration that drops or renames it must retire this check.
 async fn lacks_refused_artifact_column(transaction: &DatabaseTransaction) -> Result<bool> {
     let schema = SchemaManager::new(transaction);
     Ok(schema.has_table(ARTIFACT_TABLE).await?
