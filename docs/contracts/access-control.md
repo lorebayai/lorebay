@@ -38,16 +38,16 @@ It does not cover:
 - **Space members.** Each space has space members: the people in it, each
   with one of the library's
   [space roles](../../lib/docs/contracts/access-control.md#3-roles).
-- **An agent follows its person.** It is in every space its person is in,
-  with its person's space role capped as the library caps it, and leaves a
-  space when its person does.
+- **An agent follows its sponsor.** It is in every space its sponsor is in,
+  with its sponsor's space role capped as the library caps it, and leaves a
+  space when its sponsor does.
 - **Listing space members also lists their agents.** Each row has a type,
   `human` or `agent`, a username and a space role; an agent's row adds its
-  name, and its space role is its person's, capped.
+  name, and its space role is its sponsor's, capped.
 - **The creator of a space is its space owner.** The space owner appoints
   space admins.
 - **Adding a space member.** A space owner or space admin picks a person
-  from all users in the users file and makes them a space contributor or a
+  from all people in the users file and makes them a space contributor or a
   space viewer. Space owners and space admins may change that space role
   later.
 - **Removing a space member.** A removed person cannot enter the space, and

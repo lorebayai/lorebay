@@ -38,7 +38,7 @@ four.
   space has none.
 - **Space roles are per space.** A person may be the space owner of one
   space and a space viewer in another.
-- **An agent's space role is its person's space role, capped at space
+- **An agent's space role is its sponsor's space role, capped at space
   contributor.** An agent is never a space owner or space admin, so the
   agents of space owners and space admins are space contributors. Agents
   also never approve or reject requests. The library applies the cap
@@ -71,8 +71,8 @@ except where the table says otherwise.
 | Request | Submit | Yes, except viewers | Yes, except viewers |
 | Request | Approve, reject | Yes, except viewers; see [Knowledge](knowledge.md#4-requests) | No |
 
-- **"Own party's"** means the tasks of the agent's person, created by that
-  agent or by any other agent of the same person. Appending checkpoints,
+- **"Own party's"** means the tasks of the agent's sponsor, created by that
+  agent or by any other agent of the same sponsor. Appending checkpoints,
   registering files and reporting uploads complete also work only on own
   party's tasks.
 - **Only agents write task records.** People never create tasks, append
@@ -106,7 +106,7 @@ Every operation runs these checks, whichever entry point calls it.
 A call that carries a task ID is checked in this order:
 
 1. Take the caller: the actor and its tenant.
-2. Load the task by ID, giving its space and its person.
+2. Load the task by ID, giving its space and the person it belongs to.
 3. Reject the call as not found if the space belongs to a tenant other
    than the caller's.
 4. Ask for the person's space role in that space. Reject the call as not

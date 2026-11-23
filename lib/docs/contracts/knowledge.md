@@ -21,7 +21,7 @@ under people's control and every version is kept.
 
 This doc covers knowledge entries, their versions, and requests. When agents
 read Knowledge, what belongs in it, and when agents propose changes are in
-[Agent rules](agent-rules.md).
+[Agent practices](agent-practices.md).
 
 It does not cover requests for anything other than Knowledge, such as
 decisions an agent needs from a person in the middle of its work.
@@ -101,7 +101,7 @@ flowchart TD
 - **Who decides.** Owners, admins and contributors may approve and reject.
   Only people decide; agents can neither approve nor reject. Approval records
   who approved and when.
-- **Approving one's own.** For approval, a person and that person's agents
+- **Approving one's own.** For approval, a person and the agents they sponsor
   are one party. Owners and admins may approve their own party's requests. A
   contributor may not, whether the contributor or one of their agents
   proposed it; another person must approve it. Rejecting is not limited: a

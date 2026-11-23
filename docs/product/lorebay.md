@@ -38,7 +38,7 @@ It does not cover:
 - **Web pages.** Deploying Lorebay gives the data, the APIs and the pages
   people read, from one process. See
   [System architecture](../architecture/system.md).
-- **`v0.1.0` serves only the authorization and device sign-in pages.** The
+- **`v0.1.1` serves only the authorization and device sign-in pages.** The
   [`lorebay` CLI](../contracts/cli.md) and the skill's
   [README](../../skill/README.md) cover what the other pages will, and those
   pages come in a later release. The CLI prints as plain text two things
@@ -48,7 +48,7 @@ It does not cover:
   references, without links
   ([Keys and references](../../lib/docs/contracts/keys-and-references.md#5-references)).
 - **Skill.** Lorebay writes and ships its own skill, which states the
-  library's [agent rules](../../lib/docs/contracts/agent-rules.md) and
+  library's [agent practices](../../lib/docs/contracts/agent-practices.md) and
   Lorebay's additions in [Agent skill](../contracts/agent-skill.md). The
   skill's [README](../../skill/README.md) explains how to install the skill
   and connect an agent's MCP client.

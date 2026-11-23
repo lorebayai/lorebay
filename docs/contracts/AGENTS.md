@@ -9,10 +9,10 @@
   for its operations, and the rows of Lorebay's own operations in
   [access-control.md](access-control.md#4-permissions). Other contracts link
   to them.
-- Lorebay's own part of the agent rules lives only in
+- Lorebay's own part of the agent practices lives only in
   [agent-skill.md](agent-skill.md), under the numbers of the library's
-  [agent rules](../../lib/docs/contracts/agent-rules.md). Its backstop
-  states what happens when an agent breaks the rule, and links to the
+  [agent practices](../../lib/docs/contracts/agent-practices.md). Its backstop
+  states what happens when an agent breaks the practice, and links to the
   contract that enforces it.
 - Every Web API operation is a library operation or one of Lorebay's own.
   A change to one of Lorebay's own operations updates

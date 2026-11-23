@@ -7,6 +7,9 @@ crates `lorebay-lib-types`, `lorebay-lib-core`, `lorebay-lib-migration` and
 
 ## Unreleased
 
+- The library's recording contract is named agent practices, with 13
+  numbered practices. The practices and their backstops keep their content.
+
 - **Breaking:** Knowledge changes awaiting a person's decision become
   requests throughout the library API and MCP, with `PersonRequest` code
   names, `action`, `requested_by`, `requester_agent_name`,

@@ -162,9 +162,9 @@ It does not cover:
   another name or replaces the old sign-in. Replacing deletes the old
   record and creates the new one in one transaction when the tokens are
   issued, so the name carries over.
-- **An agent follows its person.** It is in every space its person is in,
-  and leaves a space when its person does. Its role is derived from its
-  person's; see
+- **An agent follows its sponsor.** It is in every space its sponsor is in,
+  and leaves a space when its sponsor does. Its role is derived from its
+  sponsor's; see
   [Access control](../contracts/access-control.md#3-space-members).
 - **Revoking a sign-in deletes its record.** People see the agents
   they authorized and can revoke any of them. A task keeps the agent name

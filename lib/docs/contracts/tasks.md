@@ -22,7 +22,7 @@ understand a session without reading the conversation.
 
 This doc covers what the library stores and enforces for tasks, checkpoints and
 files. When an agent creates a task, what its title and result say, and
-when it writes checkpoints are in [Agent rules](agent-rules.md).
+when it writes checkpoints are in [Agent practices](agent-practices.md).
 
 It does not cover:
 
