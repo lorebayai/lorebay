@@ -612,7 +612,7 @@ fn fixture(database: DatabaseConnection) -> Fixture {
     let person = Caller {
         person_id: "alice".to_owned(),
         agent_name: None,
-        owner_id: "team".to_owned(),
+        tenant_id: "team".to_owned(),
     };
     let agent = Caller {
         agent_name: Some("research".to_owned()),

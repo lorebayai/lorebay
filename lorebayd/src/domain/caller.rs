@@ -1,6 +1,6 @@
 use lorebay_lib_core::Caller;
 
-use super::OWNER_ID;
+use super::TENANT_ID;
 use thiserror::Error;
 
 use super::access::{AgentCaller, PersonCaller};
@@ -26,7 +26,7 @@ impl VerifiedCaller {
         Caller {
             person_id: self.account_id().to_owned(),
             agent_name,
-            owner_id: OWNER_ID.to_owned(),
+            tenant_id: TENANT_ID.to_owned(),
         }
     }
 

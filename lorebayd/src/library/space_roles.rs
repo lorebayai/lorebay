@@ -1,7 +1,7 @@
 use futures_util::future::BoxFuture;
 use lorebay_lib_core::{Membership, MembershipPage, OperationHandle, SpaceRole, SpaceRoles};
 
-use crate::domain::{OWNER_ID, read_role};
+use crate::domain::{TENANT_ID, read_role};
 use crate::repository::member::MemberRepository;
 
 pub(super) struct Roles;
@@ -22,7 +22,7 @@ impl SpaceRoles for Roles {
         request: MembershipPage<'a>,
     ) -> BoxFuture<'a, anyhow::Result<Vec<Membership>>> {
         Box::pin(async move {
-            if request.owner_id != OWNER_ID {
+            if request.tenant_id != TENANT_ID {
                 return Ok(Vec::new());
             }
             let rows = MemberRepository::builder()

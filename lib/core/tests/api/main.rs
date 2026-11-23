@@ -480,12 +480,12 @@ async fn delete_task_keeps_rows_and_files_when_product_rolls_back() {
 }
 
 #[tokio::test]
-async fn get_task_fails_as_not_found_when_space_has_another_owner() {
+async fn get_task_fails_as_not_found_when_space_has_another_tenant() {
     with_postgres(async |fixture| {
         fixture.space().await;
-        let task = fixture.task("Keep scope private").await;
+        let task = fixture.task("Keep tenant private").await;
         let outside = Caller {
-            owner_id: "other".to_owned(),
+            tenant_id: "other".to_owned(),
             ..fixture.agent.clone()
         };
         let roles_before = fixture.roles.0.load(Ordering::Relaxed);
@@ -775,7 +775,7 @@ async fn complete_agent_file_records_caller_once_when_reports_race() {
         let caller = record.caller.as_ref().unwrap();
         assert_eq!(caller.person_id, fixture.agent.person_id);
         assert_eq!(caller.agent_name, fixture.agent.agent_name);
-        assert_eq!(caller.owner_id, fixture.agent.owner_id);
+        assert_eq!(caller.tenant_id, fixture.agent.tenant_id);
         let transaction = fixture.database.begin().await.unwrap();
         let space = resolve_space(&transaction, &fixture.person, SPACE)
             .await
