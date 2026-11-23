@@ -4,16 +4,16 @@ use sea_orm::{
 use thiserror::Error;
 use typed_builder::TypedBuilder;
 
-use crate::entity::agent_authorization::Model;
-use crate::repository::agent_authorization::AgentAuthorizationRepository;
+use crate::entity::agent_sign_in::Model;
+use crate::repository::agent_sign_in::AgentSignInRepository;
 
-use super::caller::{PersonSessionError, VerifiedCaller};
+use super::caller::{PersonCallerError, VerifiedCaller};
 use super::pagination::{Page, PageOptions, decode_cursor, encode_cursor};
 
 #[derive(Debug, Error)]
 pub(crate) enum AgentError {
     #[error(transparent)]
-    Caller(#[from] PersonSessionError),
+    Caller(#[from] PersonCallerError),
     #[error(transparent)]
     Database(#[from] DbErr),
     #[error("Invalid cursor")]
@@ -53,7 +53,7 @@ pub(crate) async fn list(
             decode_cursor(CURSOR_VERSION, account_id, &cursor).ok_or(AgentError::InvalidCursor)
         })
         .transpose()?;
-    let mut records = AgentAuthorizationRepository::builder()
+    let mut records = AgentSignInRepository::builder()
         .connection(database)
         .build()
         .list(account_id, after.as_deref(), options.page_size + 1)
@@ -82,7 +82,7 @@ pub(crate) async fn revoke(
             ..Default::default()
         })
         .await?;
-    let deleted = AgentAuthorizationRepository::builder()
+    let deleted = AgentSignInRepository::builder()
         .connection(&transaction)
         .build()
         .delete_by_name(caller.account_id(), name)

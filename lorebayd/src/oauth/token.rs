@@ -7,8 +7,8 @@ use lorebay_lib_types::Secret;
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 
-use crate::domain::login_session::Tokens;
 use crate::domain::oauth_token::{CodeExchange, TokenGrant, TokenRefresh, grant_tokens};
+use crate::domain::person_sign_in::Tokens;
 use crate::domain::{authorization_server_metadata, mcp_resource};
 
 use super::error::{OAuthError, no_store_headers};

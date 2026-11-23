@@ -10,7 +10,7 @@ use crate::helpers::{Server, SigningIn, WAIT, assert_success, body, query};
 use tokio::time::timeout;
 
 #[tokio::test]
-async fn login_saves_login_session_when_person_approves() {
+async fn login_saves_cli_sign_in_when_person_approves() {
     let server = Server::start().await;
     let output = server.login().await;
     assert_eq!(body(&output), json!({"data": null, "meta": {}}));
@@ -114,7 +114,7 @@ async fn login_ignores_requests_when_callback_does_not_match() {
 }
 
 #[tokio::test]
-async fn login_preserves_login_session_when_new_sign_in_fails() {
+async fn login_preserves_cli_sign_in_when_new_sign_in_fails() {
     let server = Server::start().await;
     server.login().await;
     let before = fs::read(server.home().join(CREDENTIALS_FILE)).unwrap();

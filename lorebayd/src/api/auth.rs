@@ -3,7 +3,7 @@ use axum::http::{HeaderMap, header, request::Parts};
 
 use crate::domain::access::verify_agent;
 use crate::domain::caller::VerifiedCaller;
-use crate::domain::login_session;
+use crate::domain::person_sign_in;
 use crate::domain::token::TokenKind;
 use crate::server::ServerState;
 
@@ -23,11 +23,9 @@ impl FromRequestParts<ServerState> for VerifiedCaller {
             .verify(token)
             .map_err(|_| ApiError::Unauthorized)?;
         match claims.kind {
-            TokenKind::AgentAuthorization => {
-                Ok(Self::Agent(verify_agent(&state.database, claims).await?))
-            }
-            TokenKind::LoginSession => Ok(Self::Person(
-                login_session::verify(&state.database, claims).await?,
+            TokenKind::AgentSignIn => Ok(Self::Agent(verify_agent(&state.database, claims).await?)),
+            TokenKind::PersonSignIn => Ok(Self::Person(
+                person_sign_in::verify(&state.database, claims).await?,
             )),
         }
     }

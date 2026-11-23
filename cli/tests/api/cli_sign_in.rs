@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use tokio::time::{sleep, timeout};
 
 use crate::helpers::{CLIENT_ID, Server, WAIT, assert_success, body};
-use crate::helpers::{CREDENTIALS_FILE, LOGIN_SESSION_PATH};
+use crate::helpers::{CREDENTIALS_FILE, SIGN_IN_PATH};
 
 #[tokio::test]
 async fn agent_list_fails_with_login_hint_when_not_logged_in() {
@@ -24,7 +24,7 @@ async fn agent_list_fails_with_login_hint_when_not_logged_in() {
     server
         .json(
             Method::DELETE,
-            LOGIN_SESSION_PATH,
+            SIGN_IN_PATH,
             Value::Null,
             credentials["access_token"].as_str(),
         )
@@ -38,7 +38,7 @@ async fn agent_list_fails_with_login_hint_when_not_logged_in() {
 }
 
 #[tokio::test]
-async fn agent_list_refreshes_login_session_when_access_token_is_expired() {
+async fn agent_list_refreshes_cli_sign_in_when_access_token_is_expired() {
     let mut server = Server::configured(json!({"access_token_lifetime_seconds": 2})).await;
     server.login().await;
     let before = server.credentials();
@@ -54,7 +54,7 @@ async fn agent_list_refreshes_login_session_when_access_token_is_expired() {
 }
 
 #[tokio::test]
-async fn agent_list_refreshes_login_session_when_server_returns_unauthorized() {
+async fn agent_list_refreshes_cli_sign_in_when_server_returns_unauthorized() {
     let mut server = Server::configured(json!({"access_token_lifetime_seconds": 2})).await;
     server.login().await;
     let mut saved = server.credentials();
@@ -69,7 +69,7 @@ async fn agent_list_refreshes_login_session_when_server_returns_unauthorized() {
 }
 
 #[tokio::test]
-async fn agent_list_keeps_login_session_when_two_commands_refresh_at_once() {
+async fn agent_list_keeps_cli_sign_in_when_two_commands_refresh_at_once() {
     let mut server = Server::configured(json!({"access_token_lifetime_seconds": 2})).await;
     server.login().await;
     server.set_access_lifetime(900).await;
@@ -133,7 +133,7 @@ async fn agent_list_times_out_when_credentials_lock_is_held() {
 }
 
 #[tokio::test]
-async fn logout_ends_login_session_and_removes_credentials() {
+async fn logout_ends_cli_sign_in_and_removes_credentials() {
     let mut server = Server::start().await;
     server.login().await;
     let saved = server.credentials();
@@ -174,20 +174,20 @@ async fn logout_ends_login_session_and_removes_credentials() {
     assert_eq!(output.status.code(), Some(1));
     assert!(output.stdout.is_empty());
     assert!(
-        String::from_utf8_lossy(&output.stderr).contains("session was not ended on the server")
+        String::from_utf8_lossy(&output.stderr).contains("sign-in was not ended on the server")
     );
     assert!(!server.home().join(CREDENTIALS_FILE).exists());
 }
 
 #[tokio::test]
-async fn logout_succeeds_when_server_session_has_already_ended() {
+async fn logout_succeeds_when_server_sign_in_has_already_ended() {
     let server = Server::start().await;
     server.login().await;
     let saved = server.credentials();
     server
         .json(
             Method::DELETE,
-            LOGIN_SESSION_PATH,
+            SIGN_IN_PATH,
             Value::Null,
             saved["access_token"].as_str(),
         )
@@ -233,7 +233,7 @@ async fn agent_list_reports_invalid_credentials_without_printing_secrets() {
 }
 
 #[tokio::test]
-async fn logout_refreshes_login_session_when_access_token_is_expired() {
+async fn logout_refreshes_cli_sign_in_when_access_token_is_expired() {
     let mut server = Server::configured(json!({"access_token_lifetime_seconds": 2})).await;
     server.login().await;
     server.set_access_lifetime(900).await;
@@ -256,14 +256,14 @@ async fn logout_preserves_server_error_when_caller_is_agent() {
     assert!(output.stdout.is_empty());
     let error: Value = serde_json::from_slice(&output.stderr).unwrap();
     assert_eq!(error["code"], "auth.person_required");
-    assert_eq!(error["title"], "A login session is required");
+    assert_eq!(error["title"], "A sign-in is required");
     assert_eq!(error["status"], 403);
     assert_eq!(error["errors"], json!([]));
     assert!(
         error["message"]
             .as_str()
             .unwrap()
-            .contains("session was not ended on the server")
+            .contains("sign-in was not ended on the server")
     );
     assert!(!server.home().join(CREDENTIALS_FILE).exists());
     let response = server
@@ -277,7 +277,7 @@ async fn logout_preserves_server_error_when_caller_is_agent() {
 }
 
 #[tokio::test]
-async fn agent_list_keeps_login_session_when_two_commands_retry_unauthorized() {
+async fn agent_list_keeps_cli_sign_in_when_two_commands_retry_unauthorized() {
     let mut server = Server::configured(json!({"access_token_lifetime_seconds": 2})).await;
     server.login().await;
     server.set_access_lifetime(900).await;

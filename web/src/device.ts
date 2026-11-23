@@ -66,7 +66,7 @@
       cache: "no-store",
     });
     if (!response.ok) {
-      if (response.status === 401 && path !== "login-session") {
+      if (response.status === 401 && path !== "sign-in") {
         consent.hidden = true;
         code.hidden = true;
         login.hidden = false;
@@ -83,24 +83,24 @@
   async function logout(): Promise<void> {
     if (!accessToken) return;
     try {
-      await request("login-session", "DELETE", null);
+      await request("sign-in", "DELETE", null);
     } catch (error) {
       if (!(error instanceof HttpError) || error.status !== 401) throw error;
-      await logoutExpiredSession();
+      await logoutExpiredSignIn();
     }
     accessToken = undefined;
     refreshToken = undefined;
   }
 
-  async function logoutExpiredSession(): Promise<void> {
+  async function logoutExpiredSignIn(): Promise<void> {
     if (!refreshToken) return;
     try {
-      const tokens = await request<Tokens>("login-session/refresh", "POST", {
+      const tokens = await request<Tokens>("sign-in/refresh", "POST", {
         refresh_token: refreshToken,
       });
       accessToken = tokens.access_token;
       refreshToken = tokens.refresh_token;
-      await request("login-session", "DELETE", null);
+      await request("sign-in", "DELETE", null);
     } catch (error) {
       if (!(error instanceof HttpError) || error.status !== 401) throw error;
     }
@@ -117,7 +117,7 @@
     try {
       await logout();
       const values = new FormData(login);
-      const tokens = await request<Tokens>("login-session", "POST", {
+      const tokens = await request<Tokens>("sign-in", "POST", {
         username: values.get("username"),
         password: values.get("password"),
       });

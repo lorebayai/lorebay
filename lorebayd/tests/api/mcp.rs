@@ -158,7 +158,7 @@ async fn call_mcp_fails_when_access_token_is_expired() {
 }
 
 #[tokio::test]
-async fn call_mcp_fails_when_token_belongs_to_login_session() {
+async fn call_mcp_fails_when_token_belongs_to_person_sign_in() {
     let server = Server::start().await;
     let tokens = server.tokens().await;
     assert_challenge(
@@ -203,7 +203,7 @@ async fn call_mcp_fails_when_account_was_removed_from_users_file() {
 }
 
 #[tokio::test]
-async fn call_mcp_fails_when_authorization_is_expired() {
+async fn call_mcp_fails_when_agent_sign_in_is_expired() {
     let server = Server::start().await;
     let agent = server.authorize_agent("MCP agent").await;
     let token = agent.tokens["access_token"].as_str().unwrap();
@@ -213,7 +213,7 @@ async fn call_mcp_fails_when_authorization_is_expired() {
     )
     .await;
     server
-        .expire_oauth_credential("agent_authorization", "refresh_expires_at")
+        .expire_oauth_credential("agent_sign_in", "refresh_expires_at")
         .await;
     assert_challenge(
         mcp_call(&server, "tools/list", NEWEST_VERSION, token).await,
@@ -224,7 +224,7 @@ async fn call_mcp_fails_when_authorization_is_expired() {
 }
 
 #[tokio::test]
-async fn call_mcp_fails_when_authorization_was_removed() {
+async fn call_mcp_fails_when_agent_sign_in_was_removed() {
     let server = Server::start().await;
     let agent = server.authorize_agent("MCP agent").await;
     let token = agent.tokens["access_token"].as_str().unwrap();
@@ -233,7 +233,7 @@ async fn call_mcp_fails_when_authorization_was_removed() {
         mcp_call(&server, "tools/list", NEWEST_VERSION, token).await,
     )
     .await;
-    server.remove_agent_authorizations().await;
+    server.remove_agent_sign_ins().await;
     assert_challenge(
         mcp_call(&server, "tools/list", NEWEST_VERSION, token).await,
         &server,

@@ -13,10 +13,10 @@ use url::{Host, Url};
 
 use crate::constants::{
     CLI_CONNECTION, CLI_USAGE, CLIENT_ID_FIELD, CODE, CODE_VERIFIER, DEVICE_CODE, ERROR,
-    GRANT_TYPE, LOGIN_HINT, LOGIN_SESSION_PATH, MESSAGE, REFRESH_TOKEN, STATUS,
+    GRANT_TYPE, LOGIN_HINT, MESSAGE, REFRESH_TOKEN, SIGN_IN_PATH, STATUS,
 };
 
-use crate::credentials::{Session, Store, now};
+use crate::credentials::{CliSignIn, Store, now};
 use crate::error::{Failure, Result};
 
 pub(crate) const CLIENT_ID: &str = "lorebay-cli";
@@ -113,21 +113,21 @@ impl Http {
         path: &str,
         body: Option<&Value>,
     ) -> Result<Value> {
-        let mut session = store.load()?.ok_or_else(Failure::login_required)?;
+        let mut sign_in = store.load()?.ok_or_else(Failure::login_required)?;
         let mut refreshed = false;
-        if session.expires_at <= now() {
+        if sign_in.expires_at <= now() {
             let _lock = store.lock().await?;
-            session = store.load()?.ok_or_else(Failure::login_required)?;
-            if session.expires_at <= now() {
-                session = self.refresh(store, session).await?;
+            sign_in = store.load()?.ok_or_else(Failure::login_required)?;
+            if sign_in.expires_at <= now() {
+                sign_in = self.refresh(store, sign_in).await?;
                 refreshed = true;
             }
         }
-        let mut response = self.call(&session, method.clone(), path, body).await?;
+        let mut response = self.call(&sign_in, method.clone(), path, body).await?;
         if response.status() == StatusCode::UNAUTHORIZED && !refreshed {
             let _lock = store.lock().await?;
             let latest = store.load()?.ok_or_else(Failure::login_required)?;
-            session = if latest.access_token.expose() != session.access_token.expose()
+            sign_in = if latest.access_token.expose() != sign_in.access_token.expose()
                 && latest.expires_at > now()
             {
                 latest
@@ -135,28 +135,28 @@ impl Http {
                 self.refresh(store, latest).await?
             };
             drop(_lock);
-            response = self.call(&session, method, path, body).await?;
+            response = self.call(&sign_in, method, path, body).await?;
         }
         decode(
             response,
             &[
-                session.access_token.expose().as_str(),
-                session.refresh_token.expose().as_str(),
+                sign_in.access_token.expose().as_str(),
+                sign_in.refresh_token.expose().as_str(),
             ],
         )
         .await
     }
 
-    pub async fn refresh(&self, store: &Store, session: Session) -> Result<Session> {
-        let server = server_url(&session.server_url)?;
-        same_server(&server, &session.token_endpoint)?;
+    pub async fn refresh(&self, store: &Store, sign_in: CliSignIn) -> Result<CliSignIn> {
+        let server = server_url(&sign_in.server_url)?;
+        same_server(&server, &sign_in.token_endpoint)?;
         let result = self
             .tokens(
-                &session.token_endpoint,
+                &sign_in.token_endpoint,
                 &[
                     (GRANT_TYPE, REFRESH_TOKEN),
                     (CLIENT_ID_FIELD, CLIENT_ID),
-                    (REFRESH_TOKEN, session.refresh_token.expose().as_str()),
+                    (REFRESH_TOKEN, sign_in.refresh_token.expose().as_str()),
                 ],
             )
             .await;
@@ -168,24 +168,24 @@ impl Http {
             }
             Err(error) => return Err(error),
         };
-        let session = session_from_tokens(session.server_url, session.token_endpoint, tokens);
-        store.save(&session)?;
-        Ok(session)
+        let sign_in = sign_in_from_tokens(sign_in.server_url, sign_in.token_endpoint, tokens);
+        store.save(&sign_in)?;
+        Ok(sign_in)
     }
 
     pub async fn call(
         &self,
-        session: &Session,
+        sign_in: &CliSignIn,
         method: Method,
         path: &str,
         body: Option<&Value>,
     ) -> Result<Response> {
-        let server = server_url(&session.server_url)?;
+        let server = server_url(&sign_in.server_url)?;
         let url = endpoint(&server, path)?;
         let mut request = self
             .client
             .request(method, url)
-            .bearer_auth(session.access_token.expose());
+            .bearer_auth(sign_in.access_token.expose());
         if let Some(body) = body {
             request = request.json(body);
         }
@@ -199,17 +199,17 @@ pub(crate) async fn logout(store: &Store) -> Result<()> {
     if loaded.is_err() {
         store.remove()?;
     }
-    let Some(session) = loaded? else {
+    let Some(sign_in) = loaded? else {
         return Ok(());
     };
-    let result = end_session(store, session).await;
+    let result = end_sign_in(store, sign_in).await;
     store.remove()?;
     match result {
         Ok(()) => Ok(()),
         Err(error) if error.exit_code() == 4 || error.is_ended() => Ok(()),
         Err(error) => {
             Err(error
-                .context("Local credentials removed; the session was not ended on the server."))
+                .context("Local credentials removed; the sign-in was not ended on the server."))
         }
     }
 }
@@ -250,12 +250,12 @@ pub(crate) fn same_server(server: &Url, address: &str) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn session_from_tokens(
+pub(crate) fn sign_in_from_tokens(
     server_url: String,
     token_endpoint: String,
     tokens: Tokens,
-) -> Session {
-    Session::builder()
+) -> CliSignIn {
+    CliSignIn::builder()
         .server_url(server_url)
         .token_endpoint(token_endpoint)
         .access_token(tokens.access_token)
@@ -306,27 +306,27 @@ pub(crate) fn decode_body(status: StatusCode, body: Value, secrets: &[&str]) -> 
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
-async fn end_session(store: &Store, mut session: Session) -> Result<()> {
+async fn end_sign_in(store: &Store, mut sign_in: CliSignIn) -> Result<()> {
     let http = Http::new()?;
     let mut refreshed = false;
-    if session.expires_at <= now() {
-        session = http.refresh(store, session).await?;
+    if sign_in.expires_at <= now() {
+        sign_in = http.refresh(store, sign_in).await?;
         refreshed = true;
     }
     let mut response = http
-        .call(&session, Method::DELETE, LOGIN_SESSION_PATH, None)
+        .call(&sign_in, Method::DELETE, SIGN_IN_PATH, None)
         .await?;
     if response.status() == StatusCode::UNAUTHORIZED && !refreshed {
-        session = http.refresh(store, session).await?;
+        sign_in = http.refresh(store, sign_in).await?;
         response = http
-            .call(&session, Method::DELETE, LOGIN_SESSION_PATH, None)
+            .call(&sign_in, Method::DELETE, SIGN_IN_PATH, None)
             .await?;
     }
     decode(
         response,
         &[
-            session.access_token.expose().as_str(),
-            session.refresh_token.expose().as_str(),
+            sign_in.access_token.expose().as_str(),
+            sign_in.refresh_token.expose().as_str(),
         ],
     )
     .await?;

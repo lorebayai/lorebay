@@ -7,7 +7,7 @@ use sea_orm::DatabaseConnection;
 
 use crate::Config;
 use crate::domain::MCP_PATH;
-use crate::domain::login_session::Identity;
+use crate::domain::person_sign_in::Identity;
 use crate::storage::LocalDirectory;
 
 const MCP_SERVER_NAME: &str = "lorebayd";

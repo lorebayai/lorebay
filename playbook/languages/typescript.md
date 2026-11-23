@@ -57,7 +57,7 @@
   Route Handlers, middleware, `next/headers`, incremental static
   regeneration, or the default `next/image` loader.
 - Pages read and write data in the browser, through the Web API on the same
-  origin with the person's login session
+  origin with the person's sign-in
   ([Web API](../../docs/contracts/web-api.md#4-conventions)).
 - Code must not read `process.env`. `next build` must succeed with no
   environment variables, and the built files hold no secret and no

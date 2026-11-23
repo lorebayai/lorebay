@@ -9,8 +9,8 @@ use typed_builder::TypedBuilder;
 
 use super::invalid_query;
 use crate::domain::access::AccessError;
-use crate::domain::caller::PersonSessionError;
-use crate::domain::login_session::LoginError;
+use crate::domain::caller::PersonCallerError;
+use crate::domain::person_sign_in::LoginError;
 use lorebay_lib_core::ProposalError;
 use lorebay_lib_core::{
     AgentFileError, CallerError as LibraryCallerError, SpaceAccessError, SpaceError,
@@ -42,7 +42,7 @@ pub(crate) enum ApiError {
     NotFound,
     #[error("Payload Too Large")]
     PayloadTooLarge,
-    #[error("A login session is required")]
+    #[error("A sign-in is required")]
     PersonRequired,
     #[error("Too Many Requests")]
     RateLimited(u64),
@@ -152,10 +152,10 @@ impl From<AccessError> for ApiError {
     }
 }
 
-impl From<PersonSessionError> for ApiError {
-    fn from(error: PersonSessionError) -> Self {
+impl From<PersonCallerError> for ApiError {
+    fn from(error: PersonCallerError) -> Self {
         match error {
-            PersonSessionError::PersonRequired => Self::PersonRequired,
+            PersonCallerError::PersonRequired => Self::PersonRequired,
         }
     }
 }
@@ -167,7 +167,7 @@ impl From<LoginError> for ApiError {
             LoginError::RateLimited(wait) => Self::RateLimited(wait),
             LoginError::Unauthorized => Self::Unauthorized,
             error => {
-                tracing::error!(%error, "login session operation failed");
+                tracing::error!(%error, "sign-in operation failed");
                 Self::Internal
             }
         }
@@ -201,8 +201,8 @@ impl From<TaskAccessError> for ApiError {
 impl From<LibraryCallerError> for ApiError {
     fn from(error: LibraryCallerError) -> Self {
         let message = match error {
-            LibraryCallerError::AgentRequired => "An agent authorization is required",
-            LibraryCallerError::PersonRequired => "A login session is required",
+            LibraryCallerError::AgentRequired => "An agent sign-in is required",
+            LibraryCallerError::PersonRequired => "A sign-in is required",
             _ => return Self::library(StatusCode::INTERNAL_SERVER_ERROR, error.code(), error),
         };
         Self::library(StatusCode::FORBIDDEN, error.code(), message)

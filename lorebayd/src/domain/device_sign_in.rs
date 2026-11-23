@@ -17,8 +17,8 @@ use crate::repository::device_sign_in_request::DeviceSignInRequestRepository;
 use crate::time::now_millis;
 
 use super::authorization::CLI_CLIENT_ID;
-use super::caller::{PersonSessionError, VerifiedCaller};
-use super::login_session::{Identity, LoginError, Tokens, create_session, new_refresh_token};
+use super::caller::{PersonCallerError, VerifiedCaller};
+use super::person_sign_in::{Identity, LoginError, Tokens, create_sign_in, new_refresh_token};
 use super::primary_key;
 
 #[derive(Clone, Copy, Debug)]
@@ -34,7 +34,7 @@ pub(crate) enum DeviceError {
     #[error("Authorization is pending")]
     AuthorizationPending,
     #[error(transparent)]
-    Caller(#[from] PersonSessionError),
+    Caller(#[from] PersonCallerError),
     #[error(transparent)]
     Database(#[from] DbErr),
     #[error("The request has expired")]
@@ -281,7 +281,7 @@ async fn complete_device_request(
         .await?
         .filter(|account| account.deleted_at.is_none())
         .ok_or(DeviceError::InvalidGrant)?;
-    let (_, tokens) = create_session(identity, transaction, account).await?;
+    let (_, tokens) = create_sign_in(identity, transaction, account).await?;
     Ok(tokens)
 }
 

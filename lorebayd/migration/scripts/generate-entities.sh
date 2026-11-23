@@ -21,4 +21,4 @@ with closing(sqlite3.connect(sys.argv[1])) as projection:
 PY
 
 generate_entities "$cli" "$database" "$schema_dir/entities" lorebayd/src/entity \
-  account,member,agent_authorization,login_session,oauth_client,oauth_code,refresh_token_history,device_sign_in_request
+  account,member,agent_sign_in,person_sign_in,oauth_client,oauth_code,refresh_token_history,device_sign_in_request

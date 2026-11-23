@@ -10,41 +10,41 @@ pub struct Model {
     #[sea_orm(column_type = "Text", unique)]
     pub token_hash: String,
     #[sea_orm(column_type = "Text", nullable)]
-    pub agent_authorization_id: Option<String>,
+    pub agent_sign_in_id: Option<String>,
     #[sea_orm(column_type = "Text", nullable)]
-    pub login_session_id: Option<String>,
+    pub person_sign_in_id: Option<String>,
     pub expires_at: i64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
     #[sea_orm(
-        belongs_to = "super::agent_authorization::Entity",
-        from = "Column::AgentAuthorizationId",
-        to = "super::agent_authorization::Column::Id",
+        belongs_to = "super::agent_sign_in::Entity",
+        from = "Column::AgentSignInId",
+        to = "super::agent_sign_in::Column::Id",
         on_update = "NoAction",
         on_delete = "Cascade"
     )]
-    AgentAuthorization,
+    AgentSignIn,
     #[sea_orm(
-        belongs_to = "super::login_session::Entity",
-        from = "Column::LoginSessionId",
-        to = "super::login_session::Column::Id",
+        belongs_to = "super::person_sign_in::Entity",
+        from = "Column::PersonSignInId",
+        to = "super::person_sign_in::Column::Id",
         on_update = "NoAction",
         on_delete = "Cascade"
     )]
-    LoginSession,
+    PersonSignIn,
 }
 
-impl Related<super::agent_authorization::Entity> for Entity {
+impl Related<super::agent_sign_in::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::AgentAuthorization.def()
+        Relation::AgentSignIn.def()
     }
 }
 
-impl Related<super::login_session::Entity> for Entity {
+impl Related<super::person_sign_in::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::LoginSession.def()
+        Relation::PersonSignIn.def()
     }
 }
 

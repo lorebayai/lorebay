@@ -66,7 +66,7 @@ async fn path_arguments_fail_without_request_when_segment_is_empty_or_dot() {
 }
 
 #[tokio::test]
-async fn space_create_repeats_json_body_when_session_refreshes_after_unauthorized() {
+async fn space_create_repeats_json_body_when_sign_in_refreshes_after_unauthorized() {
     let mut proxy = Proxy::configured(json!({"access_token_lifetime_seconds": 2})).await;
     proxy.login().await;
     proxy.server.set_access_lifetime(900).await;

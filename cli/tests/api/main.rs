@@ -1,5 +1,6 @@
 mod agent_files;
 mod agents;
+mod cli_sign_in;
 mod deletion;
 mod device;
 #[expect(
@@ -12,7 +13,6 @@ mod knowledge;
 mod login;
 mod network;
 mod proposals;
-mod session;
 mod spaces;
 mod task_filters;
 mod tasks;

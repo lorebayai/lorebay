@@ -1,15 +1,15 @@
 use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, DbErr, EntityTrait, QueryFilter};
 use typed_builder::TypedBuilder;
 
-use crate::entity::login_session::{ActiveModel, Column, Entity, Model};
+use crate::entity::person_sign_in::{ActiveModel, Column, Entity, Model};
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
-pub(crate) struct LoginSessionRepository<'a, C> {
+pub(crate) struct PersonSignInRepository<'a, C> {
     pub connection: &'a C,
 }
 
-impl<C: ConnectionTrait> LoginSessionRepository<'_, C> {
+impl<C: ConnectionTrait> PersonSignInRepository<'_, C> {
     pub async fn delete_by_id(&self, id: &str) -> Result<(), DbErr> {
         Entity::delete_by_id(id).exec(self.connection).await?;
         Ok(())

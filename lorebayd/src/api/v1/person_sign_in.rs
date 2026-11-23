@@ -11,7 +11,7 @@ use typed_builder::TypedBuilder;
 
 use crate::api::{ApiError, Envelope, FieldError};
 use crate::domain::caller::VerifiedCaller;
-use crate::domain::login_session::{self, Tokens};
+use crate::domain::person_sign_in::{self, Tokens};
 use crate::oauth::no_store_headers;
 use crate::server::ServerState;
 
@@ -64,7 +64,7 @@ pub(crate) async fn log_in(
 ) -> Result<Response, ApiError> {
     let Json(request) = request.map_err(invalid_json)?;
     request.validate()?;
-    let tokens = login_session::log_in(
+    let tokens = person_sign_in::log_in(
         &state.identity,
         &state.database,
         peer.ip(),
@@ -85,7 +85,7 @@ pub(crate) async fn refresh(
 ) -> Result<Response, ApiError> {
     let Json(request) = request.map_err(invalid_json)?;
     validate_field("refresh_token", request.refresh_token.expose())?;
-    let tokens = login_session::refresh(
+    let tokens = person_sign_in::refresh(
         &state.identity,
         &state.database,
         request.refresh_token.expose(),
@@ -102,7 +102,7 @@ pub(crate) async fn log_out(
     State(state): State<ServerState>,
     caller: VerifiedCaller,
 ) -> Result<Envelope<()>, ApiError> {
-    login_session::log_out(&state.database, caller).await?;
+    person_sign_in::log_out(&state.database, caller).await?;
     Ok(Envelope::builder().data(()).build())
 }
 

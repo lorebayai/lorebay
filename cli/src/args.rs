@@ -57,7 +57,7 @@ pub(crate) enum Command {
         #[arg(long, conflicts_with = "no_browser")]
         device: bool,
     },
-    /// End your login session and remove local credentials.
+    /// End your sign-in and remove local credentials.
     Logout,
     /// Manage a space's members.
     Member {

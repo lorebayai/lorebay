@@ -34,9 +34,8 @@ subcommand. Both flags are optional. The users file is a YAML list or a JSON
 array with the fields below, each hash the command's complete output. Usernames
 must be unique, nonempty and have no leading or trailing whitespace. All hashes
 in one file must use the same Argon2 parameters. Restart the server after
-editing the file. Changing a hash does not end existing login sessions or agent
-authorizations; to end them, remove the username, restart, add it back and
-restart.
+editing the file. Changing a hash does not end existing sign-ins or agent
+sign-ins; to end them, remove the username, restart, add it back and restart.
 
 ```yaml
 - username: alice
@@ -90,8 +89,8 @@ limits group peers by IPv4 address or IPv6 /64. Behind a reverse proxy every
 caller shares one rate limit; limits per caller belong on the proxy. Logs are
 JSON on stderr and exclude configuration dumps and credentials. The data
 directory holds two keys with mode 0600: `signing.key` for tokens and
-`file-url-signing.key` for file URLs. Losing them ends every login session,
-agent authorization and file URL; anyone who reads them can forge those. Back up
+`file-url-signing.key` for file URLs. Losing them ends every sign-in,
+agent sign-in and file URL; anyone who reads them can forge those. Back up
 the data directory only while `lorebayd` is stopped.
 
 ## Docs

@@ -10,8 +10,8 @@ impl MigrationTrait for Migration {
         for table in [
             account(),
             oauth_client(),
-            agent_authorization(),
-            login_session(),
+            agent_sign_in(),
+            person_sign_in(),
             refresh_token_history(),
             oauth_code(),
             device_sign_in_request(),
@@ -31,8 +31,8 @@ impl MigrationTrait for Migration {
             DeviceSignInRequest::Table.into_iden(),
             OauthCode::Table.into_iden(),
             RefreshTokenHistory::Table.into_iden(),
-            LoginSession::Table.into_iden(),
-            AgentAuthorization::Table.into_iden(),
+            PersonSignIn::Table.into_iden(),
+            AgentSignIn::Table.into_iden(),
             OauthClient::Table.into_iden(),
             Account::Table.into_iden(),
         ] {
@@ -66,48 +66,48 @@ fn oauth_client() -> TableCreateStatement {
         .to_owned()
 }
 
-fn agent_authorization() -> TableCreateStatement {
+fn agent_sign_in() -> TableCreateStatement {
     Table::create()
-        .table(AgentAuthorization::Table)
-        .col(text(AgentAuthorization::Id).primary_key())
-        .col(text(AgentAuthorization::AccountId))
-        .col(text(AgentAuthorization::ClientId))
-        .col(text(AgentAuthorization::Name))
-        .col(text_uniq(AgentAuthorization::RandomId))
-        .col(text_uniq(AgentAuthorization::RefreshTokenHash))
-        .col(big_integer(AgentAuthorization::RefreshExpiresAt))
-        .col(big_integer(AgentAuthorization::CreatedAt))
+        .table(AgentSignIn::Table)
+        .col(text(AgentSignIn::Id).primary_key())
+        .col(text(AgentSignIn::AccountId))
+        .col(text(AgentSignIn::ClientId))
+        .col(text(AgentSignIn::Name))
+        .col(text_uniq(AgentSignIn::RandomId))
+        .col(text_uniq(AgentSignIn::RefreshTokenHash))
+        .col(big_integer(AgentSignIn::RefreshExpiresAt))
+        .col(big_integer(AgentSignIn::CreatedAt))
         .index(
             Index::create()
                 .unique()
-                .col(AgentAuthorization::AccountId)
-                .col(AgentAuthorization::Name),
+                .col(AgentSignIn::AccountId)
+                .col(AgentSignIn::Name),
         )
         .foreign_key(
             ForeignKey::create()
-                .from(AgentAuthorization::Table, AgentAuthorization::AccountId)
+                .from(AgentSignIn::Table, AgentSignIn::AccountId)
                 .to(Account::Table, Account::Id),
         )
         .foreign_key(
             ForeignKey::create()
-                .from(AgentAuthorization::Table, AgentAuthorization::ClientId)
+                .from(AgentSignIn::Table, AgentSignIn::ClientId)
                 .to(OauthClient::Table, OauthClient::ClientId),
         )
         .to_owned()
 }
 
-fn login_session() -> TableCreateStatement {
+fn person_sign_in() -> TableCreateStatement {
     Table::create()
-        .table(LoginSession::Table)
-        .col(text(LoginSession::Id).primary_key())
-        .col(text(LoginSession::AccountId))
-        .col(text_uniq(LoginSession::RandomId))
-        .col(text_uniq(LoginSession::RefreshTokenHash))
-        .col(big_integer(LoginSession::CreatedAt))
-        .col(big_integer(LoginSession::ExpiresAt))
+        .table(PersonSignIn::Table)
+        .col(text(PersonSignIn::Id).primary_key())
+        .col(text(PersonSignIn::AccountId))
+        .col(text_uniq(PersonSignIn::RandomId))
+        .col(text_uniq(PersonSignIn::RefreshTokenHash))
+        .col(big_integer(PersonSignIn::CreatedAt))
+        .col(big_integer(PersonSignIn::ExpiresAt))
         .foreign_key(
             ForeignKey::create()
-                .from(LoginSession::Table, LoginSession::AccountId)
+                .from(PersonSignIn::Table, PersonSignIn::AccountId)
                 .to(Account::Table, Account::Id),
         )
         .to_owned()
@@ -123,27 +123,27 @@ fn oauth_code() -> TableCreateStatement {
         .col(text(OauthCode::RedirectUri))
         .col(text(OauthCode::CodeChallenge))
         .col(text_null(OauthCode::AgentName))
-        .col(text_null(OauthCode::ReplacesAuthorizationId))
+        .col(text_null(OauthCode::ReplacesSignInId))
         .col(big_integer(OauthCode::CreatedAt))
         .col(big_integer(OauthCode::ExpiresAt))
         .col(big_integer_null(OauthCode::ExchangedAt))
-        .col(text_null(OauthCode::AgentAuthorizationId))
-        .col(text_null(OauthCode::LoginSessionId))
+        .col(text_null(OauthCode::AgentSignInId))
+        .col(text_null(OauthCode::PersonSignInId))
         .check(
-            Expr::col(OauthCode::AgentAuthorizationId)
+            Expr::col(OauthCode::AgentSignInId)
                 .is_null()
-                .or(Expr::col(OauthCode::LoginSessionId).is_null()),
+                .or(Expr::col(OauthCode::PersonSignInId).is_null()),
         )
         .foreign_key(
             ForeignKey::create()
-                .from(OauthCode::Table, OauthCode::AgentAuthorizationId)
-                .to(AgentAuthorization::Table, AgentAuthorization::Id)
+                .from(OauthCode::Table, OauthCode::AgentSignInId)
+                .to(AgentSignIn::Table, AgentSignIn::Id)
                 .on_delete(ForeignKeyAction::SetNull),
         )
         .foreign_key(
             ForeignKey::create()
-                .from(OauthCode::Table, OauthCode::LoginSessionId)
-                .to(LoginSession::Table, LoginSession::Id)
+                .from(OauthCode::Table, OauthCode::PersonSignInId)
+                .to(PersonSignIn::Table, PersonSignIn::Id)
                 .on_delete(ForeignKeyAction::SetNull),
         )
         .foreign_key(
@@ -153,8 +153,8 @@ fn oauth_code() -> TableCreateStatement {
         )
         .foreign_key(
             ForeignKey::create()
-                .from(OauthCode::Table, OauthCode::ReplacesAuthorizationId)
-                .to(AgentAuthorization::Table, AgentAuthorization::Id)
+                .from(OauthCode::Table, OauthCode::ReplacesSignInId)
+                .to(AgentSignIn::Table, AgentSignIn::Id)
                 .on_delete(ForeignKeyAction::SetNull),
         )
         .to_owned()
@@ -202,22 +202,22 @@ fn refresh_token_history() -> TableCreateStatement {
         .table(RefreshTokenHistory::Table)
         .col(text(RefreshTokenHistory::Id).primary_key())
         .col(text_uniq(RefreshTokenHistory::TokenHash))
-        .col(text_null(RefreshTokenHistory::AgentAuthorizationId))
-        .col(text_null(RefreshTokenHistory::LoginSessionId))
+        .col(text_null(RefreshTokenHistory::AgentSignInId))
+        .col(text_null(RefreshTokenHistory::PersonSignInId))
         .col(big_integer(RefreshTokenHistory::ExpiresAt))
         .check(
-            Expr::col(RefreshTokenHistory::AgentAuthorizationId)
+            Expr::col(RefreshTokenHistory::AgentSignInId)
                 .is_null()
-                .ne(Expr::col(RefreshTokenHistory::LoginSessionId).is_null()),
+                .ne(Expr::col(RefreshTokenHistory::PersonSignInId).is_null()),
         );
     for (owner, target) in [
         (
-            RefreshTokenHistory::AgentAuthorizationId,
-            AgentAuthorization::Table.into_iden(),
+            RefreshTokenHistory::AgentSignInId,
+            AgentSignIn::Table.into_iden(),
         ),
         (
-            RefreshTokenHistory::LoginSessionId,
-            LoginSession::Table.into_iden(),
+            RefreshTokenHistory::PersonSignInId,
+            PersonSignIn::Table.into_iden(),
         ),
     ] {
         table.foreign_key(
@@ -260,12 +260,12 @@ fn indexes() -> [IndexCreateStatement; 4] {
         index(
             "refresh_token_history_agent",
             RefreshTokenHistory::Table,
-            [RefreshTokenHistory::AgentAuthorizationId],
+            [RefreshTokenHistory::AgentSignInId],
         ),
         index(
-            "refresh_token_history_session",
+            "refresh_token_history_sign_in",
             RefreshTokenHistory::Table,
-            [RefreshTokenHistory::LoginSessionId],
+            [RefreshTokenHistory::PersonSignInId],
         ),
         index(
             "refresh_token_history_expiry",
@@ -298,7 +298,7 @@ enum Account {
 }
 
 #[derive(DeriveIden)]
-enum AgentAuthorization {
+enum AgentSignIn {
     AccountId,
     ClientId,
     CreatedAt,
@@ -311,7 +311,7 @@ enum AgentAuthorization {
 }
 
 #[derive(DeriveIden)]
-enum LoginSession {
+enum PersonSignIn {
     AccountId,
     CreatedAt,
     ExpiresAt,
@@ -335,8 +335,8 @@ enum OauthClient {
 #[derive(DeriveIden)]
 enum OauthCode {
     AccountId,
-    AgentAuthorizationId,
     AgentName,
+    AgentSignInId,
     ClientId,
     CodeChallenge,
     CodeHash,
@@ -344,9 +344,9 @@ enum OauthCode {
     ExchangedAt,
     ExpiresAt,
     Id,
-    LoginSessionId,
+    PersonSignInId,
     RedirectUri,
-    ReplacesAuthorizationId,
+    ReplacesSignInId,
     Table,
 }
 
@@ -378,10 +378,10 @@ enum DeviceSignInRequest {
 
 #[derive(DeriveIden)]
 enum RefreshTokenHistory {
-    AgentAuthorizationId,
+    AgentSignInId,
     ExpiresAt,
     Id,
-    LoginSessionId,
+    PersonSignInId,
     Table,
     TokenHash,
 }

@@ -17,7 +17,7 @@ use crate::domain::caller::VerifiedCaller;
 use crate::server::ServerState;
 
 use super::knowledge::present_string;
-use super::login_session::invalid_json;
+use super::person_sign_in::invalid_json;
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]

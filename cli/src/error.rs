@@ -42,7 +42,7 @@ impl Failure {
     pub fn login_required() -> Self {
         Self::local(
             CLI_LOGIN_REQUIRED,
-            "No active login session; run `lorebay login` again.",
+            "No active sign-in; run `lorebay login` again.",
         )
     }
 

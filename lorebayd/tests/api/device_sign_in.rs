@@ -100,7 +100,7 @@ async fn request_device_code_fails_when_rate_limit_is_exceeded() {
 }
 
 #[tokio::test]
-async fn exchange_device_code_returns_login_session_when_person_approved() {
+async fn exchange_device_code_returns_person_sign_in_when_person_approved() {
     let server = Server::configured(|config| config.device_poll_interval_seconds = 1).await;
     let codes = codes(&server).await;
     assert_error(
@@ -135,7 +135,7 @@ async fn exchange_device_code_returns_login_session_when_person_approved() {
         (second, first)
     };
     assert_error(refused, "invalid_grant").await;
-    assert_cli_session(&server, accepted, &person).await;
+    assert_cli_sign_in(&server, accepted, &person).await;
     assert_error(exchange(&server, CLI_CLIENT, &codes).await, "invalid_grant").await;
     server.stop().await;
 }
@@ -333,7 +333,7 @@ fn token(tokens: &Value) -> &str {
     tokens["access_token"].as_str().unwrap()
 }
 
-async fn assert_cli_session(server: &Server, accepted: Response, person: &Value) {
+async fn assert_cli_sign_in(server: &Server, accepted: Response, person: &Value) {
     assert_eq!(accepted.status(), StatusCode::OK);
     assert_eq!(accepted.headers()["cache-control"], "no-store");
     let tokens = accepted.json::<Value>().await.unwrap();
@@ -362,10 +362,10 @@ async fn assert_cli_session(server: &Server, accepted: Response, person: &Value)
         same_space.json::<Value>().await.unwrap()["data"]["role"],
         "owner"
     );
-    assert_session_refresh(server, &tokens).await;
+    assert_sign_in_refresh(server, &tokens).await;
 }
 
-async fn assert_session_refresh(server: &Server, tokens: &Value) {
+async fn assert_sign_in_refresh(server: &Server, tokens: &Value) {
     let refreshed = server
         .refresh_oauth(CLI_CLIENT, tokens["refresh_token"].as_str().unwrap())
         .await;

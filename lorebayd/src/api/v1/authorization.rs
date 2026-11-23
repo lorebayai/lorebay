@@ -19,7 +19,7 @@ use crate::domain::{authorization_server_metadata, mcp_resource};
 use crate::oauth::no_store_headers;
 use crate::server::ServerState;
 
-use super::login_session::invalid_json;
+use super::person_sign_in::invalid_json;
 
 #[derive(Clone, Debug, Deserialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]

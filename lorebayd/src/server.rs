@@ -32,7 +32,7 @@ use typed_builder::TypedBuilder;
 use crate::Config;
 use crate::api::{self, ApiError, Envelope};
 use crate::domain::account;
-use crate::domain::login_session::Identity;
+use crate::domain::person_sign_in::Identity;
 use crate::domain::token::TokenSigner;
 use crate::domain::user_store::UserStore;
 use crate::domain::users::FileUserStore;

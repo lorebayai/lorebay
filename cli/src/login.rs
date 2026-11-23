@@ -22,7 +22,7 @@ use crate::constants::{
 
 use crate::credentials::Store;
 use crate::error::{Failure, Result};
-use crate::http::{CLIENT_ID, Http, Metadata, server_url, session_from_tokens};
+use crate::http::{CLIENT_ID, Http, Metadata, server_url, sign_in_from_tokens};
 use crate::output;
 
 pub(crate) async fn login(store: &Store, address: &str, no_browser: bool) -> Result<()> {
@@ -58,9 +58,9 @@ pub(crate) async fn login(store: &Store, address: &str, no_browser: bool) -> Res
             ],
         )
         .await?;
-    let session = session_from_tokens(server.to_string(), attempt.metadata.token_endpoint, tokens);
+    let sign_in = sign_in_from_tokens(server.to_string(), attempt.metadata.token_endpoint, tokens);
     let _lock = store.lock().await?;
-    store.save(&session)
+    store.save(&sign_in)
 }
 
 const HEADER_END: &[u8] = b"\r\n\r\n";

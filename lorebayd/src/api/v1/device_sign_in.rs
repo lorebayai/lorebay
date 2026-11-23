@@ -13,11 +13,11 @@ use crate::domain::caller::VerifiedCaller;
 use crate::domain::device_sign_in::{
     self, DeviceDecision, DeviceDetails, DeviceError, DeviceVerification,
 };
-use crate::domain::login_session::LoginError;
+use crate::domain::person_sign_in::LoginError;
 use crate::oauth::no_store_headers;
 use crate::server::ServerState;
 
-use super::login_session::invalid_json;
+use super::person_sign_in::invalid_json;
 
 #[derive(Clone, Debug, Deserialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]

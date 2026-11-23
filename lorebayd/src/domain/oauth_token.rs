@@ -10,22 +10,22 @@ use thiserror::Error;
 use typed_builder::TypedBuilder;
 
 use crate::entity::account::Model as Account;
-use crate::entity::agent_authorization::ActiveModel;
+use crate::entity::agent_sign_in::ActiveModel;
 use crate::entity::oauth_code::Model as Code;
 use crate::entity::{oauth_code, refresh_token_history};
 use crate::repository::OAuthClientRepository;
 use crate::repository::account::AccountRepository;
-use crate::repository::agent_authorization::AgentAuthorizationRepository;
-use crate::repository::login_session::LoginSessionRepository;
+use crate::repository::agent_sign_in::AgentSignInRepository;
 use crate::repository::oauth_code::OauthCodeRepository;
+use crate::repository::person_sign_in::PersonSignInRepository;
 use crate::repository::refresh_token_history::RefreshTokenHistoryRepository;
 
 use crate::time::now_millis;
 
 use super::authorization::CLI_CLIENT_ID;
 use super::device_sign_in::{DeviceError, exchange_device_code};
-use super::login_session::{
-    self, Identity, LoginError, Tokens, issue_tokens, new_refresh_token, session_expiry,
+use super::person_sign_in::{
+    self, Identity, LoginError, Tokens, issue_tokens, new_refresh_token, sign_in_expiry,
 };
 use super::token::{TokenKind, TokenSubject};
 use super::{primary_key, random_id};
@@ -122,13 +122,13 @@ async fn exchange_code(
         return Err(TokenError::InvalidGrant);
     }
     if code.exchanged_at.is_some() {
-        end_code_authorization(&transaction, &code).await?;
+        end_code_sign_in(&transaction, &code).await?;
         transaction.commit().await?;
         return Err(TokenError::InvalidGrant);
     }
     let account = active_account(&transaction, &code.account_id).await?;
-    if let Some(id) = &code.replaces_authorization_id {
-        AgentAuthorizationRepository::builder()
+    if let Some(id) = &code.replaces_sign_in_id {
+        AgentSignInRepository::builder()
             .connection(&transaction)
             .build()
             .delete(id, &code.account_id)
@@ -136,17 +136,17 @@ async fn exchange_code(
     }
     let is_cli = code.client_id == CLI_CLIENT_ID;
     let (id, tokens) = if is_cli {
-        login_session::create_session(identity, &transaction, account).await?
+        person_sign_in::create_sign_in(identity, &transaction, account).await?
     } else {
         create_agent(identity, &transaction, code.clone(), account, now).await?
     };
     let mut model: oauth_code::ActiveModel = code.into();
     model.exchanged_at = Set(Some(now));
-    model.replaces_authorization_id = Set(None);
+    model.replaces_sign_in_id = Set(None);
     if is_cli {
-        model.login_session_id = Set(Some(id));
+        model.person_sign_in_id = Set(Some(id));
     } else {
-        model.agent_authorization_id = Set(Some(id));
+        model.agent_sign_in_id = Set(Some(id));
     }
     repository.update(model).await?;
     transaction.commit().await?;
@@ -167,7 +167,7 @@ async fn create_agent(
         TokenSubject::builder()
             .username(account.username.as_str())
             .random_id(random_id.as_str())
-            .kind(TokenKind::AgentAuthorization)
+            .kind(TokenKind::AgentSignIn)
             .build(),
         refresh_token.clone(),
         now,
@@ -180,10 +180,10 @@ async fn create_agent(
         name: Set(code.agent_name.ok_or(TokenError::InvalidGrant)?),
         random_id: Set(random_id),
         refresh_token_hash: Set(sha256_hex(refresh_token.expose())),
-        refresh_expires_at: Set(session_expiry(identity, now)),
+        refresh_expires_at: Set(sign_in_expiry(identity, now)),
         created_at: Set(now),
     };
-    AgentAuthorizationRepository::builder()
+    AgentSignInRepository::builder()
         .connection(transaction)
         .build()
         .insert(model)
@@ -204,23 +204,23 @@ async fn refresh_agent(
     input: TokenRefresh,
     hash: &Secret<String>,
 ) -> Result<Tokens, TokenError> {
-    let repository = AgentAuthorizationRepository::builder()
+    let repository = AgentSignInRepository::builder()
         .connection(transaction)
         .build();
     let now = now_millis()?;
-    let authorization = repository
+    let sign_in = repository
         .by_refresh_hash(hash.expose())
         .await?
         .filter(|row| row.client_id == input.client_id && row.refresh_expires_at > now)
         .ok_or(TokenError::InvalidGrant)?;
-    let account = active_account(transaction, &authorization.account_id).await?;
+    let account = active_account(transaction, &sign_in.account_id).await?;
     let refresh_token = new_refresh_token()?;
     let tokens = issue_tokens(
         identity,
         TokenSubject::builder()
             .username(account.username.as_str())
-            .random_id(authorization.random_id.as_str())
-            .kind(TokenKind::AgentAuthorization)
+            .random_id(sign_in.random_id.as_str())
+            .kind(TokenKind::AgentSignIn)
             .build(),
         refresh_token.clone(),
         now,
@@ -231,14 +231,14 @@ async fn refresh_agent(
         .insert(refresh_token_history::ActiveModel {
             id: Set(primary_key()),
             token_hash: Set(hash.expose().clone()),
-            agent_authorization_id: Set(Some(authorization.id.clone())),
-            login_session_id: Set(None),
-            expires_at: Set(authorization.refresh_expires_at),
+            agent_sign_in_id: Set(Some(sign_in.id.clone())),
+            person_sign_in_id: Set(None),
+            expires_at: Set(sign_in.refresh_expires_at),
         })
         .await?;
-    let mut model: ActiveModel = authorization.into();
+    let mut model: ActiveModel = sign_in.into();
     model.refresh_token_hash = Set(sha256_hex(refresh_token.expose()));
-    model.refresh_expires_at = Set(session_expiry(identity, now));
+    model.refresh_expires_at = Set(sign_in_expiry(identity, now));
     repository.update(model).await?;
     Ok(tokens)
 }
@@ -257,15 +257,15 @@ async fn refresh_tokens(
         .by_hash(hash.expose(), now)
         .await?;
     if let Some(history) = history {
-        if let Some(id) = history.agent_authorization_id {
-            AgentAuthorizationRepository::builder()
+        if let Some(id) = history.agent_sign_in_id {
+            AgentSignInRepository::builder()
                 .connection(&transaction)
                 .build()
                 .delete_by_id(&id)
                 .await?;
         }
-        if let Some(id) = history.login_session_id {
-            LoginSessionRepository::builder()
+        if let Some(id) = history.person_sign_in_id {
+            PersonSignInRepository::builder()
                 .connection(&transaction)
                 .build()
                 .delete_by_id(&id)
@@ -275,7 +275,7 @@ async fn refresh_tokens(
         return Err(TokenError::InvalidGrant);
     }
     let tokens = if input.client_id == CLI_CLIENT_ID {
-        login_session::rotate_refresh(identity, &transaction, &hash).await?
+        person_sign_in::rotate_refresh(identity, &transaction, &hash).await?
     } else {
         refresh_agent(identity, &transaction, input, &hash).await?
     };
@@ -305,19 +305,19 @@ async fn begin_write(database: &DatabaseConnection) -> Result<DatabaseTransactio
         .await?)
 }
 
-async fn end_code_authorization(
+async fn end_code_sign_in(
     transaction: &DatabaseTransaction,
     code: &Code,
 ) -> Result<(), TokenError> {
-    if let Some(id) = &code.agent_authorization_id {
-        AgentAuthorizationRepository::builder()
+    if let Some(id) = &code.agent_sign_in_id {
+        AgentSignInRepository::builder()
             .connection(transaction)
             .build()
             .delete(id, &code.account_id)
             .await?;
     }
-    if let Some(id) = &code.login_session_id {
-        LoginSessionRepository::builder()
+    if let Some(id) = &code.person_sign_in_id {
+        PersonSignInRepository::builder()
             .connection(transaction)
             .build()
             .delete(id, &code.account_id)

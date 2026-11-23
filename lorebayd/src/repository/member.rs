@@ -6,7 +6,7 @@ use sea_orm::{
 use typed_builder::TypedBuilder;
 
 use crate::entity::member::{ActiveModel, Column, Entity, Model};
-use crate::entity::{account, agent_authorization};
+use crate::entity::{account, agent_sign_in};
 
 #[derive(Clone, Debug, FromQueryResult, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
@@ -151,10 +151,7 @@ fn roster_query(space_id: &str) -> SelectStatement {
         .column((account::Entity, account::Column::Username))
         .column((Entity, Column::Role))
         .expr_as(
-            Expr::col((
-                agent_authorization::Entity,
-                agent_authorization::Column::Name,
-            )),
+            Expr::col((agent_sign_in::Entity, agent_sign_in::Column::Name)),
             Roster::AgentName,
         )
         .expr_as(Expr::val("agent"), Roster::Kind)
@@ -164,11 +161,9 @@ fn roster_query(space_id: &str) -> SelectStatement {
             Expr::col((Entity, Column::AccountId)).equals((account::Entity, account::Column::Id)),
         )
         .inner_join(
-            agent_authorization::Entity,
-            Expr::col((Entity, Column::AccountId)).equals((
-                agent_authorization::Entity,
-                agent_authorization::Column::AccountId,
-            )),
+            agent_sign_in::Entity,
+            Expr::col((Entity, Column::AccountId))
+                .equals((agent_sign_in::Entity, agent_sign_in::Column::AccountId)),
         )
         .and_where(Expr::col((Entity, Column::SpaceId)).eq(space_id))
         .and_where(Expr::col((account::Entity, account::Column::DeletedAt)).is_null());

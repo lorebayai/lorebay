@@ -7,14 +7,14 @@
   [Identity](../architecture/identity.md),
   [Keys and references](../../lib/docs/contracts/keys-and-references.md)
 
-> The `lorebay` executable is a Web API client acting with a person's login
-> session. It adds no server operation and never reads `lorebayd`'s data
+> The `lorebay` executable is a Web API client acting with a person's CLI
+> sign-in. It adds no server operation and never reads `lorebayd`'s data
 > directly.
 >
 > Permissions stay in the Web API; the CLI never grants a permission.
 >
 > Results go to standard output; prompts, hints and errors go to standard
-> error. Login session tokens and secret sign-in codes appear in neither
+> error. Sign-in tokens and secret sign-in codes appear in neither
 > stream.
 
 ## 1. Purpose
@@ -74,8 +74,8 @@ contains spaces. Optional arguments appear in brackets. List rows follow
 
 | Command after `lorebay` | Web API operation | Result in `human` output |
 | --- | --- | --- |
-| `login <server-url> [--no-browser]` | Start and complete CLI sign-in through OAuth; receive a login session | Sign-in completion; the browser link is on standard error |
-| `login <server-url> --device` | Request device sign-in and exchange it through OAuth; receive a login session | Sign-in completion; the address, short code and link carrying it are on standard error |
+| `login <server-url> [--no-browser]` | Start and complete CLI sign-in through OAuth; receive a sign-in | Sign-in completion; the browser link is on standard error |
+| `login <server-url> --device` | Request device sign-in and exchange it through OAuth; receive a sign-in | Sign-in completion; the address, short code and link carrying it are on standard error |
 | `logout` | Log out | Sign-out completion after removing local credentials |
 | `agent list` | List own agents | Agent names and the other fields the operation returns |
 | `agent revoke <name>` | Revoke one agent | Revocation result |
@@ -138,7 +138,7 @@ contains spaces. Optional arguments appear in brackets. List rows follow
   when the host is `localhost`, any IPv4 address in `127.0.0.0/8`, or the
   IPv6 address `::1`. Every other host requires `https`.
   An invalid URL or another `http` host is a usage error, before
-  requesting credentials. The CLI keeps the URL with the login session and
+  requesting credentials. The CLI keeps the URL with the sign-in and
   sends authenticated calls only to that server until another login
   succeeds, including after an HTTP redirect. Other commands have no server
   override.
@@ -161,36 +161,36 @@ contains spaces. Optional arguments appear in brackets. List rows follow
   and approves or declines the request.
   The CLI waits at the server's polling pace and slows down when asked;
   temporary connection failures, server errors and rate limits are retried
-  while the request lasts. Approval stores a login session; refusal or expiry stores
+  while the request lasts. Approval stores a CLI sign-in; refusal or expiry stores
   nothing new and exits 1, saying which happened. `--device` and
   `--no-browser` together are a usage error.
 - **Credentials belong to one local directory.** The CLI keeps the server
-  URL and the login session's access and refresh tokens in a file only the
+  URL and the CLI sign-in's access and refresh tokens in a file only the
   person can read, under `.lorebay` in the home directory, or in the
   directory `LOREBAY_HOME` names when set. A successful login replaces the
-  saved session; a failed one preserves any earlier saved session. Login
+  saved sign-in; a failed one preserves any earlier saved sign-in. Login
   completion output contains no tokens or secret authorization codes.
 - **Refresh is automatic.** An expired access token, or a 401 response,
   triggers one refresh and at most one repeat of the operation. Concurrent
   commands using the same local directory never present the same refresh
   token twice, as [Identity](../architecture/identity.md#7-tokens) requires.
   Readers see complete credentials even if another command stops during
-  replacement. If the server refuses the refresh because the session ended,
+  replacement. If the server refuses the refresh because the sign-in ended,
   the CLI removes its credentials, asks the person to run `lorebay login`
   again and exits 4. A connection failure preserves the credentials and
   exits 1. If a refresh's outcome is unknown, the next command retries with
   the saved token; if the server had already replaced it, the server ends
-  that login session under [Identity](../architecture/identity.md#7-tokens),
+  that sign-in under [Identity](../architecture/identity.md#7-tokens),
   and the CLI removes its credentials, asks the person to run
   `lorebay login` and exits 4. A command cannot wait indefinitely for another
   command refreshing the credentials; a wait that times out exits 1 without
   refreshing.
 - **`logout` removes local credentials even when the server is unreachable.**
   It attempts the Web API logout so both tokens stop working, then removes
-  the saved session. It reports when the session was not ended on the
+  the saved sign-in. It reports when the sign-in was not ended on the
   server. An unreachable server or another failure exits 1 after local
-  removal; an already absent server session is treated as signed out.
-  With no saved session, logout succeeds. A local removal failure exits 1
+  removal; an already absent server sign-in is treated as signed out.
+  With no saved sign-in, logout succeeds. A local removal failure exits 1
   and says that the credentials could not be removed.
 
 ## 5. Output and failures
@@ -212,7 +212,7 @@ contains spaces. Optional arguments appear in brackets. List rows follow
   `code` and its description as `message`. Local failures use `code` and
   `message`: `cli.usage`,
   `cli.login_required`, `cli.connection`, `cli.credentials`, `cli.timeout`
-  or `cli.cancelled`, as appropriate. A missing or ended login session also
+  or `cli.cancelled`, as appropriate. A missing or ended sign-in also
   gives the `lorebay login` hint, in that same line. No error includes a token.
 - **Server text cannot control the terminal.** In `human`, escape control
   characters in all server-supplied fields, prompts, hints and error text,
@@ -234,7 +234,7 @@ Exit codes:
 | 0 | Success, including help and logout when already signed out |
 | 1 | The server refuses the operation, or another failure occurs, including declined or expired sign-in, a connection failure or cancelled deletion |
 | 2 | Usage error, such as a missing argument, invalid option, role, status or server URL |
-| 4 | No saved login session, or the login session has ended and refresh cannot restore it |
+| 4 | No saved sign-in, or the sign-in has ended and refresh cannot restore it |
 
 ## 6. Lists
 

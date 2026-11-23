@@ -267,7 +267,7 @@ A **caller** names:
 
 Every implementation:
 
-- checks the credential on every request, so an agent authorization
+- checks the credential on every request, so an agent sign-in
   revoked, a member removed and a person deleted take effect on the next
   request; how long a person stays signed in is the product's rule;
 - gives one person's agents distinct names;
@@ -481,7 +481,7 @@ sequenceDiagram
   its rows inside, as it does when it creates a space with its owner's
   membership ([section 8](#8-scope-and-space-numbers)).
 - **A product's writes that write no library table** run in transactions
-  it opens itself. Lorebay's sign-in, agent authorization and membership
+  it opens itself. Lorebay's sign-in, agent sign-in and membership
   writes keep theirs. Routing them through the entry was rejected: the entry
   exists so that what a product adds holds for every library write, tool
   calls included, and a product's own write is already in its hands.

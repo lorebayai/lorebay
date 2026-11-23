@@ -22,7 +22,7 @@ with the space's data.
 ## 2. Scope
 
 This doc covers space members, how they are managed, and the permissions of
-Lorebay's own operations: sign-in, agent authorization, device sign-in,
+Lorebay's own operations: sign-in, agent sign-in, device sign-in,
 users, creating spaces and managing space members. The space roles, the
 permission of every library operation and the space and task checks are in
 [Library access control](../../lib/docs/contracts/access-control.md).
@@ -69,11 +69,11 @@ space's content follows the library's
 [permission matrix](../../lib/docs/contracts/access-control.md#4-permissions),
 whichever credential the caller holds.
 
-| Resource | Operation | Person (login session) | Agent (agent authorization) |
+| Resource | Operation | Person (sign-in) | Agent (agent sign-in) |
 | --- | --- | --- | --- |
-| Sign-in | Log in, refresh the login session, log out | Yes | Not applicable |
+| Sign-in | Log in, refresh the sign-in, log out | Yes | Not applicable |
 | Authorization | Read an authorization request, submit the decision on it | Yes | No |
-| Authorization | List own agents, revoke one | Yes | No |
+| Agent sign-in | List own agents, revoke one | Yes | No |
 | Device sign-in request | Read a request, submit the decision on it | Yes | No |
 | User | List the users in the users file | Yes | No |
 | Space | Create | Yes | No |
@@ -82,5 +82,5 @@ whichever credential the caller holds.
 
 - **Any signed-in person may create a space.**
 - **Credentials map onto the library's columns.** In the library's matrix,
-  a login session calls as a person and an agent authorization as an
+  a sign-in calls as a person and an agent sign-in as an
   agent.

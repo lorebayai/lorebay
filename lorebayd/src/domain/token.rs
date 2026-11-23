@@ -15,8 +15,8 @@ use super::{authorization_server_metadata, random_id};
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum TokenKind {
-    AgentAuthorization,
-    LoginSession,
+    AgentSignIn,
+    PersonSignIn,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, TypedBuilder)]
