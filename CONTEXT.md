@@ -10,7 +10,8 @@ Terms are written in lowercase in running text.
 ## Product
 
 **Lorebay**: The product, and one deployment of it: a single `lorebayd`
-process with its data, its web pages, its Web API and its MCP server.
+process with its data, its web pages, its Web API and its MCP server. One
+deployment is one tenant.
 
 **`lorebayd`**: The Lorebay server process.
 

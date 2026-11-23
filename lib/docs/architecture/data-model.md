@@ -76,12 +76,12 @@ It does not cover:
   using SQLite enables checks on every connection it supplies, as required
   by the [database interface](library.md#64-database). Each table's section
   says what a delete cascades to or clears.
-- **Person IDs and the owner ID have no foreign key.** The four columns that
+- **Person IDs and the tenant ID have no foreign key.** The four columns that
   hold a person, `space_task.person_id`, `space_proposal.proposed_by` and
   `decided_by`, and `space_knowledge_version.applied_by`, and
-  `space.owner_id` hold the product's IDs as text. They are the one
+  `space.tenant_id` hold the product's IDs as text. They are the one
   exception to declared foreign keys: the library has no table of people or
-  owners, and removing or deleting a person writes nothing here.
+  tenants, and removing or deleting a person writes nothing here.
 - **Keyword search uses `LIKE ? ESCAPE '\'`**, not a full-text index; how
   it matches is in [Storage](storage.md#4-database). Listing Knowledge by
   prefix does not use `LIKE`; see [section 6.1](#61-space_knowledge).
@@ -116,7 +116,7 @@ the library reads it through the
 | --- | --- | --- | --- |
 | `id` | TEXT | Primary key, not null | Internal UUIDv7 |
 | `number` | INTEGER | Not null, unique | The number in `SPACE-1`; never reused |
-| `owner_id` | TEXT | Not null | The product's owner ID; the scope a caller must carry |
+| `tenant_id` | TEXT | Not null | The product's tenant ID, matched against the caller's |
 | `name` | TEXT | Not null | Need not be unique |
 | `summary` | TEXT | Not null | |
 | `next_task_number` | INTEGER | Not null, default 1 | The next `TK` number |
@@ -126,9 +126,10 @@ the library reads it through the
 | `created_at` | INTEGER | Not null | |
 | `updated_at` | INTEGER | Not null | When the name or summary last changed |
 
-- **The owner ID is the scope, not a role.** Every operation compares it
-  with the caller's scope and answers a space of another owner as not found;
-  see [Library architecture](library.md#8-scope-and-space-numbers). Who
+- **The tenant ID identifies the tenant, not a role.** Every operation
+  compares it with the caller's tenant ID and answers a space of another
+  tenant as not found; see
+  [Library architecture](library.md#8-tenant-and-space-numbers). Who
   holds the owner role in a space is the product's record.
 - **Taking a key.** Creating a task, knowledge entry, file or proposal
   adds one to the matching counter and returns the value in one statement,
@@ -359,7 +360,7 @@ the SQLite backend. A table comes after the tables it references:
 CREATE TABLE space (
   id                     TEXT    NOT NULL PRIMARY KEY,
   number                 INTEGER NOT NULL UNIQUE,
-  owner_id               TEXT    NOT NULL,
+  tenant_id              TEXT    NOT NULL,
   name                   TEXT    NOT NULL,
   summary                TEXT    NOT NULL,
   next_task_number       INTEGER NOT NULL DEFAULT 1,
