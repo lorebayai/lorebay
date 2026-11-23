@@ -40,13 +40,14 @@ space. It is the scope, not a role.
 **Space**: An isolated workspace for one team, with its own tasks,
 Knowledge and proposals. A product holds many spaces.
 
-**Membership**: A person's role in one space, which the product records and
-the library reads.
+**Space membership**: A person's space role in one space, which the product
+records and the library reads.
 
-**Member**: A person with a membership in a space.
+**Space member**: A person with a space membership.
 
-**Role**: What a person may do in one space: owner, admin, contributor or
-viewer. A person's role differs from space to space.
+**Space role**: What a person may do in one space: space owner, space admin,
+space contributor or space viewer. A person's space role differs from space
+to space.
 
 ## People and agents
 

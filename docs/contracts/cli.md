@@ -84,10 +84,10 @@ contains spaces. Optional arguments appear in brackets. List rows follow
 | `space show <space>` | Read a space | Space key, name, summary and role |
 | `space change <space> [--name <name>] [--summary <summary>]` | Change a space's name and summary | Updated space, in the same form as `space show` |
 | `user list` | List the users in the users file | Usernames |
-| `participant list <space>` | List a space's participants | Human usernames and agent names, with each agent's person, and their types and roles |
-| `participant add <space> <username> --role <role>` | Add a participant | Added participant |
-| `participant set-role <space> <username> --role <role>` | Change a participant's role | Updated participant |
-| `participant remove <space> <username>` | Remove a participant | Removal result |
+| `member list <space>` | List a space's members | Human usernames and agent names, with each agent's person, and their types and roles |
+| `member add <space> <username> --role <role>` | Add a space member | Added space member |
+| `member set-role <space> <username> --role <role>` | Change a space member's role | Updated space member |
+| `member remove <space> <username>` | Remove a space member | Removal result |
 | `task list <space> [--person <username>] [--agent <name>] [--status <status>] [--keyword <text>] [--own-open]` | List tasks | Task keys, titles, statuses, people, agent names and last activity times |
 | `task show <space> <task>` | Read a task | Task fields, including its task ID, result and completed file list |
 | `task scratchpad <space> <task>` | Read a task's Scratchpad | One page of notes, with their times, in time order |
@@ -116,7 +116,7 @@ contains spaces. Optional arguments appear in brackets. List rows follow
   change` and `proposal change` require at least one of their optional
   fields; omitted fields are unchanged. Proposal inputs and version behavior
   follow [Knowledge](../../lib/docs/contracts/knowledge.md#3-knowledge-entries).
-- **Roles and statuses are checked before making a call.** Participant
+- **Roles and statuses are checked before making a call.** Space member
   addition accepts `contributor` or `viewer`; setting a role accepts `admin`,
   `contributor` or `viewer`. Ownership is not assigned by these commands.
   Task statuses are `in progress` and `ended`; proposal statuses are
@@ -258,7 +258,7 @@ Exit codes:
   is not a terminal, the CLI does not read it and treats it as no. Nothing
   is deleted, and cancellation exits 1.
 - **`--yes` skips the question.** It is accepted on these deleting commands
-  in both output modes. `participant remove` runs without a confirmation
+  in both output modes. `member remove` runs without a confirmation
   prompt. Logout is an explicit sign-out and needs no further confirmation.
   `proposal delete` submits a proposal rather than deleting
   an entry; it follows [Knowledge](../../lib/docs/contracts/knowledge.md#4-proposals).

@@ -74,7 +74,7 @@ It does not cover:
   [Library architecture](../../lib/docs/architecture/library.md#8-scope-and-space-numbers).
 - **Operations only people perform accept only a login session**, such as
   approving and rejecting proposals, deleting tasks, notes and files,
-  changing Knowledge directly, rolling back, and managing participants. The
+  changing Knowledge directly, rolling back, and managing space members. The
   full list is in the library's
   [permission matrix](../../lib/docs/contracts/access-control.md#4-permissions)
   and Lorebay's [own rows](../contracts/access-control.md#4-permissions).
@@ -165,7 +165,7 @@ It does not cover:
 - **An agent follows its person.** It is in every space its person is in,
   and leaves a space when its person does. Its role is derived from its
   person's; see
-  [Access control](../contracts/access-control.md#3-participants).
+  [Access control](../contracts/access-control.md#3-space-members).
 - **Revoking an authorization deletes its record.** People see the agents
   they authorized and can revoke any of them. A task keeps the agent name
   copied when it was created, so the name survives revocation.
@@ -188,7 +188,7 @@ It does not cover:
   deleted person take effect on the next request; see
   [Library architecture](../../lib/docs/architecture/library.md#61-caller).
   Checking the token, the record and the account on every request, and
-  answering roles from `participant`, meets it.
+  answering roles from `member`, meets it.
 - **Access tokens expire soon.** A client exchanges its refresh token for a
   new access token.
 - **Refresh tokens are random strings**, stored only as hashes. Each refresh
@@ -213,21 +213,18 @@ It does not cover:
 
 ```mermaid
 sequenceDiagram
-    participant P as Person
-    participant H as Harness
-    participant L as lorebayd
-    H->>L: Call without a token
-    L-->>H: 401, where to authorize
-    H->>L: Register as a client
-    H->>P: Open the authorization page
-    P->>L: Sign in
-    P->>L: Consent
-    L-->>H: Authorization code
-    H->>L: Exchange the code
-    L-->>H: Access and refresh tokens
-    H->>L: Calls with the access token
-    H->>L: Refresh, when the access token expires
-    L-->>H: New access and refresh tokens
+    Harness->>lorebayd: Call without a token
+    lorebayd-->>Harness: 401, where to authorize
+    Harness->>lorebayd: Register as a client
+    Harness->>Person: Open the authorization page
+    Person->>lorebayd: Sign in
+    Person->>lorebayd: Consent
+    lorebayd-->>Harness: Authorization code
+    Harness->>lorebayd: Exchange the code
+    lorebayd-->>Harness: Access and refresh tokens
+    Harness->>lorebayd: Calls with the access token
+    Harness->>lorebayd: Refresh, when the access token expires
+    lorebayd-->>Harness: New access and refresh tokens
 ```
 
 When the person revokes the authorization, its record is deleted and the

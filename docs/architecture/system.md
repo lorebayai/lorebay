@@ -70,7 +70,7 @@ designed but not built ([Storage](storage.md)).
 - **One process.** Deploying one `lorebayd` gives the data, the APIs and the
   web pages.
 - **The Web API is Lorebay's mapping of the library's operations**, beside
-  Lorebay's own operations for sign-in, agents and participants; see
+  Lorebay's own operations for sign-in, agents and space members; see
   [Web API](../contracts/web-api.md).
 - **The MCP layer is the library's.** `lorebayd` mounts its router and
   answers who is calling through Lorebay's credentials; see

@@ -7,7 +7,7 @@
   [Access control](../contracts/access-control.md),
   [Library data model](../../lib/docs/architecture/data-model.md)
 
-> Participant rows hold only people. An agent's spaces and role are derived
+> Space member rows hold only people. An agent's spaces and role are derived
 > from its person on every request, never stored.
 >
 > Lorebay's tables refer to the library's only through `space`; no library
@@ -22,7 +22,7 @@ which share Lorebay's database, are in
 
 ## 2. Scope
 
-This doc covers Lorebay's eight tables: `account` and `participant`, and the
+This doc covers Lorebay's eight tables: `account` and `member`, and the
 six tables only the authorization implementation uses,
 `agent_authorization`, `login_session`, `oauth_code`, `oauth_client`,
 `refresh_token_history` and `device_sign_in_request`. Behavior observable
@@ -40,7 +40,7 @@ It does not cover:
   for names, types, times, primary keys, statuses and case-insensitive
   uniqueness, without its two exceptions: their names carry no prefix, and
   every reference between tables is a declared foreign key, the one from
-  `participant` to the library's `space` included. `oauth_code.client_id`
+  `member` to the library's `space` included. `oauth_code.client_id`
   is the one exception ([section 5.4](#54-oauth_code)).
 - **Table names avoid SQL reserved words.** `user` and `authorization` are
   reserved in Postgres, so the tables are `account` and
@@ -67,12 +67,12 @@ erDiagram
     account ||--o{ agent_authorization : "authorizes"
     oauth_client ||--o{ agent_authorization : "is the client of"
     account |o--o{ device_sign_in_request : "approves"
-    account ||--o{ participant : "joins as"
-    space ||--o{ participant : "has"
+    account ||--o{ member : "joins as"
+    space ||--o{ member : "has"
 ```
 
 `space` is the library's table; every other table here is Lorebay's.
-Participants belong to a space; the seven account and authorization tables
+Space members belong to a space; the seven account and authorization tables
 belong to no space.
 
 ## 5. Accounts and authorization
@@ -91,7 +91,7 @@ A mirror of the users file, synced at startup.
 - **Password hashes stay out of the database**, only in the users file.
 - **Startup sync.** A username in the file but not in the table gets a row.
   A row whose username left the file gets `deleted_at`, and its
-  `participant`, `agent_authorization` and `login_session` rows and its
+  `member`, `agent_authorization` and `login_session` rows and its
   `oauth_code` rows are deleted. A deleted row whose username is
   back in the file gets `deleted_at` cleared: it is the same person. What
   that means for the person is in [Identity](identity.md#3-accounts).
@@ -277,9 +277,9 @@ computer; see [Identity](identity.md#5-sign-in).
 - **Expired rows are removed by the credential cleanup job.** An approved
   row is also deleted when its account is removed.
 
-## 6. Participants
+## 6. Space members
 
-### 6.1 `participant`
+### 6.1 `member`
 
 | Column | Type | Constraints | Meaning |
 | --- | --- | --- | --- |
@@ -295,14 +295,14 @@ computer; see [Identity](identity.md#5-sign-in).
   whose role is `owner` allows at most one owner per space. Creating a space
   adds the owner's row in the same write that creates the space; see
   [Library architecture](../../lib/docs/architecture/library.md#8-scope-and-space-numbers).
-- **The owner is stored only as a role.** The participant row whose role is
+- **The owner is stored only as a role.** The space member row whose role is
   `owner` is the one record of who owns a space, and showing the owner is
-  one lookup in the `participant_one_owner` index. The library's
+  one lookup in the `member_one_owner` index. The library's
   `space.owner_id` is the scope, which Lorebay sets to one fixed value for
   every space.
 - **`space_number` is set when the row is inserted** and never changes,
   because a space's number never does. Creating a space sets it to the
-  number Lorebay gives the space; adding a participant sets it to the number
+  number Lorebay gives the space; adding a space member sets it to the number
   the library returns when it resolves the space key. No foreign key ties
   it to `space.number`: both insert paths take the number from the library.
 - **Lorebay numbers its spaces by the highest number plus one,** read
@@ -320,9 +320,9 @@ computer; see [Identity](identity.md#5-sign-in).
 - **Only people are stored.** An agent's spaces and role are computed from
   its person on every request: the agents of owners and admins are
   contributors, and other agents have their person's role; see
-  [Access control](../contracts/access-control.md#3-participants).
+  [Access control](../contracts/access-control.md#3-space-members).
   "An agent follows its person" thus needs no sync.
-- **Removing a participant deletes the row**, and so does deleting the
+- **Removing a space member deletes the row**, and so does deleting the
   account; see [section 5.1](#51-account). Nothing in the library's tables
   changes.
 - **The foreign key to `space` is declared in Lorebay's migration**, which
@@ -332,7 +332,7 @@ computer; see [Identity](identity.md#5-sign-in).
 
 The tables of sections 5 and 6, after all migrations. A table comes after
 the tables it references: `oauth_client` before `agent_authorization`, and
-`participant` last. The library's `space` exists before Lorebay's
+`member` last. The library's `space` exists before Lorebay's
 migrations run; it is in
 [Library data model](../../lib/docs/architecture/data-model.md#7-ddl-on-sqlite).
 
@@ -417,7 +417,7 @@ CREATE TABLE device_sign_in_request (
   last_polled_at         INTEGER
 );
 
-CREATE TABLE participant (
+CREATE TABLE member (
   id            TEXT    NOT NULL PRIMARY KEY,
   space_id      TEXT    NOT NULL REFERENCES space (id),
   account_id    TEXT    NOT NULL REFERENCES account (id),
@@ -428,5 +428,5 @@ CREATE TABLE participant (
   UNIQUE (space_id, account_id),
   UNIQUE (account_id, space_number)
 );
-CREATE UNIQUE INDEX participant_one_owner ON participant (space_id) WHERE role = 'owner';
+CREATE UNIQUE INDEX member_one_owner ON member (space_id) WHERE role = 'owner';
 ```

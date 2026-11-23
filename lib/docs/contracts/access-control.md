@@ -7,10 +7,11 @@
   [Tasks](tasks.md), [Knowledge](knowledge.md), [MCP tools](mcp-tools.md)
 
 > Everyone in a space reads everything in it. Only a party writes its own
-> tasks, notes and files, and only owners and admins change Knowledge
-> without a proposal.
+> tasks, notes and files, and only space owners and space admins change
+> Knowledge without a proposal.
 >
-> Agents are never owners or admins, and never approve or reject proposals.
+> Agents are never space owners or space admins, and never approve or reject
+> proposals.
 
 ## 1. Purpose
 
@@ -20,10 +21,10 @@ people's control.
 
 ## 2. Scope
 
-This doc covers the four roles, what each may do in every library
+This doc covers the four space roles, what each may do in every library
 operation, and the checks that decide which space a call acts on. Who
-belongs to a space with which role, and how that changes, is the product's
-record, which the library reads through the
+belongs to a space with which space role, and how that changes, is the
+product's record, which the library reads through the
 [space roles interface](../architecture/library.md#63-space-roles); how a
 caller is verified is the product's too.
 
@@ -32,21 +33,23 @@ four.
 
 ## 3. Roles
 
-- **Four roles.** A person in a space has one role: owner, admin,
-  contributor or viewer. A person outside the space has none.
-- **Roles are per space.** A person may be the owner of one space and a
-  viewer in another.
-- **An agent's role is its person's role, capped at contributor.** An agent
-  is never an owner or admin, so the agents of owners and admins are
-  contributors. Agents also never approve or reject proposals. The library
-  applies the cap itself, whatever role the product reports.
-- **A removed person has no role.** Their tasks, Scratchpads and files
+- **Four space roles.** A person in a space has one space role: space owner,
+  space admin, space contributor or space viewer. A person outside the
+  space has none.
+- **Space roles are per space.** A person may be the space owner of one
+  space and a space viewer in another.
+- **An agent's space role is its person's space role, capped at space
+  contributor.** An agent is never a space owner or space admin, so the
+  agents of space owners and space admins are space contributors. Agents
+  also never approve or reject proposals. The library applies the cap
+  itself, whatever space role the product reports.
+- **A removed person has no space role.** Their tasks, Scratchpads and files
   stay, visible to everyone as before, and still show their name.
 
 ## 4. Permissions
 
-Within a space, every member reads all of its data, agents included, except
-where the table says otherwise.
+Within a space, every space member reads all of its data, agents included,
+except where the table says otherwise.
 
 | Resource | Operation | Person | Agent |
 | --- | --- | --- | --- |
@@ -74,12 +77,13 @@ where the table says otherwise.
   party's tasks.
 - **Only agents write task records.** People never create tasks, append
   notes or upload files; they tell an agent to do the work.
-- **Owners and admins close, not edit, other people's tasks.** They may close
-  or delete anyone's task and delete anyone's notes and files, such as a
-  removed person's task left `in progress`. They cannot change the title or
-  result of someone else's task.
-- **Viewers are read-only.** A person moved from contributor to viewer can no
-  longer change or delete their own earlier tasks, notes and files.
+- **Space owners and space admins close, not edit, other people's tasks.**
+  They may close or delete anyone's task and delete anyone's notes and
+  files, such as a removed person's task left `in progress`. They cannot
+  change the title or result of someone else's task.
+- **Space viewers are read-only.** A person moved from space contributor to
+  space viewer can no longer change or delete their own earlier tasks,
+  notes and files.
 - **Knowledge belongs to the whole space**, not to one person; see
   [Knowledge](knowledge.md).
 - **Creating a space is the product's rule.** The library inserts the space
@@ -92,7 +96,7 @@ where the table says otherwise.
   Reads and task creation name a space. Calls that write into a task, or
   record which task a proposal came from, carry the task ID and act on that
   task's space.
-- Permissions follow the person's role in that space.
+- Permissions follow the person's space role in that space.
 - Which MCP tool carries what is in [MCP tools](mcp-tools.md#4-tools).
 
 ## 6. Space and task checks
@@ -105,12 +109,13 @@ A call that carries a task ID is checked in this order:
 2. Load the task by ID, giving its space and its person.
 3. Reject the call as not found if the space belongs to another owner than
    the caller's scope.
-4. Ask for the person's role in that space. Reject the call as not found if
-   the person has none, a removed person included, so a caller outside a
-   space cannot tell which tasks it holds.
-5. Reject the call if the task is not the caller's party's, unless owners
-   and admins may act on anyone's task; see [section 4](#4-permissions).
-6. Reject the call if the person is a viewer.
+4. Ask for the person's space role in that space. Reject the call as not
+   found if the person has none, a removed person included, so a caller
+   outside a space cannot tell which tasks it holds.
+5. Reject the call if the task is not the caller's party's, unless space
+   owners and space admins may act on anyone's task; see
+   [section 4](#4-permissions).
+6. Reject the call if the person is a space viewer.
 7. Reject a note or a file registration if the task is `ended`, with a
    hint to set the task back to `in progress` first.
 
@@ -119,6 +124,6 @@ A call that carries a space is checked in this order:
 1. Take the caller: the person, the agent and the scope.
 2. Load the space. Reject the call as not found if it belongs to another
    owner than the caller's scope.
-3. Ask for the person's role in that space. Reject the call if the person
-   has none, or if the call writes and the person is a viewer.
+3. Ask for the person's space role in that space. Reject the call if the
+   person has none, or if the call writes and the person is a space viewer.
 4. Reject the call if the object it reads or writes is not in that space.
