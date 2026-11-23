@@ -100,7 +100,7 @@ async fn call_update_task_fails_when_task_is_outside_writable_party() {
         .await,
         unknown
     );
-    tasks::participant(&server, &person, Method::POST, "contributor").await;
+    tasks::space_member(&server, &person, Method::POST, "contributor").await;
     assert_eq!(
         call_error(&server, &bob_agent, "update_task", alice_close.clone()).await["code"],
         "space.permission_required"
@@ -112,17 +112,17 @@ async fn call_update_task_fails_when_task_is_outside_writable_party() {
         call_error(&server, &owner_agent, "update_task", bob_close.clone()).await["code"],
         "space.permission_required"
     );
-    tasks::participant(&server, &person, Method::PATCH, "admin").await;
+    tasks::space_member(&server, &person, Method::PATCH, "admin").await;
     assert_eq!(
         call_error(&server, &bob_agent, "update_task", alice_close).await["code"],
         "space.permission_required"
     );
-    tasks::participant(&server, &person, Method::PATCH, "viewer").await;
+    tasks::space_member(&server, &person, Method::PATCH, "viewer").await;
     assert_eq!(
         call_error(&server, &bob_agent, "update_task", bob_close.clone()).await["code"],
         "space.permission_required"
     );
-    tasks::participant(&server, &person, Method::DELETE, "").await;
+    tasks::space_member(&server, &person, Method::DELETE, "").await;
     assert_eq!(
         call_error(&server, &bob_agent, "update_task", bob_close).await,
         unknown

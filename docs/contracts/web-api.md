@@ -86,7 +86,7 @@ POST /api/v1/spaces/{space}/proposals/{key}/approve
 
 ## 5. Operations
 
-- **Listing users** exists for adding participants. Everyone signed in may
+- **Listing users** exists for adding space members. Everyone signed in may
   call it and sees every username.
 - **Withdrawing a proposal** has no operation of its own: a person rejects
   their own party's proposal; see

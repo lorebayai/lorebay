@@ -5,12 +5,12 @@ use sea_orm::{
 };
 use typed_builder::TypedBuilder;
 
-use crate::entity::participant::{ActiveModel, Column, Entity, Model};
+use crate::entity::member::{ActiveModel, Column, Entity, Model};
 use crate::entity::{account, agent_authorization};
 
 #[derive(Clone, Debug, FromQueryResult, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
-pub(crate) struct ParticipantRecord {
+pub(crate) struct MemberRecord {
     pub username: String,
     pub role: String,
     pub agent_name: Option<String>,
@@ -19,7 +19,7 @@ pub(crate) struct ParticipantRecord {
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
-pub(crate) struct ParticipantRepository<'a, C> {
+pub(crate) struct MemberRepository<'a, C> {
     pub connection: &'a C,
 }
 
@@ -31,13 +31,13 @@ pub(crate) struct RosterAfter {
     pub agent_name: String,
 }
 
-impl<C: ConnectionTrait> ParticipantRepository<'_, C> {
+impl<C: ConnectionTrait> MemberRepository<'_, C> {
     pub async fn list(
         &self,
         space_id: &str,
         after: Option<&RosterAfter>,
         limit: u64,
-    ) -> Result<Vec<ParticipantRecord>, DbErr> {
+    ) -> Result<Vec<MemberRecord>, DbErr> {
         let mut query = Query::select();
         query
             .columns([
@@ -69,7 +69,7 @@ impl<C: ConnectionTrait> ParticipantRepository<'_, C> {
             .order_by(Roster::Kind, Order::Desc)
             .order_by(Roster::AgentName, Order::Asc)
             .limit(limit);
-        ParticipantRecord::find_by_statement(self.connection.get_database_backend().build(&query))
+        MemberRecord::find_by_statement(self.connection.get_database_backend().build(&query))
             .all(self.connection)
             .await
     }

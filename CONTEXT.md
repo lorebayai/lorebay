@@ -2,8 +2,9 @@
 
 Canonical terms for Lorebay's docs and code. Use them exactly, and don't
 introduce synonyms. The terms Lorebay shares with the library it builds on,
-such as space, task, note, file, Knowledge, proposal, agent, role and
+such as space, task, note, file, Knowledge, proposal, agent, space role and
 key, are in the [library's glossary](lib/CONTEXT.md) and mean the same here.
+[Space members](lib/CONTEXT.md#spaces-and-roles) follow the library's definition.
 Terms are written in lowercase in running text.
 
 ## Product
@@ -12,9 +13,6 @@ Terms are written in lowercase in running text.
 process with its data, its web pages, its Web API and its MCP server.
 
 **`lorebayd`**: The Lorebay server process.
-
-**Participant**: A person in a space, with a role. An agent is in the spaces
-its person is in.
 
 **Users file**: The file of usernames and password hashes that `lorebayd`
 reads at startup. It defines who can sign in.

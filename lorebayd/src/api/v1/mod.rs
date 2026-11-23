@@ -49,12 +49,12 @@ pub(crate) fn router() -> Router<ServerState> {
             post(agent_files::complete),
         )
         .route("/users", get(users::list))
-        .route("/spaces/{space}/participants", get(participants::list))
+        .route("/spaces/{space}/members", get(space_members::list))
         .route(
-            "/spaces/{space}/participants/{username}",
-            post(participants::add)
-                .patch(participants::change_role)
-                .delete(participants::remove),
+            "/spaces/{space}/members/{username}",
+            post(space_members::add)
+                .patch(space_members::change_role)
+                .delete(space_members::remove),
         )
         .route("/device-sign-in-request", post(device_sign_in::read))
         .route("/device-sign-in-decision", post(device_sign_in::decide))
@@ -73,8 +73,8 @@ mod authorization;
 mod device_sign_in;
 mod knowledge;
 mod login_session;
-mod participants;
 mod proposals;
+mod space_members;
 mod spaces;
 mod tasks;
 mod users;

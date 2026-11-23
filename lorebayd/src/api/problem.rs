@@ -40,16 +40,16 @@ pub(crate) enum ApiError {
     MethodNotAllowed,
     #[error("Not Found")]
     NotFound,
-    #[error("The person is already in the space")]
-    ParticipantAlreadyExists,
-    #[error("Participant not found")]
-    ParticipantNotFound,
     #[error("Payload Too Large")]
     PayloadTooLarge,
     #[error("A login session is required")]
     PersonRequired,
     #[error("Too Many Requests")]
     RateLimited(u64),
+    #[error("The person is already in the space")]
+    SpaceMemberAlreadyExists,
+    #[error("Space member not found")]
+    SpaceMemberNotFound,
     #[error("Unauthorized")]
     Unauthorized,
     #[error("Service Unavailable")]
@@ -128,8 +128,8 @@ impl ApiError {
             Self::Library { status, code, .. } => (*status, code),
             Self::MethodNotAllowed => (StatusCode::METHOD_NOT_ALLOWED, "http.method_not_allowed"),
             Self::NotFound => (StatusCode::NOT_FOUND, "http.not_found"),
-            Self::ParticipantAlreadyExists => (StatusCode::CONFLICT, "participant.already_exists"),
-            Self::ParticipantNotFound => (StatusCode::NOT_FOUND, "participant.not_found"),
+            Self::SpaceMemberAlreadyExists => (StatusCode::CONFLICT, "space_member.already_exists"),
+            Self::SpaceMemberNotFound => (StatusCode::NOT_FOUND, "space_member.not_found"),
             Self::PayloadTooLarge => (StatusCode::PAYLOAD_TOO_LARGE, "request.body_too_large"),
             Self::PersonRequired => (StatusCode::FORBIDDEN, "auth.person_required"),
             Self::RateLimited(_) => (StatusCode::TOO_MANY_REQUESTS, "auth.rate_limited"),

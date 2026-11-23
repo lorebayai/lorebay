@@ -24,7 +24,7 @@ tasks, Knowledge and MCP tools, has its own design, from the
 
 ## Contracts
 
-- [Access control](contracts/access-control.md): participants, and the
+- [Access control](contracts/access-control.md): space members, and the
   permissions of Lorebay's own operations.
 - [Web API](contracts/web-api.md): paths, credentials and conventions of
   `/api/v1`.

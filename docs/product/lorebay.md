@@ -56,5 +56,5 @@ It does not cover:
 ## 4. Creating a space
 
 - **Anyone who can sign in may create a space**, and becomes its owner.
-- **Members are participants.** Who is in a space with which role, and how
+- **Space members.** Who is in a space with which role, and how
   that changes, is in [Access control](../contracts/access-control.md).

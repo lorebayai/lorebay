@@ -161,7 +161,7 @@ pub async fn assert_viewer_reads_knowledge(server: &Server, space: &str, entry: 
     assert_success(
         &server
             .run(&[
-                "participant",
+                "member",
                 "set-role",
                 space,
                 SECOND_USERNAME,

@@ -4,8 +4,8 @@ use lorebay_lib_core::{
 };
 use sea_orm::{DbErr, Set};
 
-use crate::entity::participant;
-use crate::repository::participant::ParticipantRepository;
+use crate::entity::member;
+use crate::repository::member::MemberRepository;
 
 use crate::time::now_millis;
 
@@ -29,10 +29,10 @@ pub(crate) async fn create_space(
             let role = SpaceRole::Owner;
             let (space, reference) = insert_space(write, &caller, number, role, input).await?;
             let now = now_millis()?;
-            ParticipantRepository::builder()
+            MemberRepository::builder()
                 .connection(write.transaction())
                 .build()
-                .insert(participant::ActiveModel {
+                .insert(member::ActiveModel {
                     id: Set(primary_key()),
                     space_id: Set(reference.id),
                     space_number: Set(reference.number),

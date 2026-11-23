@@ -80,7 +80,7 @@ async fn list_users_fails_when_caller_is_agent() {
             let response = server
                 .json(
                     method,
-                    &format!("/api/v1/spaces/{key}/participants/bob"),
+                    &format!("/api/v1/spaces/{key}/members/bob"),
                     json!({"role":"viewer"}),
                     Some(agent.tokens["access_token"].as_str().unwrap()),
                 )
@@ -89,7 +89,7 @@ async fn list_users_fails_when_caller_is_agent() {
         }
     }
     assert_eq!(
-        list(&server, &owner, "/api/v1/spaces/SPACE-1/participants")
+        list(&server, &owner, "/api/v1/spaces/SPACE-1/members")
             .await
             .as_array()
             .unwrap()

@@ -4,7 +4,7 @@ pub mod account;
 pub mod agent_authorization;
 pub mod device_sign_in_request;
 pub mod login_session;
+pub mod member;
 pub mod oauth_client;
 pub mod oauth_code;
-pub mod participant;
 pub mod refresh_token_history;

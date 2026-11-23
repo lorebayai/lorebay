@@ -2,7 +2,7 @@ use reqwest::{Method, Response, StatusCode};
 use serde_json::{Value, json};
 
 use crate::helpers::{Server, assert_problem, authorize_for, create_space, login, request};
-use crate::tasks::helpers::{SPACE, TASKS, create, participant, read, setup};
+use crate::tasks::helpers::{SPACE, TASKS, create, read, setup, space_member};
 
 use super::helpers::{complete, register, set_status, upload, upload_ok};
 
@@ -69,7 +69,7 @@ async fn delete_agent_file_fails_when_agent_file_belongs_to_another_person() {
     let agent_file = uploaded(&server, &agent, &task).await;
     let before = read(&server, &owner, "TK-1").await;
     let bob = login(&server, "bob").await;
-    participant(&server, &owner, Method::POST, "contributor").await;
+    space_member(&server, &owner, Method::POST, "contributor").await;
     assert_problem(
         remove(&server, &bob, SPACE, &task, "FL-1").await,
         StatusCode::FORBIDDEN,
@@ -83,7 +83,7 @@ async fn delete_agent_file_fails_when_agent_file_belongs_to_another_person() {
     assert_deleted(remove(&server, &owner, SPACE, &own, "FL-2").await).await;
     assert_eq!(read(&server, &owner, "TK-2").await["files"], json!([]));
     upload_ok(&server, &own_agent_file, "Owner removed file").await;
-    participant(&server, &owner, Method::DELETE, "").await;
+    space_member(&server, &owner, Method::DELETE, "").await;
     create_space(&server, &bob, "Other", "Bob space").await;
     for (space, code) in [("SPACE-2", "task.not_found"), (SPACE, "space.not_found")] {
         assert_problem(
@@ -95,8 +95,8 @@ async fn delete_agent_file_fails_when_agent_file_belongs_to_another_person() {
     }
     assert_eq!(read(&server, &owner, "TK-1").await, before);
     assert_exists(&server, &agent_file).await;
-    participant(&server, &owner, Method::POST, "contributor").await;
-    participant(&server, &owner, Method::PATCH, "admin").await;
+    space_member(&server, &owner, Method::POST, "contributor").await;
+    space_member(&server, &owner, Method::PATCH, "admin").await;
     assert_deleted(remove(&server, &bob, SPACE, &task, "FL-1").await).await;
     assert_eq!(read(&server, &owner, "TK-1").await["files"], json!([]));
     upload_ok(&server, &agent_file, "Admin removed file").await;
@@ -107,12 +107,12 @@ async fn delete_agent_file_fails_when_agent_file_belongs_to_another_person() {
 async fn delete_agent_file_fails_when_person_became_viewer() {
     let (server, owner, _) = setup().await;
     let bob = login(&server, "bob").await;
-    participant(&server, &owner, Method::POST, "contributor").await;
+    space_member(&server, &owner, Method::POST, "contributor").await;
     let agent = authorize_for(&server, &bob, "Bob file agent").await;
     let task = create(&server, &agent, SPACE, "Earlier file").await;
     let agent_file = uploaded(&server, &agent, &task).await;
     let before = read(&server, &bob, "TK-1").await;
-    participant(&server, &owner, Method::PATCH, "viewer").await;
+    space_member(&server, &owner, Method::PATCH, "viewer").await;
     assert_problem(
         remove(&server, &bob, SPACE, &task, "FL-1").await,
         StatusCode::FORBIDDEN,
@@ -121,7 +121,7 @@ async fn delete_agent_file_fails_when_person_became_viewer() {
     .await;
     assert_eq!(read(&server, &bob, "TK-1").await, before);
     assert_exists(&server, &agent_file).await;
-    participant(&server, &owner, Method::PATCH, "contributor").await;
+    space_member(&server, &owner, Method::PATCH, "contributor").await;
     assert_deleted(remove(&server, &bob, SPACE, &task, "FL-1").await).await;
     assert_eq!(read(&server, &bob, "TK-1").await["files"], json!([]));
     upload_ok(&server, &agent_file, "Contributor removed file").await;

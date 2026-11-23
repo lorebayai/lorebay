@@ -17,8 +17,8 @@ import sqlite3
 import sys
 
 with closing(sqlite3.connect(sys.argv[1])) as projection:
-    projection.execute("DROP INDEX participant_one_owner")
+    projection.execute("DROP INDEX member_one_owner")
 PY
 
 generate_entities "$cli" "$database" "$schema_dir/entities" lorebayd/src/entity \
-  account,participant,agent_authorization,login_session,oauth_client,oauth_code,refresh_token_history,device_sign_in_request
+  account,member,agent_authorization,login_session,oauth_client,oauth_code,refresh_token_history,device_sign_in_request

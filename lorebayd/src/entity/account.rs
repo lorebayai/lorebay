@@ -21,10 +21,10 @@ pub enum Relation {
     DeviceSignInRequest,
     #[sea_orm(has_many = "super::login_session::Entity")]
     LoginSession,
+    #[sea_orm(has_many = "super::member::Entity")]
+    Member,
     #[sea_orm(has_many = "super::oauth_code::Entity")]
     OauthCode,
-    #[sea_orm(has_many = "super::participant::Entity")]
-    Participant,
 }
 
 impl Related<super::agent_authorization::Entity> for Entity {
@@ -45,15 +45,15 @@ impl Related<super::login_session::Entity> for Entity {
     }
 }
 
-impl Related<super::oauth_code::Entity> for Entity {
+impl Related<super::member::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::OauthCode.def()
+        Relation::Member.def()
     }
 }
 
-impl Related<super::participant::Entity> for Entity {
+impl Related<super::oauth_code::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::Participant.def()
+        Relation::OauthCode.def()
     }
 }
 

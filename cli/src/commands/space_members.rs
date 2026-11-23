@@ -1,7 +1,7 @@
 use reqwest::Method;
 use serde_json::{Value, json};
 
-use crate::args::{OutputMode, ParticipantCommand};
+use crate::args::{MemberCommand, OutputMode};
 use crate::constants::DATA;
 use crate::credentials::Store;
 use crate::error::Result;
@@ -11,32 +11,32 @@ use crate::output::{self, Outcome, Table};
 use super::{Listing, api_path, list_page};
 
 pub(super) async fn run(
-    command: ParticipantCommand,
+    command: MemberCommand,
     store: &Store,
     mode: OutputMode,
 ) -> Result<Outcome> {
     match command {
-        ParticipantCommand::Add {
+        MemberCommand::Add {
             space,
             username,
             role,
         } => add(store, &space, &username, role.as_str()).await,
-        ParticipantCommand::List { space, page } => {
+        MemberCommand::List { space, page } => {
             list_page(
                 store,
                 page,
                 mode,
                 Listing::builder()
-                    .path(api_path(&[SPACES, &space, PARTICIPANTS])?)
-                    .command(format!("participant list {}", output::shell_word(&space)))
+                    .path(api_path(&[SPACES, &space, SPACE_MEMBERS])?)
+                    .command(format!("member list {}", output::shell_word(&space)))
                     .columns(COLUMNS.to_vec())
                     .fields(FIELDS.to_vec())
                     .build(),
             )
             .await
         }
-        ParticipantCommand::Remove { space, username } => remove(store, &space, &username).await,
-        ParticipantCommand::SetRole {
+        MemberCommand::Remove { space, username } => remove(store, &space, &username).await,
+        MemberCommand::SetRole {
             space,
             username,
             role,
@@ -46,7 +46,7 @@ pub(super) async fn run(
 
 const COLUMNS: [&str; 4] = ["Type", "Username", "Agent name", "Role"];
 const FIELDS: [&str; 4] = ["type", "username", "agent_name", "role"];
-const PARTICIPANTS: &str = "participants";
+const SPACE_MEMBERS: &str = "members";
 const SPACES: &str = "spaces";
 
 async fn add(store: &Store, space: &str, username: &str, role: &str) -> Result<Outcome> {
@@ -54,11 +54,11 @@ async fn add(store: &Store, space: &str, username: &str, role: &str) -> Result<O
         .authorized(
             store,
             Method::POST,
-            &api_path(&[SPACES, space, PARTICIPANTS, username])?,
+            &api_path(&[SPACES, space, SPACE_MEMBERS, username])?,
             Some(&json!({"role": role})),
         )
         .await?;
-    Ok(participant_output(body))
+    Ok(space_member_output(body))
 }
 
 async fn remove(store: &Store, space: &str, username: &str) -> Result<Outcome> {
@@ -66,11 +66,11 @@ async fn remove(store: &Store, space: &str, username: &str) -> Result<Outcome> {
         .authorized(
             store,
             Method::DELETE,
-            &api_path(&[SPACES, space, PARTICIPANTS, username])?,
+            &api_path(&[SPACES, space, SPACE_MEMBERS, username])?,
             None,
         )
         .await?;
-    let mut outcome = Outcome::completion("Participant removed.");
+    let mut outcome = Outcome::completion("Member removed.");
     outcome.body = body;
     Ok(outcome)
 }
@@ -80,14 +80,14 @@ async fn set_role(store: &Store, space: &str, username: &str, role: &str) -> Res
         .authorized(
             store,
             Method::PATCH,
-            &api_path(&[SPACES, space, PARTICIPANTS, username])?,
+            &api_path(&[SPACES, space, SPACE_MEMBERS, username])?,
             Some(&json!({"role": role})),
         )
         .await?;
-    Ok(participant_output(body))
+    Ok(space_member_output(body))
 }
 
-fn participant_output(body: Value) -> Outcome {
+fn space_member_output(body: Value) -> Outcome {
     let row = FIELDS
         .iter()
         .map(|field| body[DATA][field].as_str().unwrap_or_default().to_owned())

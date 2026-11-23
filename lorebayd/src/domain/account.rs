@@ -11,8 +11,8 @@ use crate::repository::account::AccountRepository;
 use crate::repository::agent_authorization::AgentAuthorizationRepository;
 use crate::repository::device_sign_in_request::DeviceSignInRequestRepository;
 use crate::repository::login_session::LoginSessionRepository;
+use crate::repository::member::MemberRepository;
 use crate::repository::oauth_code::OauthCodeRepository;
-use crate::repository::participant::ParticipantRepository;
 
 use super::primary_key;
 use super::user_store::UserStore;
@@ -71,7 +71,7 @@ async fn remove_credentials(transaction: &DatabaseTransaction, ids: &[String]) -
         .build()
         .delete_by_accounts(ids)
         .await?;
-    ParticipantRepository::builder()
+    MemberRepository::builder()
         .connection(transaction)
         .build()
         .delete_by_accounts(ids)

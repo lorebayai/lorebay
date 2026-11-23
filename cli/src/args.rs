@@ -59,15 +59,15 @@ pub(crate) enum Command {
     },
     /// End your login session and remove local credentials.
     Logout,
+    /// Manage a space's members.
+    Member {
+        #[command(subcommand)]
+        command: MemberCommand,
+    },
     /// Delete a task's notes.
     Note {
         #[command(subcommand)]
         command: NoteCommand,
-    },
-    /// Manage a space's participants.
-    Participant {
-        #[command(subcommand)]
-        command: ParticipantCommand,
     },
     /// Submit, read and decide Knowledge proposals.
     Proposal {
@@ -180,7 +180,7 @@ pub(crate) enum OutputMode {
 }
 
 #[derive(Clone, Debug, Subcommand)]
-pub(crate) enum ParticipantCommand {
+pub(crate) enum MemberCommand {
     /// Add a person as a contributor or viewer.
     Add {
         space: String,

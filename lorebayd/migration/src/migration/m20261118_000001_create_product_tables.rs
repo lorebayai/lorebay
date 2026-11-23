@@ -15,7 +15,7 @@ impl MigrationTrait for Migration {
             refresh_token_history(),
             oauth_code(),
             device_sign_in_request(),
-            participant(),
+            member(),
         ] {
             manager.create_table(table).await?;
         }
@@ -27,7 +27,7 @@ impl MigrationTrait for Migration {
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         for table in [
-            Participant::Table.into_iden(),
+            Member::Table.into_iden(),
             DeviceSignInRequest::Table.into_iden(),
             OauthCode::Table.into_iden(),
             RefreshTokenHistory::Table.into_iden(),
@@ -160,37 +160,37 @@ fn oauth_code() -> TableCreateStatement {
         .to_owned()
 }
 
-fn participant() -> TableCreateStatement {
+fn member() -> TableCreateStatement {
     Table::create()
-        .table(Participant::Table)
-        .col(text(Participant::Id).primary_key())
-        .col(text(Participant::SpaceId))
-        .col(text(Participant::AccountId))
-        .col(big_integer(Participant::SpaceNumber))
-        .col(text(Participant::Role))
-        .col(big_integer(Participant::CreatedAt))
-        .col(big_integer(Participant::UpdatedAt))
+        .table(Member::Table)
+        .col(text(Member::Id).primary_key())
+        .col(text(Member::SpaceId))
+        .col(text(Member::AccountId))
+        .col(big_integer(Member::SpaceNumber))
+        .col(text(Member::Role))
+        .col(big_integer(Member::CreatedAt))
+        .col(big_integer(Member::UpdatedAt))
         .index(
             Index::create()
                 .unique()
-                .col(Participant::SpaceId)
-                .col(Participant::AccountId),
+                .col(Member::SpaceId)
+                .col(Member::AccountId),
         )
         .index(
             Index::create()
                 .unique()
-                .col(Participant::AccountId)
-                .col(Participant::SpaceNumber),
+                .col(Member::AccountId)
+                .col(Member::SpaceNumber),
         )
-        .check(Expr::col(Participant::Role).is_in(["owner", "admin", "contributor", "viewer"]))
+        .check(Expr::col(Member::Role).is_in(["owner", "admin", "contributor", "viewer"]))
         .foreign_key(
             ForeignKey::create()
-                .from(Participant::Table, Participant::SpaceId)
+                .from(Member::Table, Member::SpaceId)
                 .to(Space::Table, Space::Id),
         )
         .foreign_key(
             ForeignKey::create()
-                .from(Participant::Table, Participant::AccountId)
+                .from(Member::Table, Member::AccountId)
                 .to(Account::Table, Account::Id),
         )
         .to_owned()
@@ -253,14 +253,10 @@ fn device_sign_in_request() -> TableCreateStatement {
 
 fn indexes() -> [IndexCreateStatement; 4] {
     [
-        index(
-            "participant_one_owner",
-            Participant::Table,
-            [Participant::SpaceId],
-        )
-        .unique()
-        .and_where(Expr::col(Participant::Role).eq("owner"))
-        .to_owned(),
+        index("member_one_owner", Member::Table, [Member::SpaceId])
+            .unique()
+            .and_where(Expr::col(Member::Role).eq("owner"))
+            .to_owned(),
         index(
             "refresh_token_history_agent",
             RefreshTokenHistory::Table,
@@ -355,7 +351,7 @@ enum OauthCode {
 }
 
 #[derive(DeriveIden)]
-enum Participant {
+enum Member {
     AccountId,
     CreatedAt,
     Id,

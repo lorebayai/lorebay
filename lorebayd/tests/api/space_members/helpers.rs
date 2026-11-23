@@ -5,7 +5,7 @@ use tempfile::TempDir;
 use super::super::helpers::{Server, TEST_PASSWORD, create_space, list, request};
 
 pub const SPACE: &str = "/api/v1/spaces/SPACE-1";
-pub const PARTICIPANTS: &str = "/api/v1/spaces/SPACE-1/participants";
+pub const SPACE_MEMBERS: &str = "/api/v1/spaces/SPACE-1/members";
 pub const USERS: &[(&str, &str)] = &[
     ("alice", TEST_PASSWORD),
     ("bob", TEST_PASSWORD),
@@ -31,7 +31,7 @@ pub async fn mutation(
         server,
         tokens,
         method,
-        &format!("{PARTICIPANTS}/{username}"),
+        &format!("{SPACE_MEMBERS}/{username}"),
         json!({"role":role}),
     )
     .await
@@ -65,7 +65,7 @@ pub async fn assert_role(server: &Server, tokens: &Value, role: &str) {
 }
 
 pub async fn assert_target_role(server: &Server, tokens: &Value, username: &str, role: &str) {
-    let roster = list(server, tokens, PARTICIPANTS).await;
+    let roster = list(server, tokens, SPACE_MEMBERS).await;
     let person = roster
         .as_array()
         .unwrap()

@@ -195,10 +195,10 @@ async fn create_task_fails_when_person_is_viewer() {
     let (server, person, _) = setup().await;
     let bob = login(&server, "bob").await;
     let agent = authorize_for(&server, &bob, "Bob agent").await;
-    participant(&server, &person, Method::POST, "contributor").await;
+    space_member(&server, &person, Method::POST, "contributor").await;
     let task = create(&server, &agent, SPACE, "Bob task").await;
     let original = read(&server, &person, "TK-1").await;
-    participant(&server, &person, Method::PATCH, "viewer").await;
+    space_member(&server, &person, Method::PATCH, "viewer").await;
     for response in [
         request(
             &server,
@@ -328,9 +328,9 @@ async fn add_note_fails_when_task_belongs_to_another_party() {
     let bob_agent = authorize_for(&server, &bob, "Bob agent").await;
     let task = create(&server, &agent, SPACE, "Alice task").await;
     let id = task["task_id"].as_str().unwrap();
-    participant(&server, &person, Method::POST, "contributor").await;
+    space_member(&server, &person, Method::POST, "contributor").await;
     for role in ["contributor", "admin"] {
-        participant(&server, &person, Method::PATCH, role).await;
+        space_member(&server, &person, Method::PATCH, role).await;
         assert_problem(
             note_request(&server, &bob_agent, SPACE, id, "Forbidden").await,
             StatusCode::FORBIDDEN,
@@ -338,7 +338,7 @@ async fn add_note_fails_when_task_belongs_to_another_party() {
         )
         .await;
     }
-    participant(&server, &person, Method::DELETE, "").await;
+    space_member(&server, &person, Method::DELETE, "").await;
     create_space(&server, &bob, "Bob only", "Bob work").await;
     assert_problem(
         note_request(&server, &bob_agent, "SPACE-2", id, "Forbidden").await,
@@ -388,9 +388,9 @@ async fn add_note_fails_when_person_was_removed_from_space() {
     let (server, person, _) = setup().await;
     let bob = login(&server, "bob").await;
     let agent = authorize_for(&server, &bob, "Bob agent").await;
-    participant(&server, &person, Method::POST, "contributor").await;
+    space_member(&server, &person, Method::POST, "contributor").await;
     let task = create(&server, &agent, SPACE, "Bob task").await;
-    participant(&server, &person, Method::DELETE, "").await;
+    space_member(&server, &person, Method::DELETE, "").await;
     let missing = assert_problem(
         note_request(&server, &agent, SPACE, "unknown", "Forbidden").await,
         StatusCode::NOT_FOUND,
@@ -423,7 +423,7 @@ async fn list_tasks_returns_newest_activity_first() {
     let (server, person, agent) = setup().await;
     let bob = login(&server, "bob").await;
     let other = authorize_for(&server, &bob, "Bob agent").await;
-    participant(&server, &person, Method::POST, "viewer").await;
+    space_member(&server, &person, Method::POST, "viewer").await;
     assert_eq!(
         list_page(&server, &bob, TASKS, &[]).await["data"],
         json!([])
@@ -466,7 +466,7 @@ async fn read_task_returns_scratchpad_page_when_requested() {
     let (server, person, agent) = setup().await;
     let bob = login(&server, "bob").await;
     let other = authorize_for(&server, &bob, "Bob agent").await;
-    participant(&server, &person, Method::POST, "viewer").await;
+    space_member(&server, &person, Method::POST, "viewer").await;
     let task = create(&server, &agent, SPACE, "Paged Scratchpad").await;
     let mut expected = Vec::new();
     for number in 0..5 {

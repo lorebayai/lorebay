@@ -33,7 +33,7 @@ pub async fn create(server: &Server, name: &str, summary: &str) -> String {
     body["data"]["key"].as_str().unwrap().to_owned()
 }
 
-pub fn assert_participant(output: &Output, mode: &str, role: &str) {
+pub fn assert_space_member(output: &Output, mode: &str, role: &str) {
     assert_success(output);
     assert!(output.stderr.is_empty());
     if mode == "json" {
@@ -108,7 +108,7 @@ pub async fn pages(
 
 pub async fn assert_removed(server: &Server, space: &str) {
     let roster = server
-        .run(&["participant", "list", space, "--output", "json"])
+        .run(&["member", "list", space, "--output", "json"])
         .await;
     assert_success(&roster);
     assert_eq!(
@@ -136,7 +136,7 @@ pub fn assert_removal(removed: &Output, mode: &str) {
     if mode == "json" {
         assert_eq!(body(removed), json!({"data": null, "meta": {}}));
     } else {
-        assert_eq!(removed.stdout, b"Participant removed.\n");
+        assert_eq!(removed.stdout, b"Member removed.\n");
     }
 }
 
@@ -161,9 +161,9 @@ pub fn path_commands(segment: &str) -> Vec<Vec<&str>> {
         vec!["task", "scratchpad", segment, "TK-1"],
         vec!["task", "scratchpad", "SPACE-1", segment],
         vec!["space", "change", segment, "--name", "Unchanged"],
-        vec!["participant", "list", segment],
+        vec!["member", "list", segment],
         vec![
-            "participant",
+            "member",
             "add",
             segment,
             SECOND_USERNAME,
@@ -171,24 +171,17 @@ pub fn path_commands(segment: &str) -> Vec<Vec<&str>> {
             "viewer",
         ],
         vec![
-            "participant",
+            "member",
             "set-role",
             segment,
             SECOND_USERNAME,
             "--role",
             "viewer",
         ],
-        vec!["participant", "remove", segment, SECOND_USERNAME],
-        vec!["participant", "add", "SPACE-1", segment, "--role", "viewer"],
-        vec![
-            "participant",
-            "set-role",
-            "SPACE-1",
-            segment,
-            "--role",
-            "viewer",
-        ],
-        vec!["participant", "remove", "SPACE-1", segment],
+        vec!["member", "remove", segment, SECOND_USERNAME],
+        vec!["member", "add", "SPACE-1", segment, "--role", "viewer"],
+        vec!["member", "set-role", "SPACE-1", segment, "--role", "viewer"],
+        vec!["member", "remove", "SPACE-1", segment],
         vec!["agent", "revoke", segment, "--yes"],
         vec!["agent", "revoke", segment],
     ]

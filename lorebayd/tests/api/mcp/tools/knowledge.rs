@@ -226,7 +226,7 @@ async fn three_people_with_space() -> (Server, Value, Value, Value) {
                 &server,
                 &owner,
                 Method::POST,
-                &format!("/api/v1/spaces/{SPACE}/participants/{person}"),
+                &format!("/api/v1/spaces/{SPACE}/members/{person}"),
                 json!({"role":"contributor"}),
             )
             .await,

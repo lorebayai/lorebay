@@ -233,7 +233,7 @@ async fn call_create_agent_file_fails_when_task_is_outside_writable_party() {
     for id in ["unknown", "TK-1", task["task_id"].as_str().unwrap()] {
         assert_refusals(&server, &bob_agent, id, "task.not_found").await;
     }
-    tasks::participant(&server, &person, Method::POST, "contributor").await;
+    tasks::space_member(&server, &person, Method::POST, "contributor").await;
     assert_refusals(
         &server,
         &bob_agent,
@@ -242,7 +242,7 @@ async fn call_create_agent_file_fails_when_task_is_outside_writable_party() {
     )
     .await;
     let own = tasks::create(&server, &bob_agent, SPACE, "Bob task").await;
-    tasks::participant(&server, &person, Method::PATCH, "viewer").await;
+    tasks::space_member(&server, &person, Method::PATCH, "viewer").await;
     assert_refusals(
         &server,
         &bob_agent,
@@ -250,7 +250,7 @@ async fn call_create_agent_file_fails_when_task_is_outside_writable_party() {
         "space.permission_required",
     )
     .await;
-    tasks::participant(&server, &person, Method::DELETE, "").await;
+    tasks::space_member(&server, &person, Method::DELETE, "").await;
     assert_refusals(
         &server,
         &bob_agent,
@@ -350,7 +350,7 @@ async fn call_get_agent_file_url_returns_url_that_serves_file() {
     )
     .await;
     let bob = login(&server, "bob").await;
-    tasks::participant(&server, &person, Method::POST, "viewer").await;
+    tasks::space_member(&server, &person, Method::POST, "viewer").await;
     let reader = authorize_for(&server, &bob, "File reader").await;
     let before = tasks::read(&server, &person, "TK-1").await;
     for version in [NEWEST_VERSION, "2025-03-26", "2025-06-18", "2025-11-25"] {
