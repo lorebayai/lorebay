@@ -7,7 +7,7 @@
   [Tasks](tasks.md), [Knowledge](knowledge.md), [MCP tools](mcp-tools.md)
 
 > Everyone in a space reads everything in it. Only a party writes its own
-> tasks, notes and files, and only space owners and space admins change
+> tasks, checkpoints and files, and only space owners and space admins change
 > Knowledge without a proposal.
 >
 > Agents are never space owners or space admins, and never approve or reject
@@ -56,10 +56,10 @@ except where the table says otherwise.
 | Space | List own spaces, read one | Yes | Yes |
 | Space | Change name and summary | Owner, admin | No |
 | Task | List, read one, read its Scratchpad | Yes | Yes |
-| Task | Create, append a note | No | Yes, except viewers |
+| Task | Create, append a checkpoint | No | Yes, except viewers |
 | Task | Change title, status, result | Own tasks, except viewers; owners and admins may also close anyone's | Own party's tasks, except viewers |
 | Task | Delete | Own tasks, except viewers; owners and admins: anyone's | No |
-| Note | Delete one | In own tasks, except viewers; owners and admins: anyone's | No |
+| Checkpoint | Delete one | In own tasks, except viewers; owners and admins: anyone's | No |
 | File | Register and get an upload URL | No | Yes, except viewers |
 | File | Report the upload complete | No | Yes, except viewers |
 | File | Get a download URL | Yes | Yes |
@@ -72,18 +72,18 @@ except where the table says otherwise.
 | Proposal | Approve, reject | Yes, except viewers; see [Knowledge](knowledge.md#4-proposals) | No |
 
 - **"Own party's"** means the tasks of the agent's person, created by that
-  agent or by any other agent of the same person. Appending notes,
+  agent or by any other agent of the same person. Appending checkpoints,
   registering files and reporting uploads complete also work only on own
   party's tasks.
 - **Only agents write task records.** People never create tasks, append
-  notes or upload files; they tell an agent to do the work.
+  checkpoints or upload files; they tell an agent to do the work.
 - **Space owners and space admins close, not edit, other people's tasks.**
-  They may close or delete anyone's task and delete anyone's notes and
+  They may close or delete anyone's task and delete anyone's checkpoints and
   files, such as a removed person's task left `in progress`. They cannot
   change the title or result of someone else's task.
 - **Space viewers are read-only.** A person moved from space contributor to
   space viewer can no longer change or delete their own earlier tasks,
-  notes and files.
+  checkpoints and files.
 - **Knowledge belongs to the whole space**, not to one person; see
   [Knowledge](knowledge.md).
 - **Creating a space is the product's rule.** The library inserts the space
@@ -116,7 +116,7 @@ A call that carries a task ID is checked in this order:
    owners and space admins may act on anyone's task; see
    [section 4](#4-permissions).
 6. Reject the call if the person is a space viewer.
-7. Reject a note or a file registration if the task is `ended`, with a
+7. Reject a checkpoint or a file registration if the task is `ended`, with a
    hint to set the task back to `in progress` first.
 
 A call that carries a space is checked in this order:

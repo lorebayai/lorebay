@@ -1,8 +1,8 @@
 use serde_json::json;
 
 use crate::helpers::{
-    SECOND_USERNAME, append_note, assert_success, assert_task_error, body, create, create_task,
-    read_task, task_context, task_id_from_show, task_pages, task_with_agent_files,
+    SECOND_USERNAME, append_checkpoint, assert_success, assert_task_error, body, create,
+    create_task, read_task, task_context, task_id_from_show, task_pages, task_with_agent_files,
 };
 
 #[tokio::test]
@@ -12,7 +12,7 @@ async fn task_list_returns_tasks_in_activity_order() {
     let first = create_task(&server, &space, &agent, title).await;
     create_task(&server, &space, &agent, "Second").await;
     create_task(&server, &space, &agent, "Third").await;
-    let time = append_note(&server, &space, &first, &agent, "Newest activity").await;
+    let time = append_checkpoint(&server, &space, &first, &agent, "Newest activity").await;
     for mode in ["human", "json"] {
         let (first, last, cursor) = task_pages(&server, &["task", "list", &space], mode).await;
         if mode == "json" {
@@ -132,9 +132,9 @@ async fn task_close_fails_with_server_error_when_given_task_key() {
 }
 
 #[tokio::test]
-async fn task_scratchpad_prints_notes_in_time_order() {
+async fn task_scratchpad_prints_checkpoints_in_time_order() {
     let (server, space, agent) = task_context().await;
-    let task = create_task(&server, &space, &agent, "Notes").await;
+    let task = create_task(&server, &space, &agent, "Checkpoints").await;
     let contents = [
         "**First**\n- detail\tcode\u{1b}[31m\r\u{7}\u{202e}",
         "Second",
@@ -142,7 +142,7 @@ async fn task_scratchpad_prints_notes_in_time_order() {
     ];
     let mut times = Vec::new();
     for content in contents {
-        times.push(append_note(&server, &space, &task, &agent, content).await);
+        times.push(append_checkpoint(&server, &space, &task, &agent, content).await);
     }
     assert!(times.windows(2).all(|pair| pair[0] < pair[1]));
     for mode in ["human", "json"] {
@@ -175,7 +175,7 @@ async fn task_scratchpad_prints_notes_in_time_order() {
             );
         }
     }
-    create_task(&server, &space, &agent, "Empty notes").await;
+    create_task(&server, &space, &agent, "Empty checkpoints").await;
     let empty = server
         .run(&["task", "scratchpad", &space, "TK-2", "--output", "json"])
         .await;

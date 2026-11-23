@@ -52,13 +52,14 @@ It does not cover showing an object which other objects reference it.
 
 - **A reference is `#` followed by a key**, such as `#KN-1`. A product shows
   it as a link that reads `#KN-1`.
-- **Where references work:** task titles and results, notes, Knowledge and
+- **Where references work:** task titles and results, checkpoints, Knowledge and
   proposals. References are optional.
-- **Notes have no references of their own.** Refer to the note's task.
+- **Checkpoints have no references of their own.** Refer to the checkpoint's
+  task.
 - **Unresolvable references show as plain text**, with no error: a key that
   doesn't exist, was deleted, or belongs to another space.
 - **Writes don't check references.** A product resolves them when it shows
   the text.
 - **Fixing a wrong reference.** Fix it where it was written. A result can be
-  edited. A note cannot: append a note that corrects it, or a person deletes
-  the note.
+  edited. A checkpoint cannot: append a checkpoint that corrects it, or a
+  person deletes the checkpoint.

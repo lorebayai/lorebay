@@ -10,9 +10,10 @@ use crate::api::{ApiError, Envelope, FieldError, ListQuery, Meta, invalid_query}
 use crate::domain::caller::VerifiedCaller;
 use crate::server::ServerState;
 use lorebay_lib_core::{
-    CreatedTask, Note, NoteAdded, NoteContent, TaskChanges, TaskError, TaskFilters, TaskKeyword,
-    TaskRead, TaskResult, TaskStatus, TaskTextError, TaskTitle, add_note, change_task, create_task,
-    delete_note, delete_task, list_tasks, read_scratchpad, read_task,
+    Checkpoint, CheckpointAdded, CheckpointContent, CreatedTask, TaskChanges, TaskError,
+    TaskFilters, TaskKeyword, TaskRead, TaskResult, TaskStatus, TaskTextError, TaskTitle,
+    add_checkpoint, change_task, create_task, delete_checkpoint, delete_task, list_tasks,
+    read_scratchpad, read_task,
 };
 use lorebay_lib_core::{Page, PageOptions, TaskStatusError, TaskSummary, TaskTarget};
 
@@ -29,7 +30,7 @@ pub(crate) struct CreateTaskRequest {
 #[derive(Clone, Debug, Deserialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
 #[serde(deny_unknown_fields)]
-pub(crate) struct AddNoteRequest {
+pub(crate) struct AddCheckpointRequest {
     content: String,
 }
 
@@ -86,7 +87,7 @@ pub(crate) struct TaskResponse {
     ended_at: Option<i64>,
     files: Vec<AgentFile>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    scratchpad: Option<Envelope<Vec<Note>>>,
+    scratchpad: Option<Envelope<Vec<Checkpoint>>>,
 }
 
 impl TryFrom<CreateTaskRequest> for TaskTitle {
@@ -97,10 +98,10 @@ impl TryFrom<CreateTaskRequest> for TaskTitle {
     }
 }
 
-impl TryFrom<AddNoteRequest> for NoteContent {
+impl TryFrom<AddCheckpointRequest> for CheckpointContent {
     type Error = ApiError;
 
-    fn try_from(request: AddNoteRequest) -> Result<Self, Self::Error> {
+    fn try_from(request: AddCheckpointRequest) -> Result<Self, Self::Error> {
         Self::try_from(request.content).map_err(|error| invalid_text("content", error))
     }
 }
@@ -206,7 +207,7 @@ impl From<TaskRead> for TaskResponse {
             .ended_at(read.task.ended_at)
             .summary(TaskSummary::from(read.task))
             .files(read.files)
-            .scratchpad(read.scratchpad.map(note_page))
+            .scratchpad(read.scratchpad.map(checkpoint_page))
             .build()
     }
 }
@@ -228,12 +229,12 @@ pub(crate) async fn create(
     Ok((StatusCode::CREATED, Envelope::builder().data(task).build()))
 }
 
-pub(crate) async fn append_note(
+pub(crate) async fn append_checkpoint(
     State(state): State<ServerState>,
     caller: VerifiedCaller,
     path: Result<Path<(String, Secret<String>)>, PathRejection>,
-    request: Result<Json<AddNoteRequest>, JsonRejection>,
-) -> Result<(StatusCode, Envelope<NoteAdded>), ApiError> {
+    request: Result<Json<AddCheckpointRequest>, JsonRejection>,
+) -> Result<(StatusCode, Envelope<CheckpointAdded>), ApiError> {
     let Path((space, task_id)) = path.map_err(invalid_path)?;
     let Json(request) = request.map_err(invalid_json)?;
     let caller = caller.library_caller();
@@ -242,11 +243,14 @@ pub(crate) async fn append_note(
         task_id: task_id.expose(),
     };
     let input = request.try_into()?;
-    let note = state
+    let checkpoint = state
         .library
-        .run_write(async |write| add_note(write, &caller, target, input).await)
+        .run_write(async |write| add_checkpoint(write, &caller, target, input).await)
         .await?;
-    Ok((StatusCode::CREATED, Envelope::builder().data(note).build()))
+    Ok((
+        StatusCode::CREATED,
+        Envelope::builder().data(checkpoint).build(),
+    ))
 }
 
 pub(crate) async fn change(
@@ -288,7 +292,7 @@ pub(crate) async fn delete(
     Ok(Envelope::builder().data(()).build())
 }
 
-pub(crate) async fn remove_note(
+pub(crate) async fn remove_checkpoint(
     State(state): State<ServerState>,
     caller: VerifiedCaller,
     path: Result<Path<(String, Secret<String>, String)>, PathRejection>,
@@ -299,7 +303,7 @@ pub(crate) async fn remove_note(
             FieldError::builder()
                 .field("time")
                 .code("invalid")
-                .message("Expected an integer note time.")
+                .message("Expected an integer checkpoint time.")
                 .build(),
         ])
     })?;
@@ -310,7 +314,7 @@ pub(crate) async fn remove_note(
     };
     state
         .library
-        .run_write(async |write| delete_note(write, &caller, target, time).await)
+        .run_write(async |write| delete_checkpoint(write, &caller, target, time).await)
         .await?;
     Ok(Envelope::builder().data(()).build())
 }
@@ -362,7 +366,7 @@ pub(crate) async fn scratchpad(
     caller: VerifiedCaller,
     path: Result<Path<(String, String)>, PathRejection>,
     query: Result<Query<ListQuery>, QueryRejection>,
-) -> Result<Envelope<Vec<Note>>, ApiError> {
+) -> Result<Envelope<Vec<Checkpoint>>, ApiError> {
     let Path((space, key)) = path.map_err(invalid_path)?;
     let Query(query) = query.map_err(|_| invalid_query("query"))?;
     let page = read_scratchpad(
@@ -373,14 +377,14 @@ pub(crate) async fn scratchpad(
         query.try_into()?,
     )
     .await?;
-    Ok(note_page(page))
+    Ok(checkpoint_page(page))
 }
 
 pub(crate) fn invalid_text(field: &str, error: TaskTextError) -> ApiError {
     ApiError::InvalidBody(vec![text_error(field, error)])
 }
 
-fn note_page(page: Page<Note>) -> Envelope<Vec<Note>> {
+fn checkpoint_page(page: Page<Checkpoint>) -> Envelope<Vec<Checkpoint>> {
     Envelope::builder()
         .data(page.items)
         .meta(Meta::builder().next_cursor(page.next_cursor).build())

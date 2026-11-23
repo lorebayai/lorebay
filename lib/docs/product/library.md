@@ -25,7 +25,7 @@ How the data is shown matters most: a reader must be able to tell quickly
 what an agent did and how.
 
 A product builds the library into its own process and gives its people
-spaces, tasks, notes, files, Knowledge and the MCP tools for their
+spaces, tasks, checkpoints, files, Knowledge and the MCP tools for their
 agents. What the library holds and what a product holds is in
 [Library architecture](../architecture/library.md#3-boundary).
 
@@ -38,7 +38,7 @@ docs describe; anything they don't describe is out of scope.
 It does not cover:
 
 - notifications, such as telling approvers about a new proposal;
-- comments or replies on tasks, notes, Knowledge or proposals.
+- comments or replies on tasks, checkpoints, Knowledge or proposals.
 
 ## 3. Spaces
 
@@ -66,7 +66,7 @@ The library stores five kinds of data in each space:
 | Data | What it records | Home |
 | --- | --- | --- |
 | Task | What one piece of agent work did, and its result | [Tasks](../contracts/tasks.md#3-tasks) |
-| Scratchpad | How the agent did it: the notes it wrote along the way | [Tasks](../contracts/tasks.md#4-scratchpad) |
+| Scratchpad | How the agent did it: the checkpoints it wrote along the way | [Tasks](../contracts/tasks.md#4-scratchpad) |
 | File | Files the agent produced | [Tasks](../contracts/tasks.md#5-files) |
 | Knowledge | Shared documents later sessions read | [Knowledge](../contracts/knowledge.md#3-knowledge-entries) |
 | Proposal | A requested change to Knowledge, waiting for a person | [Knowledge](../contracts/knowledge.md#4-proposals) |

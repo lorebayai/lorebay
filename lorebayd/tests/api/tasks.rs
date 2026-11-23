@@ -105,7 +105,7 @@ async fn create_task_fails_when_caller_is_person() {
             }
             assert_eq!(
                 assert_problem(
-                    note_request(
+                    checkpoint_request(
                         &server,
                         tokens,
                         space,
@@ -165,7 +165,7 @@ async fn create_task_fails_when_title_is_empty() {
         "\u{4e2d}".repeat(10_001),
     ] {
         let error = assert_problem(
-            note_request(
+            checkpoint_request(
                 &server,
                 &agent,
                 SPACE,
@@ -208,7 +208,7 @@ async fn create_task_fails_when_person_is_viewer() {
             json!({"title":"Forbidden"}),
         )
         .await,
-        note_request(
+        checkpoint_request(
             &server,
             &agent,
             SPACE,
@@ -225,38 +225,38 @@ async fn create_task_fails_when_person_is_viewer() {
 }
 
 #[tokio::test]
-async fn add_note_appends_to_scratchpad_and_updates_last_activity() {
+async fn add_checkpoint_appends_to_scratchpad_and_updates_last_activity() {
     let (server, person, agent) = setup().await;
     let task = create(&server, &agent, SPACE, "Research").await;
     let initial = read(&server, &person, "TK-1").await;
-    let note = append(&server, &agent, &task, "Found #KN-999\nDetails").await;
-    assert_eq!(note["task_title"], "Research");
-    assert!(note["time"].as_i64().unwrap() >= initial["started_at"].as_i64().unwrap());
+    let checkpoint = append(&server, &agent, &task, "Found #KN-999\nDetails").await;
+    assert_eq!(checkpoint["task_title"], "Research");
+    assert!(checkpoint["time"].as_i64().unwrap() >= initial["started_at"].as_i64().unwrap());
     let mut expected = initial;
-    expected["last_activity_at"] = note["time"].clone();
+    expected["last_activity_at"] = checkpoint["time"].clone();
     assert_eq!(read(&server, &person, "TK-1").await, expected);
     assert_eq!(
         scratchpad(&server, &person, "TK-1").await,
-        json!([{"time":note["time"], "content":"Found #KN-999\nDetails"}])
+        json!([{"time":checkpoint["time"], "content":"Found #KN-999\nDetails"}])
     );
     server.stop().await;
 }
 
 #[tokio::test]
-async fn add_note_gives_each_note_a_distinct_increasing_time() {
+async fn add_checkpoint_gives_each_checkpoint_a_distinct_increasing_time() {
     let (server, person, agent) = setup().await;
-    let task = create(&server, &agent, SPACE, "Concurrent notes").await;
+    let task = create(&server, &agent, SPACE, "Concurrent checkpoints").await;
     let mut appends = JoinSet::new();
     for number in 0..50 {
         let client = server.client.clone();
         let url = format!(
-            "http://{}{TASKS}/{}/notes",
+            "http://{}{TASKS}/{}/checkpoints",
             server.address,
             task["task_id"].as_str().unwrap()
         );
         let token = agent["access_token"].as_str().unwrap().to_owned();
         appends.spawn(async move {
-            let content = format!("Note {number}");
+            let content = format!("Checkpoint {number}");
             let response = client
                 .post(url)
                 .bearer_auth(token)
@@ -265,16 +265,16 @@ async fn add_note_gives_each_note_a_distinct_increasing_time() {
                 .await
                 .unwrap();
             assert_eq!(response.status(), StatusCode::CREATED);
-            let note = response.json::<Value>().await.unwrap()["data"].clone();
-            assert_eq!(note["task_title"], "Concurrent notes");
-            json!({"time":note["time"], "content":content})
+            let checkpoint = response.json::<Value>().await.unwrap()["data"].clone();
+            assert_eq!(checkpoint["task_title"], "Concurrent checkpoints");
+            json!({"time":checkpoint["time"], "content":content})
         });
     }
     let mut expected = Vec::new();
     while let Some(result) = appends.join_next().await {
         expected.push(result.unwrap());
     }
-    expected.sort_by_key(|note| note["time"].as_i64().unwrap());
+    expected.sort_by_key(|checkpoint| checkpoint["time"].as_i64().unwrap());
     assert_eq!(expected.len(), 50);
     assert!(
         expected
@@ -293,7 +293,7 @@ async fn add_note_gives_each_note_a_distinct_increasing_time() {
 }
 
 #[tokio::test]
-async fn add_note_fails_when_task_id_does_not_exist() {
+async fn add_checkpoint_fails_when_task_id_does_not_exist() {
     let (server, person, agent) = setup().await;
     let task = create(&server, &agent, SPACE, "Original").await;
     create_space(&server, &person, "Other", "Other work").await;
@@ -306,7 +306,7 @@ async fn add_note_fails_when_task_id_does_not_exist() {
         (SPACE, &id.to_uppercase()),
     ] {
         let error = assert_problem(
-            note_request(&server, &agent, space, id, "Forbidden").await,
+            checkpoint_request(&server, &agent, space, id, "Forbidden").await,
             StatusCode::NOT_FOUND,
             "task.not_found",
         )
@@ -322,7 +322,7 @@ async fn add_note_fails_when_task_id_does_not_exist() {
 }
 
 #[tokio::test]
-async fn add_note_fails_when_task_belongs_to_another_party() {
+async fn add_checkpoint_fails_when_task_belongs_to_another_party() {
     let (server, person, agent) = setup().await;
     let bob = login(&server, "bob").await;
     let bob_agent = authorize_for(&server, &bob, "Bob agent").await;
@@ -332,7 +332,7 @@ async fn add_note_fails_when_task_belongs_to_another_party() {
     for role in ["contributor", "admin"] {
         space_member(&server, &person, Method::PATCH, role).await;
         assert_problem(
-            note_request(&server, &bob_agent, SPACE, id, "Forbidden").await,
+            checkpoint_request(&server, &bob_agent, SPACE, id, "Forbidden").await,
             StatusCode::FORBIDDEN,
             "space.permission_required",
         )
@@ -341,20 +341,20 @@ async fn add_note_fails_when_task_belongs_to_another_party() {
     space_member(&server, &person, Method::DELETE, "").await;
     create_space(&server, &bob, "Bob only", "Bob work").await;
     assert_problem(
-        note_request(&server, &bob_agent, "SPACE-2", id, "Forbidden").await,
+        checkpoint_request(&server, &bob_agent, "SPACE-2", id, "Forbidden").await,
         StatusCode::NOT_FOUND,
         "task.not_found",
     )
     .await;
     let missing = assert_problem(
-        note_request(&server, &bob_agent, SPACE, "unknown", "Forbidden").await,
+        checkpoint_request(&server, &bob_agent, SPACE, "unknown", "Forbidden").await,
         StatusCode::NOT_FOUND,
         "space.not_found",
     )
     .await;
     assert_eq!(
         assert_problem(
-            note_request(&server, &bob_agent, SPACE, id, "Forbidden").await,
+            checkpoint_request(&server, &bob_agent, SPACE, id, "Forbidden").await,
             StatusCode::NOT_FOUND,
             "space.not_found"
         )
@@ -366,25 +366,25 @@ async fn add_note_fails_when_task_belongs_to_another_party() {
 }
 
 #[tokio::test]
-async fn add_note_succeeds_when_task_was_created_by_another_agent_of_same_person() {
+async fn add_checkpoint_succeeds_when_task_was_created_by_another_agent_of_same_person() {
     let (server, person, agent) = setup().await;
     let task = create(&server, &agent, SPACE, "Shared party").await;
     let second = authorize_for(&server, &person, "Other agent").await;
-    let note = append(&server, &second, &task, "Continuing").await;
-    assert_eq!(note["task_title"], "Shared party");
+    let checkpoint = append(&server, &second, &task, "Continuing").await;
+    assert_eq!(checkpoint["task_title"], "Shared party");
     assert_eq!(
         read(&server, &person, "TK-1").await["agent_name"],
         "Research agent"
     );
     assert_eq!(
         scratchpad(&server, &second, "TK-1").await,
-        json!([{"time":note["time"],"content":"Continuing"}])
+        json!([{"time":checkpoint["time"],"content":"Continuing"}])
     );
     server.stop().await;
 }
 
 #[tokio::test]
-async fn add_note_fails_when_person_was_removed_from_space() {
+async fn add_checkpoint_fails_when_person_was_removed_from_space() {
     let (server, person, _) = setup().await;
     let bob = login(&server, "bob").await;
     let agent = authorize_for(&server, &bob, "Bob agent").await;
@@ -392,14 +392,14 @@ async fn add_note_fails_when_person_was_removed_from_space() {
     let task = create(&server, &agent, SPACE, "Bob task").await;
     space_member(&server, &person, Method::DELETE, "").await;
     let missing = assert_problem(
-        note_request(&server, &agent, SPACE, "unknown", "Forbidden").await,
+        checkpoint_request(&server, &agent, SPACE, "unknown", "Forbidden").await,
         StatusCode::NOT_FOUND,
         "space.not_found",
     )
     .await;
     assert_eq!(
         assert_problem(
-            note_request(
+            checkpoint_request(
                 &server,
                 &agent,
                 SPACE,
@@ -455,8 +455,8 @@ async fn list_tasks_returns_newest_activity_first() {
         assert_eq!(task["person"], "alice");
         assert_eq!(task["agent_name"], "Research agent");
         assert_eq!(task["status"], "in progress");
-        let note = append(&server, &agent, task, "Found by ID").await;
-        assert_eq!(note["task_title"], task["title"]);
+        let checkpoint = append(&server, &agent, task, "Found by ID").await;
+        assert_eq!(checkpoint["task_title"], task["title"]);
     }
     server.stop().await;
 }
@@ -470,12 +470,12 @@ async fn read_task_returns_scratchpad_page_when_requested() {
     let task = create(&server, &agent, SPACE, "Paged Scratchpad").await;
     let mut expected = Vec::new();
     for number in 0..5 {
-        let content = format!("Note {number}");
-        let note = append(&server, &agent, &task, &content).await;
-        expected.push(json!({"time":note["time"], "content":content}));
+        let content = format!("Checkpoint {number}");
+        let checkpoint = append(&server, &agent, &task, &content).await;
+        expected.push(json!({"time":checkpoint["time"], "content":content}));
     }
     for tokens in [&bob, &other] {
-        read_note_pages(&server, tokens, "TK-1", &expected).await;
+        read_checkpoint_pages(&server, tokens, "TK-1", &expected).await;
         assert_eq!(
             walk(&server, tokens, &format!("{TASKS}/TK-1/scratchpad"), "2", 5).await,
             expected
@@ -494,7 +494,7 @@ async fn read_task_returns_scratchpad_page_when_requested() {
             .windows(2)
             .all(|pair| pair[0]["time"].as_i64() < pair[1]["time"].as_i64())
     );
-    assert_note_cursors(&server, &person, &bob, &expected).await;
+    assert_checkpoint_cursors(&server, &person, &bob, &expected).await;
     server.stop().await;
 }
 

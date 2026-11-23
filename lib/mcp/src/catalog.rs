@@ -4,8 +4,8 @@ use rmcp::model::{JsonObject, Tool, ToolAnnotations};
 use serde_json::{Value, json};
 
 use lorebay_lib_core::{
-    AGENT_FILE_NAME_MAX_BYTES, AGENT_FILE_SUMMARY_MAX_CHARACTERS, KEYWORD_MAX_CHARACTERS,
-    NOTE_MAX_CHARACTERS, RESULT_MAX_CHARACTERS, TITLE_MAX_CHARACTERS, TaskStatus,
+    AGENT_FILE_NAME_MAX_BYTES, AGENT_FILE_SUMMARY_MAX_CHARACTERS, CHECKPOINT_MAX_CHARACTERS,
+    KEYWORD_MAX_CHARACTERS, RESULT_MAX_CHARACTERS, TITLE_MAX_CHARACTERS, TaskStatus,
 };
 use lorebay_lib_core::{DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};
 
@@ -13,7 +13,7 @@ mod knowledge;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ToolName {
-    AddNote,
+    AddCheckpoint,
     CompleteAgentFile,
     CreateAgentFile,
     CreateProposal,
@@ -32,7 +32,7 @@ pub(crate) enum ToolName {
 impl ToolName {
     fn as_str(self) -> &'static str {
         match self {
-            Self::AddNote => "add_note",
+            Self::AddCheckpoint => "add_checkpoint",
             Self::CompleteAgentFile => "complete_file",
             Self::CreateAgentFile => "create_file",
             Self::CreateProposal => "create_proposal",
@@ -93,7 +93,7 @@ fn build_catalog() -> Vec<(ToolName, Tool)> {
         ),
         tool(
             ToolName::GetTask,
-            "Read a task by space and key such as TK-1, including its result and files. Set include_scratchpad to true to read notes; page_size and cursor then page the Scratchpad.",
+            "Read a task by space and key such as TK-1, including its result and files. Set include_scratchpad to true to read checkpoints; page_size and cursor then page the Scratchpad.",
             paged(
                 json!({"space":space(), "key":{"type":"string"}, "include_scratchpad":{"type":"boolean", "default":false}}),
             ),
@@ -101,9 +101,9 @@ fn build_catalog() -> Vec<(ToolName, Tool)> {
             true,
         ),
         tool(
-            ToolName::AddNote,
-            "Append a nonempty Markdown note using task_id, not a task key. Only your party's tasks accept writes. Ended tasks must be reopened first. Returns the note time and task title.",
-            json!({"task_id":{"type":"string"}, "content":{"type":"string", "minLength":1, "maxLength":NOTE_MAX_CHARACTERS}}),
+            ToolName::AddCheckpoint,
+            "Append a nonempty Markdown checkpoint using task_id, not a task key. Only your party's tasks accept writes. Ended tasks must be reopened first. Returns the checkpoint time and task title.",
+            json!({"task_id":{"type":"string"}, "content":{"type":"string", "minLength":1, "maxLength":CHECKPOINT_MAX_CHARACTERS}}),
             &["task_id", "content"],
             false,
         ),

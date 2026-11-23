@@ -396,7 +396,7 @@ async fn assert_tools(version: &str, response: Response) {
         ("update_task", false),
         ("list_tasks", true),
         ("get_task", true),
-        ("add_note", false),
+        ("add_checkpoint", false),
         ("create_file", false),
         ("complete_file", false),
         ("get_file_url", true),

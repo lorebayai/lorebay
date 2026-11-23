@@ -22,7 +22,7 @@ Rust crate and test suite.
 - Name a test `<operation>_<outcome>[_when_<condition>]`, without articles.
   The operation is the API call, crate item or user goal under test; the
   outcome is a present-tense verb phrase; `_when_` adds the condition only
-  when one matters: `add_note_fails_when_task_is_ended`.
+  when one matters: `add_checkpoint_fails_when_task_is_ended`.
   TypeScript titles use the same words separated by spaces.
 
 ## Integration tests

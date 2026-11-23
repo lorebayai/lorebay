@@ -6,7 +6,7 @@ use crate::helpers::{
 };
 
 use super::helpers::{
-    SPACE, TASKS, append, create, note_request, read, scratchpad, setup, space_member,
+    SPACE, TASKS, append, checkpoint_request, create, read, scratchpad, setup, space_member,
 };
 
 #[tokio::test]
@@ -16,14 +16,14 @@ async fn delete_task_removes_task_and_scratchpad() {
     space_member(&server, &owner, Method::POST, "contributor").await;
     let agent = authorize_for(&server, &person, "Bob agent").await;
     let task = create(&server, &agent, SPACE, "Mistaken task").await;
-    let note = append(&server, &agent, &task, "Mistaken note").await;
+    let checkpoint = append(&server, &agent, &task, "Mistaken checkpoint").await;
     let agent_file = prepare_agent_files(&server, &agent, &task).await;
     let id = task["task_id"].as_str().unwrap();
     assert_eq!(
         scratchpad(&server, &person, "TK-1").await[0]["time"],
-        note["time"]
+        checkpoint["time"]
     );
-    for time in [None, Some(note["time"].to_string())] {
+    for time in [None, Some(checkpoint["time"].to_string())] {
         assert_problem(
             remove(&server, &person, SPACE, "TK-1", time.as_deref()).await,
             StatusCode::NOT_FOUND,
@@ -44,7 +44,7 @@ async fn delete_task_removes_task_and_scratchpad() {
         )
         .await;
     }
-    for time in [None, Some(note["time"].to_string())] {
+    for time in [None, Some(checkpoint["time"].to_string())] {
         assert_problem(
             remove(&server, &person, SPACE, id, time.as_deref()).await,
             StatusCode::NOT_FOUND,
@@ -64,13 +64,13 @@ async fn delete_task_removes_task_and_scratchpad() {
 }
 
 #[tokio::test]
-async fn add_note_fails_with_not_found_when_task_was_deleted() {
+async fn add_checkpoint_fails_with_not_found_when_task_was_deleted() {
     let (server, person, agent) = setup().await;
     let task = create(&server, &agent, SPACE, "Deleted task").await;
     let id = task["task_id"].as_str().unwrap();
     assert_deleted(remove(&server, &person, SPACE, id, None).await).await;
     assert_problem(
-        note_request(&server, &agent, SPACE, id, "Too late").await,
+        checkpoint_request(&server, &agent, SPACE, id, "Too late").await,
         StatusCode::NOT_FOUND,
         "task.not_found",
     )
@@ -86,9 +86,9 @@ async fn add_note_fails_with_not_found_when_task_was_deleted() {
 async fn delete_task_fails_when_caller_is_agent() {
     let (server, person, agent) = setup().await;
     let task = create(&server, &agent, SPACE, "Retained task").await;
-    let note = append(&server, &agent, &task, "Retained note").await;
+    let checkpoint = append(&server, &agent, &task, "Retained checkpoint").await;
     let id = task["task_id"].as_str().unwrap();
-    let time = note["time"].to_string();
+    let time = checkpoint["time"].to_string();
     let original = read(&server, &person, "TK-1").await;
     for space in [SPACE, "SPACE-999"] {
         for task_id in [id, "unknown"] {
@@ -105,7 +105,7 @@ async fn delete_task_fails_when_caller_is_agent() {
     assert_eq!(read(&server, &person, "TK-1").await, original);
     assert_eq!(
         scratchpad(&server, &person, "TK-1").await[0]["time"],
-        note["time"]
+        checkpoint["time"]
     );
     server.stop().await;
 }
@@ -115,9 +115,9 @@ async fn delete_task_fails_when_task_belongs_to_another_person() {
     let (server, person, agent) = setup().await;
     let bob = login(&server, "bob").await;
     let task = create(&server, &agent, SPACE, "Alice task").await;
-    let note = append(&server, &agent, &task, "Alice note").await;
+    let checkpoint = append(&server, &agent, &task, "Alice checkpoint").await;
     let id = task["task_id"].as_str().unwrap();
-    let time = note["time"].to_string();
+    let time = checkpoint["time"].to_string();
     let original = read(&server, &person, "TK-1").await;
     space_member(&server, &person, Method::POST, "contributor").await;
     for time in [None, Some(time.as_str())] {
@@ -156,7 +156,7 @@ async fn delete_task_fails_when_task_belongs_to_another_person() {
     assert_eq!(read(&server, &person, "TK-1").await, original);
     assert_eq!(
         scratchpad(&server, &person, "TK-1").await[0]["time"],
-        note["time"]
+        checkpoint["time"]
     );
     server.stop().await;
 }
@@ -168,10 +168,10 @@ async fn delete_task_fails_when_person_became_viewer() {
     space_member(&server, &owner, Method::POST, "contributor").await;
     let agent = authorize_for(&server, &person, "Bob agent").await;
     let task = create(&server, &agent, SPACE, "Bob task").await;
-    let note = append(&server, &agent, &task, "Bob note").await;
+    let checkpoint = append(&server, &agent, &task, "Bob checkpoint").await;
     let original = read(&server, &person, "TK-1").await;
     space_member(&server, &owner, Method::PATCH, "viewer").await;
-    for time in [None, Some(note["time"].to_string())] {
+    for time in [None, Some(checkpoint["time"].to_string())] {
         assert_problem(
             remove(
                 &server,
@@ -189,7 +189,7 @@ async fn delete_task_fails_when_person_became_viewer() {
     assert_eq!(read(&server, &person, "TK-1").await, original);
     assert_eq!(
         scratchpad(&server, &person, "TK-1").await[0]["time"],
-        note["time"]
+        checkpoint["time"]
     );
     server.stop().await;
 }
@@ -201,9 +201,9 @@ async fn delete_task_removes_another_persons_task_when_caller_is_owner() {
     space_member(&server, &owner, Method::POST, "contributor").await;
     let agent = authorize_for(&server, &person, "Bob agent").await;
     let task = create(&server, &agent, SPACE, "Bob task").await;
-    let note = append(&server, &agent, &task, "Bob note").await;
+    let checkpoint = append(&server, &agent, &task, "Bob checkpoint").await;
     let id = task["task_id"].as_str().unwrap();
-    let time = note["time"].to_string();
+    let time = checkpoint["time"].to_string();
     assert_deleted(remove(&server, &owner, SPACE, id, Some(&time)).await).await;
     space_member(&server, &owner, Method::DELETE, "").await;
     assert_deleted(remove(&server, &owner, SPACE, id, None).await).await;
@@ -214,9 +214,9 @@ async fn delete_task_removes_another_persons_task_when_caller_is_owner() {
     space_member(&server, &owner, Method::POST, "contributor").await;
     space_member(&server, &owner, Method::PATCH, "admin").await;
     let task = create(&server, &owner_agent, SPACE, "Alice task").await;
-    let note = append(&server, &owner_agent, &task, "Alice note").await;
+    let checkpoint = append(&server, &owner_agent, &task, "Alice checkpoint").await;
     let id = task["task_id"].as_str().unwrap();
-    let time = note["time"].to_string();
+    let time = checkpoint["time"].to_string();
     assert_deleted(remove(&server, &person, SPACE, id, Some(&time)).await).await;
     assert_eq!(scratchpad(&server, &owner, "TK-2").await, json!([]));
     assert_eq!(read(&server, &owner, "TK-2").await["person"], "alice");
@@ -229,46 +229,55 @@ async fn delete_task_removes_another_persons_task_when_caller_is_owner() {
 }
 
 #[tokio::test]
-async fn delete_note_removes_one_note_from_scratchpad() {
+async fn delete_checkpoint_removes_one_checkpoint_from_scratchpad() {
     let (server, owner, _) = setup().await;
     let person = login(&server, "bob").await;
     space_member(&server, &owner, Method::POST, "contributor").await;
     let agent = authorize_for(&server, &person, "Bob agent").await;
-    let task = create(&server, &agent, SPACE, "Notes").await;
+    let task = create(&server, &agent, SPACE, "Checkpoints").await;
     for content in ["First", "Middle", "Last"] {
         append(&server, &agent, &task, content).await;
     }
-    let notes = scratchpad(&server, &person, "TK-1").await;
+    let checkpoints = scratchpad(&server, &person, "TK-1").await;
     let original = read(&server, &person, "TK-1").await;
     let id = task["task_id"].as_str().unwrap();
-    let time = notes[1]["time"].to_string();
+    let time = checkpoints[1]["time"].to_string();
     assert_deleted(remove(&server, &person, SPACE, id, Some(&time)).await).await;
     assert_eq!(
         scratchpad(&server, &person, "TK-1").await,
-        json!([notes[0], notes[2]])
+        json!([checkpoints[0], checkpoints[2]])
     );
     for missing in [time, "0".to_owned()] {
         assert_problem(
             remove(&server, &person, SPACE, id, Some(&missing)).await,
             StatusCode::NOT_FOUND,
-            "note.not_found",
+            "checkpoint.not_found",
         )
         .await;
     }
     assert_invalid_times(&server, &person, id).await;
     assert_eq!(
         scratchpad(&server, &person, "TK-1").await,
-        json!([notes[0], notes[2]])
+        json!([checkpoints[0], checkpoints[2]])
     );
     assert_eq!(read(&server, &person, "TK-1").await, original);
-    for note in [&notes[0], &notes[2]] {
-        assert_deleted(remove(&server, &person, SPACE, id, Some(&note["time"].to_string())).await)
-            .await;
+    for checkpoint in [&checkpoints[0], &checkpoints[2]] {
+        assert_deleted(
+            remove(
+                &server,
+                &person,
+                SPACE,
+                id,
+                Some(&checkpoint["time"].to_string()),
+            )
+            .await,
+        )
+        .await;
     }
     assert_eq!(scratchpad(&server, &person, "TK-1").await, json!([]));
     update_result(&server, &person, id).await;
     let next = append(&server, &agent, &task, "After deletion").await;
-    assert!(next["time"].as_i64().unwrap() > notes[2]["time"].as_i64().unwrap());
+    assert!(next["time"].as_i64().unwrap() > checkpoints[2]["time"].as_i64().unwrap());
     server.stop().await;
 }
 
@@ -290,7 +299,7 @@ async fn update_result(server: &Server, tokens: &Value, id: &str) {
         tokens,
         Method::PATCH,
         &format!("{TASKS}/{id}"),
-        json!({"result":"Notes removed"}),
+        json!({"result":"Checkpoints removed"}),
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
@@ -355,7 +364,7 @@ async fn remove(
 ) -> Response {
     let mut path = format!("/api/v1/spaces/{space}/tasks/{id}");
     if let Some(time) = time {
-        path.push_str(&format!("/notes/{time}"));
+        path.push_str(&format!("/checkpoints/{time}"));
     }
     request(server, tokens, Method::DELETE, &path, Value::Null).await
 }

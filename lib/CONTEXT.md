@@ -6,7 +6,7 @@ other terms are written in lowercase in running text.
 
 ## Library
 
-**Library**: The features every product shares: spaces, tasks, notes,
+**Library**: The features every product shares: spaces, tasks, checkpoints,
 files, Knowledge, proposals and the MCP tools, built into a product's
 process as the `lorebay-lib-*` crates.
 
@@ -82,10 +82,11 @@ space: its title, status, result, Scratchpad and files.
 
 **Result**: A task's Markdown summary of the work so far.
 
-**Note**: A short, timestamped Markdown entry an agent appends to a task
+**Checkpoint**: A short, timestamped Markdown entry an agent appends to a task
 while it works.
 
-**Scratchpad**: A task's notes, in time order.
+**Scratchpad**: A task's working record while it runs: its checkpoints in time
+order. Each product presents it its own way.
 
 **File**: Immutable content an agent uploads to a task, with a name and a
 summary.

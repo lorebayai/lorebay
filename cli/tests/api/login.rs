@@ -152,7 +152,7 @@ async fn help_and_usage_use_documented_exit_codes() {
         vec!["task", "show", "--help"],
         vec!["task", "close", "--help"],
         vec!["task", "delete", "--help"],
-        vec!["note", "delete", "--help"],
+        vec!["checkpoint", "delete", "--help"],
         vec!["task", "scratchpad", "--help"],
     ] {
         let output = server.run(&arguments).await;
@@ -162,7 +162,7 @@ async fn help_and_usage_use_documented_exit_codes() {
         if arguments.starts_with(&["task", "delete"]) {
             assert!(
                 String::from_utf8_lossy(&output.stdout)
-                    .contains("Delete a task, its notes, files and their content")
+                    .contains("Delete a task, its checkpoints, files and their content")
             );
         }
     }
@@ -178,7 +178,7 @@ async fn help_and_usage_use_documented_exit_codes() {
         vec!["task", "show", "SPACE-1"],
         vec!["task", "close", "SPACE-1"],
         vec!["task", "delete", "SPACE-1"],
-        vec!["note", "delete", "SPACE-1", "task-id"],
+        vec!["checkpoint", "delete", "SPACE-1", "task-id"],
         vec!["task", "scratchpad", "SPACE-1"],
     ] {
         let output = server.run(&arguments).await;

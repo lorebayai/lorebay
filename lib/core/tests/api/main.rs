@@ -3,11 +3,11 @@ use std::sync::atomic::Ordering;
 
 use futures_util::future::join_all;
 use lorebay_lib_core::{
-    Caller, NewSpace, NoteContent, SpaceError, SpaceInputError, SpaceRole, TaskChanges, TaskStatus,
-    WriteOperation, add_note, change_task, complete_agent_file as record_completion, create_space,
-    delete_task, get_agent_file_download_url, highest_space_number, list_tasks,
-    prepare_agent_file_completion, read_task, register_agent_file, remove_orphaned_files,
-    resolve_space,
+    Caller, CheckpointContent, NewSpace, SpaceError, SpaceInputError, SpaceRole, TaskChanges,
+    TaskStatus, WriteOperation, add_checkpoint, change_task,
+    complete_agent_file as record_completion, create_space, delete_task,
+    get_agent_file_download_url, highest_space_number, list_tasks, prepare_agent_file_completion,
+    read_task, register_agent_file, remove_orphaned_files, resolve_space,
 };
 use sea_orm::TransactionTrait;
 use tokio::sync::{Barrier, mpsc};
@@ -156,12 +156,12 @@ async fn create_agent_file_assigns_distinct_keys_when_registered_concurrently() 
 }
 
 #[tokio::test]
-async fn add_note_keeps_times_increasing_when_appended_concurrently() {
+async fn add_checkpoint_keeps_times_increasing_when_appended_concurrently() {
     with_postgres(async |fixture| {
         fixture.space().await;
         let task = fixture.task("Append concurrently").await;
         let barrier = Barrier::new(50);
-        let notes = join_all((0..50).map(|number| {
+        let checkpoints = join_all((0..50).map(|number| {
             let barrier = &barrier;
             let task = &task;
             async move {
@@ -170,13 +170,16 @@ async fn add_note_keeps_times_increasing_when_appended_concurrently() {
                     &fixture.state,
                     &fixture.agent,
                     task,
-                    &format!("Note {number}"),
+                    &format!("Checkpoint {number}"),
                 )
                 .await
             }
         }))
         .await;
-        let mut times: Vec<i64> = notes.iter().map(|note| note.time).collect();
+        let mut times: Vec<i64> = checkpoints
+            .iter()
+            .map(|checkpoint| checkpoint.time)
+            .collect();
         times.sort_unstable();
         assert!(times.windows(2).all(|pair| pair[0] < pair[1]));
         let read = read_task(
@@ -188,9 +191,13 @@ async fn add_note_keeps_times_increasing_when_appended_concurrently() {
         )
         .await
         .unwrap();
-        let notes = read.scratchpad.unwrap();
+        let checkpoints = read.scratchpad.unwrap();
         assert_eq!(
-            notes.items.iter().map(|note| note.time).collect::<Vec<_>>(),
+            checkpoints
+                .items
+                .iter()
+                .map(|checkpoint| checkpoint.time)
+                .collect::<Vec<_>>(),
             times
         );
         assert_eq!(read.task.last_activity_at, *times.last().unwrap());
@@ -199,7 +206,7 @@ async fn add_note_keeps_times_increasing_when_appended_concurrently() {
 }
 
 #[tokio::test]
-async fn add_note_fails_when_task_ends_concurrently() {
+async fn add_checkpoint_fails_when_task_ends_concurrently() {
     with_postgres(async |fixture| {
         fixture.space().await;
         let task = fixture.task("Close with append waiting").await;
@@ -235,8 +242,8 @@ async fn add_note_fails_when_task_ends_concurrently() {
         let append = tokio::spawn(async move {
             appender
                 .run_write(async |write| {
-                    let content = NoteContent::try_from("After closure".to_owned()).unwrap();
-                    add_note(write, &writer, target(&appending), content).await
+                    let content = CheckpointContent::try_from("After closure".to_owned()).unwrap();
+                    add_checkpoint(write, &writer, target(&appending), content).await
                 })
                 .await
         });
@@ -261,10 +268,10 @@ async fn add_note_fails_when_task_ends_concurrently() {
 }
 
 #[tokio::test]
-async fn complete_agent_file_keeps_last_activity_when_note_is_newer() {
+async fn complete_agent_file_keeps_last_activity_when_checkpoint_is_newer() {
     with_postgres(async |fixture| {
         fixture.space().await;
-        let task = fixture.task("Completion and newer note").await;
+        let task = fixture.task("Completion and newer checkpoint").await;
         let agent_file = register(&fixture.state, &fixture.agent, &task).await;
         fixture.storage.upload(&agent_file, b"file");
         let complete_pause = Pause::default();
@@ -292,29 +299,28 @@ async fn complete_agent_file_keeps_last_activity_when_note_is_newer() {
         let older = now_millis();
         wait_until_after(older).await;
 
-        let note_pause = Pause::default();
-        let note_state = fixture.state_with(
+        let checkpoint_pause = Pause::default();
+        let checkpoint_state = fixture.state_with(
             Gates {
-                before_commit: Some(note_pause.gate()),
+                before_commit: Some(checkpoint_pause.gate()),
                 ..Gates::default()
             },
             false,
         );
         let agent = fixture.agent.clone();
         let appending = task.clone();
-        let note =
-            tokio::spawn(
-                async move { append(&note_state, &agent, &appending, "Newer note").await },
-            );
-        note_pause.reached().await;
+        let checkpoint = tokio::spawn(async move {
+            append(&checkpoint_state, &agent, &appending, "Newer checkpoint").await
+        });
+        checkpoint_pause.reached().await;
         complete_pause.release();
         fixture.wait_for_lock(next_pid(&mut pid).await).await;
-        note_pause.release();
-        let note = note.await.unwrap();
-        assert!(note.time > older);
+        checkpoint_pause.release();
+        let checkpoint = checkpoint.await.unwrap();
+        assert!(checkpoint.time > older);
         assert_eq!(complete.await.unwrap().unwrap().agent_file.size, 4);
         let read = fixture.read(&task).await;
-        assert_eq!(read.task.last_activity_at, note.time);
+        assert_eq!(read.task.last_activity_at, checkpoint.time);
         assert_eq!(read.files.len(), 1);
     })
     .await;
@@ -418,7 +424,13 @@ async fn delete_task_keeps_rows_and_files_when_product_rolls_back() {
     with_postgres(async |fixture| {
         fixture.space().await;
         let task = fixture.task("Rolled back task deletion").await;
-        let note = append(&fixture.state, &fixture.agent, &task, "Keep this note").await;
+        let checkpoint = append(
+            &fixture.state,
+            &fixture.agent,
+            &task,
+            "Keep this checkpoint",
+        )
+        .await;
         let agent_file = register(&fixture.state, &fixture.agent, &task).await;
         let location = fixture.storage.upload(&agent_file, b"keep");
         complete_agent_file(
@@ -454,8 +466,8 @@ async fn delete_task_keeps_rows_and_files_when_product_rolls_back() {
         .unwrap();
         assert_eq!(read.task.key, task.key);
         let scratchpad = read.scratchpad.unwrap();
-        assert_eq!(scratchpad.items[0].time, note.time);
-        assert_eq!(scratchpad.items[0].content, "Keep this note");
+        assert_eq!(scratchpad.items[0].time, checkpoint.time);
+        assert_eq!(scratchpad.items[0].content, "Keep this checkpoint");
         assert_eq!(read.files[0].key, agent_file.key);
         let download =
             get_agent_file_download_url(&fixture.state, &fixture.person, SPACE, &agent_file.key)

@@ -46,17 +46,17 @@ async fn call_list_tasks_returns_own_party_tasks_not_ended() {
             .all(|row| row["person"] == "alice" && row["status"] == "in progress")
     );
     assert_party_tasks(&server, &agent).await;
-    let note = call(
+    let checkpoint = call(
         &server,
         &agent,
-        "add_note",
+        "add_checkpoint",
         json!({"task_id":rows[0]["task_id"], "content":"Recovered own task"}),
     )
     .await;
-    assert_eq!(note["task_title"], "Own second");
+    assert_eq!(checkpoint["task_title"], "Own second");
     assert_eq!(
         tasks::scratchpad(&server, &person, "TK-2").await,
-        json!([{"time":note["time"], "content":"Recovered own task"}])
+        json!([{"time":checkpoint["time"], "content":"Recovered own task"}])
     );
     let page = call(
         &server,
