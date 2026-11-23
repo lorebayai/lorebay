@@ -145,7 +145,7 @@ impl Server {
     pub async fn log_in(&self, username: &str, password: &str) -> Response {
         self.json(
             Method::POST,
-            "/api/v1/login-session",
+            "/api/v1/sign-in",
             json!({"username": username, "password": password}),
             None,
         )
@@ -159,7 +159,7 @@ impl Server {
     pub async fn refresh(&self, token: &str) -> Response {
         self.json(
             Method::POST,
-            "/api/v1/login-session/refresh",
+            "/api/v1/sign-in/refresh",
             json!({"refresh_token": token}),
             None,
         )
@@ -167,17 +167,17 @@ impl Server {
     }
 
     pub async fn log_out(&self, token: Option<&str>) -> Response {
-        self.json(Method::DELETE, "/api/v1/login-session", Value::Null, token)
+        self.json(Method::DELETE, "/api/v1/sign-in", Value::Null, token)
             .await
     }
 
-    pub async fn expire_login_sessions(&self) {
+    pub async fn expire_person_sign_ins(&self) {
         let path = self.directory.path().join("data/lorebay.sqlite3");
         let database = Database::connect(format!("sqlite://{}", path.display()))
             .await
             .unwrap();
         let statement = Query::update()
-            .table(Alias::new("login_session"))
+            .table(Alias::new("person_sign_in"))
             .value(Alias::new("expires_at"), Expr::value(0_i64))
             .to_owned();
         database.execute(&statement).await.unwrap();

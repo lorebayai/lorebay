@@ -24,7 +24,7 @@ which share Lorebay's database, are in
 
 This doc covers Lorebay's eight tables: `account` and `member`, and the
 six tables only the authorization implementation uses,
-`agent_authorization`, `login_session`, `oauth_code`, `oauth_client`,
+`agent_sign_in`, `person_sign_in`, `oauth_code`, `oauth_client`,
 `refresh_token_history` and `device_sign_in_request`. Behavior observable
 through the APIs is in the contract docs.
 
@@ -42,14 +42,13 @@ It does not cover:
   every reference between tables is a declared foreign key, the one from
   `member` to the library's `space` included. `oauth_code.client_id`
   is the one exception ([section 5.4](#54-oauth_code)).
-- **Table names avoid SQL reserved words.** `user` and `authorization` are
-  reserved in Postgres, so the tables are `account` and
-  `agent_authorization`. The latter also tells an agent's credential apart
-  from a person's login session.
+- **Table names avoid SQL reserved words.** `account` avoids `user`, which
+  is reserved in Postgres. `agent_sign_in` and `person_sign_in` tell an
+  agent's credential apart from a person's.
 - **A person's ID is `account.id`.** It is the person ID Lorebay gives the
   library, which stores it with no foreign key.
-- **Random IDs remain separate from primary keys.** The login session and
-  agent authorization keep their 128-random-bit `random_id` columns, which
+- **Random IDs remain separate from primary keys.** The sign-in and
+  agent sign-in keep their 128-random-bit `random_id` columns, which
   name them in access tokens; a primary key never appears in a token.
 - **Refresh tokens and authorization codes are stored only as SHA-256
   hashes.** The raw value is returned once, when it is issued. Access tokens
@@ -64,8 +63,8 @@ It does not cover:
 
 ```mermaid
 erDiagram
-    account ||--o{ agent_authorization : "authorizes"
-    oauth_client ||--o{ agent_authorization : "is the client of"
+    account ||--o{ agent_sign_in : "authorizes"
+    oauth_client ||--o{ agent_sign_in : "is the client of"
     account |o--o{ device_sign_in_request : "approves"
     account ||--o{ member : "joins as"
     space ||--o{ member : "has"
@@ -91,7 +90,7 @@ A mirror of the users file, synced at startup.
 - **Password hashes stay out of the database**, only in the users file.
 - **Startup sync.** A username in the file but not in the table gets a row.
   A row whose username left the file gets `deleted_at`, and its
-  `member`, `agent_authorization` and `login_session` rows and its
+  `member`, `agent_sign_in` and `person_sign_in` rows and its
   `oauth_code` rows are deleted. A deleted row whose username is
   back in the file gets `deleted_at` cleared: it is the same person. What
   that means for the person is in [Identity](identity.md#3-accounts).
@@ -99,9 +98,9 @@ A mirror of the users file, synced at startup.
   answers for a removed username, and tasks and proposals still show whose
   they were.
 
-### 5.2 `agent_authorization`
+### 5.2 `agent_sign_in`
 
-One row per agent; see [Identity](identity.md#6-agent-authorization).
+One row per agent; see [Identity](identity.md#6-agent-sign-in).
 
 | Column | Type | Constraints | Meaning |
 | --- | --- | --- | --- |
@@ -109,7 +108,7 @@ One row per agent; see [Identity](identity.md#6-agent-authorization).
 | `account_id` | TEXT | Not null, foreign key to `account` | The person who authorized |
 | `client_id` | TEXT | Not null, foreign key to `oauth_client` | The registered client |
 | `name` | TEXT | Not null | The agent name; defaults to the client name, and the person may change it when consenting |
-| `random_id` | TEXT | Not null, unique | Names the authorization in its access tokens: 128 random bits, encoded as a string |
+| `random_id` | TEXT | Not null, unique | Names the sign-in in its access tokens: 128 random bits, encoded as a string |
 | `refresh_token_hash` | TEXT | Not null, unique | |
 | `refresh_expires_at` | INTEGER | Not null | |
 | `created_at` | INTEGER | Not null | When the person authorized |
@@ -130,27 +129,27 @@ One row per agent; see [Identity](identity.md#6-agent-authorization).
   authorizes the agent again. An expired history entry ends nothing. The
   caller gets the same error as for an unknown refresh token;
   [Identity](identity.md#7-tokens) defines the replay rule.
-- **Revoking the authorization or deleting the account deletes the row.**
+- **Revoking the sign-in or deleting the account deletes the row.**
   Its access tokens then name no row and are rejected. Its refresh token
   history is deleted by cascade. Tasks keep the agent name they copied.
 - **A background job removes rows whose refresh token has expired**; see
   [System architecture](system.md#6-background-jobs).
 
-### 5.3 `login_session`
+### 5.3 `person_sign_in`
 
-A person's login session, from the web pages or the `lorebay` CLI.
+A person's sign-in, from the web pages or the `lorebay` CLI.
 
 | Column | Type | Constraints | Meaning |
 | --- | --- | --- | --- |
 | `id` | TEXT | Primary key, not null | |
 | `account_id` | TEXT | Not null, foreign key to `account` | The person signed in |
-| `random_id` | TEXT | Not null, unique | Names the session in its access tokens: 128 random bits, encoded as a string |
+| `random_id` | TEXT | Not null, unique | Names the sign-in in its access tokens: 128 random bits, encoded as a string |
 | `refresh_token_hash` | TEXT | Not null, unique | |
 | `created_at` | INTEGER | Not null | |
 | `expires_at` | INTEGER | Not null | When the refresh token expires |
 
-- **Requests and refreshes** work as for an agent authorization; see
-  [section 5.2](#52-agent_authorization). Both the Web API and the token
+- **Requests and refreshes** work as for an agent sign-in; see
+  [section 5.2](#52-agent_sign_in). Both the Web API and the token
   endpoint record and check the same refresh token history, and delete the
   row on replay. The person signs in again. A refresh also moves `expires_at`
   forward.
@@ -171,19 +170,19 @@ An authorization code, usable once and retained until its expiry after exchange.
 | `redirect_uri` | TEXT | Not null | Must match when the code is exchanged |
 | `code_challenge` | TEXT | Not null | The PKCE S256 challenge |
 | `agent_name` | TEXT | Nullable | The agent name the person chose when consenting; empty for a code issued to the `lorebay` CLI |
-| `replaces_authorization_id` | TEXT | Nullable, foreign key to `agent_authorization`, set null on delete | The authorization to replace, when the name was taken and the person chose to replace it |
+| `replaces_sign_in_id` | TEXT | Nullable, foreign key to `agent_sign_in`, set null on delete | The sign-in to replace, when the name was taken and the person chose to replace it |
 | `created_at` | INTEGER | Not null | |
 | `expires_at` | INTEGER | Not null | |
 | `exchanged_at` | INTEGER | Nullable | Null until the code is exchanged; remains set after its issued credential ends |
-| `agent_authorization_id` | TEXT | Nullable, foreign key to `agent_authorization`, set null on delete | The agent authorization this exchange produced |
-| `login_session_id` | TEXT | Nullable, foreign key to `login_session`, set null on delete | The login session this exchange produced for the CLI |
+| `agent_sign_in_id` | TEXT | Nullable, foreign key to `agent_sign_in`, set null on delete | The agent sign-in this exchange produced |
+| `person_sign_in_id` | TEXT | Nullable, foreign key to `person_sign_in`, set null on delete | The CLI sign-in this exchange produced |
 
-- **Exchanging the code is one transaction.** It deletes the authorization
+- **Exchanging the code is one transaction.** It deletes the sign-in
   being replaced, if any, which ends its tokens; creates the
-  `agent_authorization` row; and sets `exchanged_at` and
-  `agent_authorization_id` on this row, clearing `replaces_authorization_id`.
-- **A code issued to the `lorebay` CLI creates a `login_session` row
-  instead**, recording its ID in `login_session_id`, because the CLI signs
+  `agent_sign_in` row; and sets `exchanged_at` and
+  `agent_sign_in_id` on this row, clearing `replaces_sign_in_id`.
+- **A code issued to the `lorebay` CLI creates a `person_sign_in` row
+  instead**, recording its ID in `person_sign_in_id`, because the CLI signs
   a person in; see
   [Identity](identity.md#5-sign-in). The CLI client is built into `lorebayd`
   and has no `oauth_client` row, so `client_id` is not a foreign key.
@@ -199,7 +198,7 @@ An authorization code, usable once and retained until its expiry after exchange.
 ### 5.5 `oauth_client`
 
 The clients registered through Dynamic Client Registration; see
-[Identity](identity.md#6-agent-authorization).
+[Identity](identity.md#6-agent-sign-in).
 
 | Column | Type | Constraints | Meaning |
 | --- | --- | --- | --- |
@@ -208,40 +207,40 @@ The clients registered through Dynamic Client Registration; see
 | `client_name` | TEXT | Not null | The client name the client registered; the default agent name at consent |
 | `metadata` | TEXT | Not null | The registration as accepted, as JSON, with its redirect URIs |
 | `created_at` | INTEGER | Not null | |
-| `first_authorized_at` | INTEGER | Nullable | When the first agent authorization was issued; null means never authorized |
+| `first_authorized_at` | INTEGER | Nullable | When the first agent sign-in was issued; null means never authorized |
 
 - **Authorization looks the client up by `client_id`** and checks the
   `redirect_uri` against the registered ones.
 - **The first successful authorization is remembered permanently.** The code
   exchange sets `first_authorized_at` in the transaction that creates the
-  agent authorization, only when it is null. Revocation, replacement and
+  agent sign-in, only when it is null. Revocation, replacement and
   expiry never clear it.
 - **Only unused clients are deleted.** The background job removes a client
   older than `unused_client_lifetime_seconds` only when
   `first_authorized_at` is null and no unexpired, unexchanged authorization
   code names it.
-  A client that ever had an agent authorization is kept. Registration metadata
+  A client that ever had an agent sign-in is kept. Registration metadata
   is immutable; a client registers again to change it.
 
 ### 5.6 `refresh_token_history`
 
-Each refresh token replaced by a refresh of an agent authorization or login session.
+Each refresh token replaced by a refresh of an agent's or person's sign-in.
 
 | Column | Type | Constraints | Meaning |
 | --- | --- | --- | --- |
 | `id` | TEXT | Primary key, not null | |
 | `token_hash` | TEXT | Not null, unique | SHA-256 hash of the replaced refresh token |
-| `agent_authorization_id` | TEXT | Nullable, foreign key to `agent_authorization`, cascade on delete | The authorization this token belonged to |
-| `login_session_id` | TEXT | Nullable, foreign key to `login_session`, cascade on delete | The session this token belonged to |
+| `agent_sign_in_id` | TEXT | Nullable, foreign key to `agent_sign_in`, cascade on delete | The sign-in this token belonged to |
+| `person_sign_in_id` | TEXT | Nullable, foreign key to `person_sign_in`, cascade on delete | The sign-in this token belonged to |
 | `expires_at` | INTEGER | Not null | When the replaced token would have expired |
 
 - **Exactly one owner is set**, enforced by a CHECK constraint. Each owner
   column and `expires_at` have an index. Token lookup uses the unique hash.
 - **A refresh records the replaced token's existing expiry**, before moving
   the owner's expiry forward. Later refreshes never extend this entry.
-  Both login session refresh endpoints use this table.
+  Both sign-in refresh endpoints use this table.
 - **An unexpired entry identifies a replay**, as
-  [section 5.2](#52-agent_authorization) defines. An expired entry never ends
+  [section 5.2](#52-agent_sign_in) defines. An expired entry never ends
   its owner, even before the background job removes it.
 - **The history ends with its owner.** Revocation, logout, account removal,
   replacement, replay and expired-owner cleanup cascade to the history.
@@ -272,8 +271,8 @@ computer; see [Identity](identity.md#5-sign-in).
 - **A decision updates a pending row once.** Approval sets `account_id`;
   refusal leaves it null. Both preserve the original expiry.
 - **Exchanging an approved request is one transaction.** It checks the
-  account, creates a `login_session` row and deletes this row. A refused or
-  expired request cannot issue a session.
+  account, creates a `person_sign_in` row and deletes this row. A refused or
+  expired request cannot issue a sign-in.
 - **Expired rows are removed by the credential cleanup job.** An approved
   row is also deleted when its account is removed.
 
@@ -331,7 +330,7 @@ computer; see [Identity](identity.md#5-sign-in).
 ## 7. SQLite DDL
 
 The tables of sections 5 and 6, after all migrations. A table comes after
-the tables it references: `oauth_client` before `agent_authorization`, and
+the tables it references: `oauth_client` before `agent_sign_in`, and
 `member` last. The library's `space` exists before Lorebay's
 migrations run; it is in
 [Library data model](../../lib/docs/architecture/data-model.md#7-ddl-on-sqlite).
@@ -355,7 +354,7 @@ CREATE TABLE oauth_client (
   first_authorized_at  INTEGER
 );
 
-CREATE TABLE agent_authorization (
+CREATE TABLE agent_sign_in (
   id                  TEXT NOT NULL PRIMARY KEY,
   account_id          TEXT NOT NULL REFERENCES account (id),
   client_id           TEXT    NOT NULL REFERENCES oauth_client (client_id),
@@ -367,7 +366,7 @@ CREATE TABLE agent_authorization (
   UNIQUE (account_id, name)
 );
 
-CREATE TABLE login_session (
+CREATE TABLE person_sign_in (
   id                  TEXT NOT NULL PRIMARY KEY,
   account_id          TEXT NOT NULL REFERENCES account (id),
   random_id           TEXT    NOT NULL UNIQUE,
@@ -379,13 +378,13 @@ CREATE TABLE login_session (
 CREATE TABLE refresh_token_history (
   id                      TEXT NOT NULL PRIMARY KEY,
   token_hash              TEXT NOT NULL UNIQUE,
-  agent_authorization_id  TEXT REFERENCES agent_authorization (id) ON DELETE CASCADE,
-  login_session_id        TEXT REFERENCES login_session (id) ON DELETE CASCADE,
+  agent_sign_in_id        TEXT REFERENCES agent_sign_in (id) ON DELETE CASCADE,
+  person_sign_in_id       TEXT REFERENCES person_sign_in (id) ON DELETE CASCADE,
   expires_at              INTEGER NOT NULL,
-  CHECK ((agent_authorization_id IS NULL) <> (login_session_id IS NULL))
+  CHECK ((agent_sign_in_id IS NULL) <> (person_sign_in_id IS NULL))
 );
-CREATE INDEX refresh_token_history_agent ON refresh_token_history (agent_authorization_id);
-CREATE INDEX refresh_token_history_session ON refresh_token_history (login_session_id);
+CREATE INDEX refresh_token_history_agent ON refresh_token_history (agent_sign_in_id);
+CREATE INDEX refresh_token_history_sign_in ON refresh_token_history (person_sign_in_id);
 CREATE INDEX refresh_token_history_expiry ON refresh_token_history (expires_at);
 
 CREATE TABLE oauth_code (
@@ -396,13 +395,13 @@ CREATE TABLE oauth_code (
   redirect_uri            TEXT NOT NULL,
   code_challenge          TEXT NOT NULL,
   agent_name              TEXT,
-  replaces_authorization_id  TEXT REFERENCES agent_authorization (id) ON DELETE SET NULL,
+  replaces_sign_in_id     TEXT REFERENCES agent_sign_in (id) ON DELETE SET NULL,
   created_at              INTEGER NOT NULL,
   expires_at              INTEGER NOT NULL,
   exchanged_at            INTEGER,
-  agent_authorization_id  TEXT REFERENCES agent_authorization (id) ON DELETE SET NULL,
-  login_session_id        TEXT REFERENCES login_session (id) ON DELETE SET NULL,
-  CHECK (agent_authorization_id IS NULL OR login_session_id IS NULL)
+  agent_sign_in_id        TEXT REFERENCES agent_sign_in (id) ON DELETE SET NULL,
+  person_sign_in_id       TEXT REFERENCES person_sign_in (id) ON DELETE SET NULL,
+  CHECK (agent_sign_in_id IS NULL OR person_sign_in_id IS NULL)
 );
 
 CREATE TABLE device_sign_in_request (

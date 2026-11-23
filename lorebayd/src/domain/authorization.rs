@@ -12,13 +12,13 @@ use url::{Host, Url};
 
 use crate::entity::oauth_code::ActiveModel;
 use crate::repository::OAuthClientRepository;
-use crate::repository::agent_authorization::AgentAuthorizationRepository;
+use crate::repository::agent_sign_in::AgentSignInRepository;
 use crate::repository::oauth_code::OauthCodeRepository;
 
 use crate::time::now_millis;
 
-use super::access::PersonSession;
-use super::caller::{PersonSessionError, VerifiedCaller};
+use super::access::PersonCaller;
+use super::caller::{PersonCallerError, VerifiedCaller};
 use super::{authorization_server_metadata, primary_key, random_id};
 
 pub(crate) const CLI_CLIENT_ID: &str = "lorebay-cli";
@@ -43,7 +43,7 @@ pub(crate) enum AuthorizationError {
     #[error("Agent name is already taken")]
     AgentNameTaken,
     #[error(transparent)]
-    Caller(#[from] PersonSessionError),
+    Caller(#[from] PersonCallerError),
     #[error(transparent)]
     Database(#[from] sea_orm::DbErr),
     #[error(transparent)]
@@ -119,13 +119,13 @@ struct RegisteredRedirects {
 
 async fn issue_code<C: ConnectionTrait>(
     connection: &C,
-    caller: &PersonSession,
+    caller: &PersonCaller,
     input: &AuthorizationInput,
     agent_name: Option<String>,
     conflict: AgentNameConflict,
 ) -> Result<Secret<String>, AuthorizationError> {
     let existing = if let Some(name) = &agent_name {
-        AgentAuthorizationRepository::builder()
+        AgentSignInRepository::builder()
             .connection(connection)
             .build()
             .by_account_and_name(&caller.account_id, name)
@@ -133,9 +133,9 @@ async fn issue_code<C: ConnectionTrait>(
     } else {
         None
     };
-    let replaces_authorization_id = match (existing, conflict) {
+    let replaces_sign_in_id = match (existing, conflict) {
         (Some(_), AgentNameConflict::Reject) => return Err(AuthorizationError::AgentNameTaken),
-        (existing, _) => existing.map(|authorization| authorization.id),
+        (existing, _) => existing.map(|sign_in| sign_in.id),
     };
     let code = Secret::from(random_id().map_err(anyhow::Error::from)?);
     let now = now_millis()?;
@@ -147,12 +147,12 @@ async fn issue_code<C: ConnectionTrait>(
         redirect_uri: Set(input.redirect_uri.clone()),
         code_challenge: Set(input.code_challenge.clone()),
         agent_name: Set(agent_name),
-        replaces_authorization_id: Set(replaces_authorization_id),
+        replaces_sign_in_id: Set(replaces_sign_in_id),
         created_at: Set(now),
         expires_at: Set(now + CODE_LIFETIME_MILLIS),
         exchanged_at: Set(None),
-        agent_authorization_id: Set(None),
-        login_session_id: Set(None),
+        agent_sign_in_id: Set(None),
+        person_sign_in_id: Set(None),
     };
     OauthCodeRepository::builder()
         .connection(connection)

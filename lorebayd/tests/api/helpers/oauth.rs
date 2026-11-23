@@ -143,13 +143,13 @@ impl Server {
         database.close().await.unwrap();
     }
 
-    pub async fn remove_agent_authorizations(&self) {
+    pub async fn remove_agent_sign_ins(&self) {
         let path = self.directory.path().join("data/lorebay.sqlite3");
         let database = Database::connect(format!("sqlite://{}", path.display()))
             .await
             .unwrap();
         let statement = Query::delete()
-            .from_table(Alias::new("agent_authorization"))
+            .from_table(Alias::new("agent_sign_in"))
             .to_owned();
         database.execute(&statement).await.unwrap();
         database.close().await.unwrap();

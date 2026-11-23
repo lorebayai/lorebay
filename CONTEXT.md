@@ -20,22 +20,22 @@ reads at startup. It defines who can sign in.
 **Account**: One username in the users file, and the person who signs in
 with it.
 
-**Login session**: One sign-in of a person, from the web pages or the
-`lorebay` CLI. It is the person's credential.
+**Sign-in**: A person's credential, from one sign-in on the web pages; from
+the `lorebay` CLI it is a **CLI sign-in**.
 
 **`lorebay`**: The command-line client. People use it for the operations
 only people perform and to read a space's content.
 
 **Device sign-in request**: A short-lived request to sign the `lorebay` CLI
 in from a browser on another computer. A person confirms its short code
-before the CLI receives that person's login session.
+before the CLI receives that person's CLI sign-in.
 
 ## Agents
 
-**Agent authorization**: The record and credential of one agent. In
-Lorebay, each agent is one OAuth authorization a person grants to a client,
-such as Claude Code; external programs that call the Web API are agents
-too.
+**Agent sign-in**: An agent's Sign-in: the record and credential of one
+agent, one OAuth authorization a person grants to a client, such as Claude
+Code. Each agent has exactly one. External programs that call the Web API
+are agents too.
 
 **Skill**: The skill Lorebay ships, as the
 [library's glossary](lib/CONTEXT.md) defines it.

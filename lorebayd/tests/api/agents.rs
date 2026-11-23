@@ -113,7 +113,7 @@ async fn list_agents_returns_next_page_when_cursor_is_given() {
 }
 
 #[tokio::test]
-async fn revoke_agent_ends_agent_authorization() {
+async fn revoke_agent_ends_agent_sign_in() {
     let server = Server::start().await;
     let person = server.tokens().await;
     let name = "Build agent / home? #+%";
@@ -264,7 +264,7 @@ async fn list_agents_fails_when_caller_is_agent() {
 }
 
 #[tokio::test]
-async fn list_agents_omits_agent_when_authorization_has_expired() {
+async fn list_agents_omits_agent_when_agent_sign_in_has_expired() {
     let server = Server::configured(|config| config.credential_cleanup_interval_seconds = 1).await;
     let person = server.tokens().await;
     let agent = server.authorize_agent("Build agent").await;
@@ -273,7 +273,7 @@ async fn list_agents_omits_agent_when_authorization_has_expired() {
         json!(["Build agent"])
     );
     server
-        .expire_oauth_credential("agent_authorization", "refresh_expires_at")
+        .expire_oauth_credential("agent_sign_in", "refresh_expires_at")
         .await;
     timeout(TEST_TIMEOUT, async {
         while !list_page(&server, &person, AGENTS_PATH, &[]).await["data"]
@@ -308,13 +308,13 @@ async fn list_agents_omits_agent_when_authorization_has_expired() {
 }
 
 #[tokio::test]
-async fn call_web_api_fails_when_agent_authorization_has_expired() {
+async fn call_web_api_fails_when_agent_sign_in_has_expired() {
     let server = Server::start().await;
     let person = server.tokens().await;
     let agent = server.authorize_agent("Build agent").await;
     assert_person_required(list_response(AGENTS_PATH, &server, &agent.tokens, &[]).await).await;
     server
-        .expire_oauth_credential("agent_authorization", "refresh_expires_at")
+        .expire_oauth_credential("agent_sign_in", "refresh_expires_at")
         .await;
     assert_problem(
         list_response(AGENTS_PATH, &server, &agent.tokens, &[]).await,
@@ -434,7 +434,7 @@ async fn assert_person_required(response: Response) {
     let body = assert_problem(response, StatusCode::FORBIDDEN, "auth.person_required").await;
     assert_eq!(
         body,
-        json!({"type": "about:blank", "title": "A login session is required",
+        json!({"type": "about:blank", "title": "A person's sign-in is required",
         "status": 403, "code": "auth.person_required", "errors": []})
     );
 }

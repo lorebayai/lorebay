@@ -35,7 +35,7 @@ pub use team::*;
 pub const SECOND_USERNAME: &str = "teammate /?#+%";
 
 pub const CREDENTIALS_FILE: &str = "credentials.json";
-pub const LOGIN_SESSION_PATH: &str = "/api/v1/login-session";
+pub const SIGN_IN_PATH: &str = "/api/v1/sign-in";
 pub const WAIT: Duration = Duration::from_secs(30);
 pub const HTTP_WAIT: Duration = Duration::from_secs(10);
 pub const PASSWORD: &str = "scenario password";
@@ -219,7 +219,7 @@ impl Server {
         .await;
         self.json(
             Method::DELETE,
-            LOGIN_SESSION_PATH,
+            SIGN_IN_PATH,
             Value::Null,
             person["access_token"].as_str(),
         )
@@ -262,7 +262,7 @@ impl Server {
     async fn person_as(&self, username: &str) -> Value {
         self.json(
             Method::POST,
-            LOGIN_SESSION_PATH,
+            SIGN_IN_PATH,
             json!({"username": username, "password": PASSWORD}),
             None,
         )
@@ -299,7 +299,7 @@ impl Server {
             .await;
         self.json(
             Method::DELETE,
-            LOGIN_SESSION_PATH,
+            SIGN_IN_PATH,
             Value::Null,
             person["access_token"].as_str(),
         )
@@ -564,7 +564,7 @@ async fn ready(client: &Client, url: &str, process: &mut Daemon, username: &str)
 
 async fn owns_server(client: &Client, url: &str, username: &str) -> bool {
     let Ok(response) = client
-        .post(format!("{url}/api/v1/login-session"))
+        .post(format!("{url}/api/v1/sign-in"))
         .json(&json!({"username": username, "password": PASSWORD}))
         .send()
         .await
@@ -581,7 +581,7 @@ async fn owns_server(client: &Client, url: &str, username: &str) -> bool {
         return false;
     };
     client
-        .delete(format!("{url}/api/v1/login-session"))
+        .delete(format!("{url}/api/v1/sign-in"))
         .bearer_auth(token)
         .send()
         .await

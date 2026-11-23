@@ -11,7 +11,7 @@ use crate::domain::create_space;
 use crate::server::ServerState;
 use lorebay_lib_core::{NewSpace, Space, SpaceChanges, change_space, list_spaces, read_space};
 
-use super::login_session::invalid_json;
+use super::person_sign_in::invalid_json;
 
 #[derive(Clone, Debug, Deserialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]

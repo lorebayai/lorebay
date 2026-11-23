@@ -8,7 +8,7 @@ use sea_orm::DatabaseConnection;
 use crate::api::bearer;
 use crate::domain::access::{AccessError, verify_agent};
 use crate::domain::caller::VerifiedCaller;
-use crate::domain::login_session::Identity;
+use crate::domain::person_sign_in::Identity;
 
 pub(super) struct AgentResolver {
     pub database: DatabaseConnection,
@@ -29,7 +29,7 @@ impl CallerResolver for AgentResolver {
             };
             match verify_agent(&self.database, claims).await {
                 Ok(caller) => {
-                    tracing::debug!(account_id = %caller.account_id, agent_authorization_id = %caller.authorization_id,
+                    tracing::debug!(account_id = %caller.account_id, agent_sign_in_id = %caller.agent_sign_in_id,
                         "authenticated MCP caller");
                     Ok(Some(VerifiedCaller::Agent(caller).library_caller()))
                 }

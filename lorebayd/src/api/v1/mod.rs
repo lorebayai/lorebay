@@ -61,10 +61,10 @@ pub(crate) fn router() -> Router<ServerState> {
         .route("/authorization-request", post(authorization::read))
         .route("/authorization-decision", post(authorization::decide))
         .route(
-            "/login-session",
-            post(login_session::log_in).delete(login_session::log_out),
+            "/sign-in",
+            post(person_sign_in::log_in).delete(person_sign_in::log_out),
         )
-        .route("/login-session/refresh", post(login_session::refresh))
+        .route("/sign-in/refresh", post(person_sign_in::refresh))
 }
 
 mod agent_files;
@@ -72,7 +72,7 @@ mod agents;
 mod authorization;
 mod device_sign_in;
 mod knowledge;
-mod login_session;
+mod person_sign_in;
 mod proposals;
 mod space_members;
 mod spaces;

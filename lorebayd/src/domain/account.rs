@@ -8,11 +8,11 @@ use sea_orm::{
 
 use crate::entity::account::ActiveModel;
 use crate::repository::account::AccountRepository;
-use crate::repository::agent_authorization::AgentAuthorizationRepository;
+use crate::repository::agent_sign_in::AgentSignInRepository;
 use crate::repository::device_sign_in_request::DeviceSignInRequestRepository;
-use crate::repository::login_session::LoginSessionRepository;
 use crate::repository::member::MemberRepository;
 use crate::repository::oauth_code::OauthCodeRepository;
+use crate::repository::person_sign_in::PersonSignInRepository;
 
 use super::primary_key;
 use super::user_store::UserStore;
@@ -81,12 +81,12 @@ async fn remove_credentials(transaction: &DatabaseTransaction, ids: &[String]) -
         .build()
         .delete_by_accounts(ids)
         .await?;
-    AgentAuthorizationRepository::builder()
+    AgentSignInRepository::builder()
         .connection(transaction)
         .build()
         .delete_by_accounts(ids)
         .await?;
-    LoginSessionRepository::builder()
+    PersonSignInRepository::builder()
         .connection(transaction)
         .build()
         .delete_by_accounts(ids)

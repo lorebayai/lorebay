@@ -3,18 +3,18 @@ use lorebay_lib_core::Caller;
 use super::OWNER_ID;
 use thiserror::Error;
 
-use super::access::{AgentCaller, PersonSession};
+use super::access::{AgentCaller, PersonCaller};
 
 #[derive(Debug, Error)]
-pub(crate) enum PersonSessionError {
-    #[error("A login session is required")]
+pub(crate) enum PersonCallerError {
+    #[error("A person's sign-in is required")]
     PersonRequired,
 }
 
 #[derive(Clone, Debug)]
 pub(crate) enum VerifiedCaller {
     Agent(AgentCaller),
-    Person(PersonSession),
+    Person(PersonCaller),
 }
 
 impl VerifiedCaller {
@@ -37,9 +37,9 @@ impl VerifiedCaller {
         }
     }
 
-    pub fn person(&self) -> Result<&PersonSession, PersonSessionError> {
+    pub fn person(&self) -> Result<&PersonCaller, PersonCallerError> {
         match self {
-            Self::Agent(_) => Err(PersonSessionError::PersonRequired),
+            Self::Agent(_) => Err(PersonCallerError::PersonRequired),
             Self::Person(caller) => Ok(caller),
         }
     }

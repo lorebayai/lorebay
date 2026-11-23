@@ -15,33 +15,27 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_many = "super::agent_authorization::Entity")]
-    AgentAuthorization,
+    #[sea_orm(has_many = "super::agent_sign_in::Entity")]
+    AgentSignIn,
     #[sea_orm(has_many = "super::device_sign_in_request::Entity")]
     DeviceSignInRequest,
-    #[sea_orm(has_many = "super::login_session::Entity")]
-    LoginSession,
     #[sea_orm(has_many = "super::member::Entity")]
     Member,
     #[sea_orm(has_many = "super::oauth_code::Entity")]
     OauthCode,
+    #[sea_orm(has_many = "super::person_sign_in::Entity")]
+    PersonSignIn,
 }
 
-impl Related<super::agent_authorization::Entity> for Entity {
+impl Related<super::agent_sign_in::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::AgentAuthorization.def()
+        Relation::AgentSignIn.def()
     }
 }
 
 impl Related<super::device_sign_in_request::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::DeviceSignInRequest.def()
-    }
-}
-
-impl Related<super::login_session::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::LoginSession.def()
     }
 }
 
@@ -54,6 +48,12 @@ impl Related<super::member::Entity> for Entity {
 impl Related<super::oauth_code::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::OauthCode.def()
+    }
+}
+
+impl Related<super::person_sign_in::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::PersonSignIn.def()
     }
 }
 

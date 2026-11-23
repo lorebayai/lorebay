@@ -14,7 +14,7 @@ use crate::domain::{
 };
 use crate::server::ServerState;
 
-use super::login_session::invalid_json;
+use super::person_sign_in::invalid_json;
 
 #[derive(Clone, Debug, Deserialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]

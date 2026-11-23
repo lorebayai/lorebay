@@ -44,9 +44,9 @@ flowchart TD
     end
     sqlite["SQLite"]
     store["File content<br/>local directory or S3"]
-    human -- "login session" --> web
-    program -- "agent authorization" --> web
-    agent -- "agent authorization" --> library
+    human -- "sign-in" --> web
+    program -- "agent sign-in" --> web
+    agent -- "agent sign-in" --> library
     agent -- "authorize" --> oauth
     web --> library
     jobs --> library
@@ -60,10 +60,10 @@ designed but not built ([Storage](storage.md)).
 
 | Caller | Entry point | Credential |
 | --- | --- | --- |
-| Person, in a browser | Web API and web pages | Login session |
-| Person, in a terminal | Web API, through the [`lorebay` CLI](../contracts/cli.md) | Login session |
-| External program | Web API | Agent authorization |
-| Agent | MCP | Agent authorization |
+| Person, in a browser | Web API and web pages | Sign-in |
+| Person, in a terminal | Web API, through the [`lorebay` CLI](../contracts/cli.md) | CLI sign-in |
+| External program | Web API | Agent sign-in |
+| Agent | MCP | Agent sign-in |
 
 ## 4. Entry points
 
@@ -94,8 +94,7 @@ They include:
   [Entry points](../../lib/docs/architecture/entry-points.md#4-entry-points);
 - removing old temporary uploads and old stored content with out-of-format
   names in the local directory; see [Storage](storage.md#4-file-storage);
-- removing expired authorization codes, device sign-in requests, login
-  sessions and agent authorizations, and replaced refresh tokens past their
-  expiry;
+- removing expired authorization codes, device sign-in requests, sign-ins
+  and agent sign-ins, and replaced refresh tokens past their expiry;
 - removing registered clients that were never authorized, once they reach
-  a configurable age; see [Identity](identity.md#6-agent-authorization).
+  a configurable age; see [Identity](identity.md#6-agent-sign-in).

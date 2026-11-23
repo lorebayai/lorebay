@@ -57,7 +57,7 @@ install the plugin as above. Remove an older install's links,
 twice. `--no-browser` on either `mcp login` prints the authorization link only.
 On Lorebay's authorization page, sign in, consent and name the agent, such as
 `Claude Code (home)`. Authorizing the same harness again suggests the same name:
-pick another, or replace the old authorization and keep the name.
+pick another, or replace the old sign-in and keep the name.
 `lorebay agent revoke '<name>'` ends one. When the harness says `lorebay` needs
 authentication, run `mcp login lorebay` again: until then no work is recorded,
 and the agent says so only if the harness loads the skill, which Codex was seen

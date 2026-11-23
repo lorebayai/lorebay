@@ -15,17 +15,17 @@ use typed_builder::TypedBuilder;
 
 use crate::Config;
 use crate::entity::account::Model as Account;
-use crate::entity::login_session::{ActiveModel, Model};
+use crate::entity::person_sign_in::{ActiveModel, Model};
 use crate::entity::refresh_token_history;
 use crate::repository::account::AccountRepository;
-use crate::repository::agent_authorization::AgentAuthorizationRepository;
-use crate::repository::login_session::LoginSessionRepository;
+use crate::repository::agent_sign_in::AgentSignInRepository;
+use crate::repository::person_sign_in::PersonSignInRepository;
 use crate::repository::refresh_token_history::RefreshTokenHistoryRepository;
 
 use crate::time::now_millis;
 
-use super::access::PersonSession;
-use super::caller::{PersonSessionError, VerifiedCaller};
+use super::access::PersonCaller;
+use super::caller::{PersonCallerError, VerifiedCaller};
 use super::token::{Claims, TokenKind, TokenSigner, TokenSubject};
 use super::user_store::UserStore;
 use super::{primary_key, random_id};
@@ -33,7 +33,7 @@ use super::{primary_key, random_id};
 #[derive(Debug, Error)]
 pub(crate) enum LoginError {
     #[error(transparent)]
-    Caller(#[from] PersonSessionError),
+    Caller(#[from] PersonCallerError),
     #[error(transparent)]
     Database(#[from] sea_orm::DbErr),
     #[error(transparent)]
@@ -103,7 +103,7 @@ pub(crate) async fn log_in(
         .await?
         .filter(|account| account.deleted_at.is_none())
         .ok_or(LoginError::Unauthorized)?;
-    let (_, tokens) = create_session(identity, &transaction, account).await?;
+    let (_, tokens) = create_sign_in(identity, &transaction, account).await?;
     transaction.commit().await?;
     Ok(tokens)
 }
@@ -121,15 +121,15 @@ pub(crate) async fn refresh(
         .by_hash(hash.expose(), now_millis()?)
         .await?;
     if let Some(history) = history {
-        if let Some(id) = history.agent_authorization_id {
-            AgentAuthorizationRepository::builder()
+        if let Some(id) = history.agent_sign_in_id {
+            AgentSignInRepository::builder()
                 .connection(&transaction)
                 .build()
                 .delete_by_id(&id)
                 .await?;
         }
-        if let Some(id) = history.login_session_id {
-            LoginSessionRepository::builder()
+        if let Some(id) = history.person_sign_in_id {
+            PersonSignInRepository::builder()
                 .connection(&transaction)
                 .build()
                 .delete_by_id(&id)
@@ -148,22 +148,22 @@ pub(crate) async fn rotate_refresh(
     transaction: &DatabaseTransaction,
     hash: &Secret<String>,
 ) -> Result<Tokens, LoginError> {
-    let repository = LoginSessionRepository::builder()
+    let repository = PersonSignInRepository::builder()
         .connection(transaction)
         .build();
-    let session = repository
+    let sign_in = repository
         .by_refresh_hash(hash.expose())
         .await?
         .ok_or(LoginError::Unauthorized)?;
     let now = now_millis()?;
-    let username = active_username(transaction, &session, now).await?;
+    let username = active_username(transaction, &sign_in, now).await?;
     let refresh_token = new_refresh_token()?;
     let tokens = issue_tokens(
         identity,
         TokenSubject::builder()
             .username(username.as_str())
-            .random_id(session.random_id.as_str())
-            .kind(TokenKind::LoginSession)
+            .random_id(sign_in.random_id.as_str())
+            .kind(TokenKind::PersonSignIn)
             .build(),
         refresh_token.clone(),
         now,
@@ -174,14 +174,14 @@ pub(crate) async fn rotate_refresh(
         .insert(refresh_token_history::ActiveModel {
             id: Set(primary_key()),
             token_hash: Set(hash.expose().clone()),
-            agent_authorization_id: Set(None),
-            login_session_id: Set(Some(session.id.clone())),
-            expires_at: Set(session.expires_at),
+            agent_sign_in_id: Set(None),
+            person_sign_in_id: Set(Some(sign_in.id.clone())),
+            expires_at: Set(sign_in.expires_at),
         })
         .await?;
-    let mut model: ActiveModel = session.into();
+    let mut model: ActiveModel = sign_in.into();
     model.refresh_token_hash = Set(sha256_hex(refresh_token.expose()));
-    model.expires_at = Set(session_expiry(identity, now));
+    model.expires_at = Set(sign_in_expiry(identity, now));
     repository.update(model).await?;
     Ok(tokens)
 }
@@ -192,11 +192,11 @@ pub(crate) async fn log_out(
 ) -> Result<(), LoginError> {
     let caller = caller.person()?;
     let transaction = begin_write(database).await?;
-    let repository = LoginSessionRepository::builder()
+    let repository = PersonSignInRepository::builder()
         .connection(&transaction)
         .build();
     if repository
-        .delete(&caller.login_session_id, &caller.account_id)
+        .delete(&caller.person_sign_in_id, &caller.account_id)
         .await?
         == 0
     {
@@ -209,30 +209,30 @@ pub(crate) async fn log_out(
 pub(crate) async fn verify(
     database: &DatabaseConnection,
     claims: Claims,
-) -> Result<PersonSession, LoginError> {
+) -> Result<PersonCaller, LoginError> {
     let now = now_millis()?;
-    if claims.kind != TokenKind::LoginSession || claims.exp <= (now / 1000) as u64 {
+    if claims.kind != TokenKind::PersonSignIn || claims.exp <= (now / 1000) as u64 {
         return Err(LoginError::Unauthorized);
     }
     let transaction = database.begin().await?;
-    let session = LoginSessionRepository::builder()
+    let sign_in = PersonSignInRepository::builder()
         .connection(&transaction)
         .build()
         .by_random_id(&claims.sid)
         .await?
         .ok_or(LoginError::Unauthorized)?;
-    let username = active_username(&transaction, &session, now).await?;
+    let username = active_username(&transaction, &sign_in, now).await?;
     if username != claims.sub {
         return Err(LoginError::Unauthorized);
     }
     transaction.commit().await?;
-    Ok(PersonSession::builder()
-        .account_id(session.account_id)
-        .login_session_id(session.id)
+    Ok(PersonCaller::builder()
+        .account_id(sign_in.account_id)
+        .person_sign_in_id(sign_in.id)
         .build())
 }
 
-pub(crate) async fn create_session(
+pub(crate) async fn create_sign_in(
     identity: &Identity,
     transaction: &DatabaseTransaction,
     account: Account,
@@ -245,7 +245,7 @@ pub(crate) async fn create_session(
         TokenSubject::builder()
             .username(account.username.as_str())
             .random_id(random_id.as_str())
-            .kind(TokenKind::LoginSession)
+            .kind(TokenKind::PersonSignIn)
             .build(),
         refresh_token.clone(),
         now,
@@ -257,9 +257,9 @@ pub(crate) async fn create_session(
         random_id: Set(random_id),
         refresh_token_hash: Set(sha256_hex(refresh_token.expose())),
         created_at: Set(now),
-        expires_at: Set(session_expiry(identity, now)),
+        expires_at: Set(sign_in_expiry(identity, now)),
     };
-    LoginSessionRepository::builder()
+    PersonSignInRepository::builder()
         .connection(transaction)
         .build()
         .insert(model)
@@ -286,7 +286,7 @@ pub(crate) fn new_refresh_token() -> anyhow::Result<Secret<String>> {
     Ok(Secret::from(format!("{}{}", random_id()?, random_id()?)))
 }
 
-pub(crate) fn session_expiry(identity: &Identity, now: i64) -> i64 {
+pub(crate) fn sign_in_expiry(identity: &Identity, now: i64) -> i64 {
     now + Duration::from_secs(identity.config.refresh_token_lifetime_seconds).as_millis() as i64
 }
 
@@ -301,16 +301,16 @@ async fn begin_write(database: &DatabaseConnection) -> Result<DatabaseTransactio
 
 async fn active_username<C: ConnectionTrait>(
     connection: &C,
-    session: &Model,
+    sign_in: &Model,
     now: i64,
 ) -> Result<String, LoginError> {
-    if session.expires_at <= now {
+    if sign_in.expires_at <= now {
         return Err(LoginError::Unauthorized);
     }
     let account = AccountRepository::builder()
         .connection(connection)
         .build()
-        .by_id(&session.account_id)
+        .by_id(&sign_in.account_id)
         .await?
         .filter(|account| account.deleted_at.is_none())
         .ok_or(LoginError::Unauthorized)?;

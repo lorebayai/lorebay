@@ -11,7 +11,7 @@ use sea_orm::DatabaseConnection;
 use typed_builder::TypedBuilder;
 
 use crate::Config;
-use crate::domain::login_session::Identity;
+use crate::domain::person_sign_in::Identity;
 use crate::domain::{
     AUTHORIZATION_PATH, DEVICE_AUTHORIZATION_PATH, DEVICE_VERIFICATION_PATH, REGISTRATION_PATH,
     TOKEN_PATH,

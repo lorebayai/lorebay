@@ -17,8 +17,8 @@ tasks, Knowledge and MCP tools, has its own design, from the
   process, its entry points and background jobs.
 - [Storage](architecture/storage.md): the backends Lorebay runs, its data
   directory, file serving and backups.
-- [Identity](architecture/identity.md): accounts, sign-in, agent
-  authorization and tokens.
+- [Identity](architecture/identity.md): accounts, sign-in, agent sign-in and
+  tokens.
 - [Data model](architecture/data-model.md): Lorebay's eight tables, their
   columns, constraints and rules, and the SQLite DDL.
 

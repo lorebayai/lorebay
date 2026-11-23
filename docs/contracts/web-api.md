@@ -62,14 +62,14 @@ POST /api/v1/spaces/{space}/proposals/{key}/approve
 ## 4. Conventions
 
 - **Credentials.** Every call carries an access token in its `Authorization`
-  header: a login session's for a person, an agent authorization's for an
+  header: a sign-in's for a person, an agent sign-in's for an
   agent or external program. See
   [Identity](../architecture/identity.md#4-credentials).
 - **Sign-in, device authorization and client registration are rate limited
   by address.** A call over the limit is refused, and the caller may try
   again after a wait. See
   Identity, on [sign-in](../architecture/identity.md#5-sign-in) and on
-  [registration](../architecture/identity.md#6-agent-authorization).
+  [registration](../architecture/identity.md#6-agent-sign-in).
 - **Every list is paginated** with a cursor, a default page size and a fixed
   order, as the library's
   [lists](../../lib/docs/contracts/mcp-tools.md#4-tools) are.

@@ -23,7 +23,7 @@ async fn exchange_code_returns_access_and_refresh_tokens() {
     let tokens = assert_tokens(server.exchange_code(&client, &code).await).await;
     server.assert_token_issuer(&tokens).await;
     let claims = claims(&tokens);
-    assert_eq!(claims["kind"], "agent_authorization");
+    assert_eq!(claims["kind"], "agent_sign_in");
     assert_eq!(claims["sub"], "alice");
     assert_eq!(claims["sid"].as_str().unwrap().len(), 22);
     assert_eq!(
@@ -41,11 +41,11 @@ async fn exchange_code_returns_access_and_refresh_tokens() {
 }
 
 #[tokio::test]
-async fn exchange_code_creates_login_session_when_client_is_cli() {
+async fn exchange_code_creates_person_sign_in_when_client_is_cli() {
     let server = Server::start().await;
     let code = server.approve_code(CLI_CLIENT, None).await;
     let tokens = assert_tokens(server.exchange_code(CLI_CLIENT, &code).await).await;
-    assert_eq!(claims(&tokens)["kind"], "login_session");
+    assert_eq!(claims(&tokens)["kind"], "person_sign_in");
     assert_eq!(claims(&tokens)["sub"], "alice");
     assert_person(&server, &tokens).await;
     assert_eq!(
@@ -164,7 +164,7 @@ async fn exchange_code_fails_when_client_differs() {
 }
 
 #[tokio::test]
-async fn exchange_code_replaces_old_authorization_when_person_chose_to_replace() {
+async fn exchange_code_replaces_old_agent_sign_in_when_person_chose_to_replace() {
     let server = Server::start().await;
     let old = server.authorize_agent(AGENT_NAME).await;
     let client = server.register_client(AGENT_NAME).await;
@@ -202,7 +202,7 @@ async fn exchange_code_replaces_old_authorization_when_person_chose_to_replace()
 }
 
 #[tokio::test]
-async fn exchange_code_preserves_old_authorization_when_replacement_verifier_is_wrong() {
+async fn exchange_code_preserves_old_agent_sign_in_when_replacement_verifier_is_wrong() {
     let server = Server::start().await;
     let old = server.authorize_agent(AGENT_NAME).await;
     let client = server.register_client(AGENT_NAME).await;
@@ -258,7 +258,7 @@ async fn exchange_code_fails_when_replacement_target_was_already_replaced() {
 }
 
 #[tokio::test]
-async fn exchange_code_succeeds_when_replaced_authorization_was_removed() {
+async fn exchange_code_succeeds_when_replaced_agent_sign_in_was_removed() {
     let server = Server::configured(|config| {
         config.credential_cleanup_interval_seconds = 1;
     })
@@ -268,7 +268,7 @@ async fn exchange_code_succeeds_when_replaced_authorization_was_removed() {
     let client = server.register_client(AGENT_NAME).await;
     let code = replacement_code(&server, &client, &person).await;
     server
-        .expire_oauth_credential("agent_authorization", "refresh_expires_at")
+        .expire_oauth_credential("agent_sign_in", "refresh_expires_at")
         .await;
     timeout(Duration::from_secs(5), async {
         loop {
@@ -323,7 +323,7 @@ async fn refresh_token_returns_new_tokens() {
         server.assert_token_issuer(&refreshed).await;
         assert_ne!(refreshed["access_token"], tokens["access_token"]);
         assert_eq!(claims(&refreshed)["sid"], claims(&tokens)["sid"]);
-        assert_eq!(claims(&refreshed)["kind"], "agent_authorization");
+        assert_eq!(claims(&refreshed)["kind"], "agent_sign_in");
         tokens = refreshed;
     }
     assert_oauth_error(
@@ -343,7 +343,7 @@ async fn refresh_token_returns_new_tokens() {
 }
 
 #[tokio::test]
-async fn refresh_token_ends_agent_authorization_when_refresh_token_was_already_exchanged() {
+async fn refresh_token_ends_agent_sign_in_when_refresh_token_was_already_exchanged() {
     let server = Server::start().await;
     let agent = server.authorize_agent("Build agent").await;
     let other = server.register_client("Other client").await;
@@ -387,7 +387,7 @@ async fn refresh_token_ends_agent_authorization_when_refresh_token_was_already_e
 }
 
 #[tokio::test]
-async fn refresh_token_renews_login_session_when_client_is_cli() {
+async fn refresh_token_renews_person_sign_in_when_client_is_cli() {
     let server =
         Server::start_with_settings(Settings::builder().refresh_seconds(3_u64).build()).await;
     let code = server.approve_code(CLI_CLIENT, None).await;
@@ -423,7 +423,7 @@ async fn refresh_token_renews_login_session_when_client_is_cli() {
 }
 
 #[tokio::test]
-async fn refresh_token_ends_login_session_when_cli_refresh_token_was_already_exchanged() {
+async fn refresh_token_ends_person_sign_in_when_cli_refresh_token_was_already_exchanged() {
     let server = Server::start().await;
     let other = server.register_client("Other client").await;
     let independent = server.tokens().await;
@@ -464,7 +464,7 @@ async fn refresh_token_ends_login_session_when_cli_refresh_token_was_already_exc
 }
 
 #[tokio::test]
-async fn refresh_token_ends_login_session_when_refreshes_race_across_endpoints() {
+async fn refresh_token_ends_person_sign_in_when_refreshes_race_across_endpoints() {
     let server = Server::start().await;
     let code = server.approve_code(CLI_CLIENT, None).await;
     let tokens = assert_tokens(server.exchange_code(CLI_CLIENT, &code).await).await;
@@ -509,11 +509,11 @@ async fn refresh_token_ends_login_session_when_refreshes_race_across_endpoints()
 }
 
 #[tokio::test]
-async fn refresh_token_fails_when_agent_authorization_is_expired() {
+async fn refresh_token_fails_when_agent_sign_in_is_expired() {
     let server = Server::start().await;
     let agent = server.authorize_agent("Build agent").await;
     server
-        .expire_oauth_credential("agent_authorization", "refresh_expires_at")
+        .expire_oauth_credential("agent_sign_in", "refresh_expires_at")
         .await;
     assert_oauth_error(
         server
@@ -552,11 +552,11 @@ async fn refresh_token_fails_when_client_differs() {
 }
 
 #[tokio::test]
-async fn refresh_token_fails_when_login_session_is_expired() {
+async fn refresh_token_fails_when_person_sign_in_is_expired() {
     let server = Server::start().await;
     let code = server.approve_code(CLI_CLIENT, None).await;
     let tokens = assert_tokens(server.exchange_code(CLI_CLIENT, &code).await).await;
-    server.expire_login_sessions().await;
+    server.expire_person_sign_ins().await;
     assert_oauth_error(
         server
             .refresh_oauth(CLI_CLIENT, tokens["refresh_token"].as_str().unwrap())
@@ -744,7 +744,7 @@ async fn replacement_code(server: &Server, client: &str, person: &Value) -> Stri
 }
 
 #[tokio::test]
-async fn refresh_token_ends_agent_authorization_when_older_replaced_refresh_token_is_presented() {
+async fn refresh_token_ends_agent_sign_in_when_older_replaced_refresh_token_is_presented() {
     let server = Server::start().await;
     let agent = server.authorize_agent(AGENT_NAME).await;
     let independent = server.authorize_agent("Independent agent").await;
@@ -769,7 +769,7 @@ async fn refresh_token_ends_agent_authorization_when_older_replaced_refresh_toke
 }
 
 #[tokio::test]
-async fn refresh_token_ends_login_session_when_older_replaced_cli_refresh_token_is_presented() {
+async fn refresh_token_ends_person_sign_in_when_older_replaced_cli_refresh_token_is_presented() {
     let server = Server::start().await;
     let code = server.approve_code(CLI_CLIENT, None).await;
     let original = assert_tokens(server.exchange_code(CLI_CLIENT, &code).await).await;
@@ -802,7 +802,7 @@ async fn refresh_token_ends_login_session_when_older_replaced_cli_refresh_token_
 }
 
 #[tokio::test]
-async fn refresh_login_session_ends_agent_authorization_when_replaced_refresh_token_is_presented() {
+async fn refresh_person_sign_in_ends_agent_sign_in_when_replaced_refresh_token_is_presented() {
     let server = Server::start().await;
     let agent = server.authorize_agent(AGENT_NAME).await;
     let independent = server.authorize_agent("Independent agent").await;
@@ -839,8 +839,8 @@ async fn refresh_login_session_ends_agent_authorization_when_replaced_refresh_to
 }
 
 #[tokio::test]
-async fn refresh_token_fails_without_ending_agent_authorization_when_replaced_refresh_token_has_expired()
- {
+async fn refresh_token_fails_without_ending_agent_sign_in_when_replaced_refresh_token_has_expired()
+{
     let server = Server::start().await;
     let agent = server.authorize_agent(AGENT_NAME).await;
     let newest = refresh_twice(&server, &agent.client_id, &agent.tokens).await;
@@ -869,7 +869,7 @@ async fn refresh_token_fails_without_ending_agent_authorization_when_replaced_re
 }
 
 #[tokio::test]
-async fn refresh_token_fails_without_ending_login_session_when_replaced_refresh_token_has_expired()
+async fn refresh_token_fails_without_ending_person_sign_in_when_replaced_refresh_token_has_expired()
 {
     let server = Server::start().await;
     let original = server.tokens().await;
@@ -896,7 +896,7 @@ async fn refresh_token_fails_without_ending_login_session_when_replaced_refresh_
 }
 
 #[tokio::test]
-async fn exchange_code_ends_agent_authorization_when_code_was_already_exchanged() {
+async fn exchange_code_ends_agent_sign_in_when_code_was_already_exchanged() {
     let server = Server::start().await;
     let client = server.register_client(AGENT_NAME).await;
     let code = server.approve_code(&client, Some(AGENT_NAME)).await;
@@ -913,7 +913,7 @@ async fn exchange_code_ends_agent_authorization_when_code_was_already_exchanged(
 }
 
 #[tokio::test]
-async fn exchange_code_ends_login_session_when_cli_code_was_already_exchanged() {
+async fn exchange_code_ends_person_sign_in_when_cli_code_was_already_exchanged() {
     let server = Server::start().await;
     let code = server.approve_code(CLI_CLIENT, None).await;
     let original = assert_tokens(server.exchange_code(CLI_CLIENT, &code).await).await;
@@ -936,7 +936,7 @@ async fn exchange_code_ends_login_session_when_cli_code_was_already_exchanged() 
 }
 
 #[tokio::test]
-async fn exchange_code_keeps_agent_authorization_when_replay_verifier_is_wrong() {
+async fn exchange_code_keeps_agent_sign_in_when_replay_verifier_is_wrong() {
     let server = Server::start().await;
     let client = server.register_client(AGENT_NAME).await;
     for client in [client.as_str(), CLI_CLIENT] {
@@ -951,7 +951,7 @@ async fn exchange_code_keeps_agent_authorization_when_replay_verifier_is_wrong()
 }
 
 #[tokio::test]
-async fn exchange_code_keeps_authorization_when_replay_binding_differs() {
+async fn exchange_code_keeps_agent_sign_in_when_replay_binding_differs() {
     let server = Server::start().await;
     let client = server.register_client(AGENT_NAME).await;
     let other = server.register_client("Other client").await;
@@ -973,7 +973,7 @@ async fn exchange_code_keeps_authorization_when_replay_binding_differs() {
 }
 
 #[tokio::test]
-async fn exchange_code_keeps_authorization_when_exchanged_code_has_expired() {
+async fn exchange_code_keeps_agent_sign_in_when_exchanged_code_has_expired() {
     let server = Server::start().await;
     let client = server.register_client(AGENT_NAME).await;
     for client in [client.as_str(), CLI_CLIENT] {

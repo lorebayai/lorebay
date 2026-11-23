@@ -9,10 +9,10 @@ use typed_builder::TypedBuilder;
 use crate::time::now_millis;
 
 use crate::repository::OAuthClientRepository;
-use crate::repository::agent_authorization::AgentAuthorizationRepository;
+use crate::repository::agent_sign_in::AgentSignInRepository;
 use crate::repository::device_sign_in_request::DeviceSignInRequestRepository;
-use crate::repository::login_session::LoginSessionRepository;
 use crate::repository::oauth_code::OauthCodeRepository;
+use crate::repository::person_sign_in::PersonSignInRepository;
 use crate::repository::refresh_token_history::RefreshTokenHistoryRepository;
 
 #[derive(Debug, Error)]
@@ -27,8 +27,8 @@ pub(crate) enum CredentialCleanupError {
 #[builder(field_defaults(setter(into)))]
 pub(crate) struct RemovedCredentials {
     pub authorization_codes: u64,
-    pub login_sessions: u64,
-    pub agent_authorizations: u64,
+    pub person_sign_ins: u64,
+    pub agent_sign_ins: u64,
     pub refresh_token_history: u64,
     pub unused_clients: u64,
     pub device_sign_in_requests: u64,
@@ -66,15 +66,15 @@ pub(crate) async fn remove_expired_credentials(
                 .delete_expired(now)
                 .await?,
         )
-        .login_sessions(
-            LoginSessionRepository::builder()
+        .person_sign_ins(
+            PersonSignInRepository::builder()
                 .connection(&transaction)
                 .build()
                 .delete_expired(now)
                 .await?,
         )
-        .agent_authorizations(
-            AgentAuthorizationRepository::builder()
+        .agent_sign_ins(
+            AgentSignInRepository::builder()
                 .connection(&transaction)
                 .build()
                 .delete_expired(now)

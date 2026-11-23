@@ -3,7 +3,7 @@ use thiserror::Error;
 use typed_builder::TypedBuilder;
 
 use crate::repository::account::AccountRepository;
-use crate::repository::agent_authorization::AgentAuthorizationRepository;
+use crate::repository::agent_sign_in::AgentSignInRepository;
 
 use crate::time::now_millis;
 
@@ -23,15 +23,15 @@ pub(crate) enum AccessError {
 #[builder(field_defaults(setter(into)))]
 pub(crate) struct AgentCaller {
     pub account_id: String,
-    pub authorization_id: String,
+    pub agent_sign_in_id: String,
     pub name: String,
 }
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
-pub(crate) struct PersonSession {
+pub(crate) struct PersonCaller {
     pub account_id: String,
-    pub login_session_id: String,
+    pub person_sign_in_id: String,
 }
 
 pub(crate) async fn verify_agent(
@@ -39,28 +39,28 @@ pub(crate) async fn verify_agent(
     claims: Claims,
 ) -> Result<AgentCaller, AccessError> {
     let now = now_millis()?;
-    if claims.kind != TokenKind::AgentAuthorization || claims.exp <= (now / 1000) as u64 {
+    if claims.kind != TokenKind::AgentSignIn || claims.exp <= (now / 1000) as u64 {
         return Err(AccessError::Unauthorized);
     }
     let transaction = database.begin().await?;
-    let authorization = AgentAuthorizationRepository::builder()
+    let sign_in = AgentSignInRepository::builder()
         .connection(&transaction)
         .build()
         .by_random_id(&claims.sid)
         .await?
-        .filter(|authorization| authorization.refresh_expires_at > now)
+        .filter(|sign_in| sign_in.refresh_expires_at > now)
         .ok_or(AccessError::Unauthorized)?;
     AccountRepository::builder()
         .connection(&transaction)
         .build()
-        .by_id(&authorization.account_id)
+        .by_id(&sign_in.account_id)
         .await?
         .filter(|account| account.deleted_at.is_none() && account.username == claims.sub)
         .ok_or(AccessError::Unauthorized)?;
     transaction.commit().await?;
     Ok(AgentCaller::builder()
-        .account_id(authorization.account_id)
-        .authorization_id(authorization.id)
-        .name(authorization.name)
+        .account_id(sign_in.account_id)
+        .agent_sign_in_id(sign_in.id)
+        .name(sign_in.name)
         .build())
 }

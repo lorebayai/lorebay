@@ -17,7 +17,7 @@ use crate::error::{Failure, Result};
 
 #[derive(Clone, Debug, Deserialize, Serialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
-pub(crate) struct Session {
+pub(crate) struct CliSignIn {
     pub server_url: String,
     pub token_endpoint: String,
     pub access_token: Secret<String>,
@@ -85,7 +85,7 @@ impl Store {
         }
     }
 
-    pub fn load(&self) -> Result<Option<Session>> {
+    pub fn load(&self) -> Result<Option<CliSignIn>> {
         let file = match File::open(self.directory.join(CREDENTIALS_FILE)) {
             Ok(file) => file,
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
@@ -100,12 +100,12 @@ impl Store {
         })
     }
 
-    pub fn save(&self, session: &Session) -> Result<()> {
+    pub fn save(&self, sign_in: &CliSignIn) -> Result<()> {
         let mut temporary = NamedTempFile::new_in(&self.directory)?;
         temporary
             .as_file()
             .set_permissions(Permissions::from_mode(PRIVATE_MODE))?;
-        let bytes = serde_json::to_vec(session)
+        let bytes = serde_json::to_vec(sign_in)
             .map_err(|_| Failure::local(CLI_CREDENTIALS, "Could not encode credentials."))?;
         temporary.write_all(&bytes)?;
         temporary.as_file().sync_all()?;

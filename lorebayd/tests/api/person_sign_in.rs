@@ -54,7 +54,7 @@ async fn log_in_fails_when_password_is_wrong() {
 }
 
 #[tokio::test]
-async fn refresh_login_session_returns_new_tokens() {
+async fn refresh_person_sign_in_returns_new_tokens() {
     let server = Server::configured(|config| {
         config.public_url = "https://lorebay.test:8443/".to_owned();
     })
@@ -95,7 +95,7 @@ async fn refresh_login_session_returns_new_tokens() {
 }
 
 #[tokio::test]
-async fn refresh_login_session_ends_login_session_when_refresh_token_was_already_exchanged() {
+async fn refresh_person_sign_in_ends_person_sign_in_when_refresh_token_was_already_exchanged() {
     let server = Server::start().await;
     let tokens = server.tokens().await;
     let independent = server.tokens().await;
@@ -153,10 +153,10 @@ async fn refresh_login_session_ends_login_session_when_refresh_token_was_already
 }
 
 #[tokio::test]
-async fn refresh_login_session_fails_when_login_session_is_expired() {
+async fn refresh_person_sign_in_fails_when_person_sign_in_is_expired() {
     let server = Server::start().await;
     let tokens = server.tokens().await;
-    server.expire_login_sessions().await;
+    server.expire_person_sign_ins().await;
     assert_eq!(
         server
             .refresh(tokens["refresh_token"].as_str().unwrap())
@@ -175,7 +175,7 @@ async fn refresh_login_session_fails_when_login_session_is_expired() {
 }
 
 #[tokio::test]
-async fn log_out_ends_login_session() {
+async fn log_out_ends_person_sign_in() {
     let server = Server::start().await;
     let tokens = server.tokens().await;
     assert_eq!(tokens["expires_in"], 900);
@@ -367,7 +367,8 @@ async fn log_in_masks_unknown_username_when_hash_uses_nondefault_parameters() {
 }
 
 #[tokio::test]
-async fn refresh_login_session_ends_login_session_when_older_replaced_refresh_token_is_presented() {
+async fn refresh_person_sign_in_ends_person_sign_in_when_older_replaced_refresh_token_is_presented()
+{
     let server = Server::start().await;
     let original = server.tokens().await;
     let independent = server.tokens().await;

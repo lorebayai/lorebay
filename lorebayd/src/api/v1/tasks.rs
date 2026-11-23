@@ -16,7 +16,7 @@ use lorebay_lib_core::{
 };
 use lorebay_lib_core::{Page, PageOptions, TaskStatusError, TaskSummary, TaskTarget};
 
-use super::login_session::invalid_json;
+use super::person_sign_in::invalid_json;
 use lorebay_lib_core::AgentFile;
 
 #[derive(Clone, Debug, Deserialize, TypedBuilder)]

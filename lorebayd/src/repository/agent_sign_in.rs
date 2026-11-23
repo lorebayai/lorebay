@@ -4,15 +4,15 @@ use sea_orm::{
 };
 use typed_builder::TypedBuilder;
 
-use crate::entity::agent_authorization::{ActiveModel, Column, Entity, Model};
+use crate::entity::agent_sign_in::{ActiveModel, Column, Entity, Model};
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
-pub(crate) struct AgentAuthorizationRepository<'a, C> {
+pub(crate) struct AgentSignInRepository<'a, C> {
     pub connection: &'a C,
 }
 
-impl<C: ConnectionTrait> AgentAuthorizationRepository<'_, C> {
+impl<C: ConnectionTrait> AgentSignInRepository<'_, C> {
     pub async fn list(
         &self,
         account_id: &str,

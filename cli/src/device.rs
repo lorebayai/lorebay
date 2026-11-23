@@ -17,7 +17,7 @@ use crate::credentials::Store;
 use crate::error::{Failure, Result};
 use crate::http::{
     CLIENT_ID, Http, Metadata, Tokens, decode, decode_body, same_server, server_url,
-    session_from_tokens, tokens_from_value,
+    sign_in_from_tokens, tokens_from_value,
 };
 use crate::output;
 
@@ -47,9 +47,9 @@ pub(crate) async fn login(store: &Store, address: &str) -> Result<()> {
             result.map_err(|_| expired())??,
         _ = ctrl_c() => return Err(Failure::local(CLI_CANCELLED, "Sign-in cancelled.")),
     };
-    let session = session_from_tokens(server.to_string(), metadata.token_endpoint, tokens);
+    let sign_in = sign_in_from_tokens(server.to_string(), metadata.token_endpoint, tokens);
     let _lock = store.lock().await?;
-    store.save(&session)
+    store.save(&sign_in)
 }
 
 const ACCESS_DENIED: &str = "access_denied";

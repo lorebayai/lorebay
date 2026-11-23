@@ -10,7 +10,7 @@ use crate::helpers::{
 };
 
 #[tokio::test]
-async fn login_device_saves_login_session_when_person_approves() {
+async fn login_device_saves_cli_sign_in_when_person_approves() {
     let server = Server::configured(json!({"device_poll_interval_seconds": 1})).await;
     server.login().await;
     let previous = server.credentials();
@@ -90,7 +90,7 @@ async fn login_device_fails_when_request_expires() {
 }
 
 #[tokio::test]
-async fn login_device_preserves_login_session_when_new_sign_in_fails() {
+async fn login_device_preserves_cli_sign_in_when_new_sign_in_fails() {
     let server = Server::start().await;
     server.login().await;
     let before = fs::read(server.home().join(CREDENTIALS_FILE)).unwrap();

@@ -15,7 +15,7 @@ use lorebay_lib_core::{
     get_agent_file_download_url, prepare_agent_file_completion, register_agent_file,
 };
 
-use super::login_session::invalid_json;
+use super::person_sign_in::invalid_json;
 
 #[derive(Clone, Debug, Deserialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]

@@ -13,7 +13,7 @@ use crate::repository::member::{MemberRecord, MemberRepository, RosterAfter};
 
 use crate::time::now_millis;
 
-use super::caller::{PersonSessionError, VerifiedCaller};
+use super::caller::{PersonCallerError, VerifiedCaller};
 use super::pagination::{Page, PageOptions, decode_cursor, encode_cursor};
 use super::primary_key;
 
@@ -24,7 +24,7 @@ pub(crate) enum SpaceMemberError {
     #[error("The person is already in the space")]
     AlreadyExists,
     #[error(transparent)]
-    Caller(#[from] PersonSessionError),
+    Caller(#[from] PersonCallerError),
     #[error(transparent)]
     Database(#[from] DbErr),
     #[error(transparent)]
