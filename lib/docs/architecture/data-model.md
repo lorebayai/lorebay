@@ -24,7 +24,7 @@ the rules they keep, and the SQL that creates them.
 
 This doc covers the library's seven tables: `space`, `space_task`,
 `space_checkpoint`, `space_agent_file`, `space_knowledge`,
-`space_knowledge_version` and `space_proposal`. Behavior observable through
+`space_knowledge_version` and `space_person_request`. Behavior observable through
 the public API is in the contract docs, and how the library's migrations
 sit beside a product's is in
 [Library architecture](library.md#12-data).
@@ -63,9 +63,9 @@ It does not cover:
 - **Keys.** A table whose rows have keys has a `number` column, unique
   together with `space_id`. The table fixes the prefix: `TK` for
   `space_task`, `KN` for `space_knowledge`, `FL` for `space_agent_file` and
-  `PP` for `space_proposal`. Numbers come from counters on `space`; see
+  `RQ` for `space_person_request`. Numbers come from counters on `space`; see
   [section 5.1](#51-space).
-- **Statuses and kinds** are stored as lowercase English values, as the
+- **Statuses, kinds and actions** are stored as lowercase English values, as the
   contracts write them, with a CHECK constraint, such as `in progress` or
   `ended` for a task's `status`.
 - **Case-insensitive uniqueness** uses a second column, `name_key`, holding
@@ -77,7 +77,7 @@ It does not cover:
   by the [database interface](library.md#64-database). Each table's section
   says what a delete cascades to or clears.
 - **Person IDs and the tenant ID have no foreign key.** The four columns that
-  hold a person, `space_task.person_id`, `space_proposal.proposed_by` and
+  hold a person, `space_task.person_id`, `space_person_request.requested_by` and
   `decided_by`, and `space_knowledge_version.applied_by`, and
   `space.tenant_id` hold the product's IDs as text. They are the one
   exception to declared foreign keys: the library has no table of people or
@@ -94,15 +94,15 @@ It does not cover:
 erDiagram
     space ||--o{ space_task : "holds"
     space ||--o{ space_knowledge : "holds"
-    space ||--o{ space_proposal : "holds"
+    space ||--o{ space_person_request : "holds"
     space_task ||--o{ space_checkpoint : "has"
     space_task ||--o{ space_agent_file : "has"
-    space_task |o--o{ space_proposal : "is the source of"
+    space_task |o--o{ space_person_request : "is the source of"
     space_knowledge ||--|{ space_knowledge_version : "has"
-    space_knowledge |o--o{ space_proposal : "is the target of"
+    space_knowledge |o--o{ space_person_request : "is the target of"
 ```
 
-Tasks, knowledge entries and proposals belong to a space; checkpoints and
+Tasks, knowledge entries and requests belong to a space; checkpoints and
 files belong to a task; each knowledge entry's history is in
 `space_knowledge_version`. Who belongs to a space is the product's record;
 the library reads it through the
@@ -122,7 +122,7 @@ the library reads it through the
 | `next_task_number` | INTEGER | Not null, default 1 | The next `TK` number |
 | `next_knowledge_number` | INTEGER | Not null, default 1 | The next `KN` number |
 | `next_agent_file_number` | INTEGER | Not null, default 1 | The next `FL` number |
-| `next_proposal_number` | INTEGER | Not null, default 1 | The next `PP` number |
+| `next_person_request_number` | INTEGER | Not null, default 1 | The next `RQ` number |
 | `created_at` | INTEGER | Not null | |
 | `updated_at` | INTEGER | Not null | When the name or summary last changed |
 
@@ -131,7 +131,7 @@ the library reads it through the
   tenant as not found; see
   [Library architecture](library.md#8-tenant-and-space-numbers). Who
   holds the owner role in a space is the product's record.
-- **Taking a key.** Creating a task, knowledge entry, file or proposal
+- **Taking a key.** Creating a task, knowledge entry, file or request
   adds one to the matching counter and returns the value in one statement,
   inside the same transaction, and uses the value before the increment.
   Taking the current maximum plus one would reuse the keys of deleted
@@ -176,7 +176,7 @@ the library reads it through the
 - **`(id, space_id)` is unique** so that `space_agent_file` can reference a
   task together with its space; see [section 5.4](#54-space_agent_file).
 - **Deletion is real.** Deleting a task cascades to its checkpoints and file
-  rows, and clears the source task of its proposals; keys written in text
+  rows, and clears the source task of its requests; keys written in text
   stay and show as plain text. The file content is deleted after the
   transaction commits; see [Storage](storage.md#4-database).
 - **Indexes:** `space_task_space_activity`, on
@@ -235,7 +235,7 @@ the library reads it through the
   a registration from being both completed and refused.
 - **Index:** `space_agent_file_task`, on `task_id`.
 
-## 6. Knowledge and proposals
+## 6. Knowledge and requests
 
 ### 6.1 `space_knowledge`
 
@@ -283,8 +283,8 @@ One row per knowledge entry; its content is in `space_knowledge_version`.
 | `kind` | TEXT | Not null | `content`, a version with content, or `deletion`, the version that deletes the entry |
 | `content` | TEXT | Nullable | Set for a `content` version, empty for a `deletion` |
 | `summary` | TEXT | Nullable | The same |
-| `applied_by` | TEXT | Not null | The product's ID of who made it take effect: the person who changed the entry directly, or who approved the proposal; no foreign key |
-| `proposal_id` | TEXT | Nullable, foreign key to `space_proposal` | The source proposal; empty for a direct change |
+| `applied_by` | TEXT | Not null | The product's ID of who made it take effect: the person who changed the entry directly, or who approved the request; no foreign key |
+| `person_request_id` | TEXT | Nullable, foreign key to `space_person_request` | The source request; empty for a direct change |
 | `created_at` | INTEGER | Not null | |
 
 - **Versions are only added.** Creating an entry, changing its content or
@@ -293,42 +293,42 @@ One row per knowledge entry; its content is in `space_knowledge_version`.
 - **A content version holds the full content and summary**, never a diff. A
   CHECK keeps both set for `content` and both empty for `deletion`. A
   deletion version records who deleted the entry, when, and from which
-  proposal; the earlier content stays in older versions.
+  request; the earlier content stays in older versions.
 - **Rolling back** adds a `content` version that copies the content and
   summary of the chosen version. Rolling back to a version from before a
   deletion also clears `deleted_at`, which restores the entry.
 
-### 6.3 `space_proposal`
+### 6.3 `space_person_request`
 
 | Column | Type | Constraints | Meaning |
 | --- | --- | --- | --- |
 | `id` | TEXT | Primary key, not null | |
 | `space_id` | TEXT | Not null, foreign key to `space` | |
-| `number` | INTEGER | Not null | The `PP` number; `(space_id, number)` is unique |
-| `kind` | TEXT | Not null | `create`, `change` or `delete` |
+| `number` | INTEGER | Not null | The `RQ` number; `(space_id, number)` is unique |
+| `action` | TEXT | Not null | `create`, `change` or `delete` |
 | `knowledge_id` | TEXT | Nullable, foreign key to `space_knowledge` | Set on submission for a change or a delete; for a create, set on approval to the entry it created or restored |
 | `base_version` | INTEGER | Nullable | For a change or a delete, the entry's latest version on submission |
 | `new_name` | TEXT | Nullable | Required for a create; for a change, set only to rename |
 | `new_summary` | TEXT | Nullable | Required for a create; for a change, set only to change it |
 | `new_content` | TEXT | Nullable | The same |
-| `proposed_by` | TEXT | Not null | The product's ID of who proposed; no foreign key |
-| `proposer_agent_name` | TEXT | Nullable | The agent name, copied, when an agent proposed; empty when a person proposed |
-| `from_task_id` | TEXT | Nullable, foreign key to `space_task`, set null on delete | The source task; empty for a proposal a person made, or once the task is deleted |
+| `requested_by` | TEXT | Not null | The product's ID of who proposed; no foreign key |
+| `requester_agent_name` | TEXT | Nullable | The agent name, copied, when an agent proposed; empty when a person proposed |
+| `from_task_id` | TEXT | Nullable, foreign key to `space_task`, set null on delete | The source task; empty for a request a person made, or once the task is deleted |
 | `status` | TEXT | Not null | `pending`, `approved` or `rejected` |
 | `decided_by` | TEXT | Nullable | The product's ID of who approved or rejected it; no foreign key |
 | `decided_at` | INTEGER | Nullable | |
 | `reject_reason` | TEXT | Nullable | Required when rejected |
 | `created_at` | INTEGER | Not null | |
 
-- **A CHECK per kind.** A create carries a name, a summary and content, and
+- **A CHECK per action.** A create carries a name, a summary and content, and
   no `base_version`. A change carries `knowledge_id` and `base_version`, and
   at least one of name, summary and content. A delete carries `knowledge_id`
   and `base_version`, and none of the three.
-- **A CHECK on status.** A `pending` proposal has neither `decided_by` nor
+- **A CHECK on status.** A `pending` request has neither `decided_by` nor
   `decided_at`; any other has both; a `rejected` one has a `reject_reason`.
-- **Changed since proposed.** While a proposal is `pending`, a
+- **Changed since requested.** While a request is `pending`, a
   `base_version` that differs from the entry's `latest_version` marks the
-  proposal, so a product can show the difference; so does a create whose name
+  request, so a product can show the difference; so does a create whose name
   already belongs to an entry. A rename adds no version, so it goes undetected.
 - **Approving** changes the status and writes `space_knowledge` and
   `space_knowledge_version` in one transaction. Content or summary that a
@@ -337,24 +337,24 @@ One row per knowledge entry; its content is in `space_knowledge_version`.
   deletion, and `deleted_at` is cleared. A change that only renames an entry
   that is not deleted changes `name` and `name_key` and adds no version; on
   a deleted entry it restores the entry as above, adding a copied version.
-- **Approving one's own party's proposal.** A contributor may not, so the
-  library compares `proposed_by` with the approver; see
-  [Knowledge](../contracts/knowledge.md#4-proposals).
+- **Approving one's own party's request.** A contributor may not, so the
+  library compares `requested_by` with the approver; see
+  [Knowledge](../contracts/knowledge.md#4-requests).
 - **The source task's space.** The task in `from_task_id` must be in the
-  proposal's space. Code ensures it: an agent's proposal takes its
+  request's space. Code ensures it: an agent's request takes its
   `space_id` from that task. A composite foreign key like
   `space_agent_file`'s cannot work here: when the task is deleted,
   `ON DELETE SET NULL` would clear `space_id` too, which is not null.
-- **Indexes:** `space_proposal_space_status`, on
-  `(space_id, status, created_at)`, to list proposals by status;
-  `space_proposal_knowledge`, on `knowledge_id`, to find the proposals on
+- **Indexes:** `space_person_request_space_status`, on
+  `(space_id, status, created_at)`, to list requests by status;
+  `space_person_request_knowledge`, on `knowledge_id`, to find the requests on
   one entry.
 
 ## 7. DDL on SQLite
 
 The tables of sections 5 and 6, as the library's migrations build them on
 the SQLite backend. A table comes after the tables it references:
-`space_proposal` before `space_knowledge_version`.
+`space_person_request` before `space_knowledge_version`.
 
 ```sql
 CREATE TABLE space (
@@ -366,7 +366,7 @@ CREATE TABLE space (
   next_task_number       INTEGER NOT NULL DEFAULT 1,
   next_knowledge_number  INTEGER NOT NULL DEFAULT 1,
   next_agent_file_number INTEGER NOT NULL DEFAULT 1,
-  next_proposal_number   INTEGER NOT NULL DEFAULT 1,
+  next_person_request_number   INTEGER NOT NULL DEFAULT 1,
   created_at             INTEGER NOT NULL,
   updated_at             INTEGER NOT NULL
 );
@@ -432,18 +432,18 @@ CREATE TABLE space_knowledge (
   UNIQUE (space_id, name_key)
 );
 
-CREATE TABLE space_proposal (
+CREATE TABLE space_person_request (
   id                   TEXT    NOT NULL PRIMARY KEY,
   space_id             TEXT    NOT NULL REFERENCES space (id),
   number               INTEGER NOT NULL,
-  kind                 TEXT    NOT NULL CHECK (kind IN ('create', 'change', 'delete')),
+  action                 TEXT    NOT NULL CHECK (action IN ('create', 'change', 'delete')),
   knowledge_id         TEXT    REFERENCES space_knowledge (id),
   base_version         INTEGER,
   new_name             TEXT,
   new_summary          TEXT,
   new_content          TEXT,
-  proposed_by          TEXT    NOT NULL,
-  proposer_agent_name  TEXT,
+  requested_by          TEXT    NOT NULL,
+  requester_agent_name  TEXT,
   from_task_id         TEXT    REFERENCES space_task (id) ON DELETE SET NULL,
   status               TEXT    NOT NULL CHECK (status IN ('pending', 'approved', 'rejected')),
   decided_by           TEXT,
@@ -452,11 +452,11 @@ CREATE TABLE space_proposal (
   created_at           INTEGER NOT NULL,
   UNIQUE (space_id, number),
   CHECK (
-    (kind = 'create' AND base_version IS NULL
+    (action = 'create' AND base_version IS NULL
       AND new_name IS NOT NULL AND new_summary IS NOT NULL AND new_content IS NOT NULL)
-    OR (kind = 'change' AND knowledge_id IS NOT NULL AND base_version IS NOT NULL
+    OR (action = 'change' AND knowledge_id IS NOT NULL AND base_version IS NOT NULL
       AND (new_name IS NOT NULL OR new_summary IS NOT NULL OR new_content IS NOT NULL))
-    OR (kind = 'delete' AND knowledge_id IS NOT NULL AND base_version IS NOT NULL
+    OR (action = 'delete' AND knowledge_id IS NOT NULL AND base_version IS NOT NULL
       AND new_name IS NULL AND new_summary IS NULL AND new_content IS NULL)
   ),
   CHECK (
@@ -465,8 +465,8 @@ CREATE TABLE space_proposal (
   ),
   CHECK (status <> 'rejected' OR reject_reason IS NOT NULL)
 );
-CREATE INDEX space_proposal_space_status ON space_proposal (space_id, status, created_at);
-CREATE INDEX space_proposal_knowledge ON space_proposal (knowledge_id);
+CREATE INDEX space_person_request_space_status ON space_person_request (space_id, status, created_at);
+CREATE INDEX space_person_request_knowledge ON space_person_request (knowledge_id);
 
 CREATE TABLE space_knowledge_version (
   id            TEXT    NOT NULL PRIMARY KEY,
@@ -476,7 +476,7 @@ CREATE TABLE space_knowledge_version (
   content       TEXT,
   summary       TEXT,
   applied_by    TEXT    NOT NULL,
-  proposal_id   TEXT    REFERENCES space_proposal (id),
+  person_request_id   TEXT    REFERENCES space_person_request (id),
   created_at    INTEGER NOT NULL,
   UNIQUE (knowledge_id, version),
   CHECK (

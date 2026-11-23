@@ -1,6 +1,6 @@
 ---
 name: lorebay
-description: Rules for recording your work for the person in Lorebay. Use in every session in which the MCP server `lorebay` is registered in the harness, reachable or not, whatever the first request, even when the person never names Lorebay.
+description: Rules for recording your work for the person in Lorebay. Use in every session in which the MCP server `lorebay` is registered in the harness, reachable or not, whatever the first ask, even when the person never names Lorebay.
 ---
 
 # Lorebay
@@ -36,7 +36,7 @@ files, and in the file the harness loads when the project has neither.
 
 ### 2. Create the task
 
-After the person's first request, check whether it continues earlier work
+After the person's first ask, check whether it continues earlier work
 (rule 3), and create a task with `create_task` only if it doesn't. The title
 is one sentence naming what the person wants done, not how; change it with
 `update_task` when the scope changes. A subagent is not a separate session: it
@@ -105,7 +105,7 @@ harness lets you before relying on the entry.
 
 Record in this order: the task; the plan, before the work it describes; each
 step, then its checkpoint; then, once every edit and check is done, the uploads
-(rule 6), the result (rule 10) and the end (rule 12), with a proposal (rule
+(rule 6), the result (rule 10) and the end (rule 12), with a request (rule
 11) after the result, before or after the end.
 
 Write checkpoints with `add_checkpoint`:
@@ -161,7 +161,7 @@ cannot be edited, so append a checkpoint that corrects it.
 Content about one repository, such as how to build it or its code conventions,
 stays in that repository's files, such as its agent instructions files, and
 is never proposed as Knowledge. Content that spans repositories, concerns the
-team, or is unrelated to code goes into Knowledge through a proposal (rule
+team, or is unrelated to code goes into Knowledge through a request (rule
 11).
 
 ### 9. Keep working when the MCP server is unreachable
@@ -203,18 +203,18 @@ needs only the latest task.
 
 When you have learned something later sessions can use that belongs in
 Knowledge (rule 8), propose it after the result is written. Before you say
-anything to the person about a proposal, or submit one they asked for by name,
-look for a `pending` or `rejected` proposal about the same thing with
-`list_proposals` by keyword, and read a likely match with `get_proposal`. For a
+anything to the person about a request, or submit one they asked for by name,
+look for a `pending` or `rejected` request about the same thing with
+`list_requests` by keyword, and read a likely match with `get_request`. For a
 `pending` match, tell the person it already awaits approval and offer nothing;
 for a `rejected` one, tell the person its reason and let them decide whether to
 propose again. Otherwise, tell the person in the harness what you intend to
-propose, and submit it with `create_proposal` only after the person confirms.
+propose, and submit it with `create_request` only after the person confirms.
 A change the person asks for by name counts as confirmed.
 
 The task may be `ended` by then: the confirmation answers your question and is
-no request for more work, so submit from the task without reopening it, then
-add the proposal's reference, such as `#PP-3`, to the result's Deliverables. A
+no ask for more work, so submit from the task without reopening it, then
+add the request's reference, such as `#RQ-3`, to the result's Deliverables. A
 session with no task proposes nothing: tell the person what you would have
 proposed.
 

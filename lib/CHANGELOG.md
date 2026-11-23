@@ -7,6 +7,14 @@ crates `lorebay-lib-types`, `lorebay-lib-core`, `lorebay-lib-migration` and
 
 ## Unreleased
 
+- **Breaking:** Knowledge changes awaiting a person's decision become
+  requests throughout the library API and MCP, with `PersonRequest` code
+  names, `action`, `requested_by`, `requester_agent_name`,
+  `changed_since_requested` and history's `request_key`, `person_request.*`
+  errors, `RQ-` keys and the rewritten `space_person_request` schema. The
+  created migration changes in place; a database that applied it must be
+  recreated.
+
 - **Breaking:** Task notes become checkpoints throughout the core API and
   MCP tools, with `Checkpoint` code names, `add_checkpoint`,
   `checkpoint.not_found` errors and the rewritten `space_checkpoint` schema.

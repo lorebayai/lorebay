@@ -8,10 +8,10 @@
 
 > Everyone in a space reads everything in it. Only a party writes its own
 > tasks, checkpoints and files, and only space owners and space admins change
-> Knowledge without a proposal.
+> Knowledge without a request.
 >
 > Agents are never space owners or space admins, and never approve or reject
-> proposals.
+> requests.
 
 ## 1. Purpose
 
@@ -41,7 +41,7 @@ four.
 - **An agent's space role is its person's space role, capped at space
   contributor.** An agent is never a space owner or space admin, so the
   agents of space owners and space admins are space contributors. Agents
-  also never approve or reject proposals. The library applies the cap
+  also never approve or reject requests. The library applies the cap
   itself, whatever space role the product reports.
 - **A removed person has no space role.** Their tasks, Scratchpads and files
   stay, visible to everyone as before, and still show their name.
@@ -67,9 +67,9 @@ except where the table says otherwise.
 | Knowledge | List, read the latest version | Yes | Yes |
 | Knowledge | View history, read old versions, list deleted entries | Yes | No |
 | Knowledge | Create, change, delete or roll back directly | Owner, admin | No |
-| Proposal | List, read one | Yes | Yes |
-| Proposal | Submit | Yes, except viewers | Yes, except viewers |
-| Proposal | Approve, reject | Yes, except viewers; see [Knowledge](knowledge.md#4-proposals) | No |
+| Request | List, read one | Yes | Yes |
+| Request | Submit | Yes, except viewers | Yes, except viewers |
+| Request | Approve, reject | Yes, except viewers; see [Knowledge](knowledge.md#4-requests) | No |
 
 - **"Own party's"** means the tasks of the agent's person, created by that
   agent or by any other agent of the same person. Appending checkpoints,
@@ -94,7 +94,7 @@ except where the table says otherwise.
 
 - An agent is in several spaces at once, so every call names its target.
   Reads and task creation name a space. Calls that write into a task, or
-  record which task a proposal came from, carry the task ID and act on that
+  record which task a request came from, carry the task ID and act on that
   task's space.
 - Permissions follow the person's space role in that space.
 - Which MCP tool carries what is in [MCP tools](mcp-tools.md#4-tools).

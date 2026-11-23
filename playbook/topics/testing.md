@@ -99,7 +99,7 @@ running `lorebayd`.
 - All E2E tests live in one test suite, `tests/e2e/`, written in TypeScript
   with Playwright.
 - Each test is one **journey**: a person's goal from start to finish, such
-  as approving a proposal an agent submitted.
+  as approving a request an agent submitted.
 - A journey asserts what the person sees, with role, label and text locators
   and Playwright's auto-waiting assertions (`await expect(...)`).
 - Contract details, such as error responses and edge cases, belong to

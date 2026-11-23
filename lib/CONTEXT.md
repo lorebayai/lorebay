@@ -7,7 +7,7 @@ other terms are written in lowercase in running text.
 ## Library
 
 **Library**: The features every product shares: spaces, tasks, checkpoints,
-files, Knowledge, proposals and the MCP tools, built into a product's
+files, Knowledge, requests and the MCP tools, built into a product's
 process as the `lorebay-lib-*` crates.
 
 **Product**: A program built on the library. It holds people, how they sign
@@ -41,7 +41,7 @@ the space. It is the tenant, not a role.
 ## Spaces and roles
 
 **Space**: An isolated workspace for one team, with its own tasks,
-Knowledge and proposals. A tenant holds many spaces.
+Knowledge and requests. A tenant holds many spaces.
 
 **Space membership**: A person's space role in one space, which the product
 records and the library reads.
@@ -106,8 +106,9 @@ versions.
 **Knowledge version**: One stored state of a knowledge entry: its content and
 summary, or its deletion.
 
-**Proposal**: A request to create, change or delete a knowledge entry. It
-takes effect only when a person approves it.
+**Request**: A record of a change that waits on a person's decision. The
+library has one kind, the Knowledge-change request, to create, change or
+delete a knowledge entry; it takes effect only when a person approves it.
 
 **Cleanup round**: A library function with no caller that a product runs on
 its own schedule to remove what interrupted writes leave behind. There are
@@ -128,7 +129,7 @@ A product receives a space's ID only to refer to the space in its own rows.
 
 **Key**: A short identifier with a type prefix, such as `TK-12`, shown to
 people and used in references. Keys of tasks, knowledge entries, files
-and proposals count up per space; a space's key carries its space number.
+and requests count up per space; a space's key carries its space number.
 
 **Space number**: The permanent number in a space key, such as the 1 in
 `SPACE-1`, which the product gives each space. It is separate from the

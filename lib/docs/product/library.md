@@ -37,15 +37,15 @@ docs describe; anything they don't describe is out of scope.
 
 It does not cover:
 
-- notifications, such as telling approvers about a new proposal;
-- comments or replies on tasks, checkpoints, Knowledge or proposals.
+- notifications, such as telling approvers about a new request;
+- comments or replies on tasks, checkpoints, Knowledge or requests.
 
 ## 3. Spaces
 
 A product holds many spaces. A space is one team's workspace.
 
 - **Spaces are isolated.** Each space has its own members, tasks,
-  Scratchpads, files, Knowledge and proposals, and no space sees
+  Scratchpads, files, Knowledge and requests, and no space sees
   another's. A person may belong to several spaces.
 - **The product decides who may create a space**, and who belongs to it
   with which role. The library enforces what each role may do; see
@@ -69,4 +69,4 @@ The library stores five kinds of data in each space:
 | Scratchpad | How the agent did it: the checkpoints it wrote along the way | [Tasks](../contracts/tasks.md#4-scratchpad) |
 | File | Files the agent produced | [Tasks](../contracts/tasks.md#5-files) |
 | Knowledge | Shared documents later sessions read | [Knowledge](../contracts/knowledge.md#3-knowledge-entries) |
-| Proposal | A requested change to Knowledge, waiting for a person | [Knowledge](../contracts/knowledge.md#4-proposals) |
+| Request | A requested change to Knowledge, waiting for a person | [Knowledge](../contracts/knowledge.md#4-requests) |

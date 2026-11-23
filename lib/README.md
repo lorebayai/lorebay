@@ -1,7 +1,7 @@
 # Lorebay library
 
 The library holds the features every product shares: spaces, tasks, checkpoints,
-files, Knowledge, proposals and the MCP tools. Lorebay is the first
+files, Knowledge, requests and the MCP tools. Lorebay is the first
 product built on it, and a project in another repository depends on the
 crates it needs.
 

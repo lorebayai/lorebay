@@ -54,15 +54,15 @@ cargo run -p lorebay-cli -- knowledge change SPACE-1 KN-1 --name deploy/test.md 
 cargo run -p lorebay-cli -- knowledge change SPACE-1 deploy/test.md --content-file - < guide.md
 cargo run -p lorebay-cli -- knowledge delete SPACE-1 KN-1 --yes
 cargo run -p lorebay-cli -- knowledge rollback SPACE-1 KN-1 1
-cargo run -p lorebay-cli -- proposal list SPACE-1 --status pending --keyword staging --page-size 20
-cargo run -p lorebay-cli -- proposal show SPACE-1 PP-1
-cargo run -p lorebay-cli -- proposal create SPACE-1 deploy/staging.md --summary 'Staging steps' --content '# Staging'
-cargo run -p lorebay-cli -- proposal create SPACE-1 deploy/production.md --summary 'Production steps' --content-file guide.md
-cargo run -p lorebay-cli -- proposal change SPACE-1 KN-1 --name deploy/test.md --summary 'Test steps' --content '# Test'
-cargo run -p lorebay-cli -- proposal change SPACE-1 deploy/test.md --content-file - < guide.md
-cargo run -p lorebay-cli -- proposal delete SPACE-1 KN-1
-cargo run -p lorebay-cli -- proposal approve SPACE-1 PP-1
-cargo run -p lorebay-cli -- proposal reject SPACE-1 PP-1 --reason 'Superseded'
+cargo run -p lorebay-cli -- request list SPACE-1 --status pending --keyword staging --page-size 20
+cargo run -p lorebay-cli -- request show SPACE-1 RQ-1
+cargo run -p lorebay-cli -- request create SPACE-1 deploy/staging.md --summary 'Staging steps' --content '# Staging'
+cargo run -p lorebay-cli -- request create SPACE-1 deploy/production.md --summary 'Production steps' --content-file guide.md
+cargo run -p lorebay-cli -- request change SPACE-1 KN-1 --name deploy/test.md --summary 'Test steps' --content '# Test'
+cargo run -p lorebay-cli -- request change SPACE-1 deploy/test.md --content-file - < guide.md
+cargo run -p lorebay-cli -- request delete SPACE-1 KN-1
+cargo run -p lorebay-cli -- request approve SPACE-1 RQ-1
+cargo run -p lorebay-cli -- request reject SPACE-1 RQ-1 --reason 'Superseded'
 cargo run -p lorebay-cli -- logout
 cargo run -p lorebay-cli -- --help
 ```

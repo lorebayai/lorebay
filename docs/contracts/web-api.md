@@ -43,7 +43,7 @@ It does not cover:
 ```text
 GET  /api/v1/spaces/{space}/tasks
 POST /api/v1/spaces/{space}/tasks/{task_id}/checkpoints
-POST /api/v1/spaces/{space}/proposals/{key}/approve
+POST /api/v1/spaces/{space}/requests/{key}/approve
 ```
 
 - **OAuth endpoints are outside `/api/v1`**, at the standard locations:
@@ -77,7 +77,7 @@ POST /api/v1/spaces/{space}/proposals/{key}/approve
   carries the library's error code, such as `task.not_found`, with an HTTP
   status Lorebay chooses in one place; `task.ended`,
   `agent_file.not_uploaded`, `agent_file.refused`, `agent_file.too_large`,
-  `space.number_taken`, `knowledge.name_taken` and `proposal.decided`
+  `space.number_taken`, `knowledge.name_taken` and `person_request.decided`
   answer 409.
 - **Writes don't check references**; see
   [Keys and references](../../lib/docs/contracts/keys-and-references.md#5-references).
@@ -88,6 +88,6 @@ POST /api/v1/spaces/{space}/proposals/{key}/approve
 
 - **Listing users** exists for adding space members. Everyone signed in may
   call it and sees every username.
-- **Withdrawing a proposal** has no operation of its own: a person rejects
-  their own party's proposal; see
-  [Knowledge](../../lib/docs/contracts/knowledge.md#4-proposals).
+- **Withdrawing a request** has no operation of its own: a person rejects
+  their own party's request; see
+  [Knowledge](../../lib/docs/contracts/knowledge.md#4-requests).

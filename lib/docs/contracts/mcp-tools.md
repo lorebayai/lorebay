@@ -54,12 +54,12 @@ It does not cover:
 | `get_file_url` | Space | Returns a short-lived download URL | Get a download URL |
 | `list_knowledge` | Space | Lists one level by name prefix: its entries, with names, keys and summaries, and the next level's prefixes; no prefix lists the top level; a keyword searches names, summaries and content across the space | List Knowledge |
 | `read_knowledge` | Space | Reads one entry by name or key, latest version only | Read a knowledge entry |
-| `create_proposal` | Task ID | Proposes creating, changing or deleting an entry | Submit a proposal |
-| `list_proposals` | Space | Lists proposals, filtered by status and keyword | List proposals |
-| `get_proposal` | Space | Reads one proposal: content, status, the 'changed since proposed' mark, rejection reason | Read a proposal |
+| `create_request` | Task ID | Proposes creating, changing or deleting an entry | Submit a request |
+| `list_requests` | Space | Lists requests, filtered by status and keyword | List requests |
+| `get_request` | Space | Reads one request: content, status, the 'changed since requested' mark, rejection reason | Read a request |
 
 - **Lists are paginated.** `list_spaces`, `list_tasks`, `list_knowledge`,
-  `list_proposals` and the Scratchpad in `get_task` return pages, so no call puts an
+  `list_requests` and the Scratchpad in `get_task` return pages, so no call puts an
   unbounded result into the model's context. Each page follows a cursor,
   in a fixed order, with a default page size the caller may change, up to
   the library's limit.
@@ -72,7 +72,7 @@ It does not cover:
   [Keys and references](keys-and-references.md#3-keys).
 
 What MCP leaves out, people do through a product's entry points: deleting
-tasks, checkpoints and files; approving and rejecting proposals; changing
+tasks, checkpoints and files; approving and rejecting requests; changing
 Knowledge directly; viewing history and rolling back. Creating spaces and
 managing who is in them are the product's. Agents may also read one space
 through a product's entry point; that operation has no tool.

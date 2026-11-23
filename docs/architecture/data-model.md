@@ -95,7 +95,7 @@ A mirror of the users file, synced at startup.
   back in the file gets `deleted_at` cleared: it is the same person. What
   that means for the person is in [Identity](identity.md#3-accounts).
 - **Rows are never deleted**, so Lorebay's person names interface still
-  answers for a removed username, and tasks and proposals still show whose
+  answers for a removed username, and tasks and requests still show whose
   they were.
 
 ### 5.2 `agent_sign_in`
