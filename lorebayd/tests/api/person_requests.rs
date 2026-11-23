@@ -1023,7 +1023,7 @@ async fn approve_person_request_renames_entry_without_version() {
 }
 
 #[tokio::test]
-async fn approve_person_request_deletes_entry_when_kind_is_delete() {
+async fn approve_person_request_deletes_entry_when_action_is_delete() {
     let (server, owner) = setup().await;
     seed(&server, &owner, "Guide").await;
     let before = versions(&server, &owner, "KN-1").await;

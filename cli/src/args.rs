@@ -217,7 +217,7 @@ pub(crate) enum PersonRequestCommand {
     /// Approve a request and apply its Knowledge change.
     Approve {
         space: String,
-        #[arg(value_name = "request")]
+        #[arg(value_name = "REQUEST")]
         person_request: String,
     },
     /// Propose changes to an entry's name, summary or content.
@@ -255,7 +255,7 @@ pub(crate) enum PersonRequestCommand {
     /// Reject a request, or withdraw your own party's request.
     Reject {
         space: String,
-        #[arg(value_name = "request")]
+        #[arg(value_name = "REQUEST")]
         person_request: String,
         #[arg(long)]
         reason: String,
@@ -263,7 +263,7 @@ pub(crate) enum PersonRequestCommand {
     /// Show a request's fields, content and decision.
     Show {
         space: String,
-        #[arg(value_name = "request")]
+        #[arg(value_name = "REQUEST")]
         person_request: String,
     },
 }
