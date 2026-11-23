@@ -55,7 +55,7 @@ flowchart TD
     impls --> store
 ```
 
-`v0.1.0` keeps file content in a local directory; the S3 backend is
+`v0.1.1` keeps file content in a local directory; the S3 backend is
 designed but not built ([Storage](storage.md)).
 
 | Caller | Entry point | Credential |
