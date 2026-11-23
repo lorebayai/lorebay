@@ -54,7 +54,8 @@ It does not cover showing an object which other objects reference it.
   it as a link that reads `#KN-1`.
 - **Where references work:** task titles and results, checkpoints, Knowledge and
   proposals. References are optional.
-- **Checkpoints have no references of their own.** Refer to the checkpoint's task.
+- **Checkpoints have no references of their own.** Refer to the checkpoint's
+  task.
 - **Unresolvable references show as plain text**, with no error: a key that
   doesn't exist, was deleted, or belongs to another space.
 - **Writes don't check references.** A product resolves them when it shows

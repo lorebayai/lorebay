@@ -226,9 +226,9 @@ reaches data only through the operations and the reads above.
   MCP layer may not depend on a product, and copying them into the MCP crate
   lets the two entry points drift.
 - **Inputs validate themselves.** Input types, such as a task title or a
-  checkpoint, check their own length and format when built. Task changes, statuses
-  and page sizes have shared validation and field errors. Each entry point
-  maps those errors to its protocol. Page sizes and input lengths are
+  checkpoint, check their own length and format when built. Task changes,
+  statuses and page sizes have shared validation and field errors. Each entry
+  point maps those errors to its protocol. Page sizes and input lengths are
   constants.
 - **Public enums and settings can grow.** The error enums, the write
   labels, the settings and the interface set are non-exhaustive: a product

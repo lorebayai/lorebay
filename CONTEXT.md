@@ -2,8 +2,8 @@
 
 Canonical terms for Lorebay's docs and code. Use them exactly, and don't
 introduce synonyms. The terms Lorebay shares with the library it builds on,
-such as space, task, checkpoint, file, Knowledge, proposal, agent, space role and
-key, are in the [library's glossary](lib/CONTEXT.md) and mean the same here.
+such as space, task, checkpoint, file, Knowledge, proposal, agent, space role
+and key, are in the [library's glossary](lib/CONTEXT.md) and mean the same here.
 [Space members](lib/CONTEXT.md#spaces-and-roles) follow the library's definition.
 Terms are written in lowercase in running text.
 

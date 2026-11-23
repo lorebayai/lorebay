@@ -84,7 +84,8 @@ The Scratchpad records how the agent did the work. It holds checkpoints only.
   Times strictly increase within a task, so a checkpoint's time names it. A
   task's Scratchpad is its checkpoints in time order.
 - **The Scratchpad is append-only.** A checkpoint cannot be edited. A person may
-  delete single checkpoints in their own tasks; agents cannot delete checkpoints.
+  delete single checkpoints in their own tasks; agents cannot delete
+  checkpoints.
 - **One tool for every harness.** The library offers one MCP tool for writing
   checkpoints. The tool serves every harness.
 - **Checkpoints belong to the agent's current task.**

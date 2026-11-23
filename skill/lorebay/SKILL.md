@@ -117,8 +117,8 @@ Write checkpoints with `add_checkpoint`:
 - **After each step:** what you did, and why. The steps are each thing the
   person asks for this time, including a check they ask for, and each further
   step the plan names. A task of one step gets this checkpoint too; the result
-  does not replace it. Continuing a task is no exception: the correction or further
-  work is a step, with its checkpoint before the result.
+  does not replace it. Continuing a task is no exception: the correction or
+  further work is a step, with its checkpoint before the result.
 - **No closing checkpoint:** the conclusion goes in the result.
 
 Never write secrets, such as keys, passwords, credentials, or upload and
