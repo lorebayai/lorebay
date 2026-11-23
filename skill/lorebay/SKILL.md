@@ -149,7 +149,7 @@ Upload with the URL and headers that `create_file` returns, then call
 uploaded. If the upload URL expires first, register the file again. A
 failed upload does not stop the work. If `complete_file` refuses the file
 as over the size limit, the refusal is final: don't report that file
-again, and register a new file to upload smaller content.
+again, and register a new file to upload a smaller file.
 
 ### 7. Write references
 

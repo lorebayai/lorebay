@@ -164,7 +164,7 @@ async fn delete_agent_file_fails_when_agent_file_is_in_another_task() {
 }
 
 #[tokio::test]
-async fn delete_task_removes_files_of_its_agent_files() {
+async fn delete_task_removes_content_of_its_agent_files() {
     let (server, person, agent) = setup().await;
     let task = create(&server, &agent, SPACE, "Task with files").await;
     let completed = uploaded(&server, &agent, &task).await;

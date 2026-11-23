@@ -20,12 +20,12 @@ lorebayd --config /path/to/lorebayd.json --dotenv /path/to/lorebayd.env
 ```
 
 The second command regenerates Lorebay's entities. Startup applies the
-library's migrations, then Lorebay's. A data directory from an earlier
-release is refused: delete it and start with an empty one; the users file
-recreates the accounts. Open the metadata's `/oauth/authorize` endpoint with
-the client's authorization parameters to sign in and consent. The CLI's
-client ID is `lorebay-cli`; it accepts loopback redirects on any port and
-takes no agent name.
+library's migrations, then Lorebay's. Data directories from `v0.1.1` or later
+are upgraded in place; those from before `v0.1.1` are refused: delete them
+and start empty, and the users file recreates the accounts. Open the
+metadata's `/oauth/authorize` endpoint with the client's authorization
+parameters to sign in and consent. The CLI's client ID is `lorebay-cli`; it
+accepts loopback redirects on any port and takes no agent name.
 
 `hash-password` reads a password from standard input, removes one final line
 ending and prints an Argon2id PHC hash; it starts no server and accepts no

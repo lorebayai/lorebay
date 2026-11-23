@@ -215,7 +215,7 @@ the library reads it through the
 | `completed_at` | INTEGER | Nullable | When the upload was reported complete; until then the file is not listed among the task's files |
 | `refused_at` | INTEGER | Nullable | When a report found the file over the size limit; a refused file is never completed |
 
-- **The key is taken at registration**, and `complete_agent_file` names the
+- **The key is taken at registration**, and `complete_file` names the
   file by it. The abandoned-registration round removes registrations
   neither completed nor refused; their keys stay unused.
 - **A refused registration stays until its task is deleted**, so a later

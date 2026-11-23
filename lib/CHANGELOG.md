@@ -9,8 +9,9 @@ crates `lorebay-lib-types`, `lorebay-lib-core`, `lorebay-lib-migration` and
 
 - **Breaking:** Task uploads become files throughout the library API, MCP
   tools and task fields, with `AgentFile` code names, `agent_file.*` errors,
-  `FL-` keys and the rewritten `space_agent_file` schema. Earlier data is
-  refused; `v0.1.1` is the first release whose data is kept.
+  `FL-` keys and the rewritten `space_agent_file` schema. The created
+  migration `m20261118_000001_create_space_tables` changes in place; a
+  database that applied it must be recreated.
 
 Version 0.1.0, the first version, not yet tagged.
 

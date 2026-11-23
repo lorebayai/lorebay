@@ -166,7 +166,7 @@ fn task_list_properties() -> Value {
 fn create_agent_file() -> (ToolName, Tool) {
     tool(
         ToolName::CreateAgentFile,
-        "Register a file using task_id, a file name and a summary. Returns its key, upload_url, method, headers and task title. Upload the file's content with an HTTP PUT to upload_url carrying every returned header; file content never passes through MCP. HTTP 412 means the file is already in storage: call complete_file with the returned key. Ended tasks must be reopened before registration.",
+        "Register a file using task_id, a file name and a summary. Returns its key, upload_url, method, headers and task title. Upload the file's content with an HTTP PUT to upload_url carrying every returned header; file content never passes through MCP. HTTP 412 means the file's content is already stored: call complete_file with the returned key. Ended tasks must be reopened before registration.",
         json!({
             "task_id":{"type":"string"},
             "file_name":{"type":"string", "minLength":1, "maxLength":AGENT_FILE_NAME_MAX_BYTES, "description":"Nonempty file name, at most 255 UTF-8 bytes."},
