@@ -1,12 +1,12 @@
 use thiserror::Error;
 use typed_builder::TypedBuilder;
 
-pub const ARTIFACT_FILE_NAME_MAX_BYTES: usize = 255;
-pub const ARTIFACT_SUMMARY_MAX_CHARACTERS: usize = 500;
+pub const AGENT_FILE_NAME_MAX_BYTES: usize = 255;
+pub const AGENT_FILE_SUMMARY_MAX_CHARACTERS: usize = 500;
 
 #[derive(Debug, Error)]
 #[non_exhaustive]
-pub enum ArtifactTextError {
+pub enum AgentFileTextError {
     #[error("Must not be empty.")]
     Empty,
     #[error("Must be at most {0} bytes.")]
@@ -16,62 +16,60 @@ pub enum ArtifactTextError {
 }
 
 #[derive(Clone, Debug)]
-pub struct ArtifactFileName {
+pub struct AgentFileName {
     value: String,
 }
 
 #[derive(Clone, Debug)]
-pub struct ArtifactSummary {
+pub struct AgentFileSummary {
     value: String,
 }
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
-pub struct NewArtifact {
-    pub file_name: ArtifactFileName,
-    pub summary: ArtifactSummary,
+pub struct NewAgentFile {
+    pub file_name: AgentFileName,
+    pub summary: AgentFileSummary,
 }
 
-impl TryFrom<String> for ArtifactFileName {
-    type Error = ArtifactTextError;
+impl TryFrom<String> for AgentFileName {
+    type Error = AgentFileTextError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         if value.trim().is_empty() {
-            return Err(ArtifactTextError::Empty);
+            return Err(AgentFileTextError::Empty);
         }
-        if value.len() > ARTIFACT_FILE_NAME_MAX_BYTES {
-            return Err(ArtifactTextError::TooManyBytes(
-                ARTIFACT_FILE_NAME_MAX_BYTES,
-            ));
+        if value.len() > AGENT_FILE_NAME_MAX_BYTES {
+            return Err(AgentFileTextError::TooManyBytes(AGENT_FILE_NAME_MAX_BYTES));
         }
         Ok(Self { value })
     }
 }
 
-impl From<ArtifactFileName> for String {
-    fn from(value: ArtifactFileName) -> Self {
+impl From<AgentFileName> for String {
+    fn from(value: AgentFileName) -> Self {
         value.value
     }
 }
 
-impl TryFrom<String> for ArtifactSummary {
-    type Error = ArtifactTextError;
+impl TryFrom<String> for AgentFileSummary {
+    type Error = AgentFileTextError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         if value.trim().is_empty() {
-            return Err(ArtifactTextError::Empty);
+            return Err(AgentFileTextError::Empty);
         }
-        if value.chars().count() > ARTIFACT_SUMMARY_MAX_CHARACTERS {
-            return Err(ArtifactTextError::TooManyCharacters(
-                ARTIFACT_SUMMARY_MAX_CHARACTERS,
+        if value.chars().count() > AGENT_FILE_SUMMARY_MAX_CHARACTERS {
+            return Err(AgentFileTextError::TooManyCharacters(
+                AGENT_FILE_SUMMARY_MAX_CHARACTERS,
             ));
         }
         Ok(Self { value })
     }
 }
 
-impl From<ArtifactSummary> for String {
-    fn from(value: ArtifactSummary) -> Self {
+impl From<AgentFileSummary> for String {
+    fn from(value: AgentFileSummary) -> Self {
         value.value
     }
 }

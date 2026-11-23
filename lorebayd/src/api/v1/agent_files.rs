@@ -10,9 +10,9 @@ use crate::api::{ApiError, Envelope, FieldError};
 use crate::domain::caller::VerifiedCaller;
 use crate::server::ServerState;
 use lorebay_lib_core::{
-    ArtifactCompleted, ArtifactFileName, ArtifactRegistered, ArtifactSummary, ArtifactTextError,
-    DownloadRequest, NewArtifact, TaskTarget, complete_artifact, delete_artifact,
-    get_artifact_download_url, prepare_artifact_completion, register_artifact,
+    AgentFileCompleted, AgentFileName, AgentFileRegistered, AgentFileSummary, AgentFileTextError,
+    DownloadRequest, NewAgentFile, TaskTarget, complete_agent_file, delete_agent_file,
+    get_agent_file_download_url, prepare_agent_file_completion, register_agent_file,
 };
 
 use super::login_session::invalid_json;
@@ -20,22 +20,22 @@ use super::login_session::invalid_json;
 #[derive(Clone, Debug, Deserialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
 #[serde(deny_unknown_fields)]
-pub(crate) struct RegisterArtifactRequest {
+pub(crate) struct RegisterAgentFileRequest {
     file_name: String,
     summary: String,
 }
 
-impl TryFrom<RegisterArtifactRequest> for NewArtifact {
+impl TryFrom<RegisterAgentFileRequest> for NewAgentFile {
     type Error = ApiError;
 
-    fn try_from(request: RegisterArtifactRequest) -> Result<Self, Self::Error> {
+    fn try_from(request: RegisterAgentFileRequest) -> Result<Self, Self::Error> {
         Ok(Self::builder()
             .file_name(
-                ArtifactFileName::try_from(request.file_name)
+                AgentFileName::try_from(request.file_name)
                     .map_err(|error| invalid_text("file_name", error))?,
             )
             .summary(
-                ArtifactSummary::try_from(request.summary)
+                AgentFileSummary::try_from(request.summary)
                     .map_err(|error| invalid_text("summary", error))?,
             )
             .build())
@@ -49,7 +49,7 @@ pub(crate) async fn download_url(
 ) -> Result<Envelope<DownloadRequest>, ApiError> {
     let Path((space, key)) = path.map_err(invalid_path)?;
     let download =
-        get_artifact_download_url(&state.library, &caller.library_caller(), &space, &key).await?;
+        get_agent_file_download_url(&state.library, &caller.library_caller(), &space, &key).await?;
     Ok(Envelope::builder().data(download).build())
 }
 
@@ -57,8 +57,8 @@ pub(crate) async fn register(
     State(state): State<ServerState>,
     caller: VerifiedCaller,
     path: Result<Path<(String, Secret<String>)>, PathRejection>,
-    request: Result<Json<RegisterArtifactRequest>, JsonRejection>,
-) -> Result<(StatusCode, Envelope<ArtifactRegistered>), ApiError> {
+    request: Result<Json<RegisterAgentFileRequest>, JsonRejection>,
+) -> Result<(StatusCode, Envelope<AgentFileRegistered>), ApiError> {
     let Path((space, task_id)) = path.map_err(invalid_path)?;
     let Json(request) = request.map_err(invalid_json)?;
     let target = TaskTarget::builder()
@@ -69,12 +69,12 @@ pub(crate) async fn register(
     let input = request.try_into()?;
     let registration = state
         .library
-        .run_write(async |write| register_artifact(write, &caller, target, input).await)
+        .run_write(async |write| register_agent_file(write, &caller, target, input).await)
         .await?;
-    let artifact = registration.issue_upload(&state.library).await?;
+    let agent_file = registration.issue_upload(&state.library).await?;
     Ok((
         StatusCode::CREATED,
-        Envelope::builder().data(artifact).build(),
+        Envelope::builder().data(agent_file).build(),
     ))
 }
 
@@ -82,20 +82,20 @@ pub(crate) async fn complete(
     State(state): State<ServerState>,
     caller: VerifiedCaller,
     path: Result<Path<(String, Secret<String>, String)>, PathRejection>,
-) -> Result<Envelope<ArtifactCompleted>, ApiError> {
+) -> Result<Envelope<AgentFileCompleted>, ApiError> {
     let Path((space, task_id, key)) = path.map_err(invalid_path)?;
     let target = TaskTarget::builder()
         .path_space(Some(space.as_str()))
         .task_id(task_id.expose().as_str())
         .build();
     let caller = caller.library_caller();
-    let prepared = prepare_artifact_completion(&state.library, &caller, target, &key).await?;
+    let prepared = prepare_agent_file_completion(&state.library, &caller, target, &key).await?;
     let completion = state
         .library
-        .run_write(async |write| complete_artifact(write, &caller, target, prepared).await)
+        .run_write(async |write| complete_agent_file(write, &caller, target, prepared).await)
         .await?;
-    let artifact = completion.into_result()?;
-    Ok(Envelope::builder().data(artifact).build())
+    let agent_file = completion.into_result()?;
+    Ok(Envelope::builder().data(agent_file).build())
 }
 
 pub(crate) async fn delete(
@@ -111,15 +111,17 @@ pub(crate) async fn delete(
     let caller = caller.library_caller();
     state
         .library
-        .run_write(async |write| delete_artifact(write, &caller, target, &key).await)
+        .run_write(async |write| delete_agent_file(write, &caller, target, &key).await)
         .await?;
     Ok(Envelope::builder().data(()).build())
 }
 
-fn invalid_text(field: &str, error: ArtifactTextError) -> ApiError {
+fn invalid_text(field: &str, error: AgentFileTextError) -> ApiError {
     let code = match error {
-        ArtifactTextError::Empty => "required",
-        ArtifactTextError::TooManyBytes(_) | ArtifactTextError::TooManyCharacters(_) => "too_long",
+        AgentFileTextError::Empty => "required",
+        AgentFileTextError::TooManyBytes(_) | AgentFileTextError::TooManyCharacters(_) => {
+            "too_long"
+        }
         _ => "invalid",
     };
     ApiError::InvalidBody(vec![
@@ -136,7 +138,7 @@ fn invalid_path(_error: PathRejection) -> ApiError {
         FieldError::builder()
             .field("path")
             .code("invalid")
-            .message("Expected valid UTF-8 space, task and artifact identifiers.")
+            .message("Expected valid UTF-8 space, task and file identifiers.")
             .build(),
     ])
 }

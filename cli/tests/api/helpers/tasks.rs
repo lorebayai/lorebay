@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 
 use super::{Server, create};
 
-pub const ARTIFACT_BYTES: &str = "Scenario artifact\n";
+pub const AGENT_FILE_BYTES: &str = "Scenario file\n";
 
 pub async fn task_context() -> (Server, String, Value) {
     let server = Server::start().await;
@@ -104,7 +104,7 @@ pub async fn read_task(server: &Server, space: &str, key: &str) -> Value {
         .clone()
 }
 
-pub async fn task_with_artifacts(
+pub async fn task_with_agent_files(
     server: &Server,
     space: &str,
     agent: &Value,
@@ -121,11 +121,11 @@ pub async fn task_with_artifacts(
             agent["access_token"].as_str(),
         )
         .await;
-    let first = upload_task_artifact(server, space, &task, agent, "report.txt").await;
-    let second = upload_task_artifact(server, space, &task, agent, "chart.csv").await;
-    register_task_artifact(server, space, &task, agent, "pending.txt").await;
+    let first = upload_task_agent_file(server, space, &task, agent, "report.txt").await;
+    let second = upload_task_agent_file(server, space, &task, agent, "chart.csv").await;
+    register_task_agent_file(server, space, &task, agent, "pending.txt").await;
     let read = read_task(server, space, task["key"].as_str().unwrap()).await;
-    assert_eq!(read["artifacts"], json!([first, second]));
+    assert_eq!(read["files"], json!([first, second]));
     assert_eq!(read["result"], result);
     read
 }
@@ -150,7 +150,7 @@ pub async fn task_id_from_show(server: &Server, space: &str, key: &str, mode: &s
         .to_owned()
 }
 
-async fn register_task_artifact(
+async fn register_task_agent_file(
     server: &Server,
     space: &str,
     task: &Value,
@@ -161,34 +161,34 @@ async fn register_task_artifact(
     server
         .json(
             Method::POST,
-            &format!("/api/v1/spaces/{space}/tasks/{id}/artifacts"),
-            json!({"file_name": file_name, "summary": "Completed artifact"}),
+            &format!("/api/v1/spaces/{space}/tasks/{id}/files"),
+            json!({"file_name": file_name, "summary": "Completed file"}),
             agent["access_token"].as_str(),
         )
         .await["data"]
         .clone()
 }
 
-async fn upload_task_artifact(
+async fn upload_task_agent_file(
     server: &Server,
     space: &str,
     task: &Value,
     agent: &Value,
     file_name: &str,
 ) -> Value {
-    let registered = register_task_artifact(server, space, task, agent, file_name).await;
+    let registered = register_task_agent_file(server, space, task, agent, file_name).await;
     let method = Method::from_bytes(registered["method"].as_str().unwrap().as_bytes()).unwrap();
     let mut request = server
         .client
         .request(method, registered["upload_url"].as_str().unwrap())
-        .body(ARTIFACT_BYTES);
+        .body(AGENT_FILE_BYTES);
     for (name, value) in registered["headers"].as_object().unwrap() {
         request = request.header(name, value.as_str().unwrap());
     }
     let response = request
         .send()
         .await
-        .map_err(|_| "artifact upload failed")
+        .map_err(|_| "file upload failed")
         .unwrap();
     assert_eq!(response.status(), StatusCode::CREATED);
     assert!(response.bytes().await.unwrap().is_empty());
@@ -197,7 +197,7 @@ async fn upload_task_artifact(
     let mut completed = server
         .json(
             Method::POST,
-            &format!("/api/v1/spaces/{space}/tasks/{id}/artifacts/{key}/complete"),
+            &format!("/api/v1/spaces/{space}/tasks/{id}/files/{key}/complete"),
             Value::Null,
             agent["access_token"].as_str(),
         )
@@ -205,7 +205,7 @@ async fn upload_task_artifact(
         .clone();
     assert_eq!(completed["key"], key);
     assert_eq!(completed["file_name"], file_name);
-    assert_eq!(completed["size"], ARTIFACT_BYTES.len());
+    assert_eq!(completed["size"], AGENT_FILE_BYTES.len());
     completed.as_object_mut().unwrap().remove("task_title");
     completed
 }

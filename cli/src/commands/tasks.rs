@@ -172,7 +172,7 @@ fn task_output(body: Value) -> Outcome {
                 ("Ended at", "ended_at"),
                 ("Last activity at", "last_activity_at"),
                 ("Result", "result"),
-                ("Artifacts", "artifacts"),
+                ("Files", "files"),
             ]
             .into_iter()
             .map(|(label, field)| {

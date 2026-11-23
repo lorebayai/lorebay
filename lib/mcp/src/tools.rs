@@ -1,7 +1,7 @@
 use lorebay_lib_core::{
     Caller, LibraryState, NoteContent, Page, TaskRead, TaskTarget, TaskTitle, add_note,
-    change_task, complete_artifact, create_task, get_artifact_download_url, list_spaces,
-    list_tasks, prepare_artifact_completion, read_task, register_artifact,
+    change_task, complete_agent_file, create_task, get_agent_file_download_url, list_spaces,
+    list_tasks, prepare_agent_file_completion, read_task, register_agent_file,
 };
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -39,10 +39,10 @@ pub(super) async fn call(
             .await?,
         ),
         ToolName::AddNote => append(state, caller, &arguments).await,
-        ToolName::CreateArtifact => register(state, caller, &arguments).await,
-        ToolName::CompleteArtifact => complete(state, caller, &arguments).await,
-        ToolName::GetArtifactUrl => value(
-            get_artifact_download_url(
+        ToolName::CreateAgentFile => register(state, caller, &arguments).await,
+        ToolName::CompleteAgentFile => complete(state, caller, &arguments).await,
+        ToolName::GetAgentFileUrl => value(
+            get_agent_file_download_url(
                 state,
                 caller,
                 &arguments.string("space")?,
@@ -64,9 +64,9 @@ async fn register(
     arguments: &Arguments,
 ) -> Result<Value, ToolError> {
     let task_id = arguments.string("task_id")?;
-    let input = arguments.artifact()?;
+    let input = arguments.agent_file()?;
     let registration = state
-        .run_write(async |write| register_artifact(write, caller, target(&task_id), input).await)
+        .run_write(async |write| register_agent_file(write, caller, target(&task_id), input).await)
         .await?;
     value(registration.issue_upload(state).await?)
 }
@@ -78,9 +78,11 @@ async fn complete(
 ) -> Result<Value, ToolError> {
     let task_id = arguments.string("task_id")?;
     let key = arguments.string("key")?;
-    let prepared = prepare_artifact_completion(state, caller, target(&task_id), &key).await?;
+    let prepared = prepare_agent_file_completion(state, caller, target(&task_id), &key).await?;
     let completion = state
-        .run_write(async |write| complete_artifact(write, caller, target(&task_id), prepared).await)
+        .run_write(async |write| {
+            complete_agent_file(write, caller, target(&task_id), prepared).await
+        })
         .await?;
     value(completion.into_result()?)
 }
@@ -138,7 +140,7 @@ fn target(task_id: &str) -> TaskTarget<'_> {
 
 fn task_response(read: TaskRead) -> Result<Value, ToolError> {
     let mut result = value(read.task)?;
-    result["artifacts"] = value(read.artifacts)?;
+    result["files"] = value(read.files)?;
     if let Some(scratchpad) = read.scratchpad {
         result["scratchpad"] = page_response(scratchpad)?;
     }

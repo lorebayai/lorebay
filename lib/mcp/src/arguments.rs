@@ -3,7 +3,7 @@ use serde_json::Value;
 use typed_builder::TypedBuilder;
 
 use lorebay_lib_core::{
-    ArtifactFileName, ArtifactSummary, NewArtifact, PageOptions, PageSizeError, TaskChanges,
+    AgentFileName, AgentFileSummary, NewAgentFile, PageOptions, PageSizeError, TaskChanges,
     TaskFilters, TaskKeyword, TaskResult, TaskStatus, TaskStatusError, TaskTitle,
 };
 
@@ -120,12 +120,12 @@ impl Arguments {
         Ok(changes)
     }
 
-    pub fn artifact(&self) -> Result<NewArtifact, ToolError> {
-        let file_name = ArtifactFileName::try_from(self.string("file_name")?)
-            .map_err(|error| ToolError::artifact_text("file_name", error))?;
-        let summary = ArtifactSummary::try_from(self.string("summary")?)
-            .map_err(|error| ToolError::artifact_text("summary", error))?;
-        Ok(NewArtifact { file_name, summary })
+    pub fn agent_file(&self) -> Result<NewAgentFile, ToolError> {
+        let file_name = AgentFileName::try_from(self.string("file_name")?)
+            .map_err(|error| ToolError::agent_file_text("file_name", error))?;
+        let summary = AgentFileSummary::try_from(self.string("summary")?)
+            .map_err(|error| ToolError::agent_file_text("summary", error))?;
+        Ok(NewAgentFile { file_name, summary })
     }
 
     pub fn tasks(&self) -> Result<(PageOptions, TaskFilters), ToolError> {

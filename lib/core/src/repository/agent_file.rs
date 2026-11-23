@@ -5,15 +5,15 @@ use sea_orm::{
 };
 use typed_builder::TypedBuilder;
 
-use crate::entity::space_artifact::{ActiveModel, Column, Entity, Model};
+use crate::entity::space_agent_file::{ActiveModel, Column, Entity, Model};
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
-pub(crate) struct ArtifactRepository<'a, C> {
+pub(crate) struct AgentFileRepository<'a, C> {
     pub connection: &'a C,
 }
 
-impl<C: ConnectionTrait> ArtifactRepository<'_, C> {
+impl<C: ConnectionTrait> AgentFileRepository<'_, C> {
     pub async fn delete_abandoned(&self, before: i64, limit: u64) -> Result<Vec<String>, DbErr> {
         let candidates = Query::select()
             .column(Column::Id)
@@ -96,7 +96,7 @@ impl<C: ConnectionTrait> ArtifactRepository<'_, C> {
         model.insert(self.connection).await
     }
 
-    pub async fn delete_task_artifacts(&self, task_id: &str) -> Result<Vec<String>, DbErr> {
+    pub async fn delete_task_agent_files(&self, task_id: &str) -> Result<Vec<String>, DbErr> {
         self.delete_returning(Column::TaskId.eq(task_id)).await
     }
 

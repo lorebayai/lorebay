@@ -75,7 +75,7 @@ pub struct LibrarySettings {
     pub upload_url_lifetime: Duration,
     pub download_url_lifetime: Duration,
     pub inline_content_types: Vec<String>,
-    pub abandoned_artifact_lifetime: Duration,
+    pub abandoned_agent_file_lifetime: Duration,
     pub orphaned_file_lifetime: Duration,
 }
 
@@ -92,9 +92,9 @@ pub struct LibraryState {
 impl LibraryState {
     pub fn new(settings: LibrarySettings, interfaces: LibraryInterfaces) -> InterfaceResult<Self> {
         anyhow::ensure!(
-            settings.abandoned_artifact_lifetime > settings.upload_url_lifetime
+            settings.abandoned_agent_file_lifetime > settings.upload_url_lifetime
                 && settings.orphaned_file_lifetime > settings.upload_url_lifetime,
-            "Artifact cleanup ages must exceed the upload URL lifetime"
+            "File cleanup ages must exceed the upload URL lifetime"
         );
         Ok(Self {
             settings: Arc::new(settings),
@@ -320,18 +320,18 @@ pub enum WriteOperation {
     ChangeKnowledgeEntry,
     ChangeSpace,
     ChangeTask,
-    CompleteArtifact,
+    CompleteAgentFile,
     CreateKnowledgeEntry,
     CreateSpace,
     CreateTask,
-    DeleteArtifact,
+    DeleteAgentFile,
     DeleteKnowledgeEntry,
     DeleteNote,
     DeleteTask,
-    RefuseArtifact,
-    RegisterArtifact,
+    RefuseAgentFile,
+    RegisterAgentFile,
     RejectProposal,
-    RemoveAbandonedArtifacts,
+    RemoveAbandonedAgentFiles,
     RollBackKnowledgeEntry,
     SubmitProposal,
 }

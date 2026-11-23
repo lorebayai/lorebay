@@ -14,7 +14,7 @@ use crate::http::{self, Http};
 use crate::login;
 use crate::output::{self, Outcome, Table};
 
-mod artifacts;
+mod agent_files;
 mod content;
 mod deletion;
 mod knowledge;
@@ -32,7 +32,7 @@ pub(super) use pages::{Listing, api_path, display_value, list_page};
 pub(crate) async fn run(command: Command, mode: OutputMode) -> Result<Outcome> {
     let store = Store::from_environment()?;
     match command {
-        Command::Artifact { command } => artifacts::run(command, &store).await,
+        Command::AgentFile { command } => agent_files::run(command, &store).await,
         Command::Knowledge { command } => knowledge::run(command, &store, mode).await,
         Command::Login {
             server_url,

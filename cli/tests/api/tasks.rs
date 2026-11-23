@@ -2,7 +2,7 @@ use serde_json::json;
 
 use crate::helpers::{
     SECOND_USERNAME, append_note, assert_success, assert_task_error, body, create, create_task,
-    read_task, task_context, task_id_from_show, task_pages, task_with_artifacts,
+    read_task, task_context, task_id_from_show, task_pages, task_with_agent_files,
 };
 
 #[tokio::test]
@@ -43,32 +43,29 @@ async fn task_list_returns_tasks_in_activity_order() {
 }
 
 #[tokio::test]
-async fn task_show_prints_result_task_id_and_artifacts() {
+async fn task_show_prints_result_task_id_and_agent_files() {
     let (server, space, agent) = task_context().await;
     let title = "# Work\nStatus: ended\n- source\ttext\u{1b}[0m\r\u{7}\u{2066}";
     let result = "# Findings\nTask ID: another-task\n\n- **Done**\tcode\u{1b}[0m\r\u{7}\u{202e}\n";
-    let expected = task_with_artifacts(&server, &space, &agent, title, result).await;
+    let expected = task_with_agent_files(&server, &space, &agent, title, result).await;
     let shown = server
         .run(&["task", "show", &space, "TK-1", "--output", "json"])
         .await;
     assert_success(&shown);
     assert!(shown.stderr.is_empty());
     assert_eq!(body(&shown), json!({"data": expected, "meta": {}}));
-    assert_eq!(
-        body(&shown)["data"]["artifacts"].as_array().unwrap().len(),
-        2
-    );
+    assert_eq!(body(&shown)["data"]["files"].as_array().unwrap().len(), 2);
     let human = server.run(&["task", "show", &space, "TK-1"]).await;
     assert_success(&human);
     assert!(human.stderr.is_empty());
     let id = expected["task_id"].as_str().unwrap();
     let started = expected["started_at"].as_i64().unwrap();
     let last_activity = expected["last_activity_at"].as_i64().unwrap();
-    let artifacts = &expected["artifacts"];
+    let agent_files = &expected["files"];
     assert_eq!(
         String::from_utf8(human.stdout).unwrap(),
         format!(
-            "Key: TK-1\nTask ID: {id}\nTitle: # Work\n  Status: ended\n  - source\ttext\\u{{1b}}[0m\\r\\u{{7}}\\u{{2066}}\nStatus: in progress\nPerson: {}\nAgent name: Task agent\nStarted at: {started}\nEnded at: \nLast activity at: {last_activity}\nResult: # Findings\n  Task ID: another-task\n  \n  - **Done**\tcode\\u{{1b}}[0m\\r\\u{{7}}\\u{{202e}}\n  \nArtifacts: {artifacts}\n",
+            "Key: TK-1\nTask ID: {id}\nTitle: # Work\n  Status: ended\n  - source\ttext\\u{{1b}}[0m\\r\\u{{7}}\\u{{2066}}\nStatus: in progress\nPerson: {}\nAgent name: Task agent\nStarted at: {started}\nEnded at: \nLast activity at: {last_activity}\nResult: # Findings\n  Task ID: another-task\n  \n  - **Done**\tcode\\u{{1b}}[0m\\r\\u{{7}}\\u{{202e}}\n  \nFiles: {agent_files}\n",
             server.username
         )
     );
@@ -78,7 +75,7 @@ async fn task_show_prints_result_task_id_and_artifacts() {
 async fn task_close_ends_task_named_by_task_id() {
     let (server, space, agent) = task_context().await;
     for mode in ["human", "json"] {
-        let mut expected = task_with_artifacts(
+        let mut expected = task_with_agent_files(
             &server,
             &space,
             &agent,

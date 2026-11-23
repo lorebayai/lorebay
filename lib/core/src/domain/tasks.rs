@@ -10,7 +10,7 @@ use typed_builder::TypedBuilder;
 
 use crate::entity::{space, space_note as note, space_task as task};
 use crate::repository::{
-    ArtifactRepository, NoteRepository, SpaceRepository, TaskAfter, TaskListFilter, TaskRepository,
+    AgentFileRepository, NoteRepository, SpaceRepository, TaskAfter, TaskListFilter, TaskRepository,
 };
 use crate::{Caller, LibraryState, OperationHandle, Write, WriteOperation};
 
@@ -21,7 +21,7 @@ use super::space_access::{READ_ROLES, SpaceAccessError, WRITE_ROLES, check_space
 use super::task_access::{TaskAccessError, TaskAction, TaskCheck, check_task};
 use super::time::now_millis;
 use super::{
-    Artifact, CallerError, NoteContent, TaskFilterError, TaskFilters, TaskResult, TaskTitle,
+    AgentFile, CallerError, NoteContent, TaskFilterError, TaskFilters, TaskResult, TaskTitle,
 };
 
 #[derive(Debug, Error)]
@@ -107,7 +107,7 @@ pub struct TaskChanges {
 pub struct TaskRead {
     pub task: Task,
     pub scratchpad: Option<Page<Note>>,
-    pub artifacts: Vec<Artifact>,
+    pub files: Vec<AgentFile>,
 }
 
 #[derive(Debug, Error)]
@@ -377,10 +377,10 @@ pub async fn delete_task(
     )
     .await?;
     let transaction = write.transaction();
-    let locations = ArtifactRepository::builder()
+    let locations = AgentFileRepository::builder()
         .connection(transaction)
         .build()
-        .delete_task_artifacts(&task.id)
+        .delete_task_agent_files(&task.id)
         .await?;
     TaskRepository::builder()
         .connection(transaction)
@@ -587,11 +587,11 @@ async fn full_task(
     notes: Option<Page<Note>>,
 ) -> Result<TaskRead, TaskError> {
     let names = names_for(state, handle, from_ref(&task)).await?;
-    let artifacts = completed_artifacts(handle.transaction(), &task.id).await?;
+    let files = completed_agent_files(handle.transaction(), &task.id).await?;
     Ok(TaskRead {
         task: named_task(task, &names)?,
         scratchpad: notes,
-        artifacts,
+        files,
     })
 }
 
@@ -612,17 +612,17 @@ async fn task_by_key(
         .ok_or(TaskError::NotFound)
 }
 
-async fn completed_artifacts(
+async fn completed_agent_files(
     transaction: &DatabaseTransaction,
     task_id: &str,
-) -> Result<Vec<Artifact>, DbErr> {
-    ArtifactRepository::builder()
+) -> Result<Vec<AgentFile>, DbErr> {
+    AgentFileRepository::builder()
         .connection(transaction)
         .build()
         .completed(task_id)
         .await?
         .into_iter()
-        .map(Artifact::try_from)
+        .map(AgentFile::try_from)
         .collect()
 }
 

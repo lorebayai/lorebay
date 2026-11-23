@@ -11,16 +11,16 @@ use crate::tasks::helpers::{SPACE, create, participant, read, setup};
 use super::helpers::{complete, file_url, prepare, register, registration, upload_ok};
 
 #[tokio::test]
-async fn get_artifact_download_url_returns_url_that_serves_uploaded_bytes() {
+async fn get_agent_file_download_url_returns_url_that_serves_uploaded_bytes() {
     let (server, person, agent) = setup().await;
     let task = create(&server, &agent, SPACE, "Shared file").await;
-    let artifact = uploaded(&server, &agent, &task, "report.txt").await;
+    let agent_file = uploaded(&server, &agent, &task, "report.txt").await;
     let bob = login(&server, "bob").await;
     participant(&server, &person, Method::POST, "viewer").await;
     let reader = authorize_for(&server, &bob, "Reader").await;
     let before = read(&server, &person, "TK-1").await;
     for caller in [&person, &bob, &reader] {
-        let download = download_url(&server, caller, SPACE, &artifact).await;
+        let download = download_url(&server, caller, SPACE, &agent_file).await;
         let url = Url::parse(download["url"].as_str().unwrap()).unwrap();
         assert_eq!(url.origin().ascii_serialization(), server.public_url);
         let expiry = url
@@ -39,7 +39,7 @@ async fn get_artifact_download_url_returns_url_that_serves_uploaded_bytes() {
     participant(&server, &person, Method::DELETE, "").await;
     for caller in [&bob, &reader] {
         assert_problem(
-            url_request(&server, caller, SPACE, &artifact).await,
+            url_request(&server, caller, SPACE, &agent_file).await,
             StatusCode::NOT_FOUND,
             "space.not_found",
         )
@@ -58,8 +58,8 @@ async fn download_file_is_served_as_attachment_when_file_is_html_or_svg() {
         "a\"\r\nX-Injected: yes.html",
         "\u{754c}\\100%.txt",
     ] {
-        let artifact = uploaded(&server, &agent, &task, name).await;
-        let download = download_url(&server, &person, SPACE, &artifact).await;
+        let agent_file = uploaded(&server, &agent, &task, name).await;
+        let download = download_url(&server, &person, SPACE, &agent_file).await;
         let response = fetch(&server, download["url"].as_str().unwrap()).await;
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(
@@ -103,8 +103,8 @@ async fn download_file_opens_inline_when_file_is_png_or_pdf() {
         ("WEBP", "image/webp"),
     ] {
         let name = format!("file.{extension}");
-        let artifact = uploaded(&server, &agent, &task, &name).await;
-        let download = download_url(&server, &person, SPACE, &artifact).await;
+        let agent_file = uploaded(&server, &agent, &task, &name).await;
+        let download = download_url(&server, &person, SPACE, &agent_file).await;
         let response = fetch(&server, download["url"].as_str().unwrap()).await;
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(response.headers()["content-type"], content_type);
@@ -126,17 +126,17 @@ async fn download_file_opens_inline_when_file_is_png_or_pdf() {
 }
 
 #[tokio::test]
-async fn get_artifact_download_url_fails_when_artifact_is_in_another_space() {
+async fn get_agent_file_download_url_fails_when_agent_file_is_in_another_space() {
     let server = Server::start().await;
     let (person, agent, task) = prepare(&server).await;
-    let artifact = uploaded(&server, &agent, &task, "a.txt").await;
+    let agent_file = uploaded(&server, &agent, &task, "a.txt").await;
     create_space(&server, &person, "Other", "Other space").await;
     for (space, key, code) in [
-        ("SPACE-2", artifact.as_str(), "artifact.not_found"),
-        (SPACE, "AR-999", "artifact.not_found"),
-        (SPACE, "AR-01", "artifact.not_found"),
-        (SPACE, "TK-1", "artifact.not_found"),
-        ("SPACE-999", artifact.as_str(), "space.not_found"),
+        ("SPACE-2", agent_file.as_str(), "agent_file.not_found"),
+        (SPACE, "FL-999", "agent_file.not_found"),
+        (SPACE, "FL-01", "agent_file.not_found"),
+        (SPACE, "TK-1", "agent_file.not_found"),
+        ("SPACE-999", agent_file.as_str(), "space.not_found"),
     ] {
         assert_problem(
             url_request(&server, &person, space, key).await,
@@ -149,7 +149,7 @@ async fn get_artifact_download_url_fails_when_artifact_is_in_another_space() {
 }
 
 #[tokio::test]
-async fn get_artifact_download_url_fails_when_upload_is_not_complete() {
+async fn get_agent_file_download_url_fails_when_upload_is_not_complete() {
     let server = Server::start().await;
     let (person, agent, task) = prepare(&server).await;
     let registered = register(&server, &agent, &task).await;
@@ -158,17 +158,17 @@ async fn get_artifact_download_url_fails_when_upload_is_not_complete() {
             upload_ok(&server, &registered, "Uploaded bytes").await;
         }
         assert_problem(
-            url_request(&server, &person, SPACE, "AR-1").await,
+            url_request(&server, &person, SPACE, "FL-1").await,
             StatusCode::NOT_FOUND,
-            "artifact.not_found",
+            "agent_file.not_found",
         )
         .await;
     }
     assert_eq!(
-        complete(&server, &agent, &task, "AR-1").await.status(),
+        complete(&server, &agent, &task, "FL-1").await.status(),
         StatusCode::OK
     );
-    download_url(&server, &person, SPACE, "AR-1").await;
+    download_url(&server, &person, SPACE, "FL-1").await;
     server.stop().await;
 }
 
@@ -176,13 +176,13 @@ async fn get_artifact_download_url_fails_when_upload_is_not_complete() {
 async fn download_file_fails_when_url_is_expired() {
     let server = Server::start().await;
     let (person, agent, task) = prepare(&server).await;
-    let artifact = uploaded(&server, &agent, &task, "a.txt").await;
+    let agent_file = uploaded(&server, &agent, &task, "a.txt").await;
     let upload = register(&server, &agent, &task).await;
     let directory = server.stop().await;
     let server =
         Server::restart_configured(directory, |config| config.upload_url_lifetime_seconds = 1)
             .await;
-    let download = download_url(&server, &person, SPACE, &artifact).await;
+    let download = download_url(&server, &person, SPACE, &agent_file).await;
     assert_problem(
         fetch(&server, upload["upload_url"].as_str().unwrap()).await,
         StatusCode::FORBIDDEN,
@@ -210,8 +210,8 @@ async fn download_file_fails_when_url_is_expired() {
 async fn download_file_fails_when_url_was_altered() {
     let server = Server::start().await;
     let (person, agent, task) = prepare(&server).await;
-    let artifact = uploaded(&server, &agent, &task, "a.html").await;
-    let download = download_url(&server, &person, SPACE, &artifact).await;
+    let agent_file = uploaded(&server, &agent, &task, "a.html").await;
+    let download = download_url(&server, &person, SPACE, &agent_file).await;
     let url = Url::parse(download["url"].as_str().unwrap()).unwrap();
     let other = uploaded(&server, &agent, &task, "b.pdf").await;
     let other = download_url(&server, &person, SPACE, &other).await;
@@ -268,9 +268,9 @@ async fn download_file_fails_when_url_was_altered() {
 }
 
 #[tokio::test]
-async fn download_file_fails_when_artifact_was_deleted() {
+async fn download_file_fails_when_agent_file_was_deleted() {
     let (server, person, agent) = setup().await;
-    for resource in ["artifact", "task"] {
+    for resource in ["file", "task"] {
         let task = create(&server, &agent, SPACE, "Deleted download").await;
         let registered = register(&server, &agent, &task).await;
         let key = registered["key"].as_str().unwrap();
@@ -288,8 +288,8 @@ async fn download_file_fails_when_artifact_was_deleted() {
             "/api/v1/spaces/{SPACE}/tasks/{}",
             task["task_id"].as_str().unwrap()
         );
-        if resource == "artifact" {
-            path.push_str(&format!("/artifacts/{key}"));
+        if resource == "file" {
+            path.push_str(&format!("/files/{key}"));
         }
         let response = request(&server, &person, Method::DELETE, &path, Value::Null).await;
         assert_eq!(response.status(), StatusCode::OK);
@@ -303,7 +303,7 @@ async fn download_file_fails_when_artifact_was_deleted() {
         assert_problem(
             url_request(&server, &person, SPACE, key).await,
             StatusCode::NOT_FOUND,
-            "artifact.not_found",
+            "agent_file.not_found",
         )
         .await;
     }
@@ -351,7 +351,7 @@ async fn url_request(server: &Server, caller: &Value, space: &str, key: &str) ->
         server,
         caller,
         Method::GET,
-        &format!("/api/v1/spaces/{space}/artifacts/{key}/url"),
+        &format!("/api/v1/spaces/{space}/files/{key}/url"),
         Value::Null,
     )
     .await

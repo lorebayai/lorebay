@@ -1,6 +1,6 @@
-pub use artifact_cleanup::*;
-pub use artifact_input::*;
-pub use artifacts::*;
+pub use agent_file_cleanup::*;
+pub use agent_file_input::*;
+pub use agent_files::*;
 pub use knowledge::*;
 pub use knowledge_error::*;
 pub use knowledge_history::*;
@@ -40,9 +40,9 @@ impl CallerError {
     }
 }
 
-mod artifact_cleanup;
-mod artifact_input;
-mod artifacts;
+mod agent_file_cleanup;
+mod agent_file_input;
+mod agent_files;
 mod id;
 mod key;
 mod knowledge;

@@ -41,11 +41,11 @@ pub(super) enum TaskAction {
     AppendNote,
     Change,
     Close,
-    CompleteArtifact,
+    CompleteAgentFile,
     Delete,
-    DeleteArtifact,
+    DeleteAgentFile,
     DeleteNote,
-    RegisterArtifact,
+    RegisterAgentFile,
     SubmitProposal,
 }
 
@@ -99,7 +99,7 @@ pub(super) async fn check_task(
     };
     check_party(&task, caller, role, check.action)?;
     let task = match (handle, check.action) {
-        (OperationHandle::Write(_), TaskAction::DeleteArtifact | TaskAction::DeleteNote)
+        (OperationHandle::Write(_), TaskAction::DeleteAgentFile | TaskAction::DeleteNote)
         | (OperationHandle::Read(_), _) => task,
         (OperationHandle::Write(_), _) => tasks
             .lock_by_id(&task.id)
@@ -120,7 +120,7 @@ fn check_party(
         action,
         TaskAction::Close
             | TaskAction::Delete
-            | TaskAction::DeleteArtifact
+            | TaskAction::DeleteAgentFile
             | TaskAction::DeleteNote
     ) && matches!(role, SpaceRole::Owner | SpaceRole::Admin);
     if (task.person_id != caller.person_id() && !may_manage_others) || role == SpaceRole::Viewer {
@@ -132,8 +132,8 @@ fn check_party(
 fn check_task_state(task: &Model, action: TaskAction) -> Result<(), TaskAccessError> {
     match (action, task.status.as_str()) {
         (TaskAction::AppendNote, "ended") => Err(TaskAccessError::Ended("appending a note")),
-        (TaskAction::RegisterArtifact, "ended") => {
-            Err(TaskAccessError::Ended("registering an artifact"))
+        (TaskAction::RegisterAgentFile, "ended") => {
+            Err(TaskAccessError::Ended("registering a file"))
         }
         _ => Ok(()),
     }

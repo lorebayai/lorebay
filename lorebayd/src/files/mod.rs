@@ -20,7 +20,7 @@ use typed_builder::TypedBuilder;
 use crate::api::ProblemDetails;
 use crate::server::ServerState;
 use crate::storage::{FileOperation, StorageError};
-use lorebay_lib_core::{ArtifactError, check_artifact_download};
+use lorebay_lib_core::{AgentFileError, check_agent_file_download};
 
 use headers::download_headers;
 
@@ -67,7 +67,7 @@ impl IntoResponse for FileError {
         let (status, code) = match &self {
             Self::Encoding => (StatusCode::UNSUPPORTED_MEDIA_TYPE, "file.content_encoding"),
             Self::Internal(error) => {
-                tracing::error!(%error, "artifact download failed");
+                tracing::error!(%error, "file download failed");
                 (StatusCode::INTERNAL_SERVER_ERROR, "server.internal")
             }
             Self::Header => (StatusCode::FORBIDDEN, "file.headers_required"),
@@ -78,7 +78,7 @@ impl IntoResponse for FileError {
                 }
                 StorageError::Interrupted => (StatusCode::BAD_REQUEST, "file.interrupted"),
                 StorageError::Io(error) => {
-                    tracing::error!(%error, "artifact file operation failed");
+                    tracing::error!(%error, "file content operation failed");
                     (StatusCode::INTERNAL_SERVER_ERROR, "server.internal")
                 }
                 StorageError::NotFound => (StatusCode::NOT_FOUND, "file.not_found"),
@@ -115,10 +115,10 @@ impl IntoResponse for FileError {
     }
 }
 
-impl From<ArtifactError> for FileError {
-    fn from(error: ArtifactError) -> Self {
+impl From<AgentFileError> for FileError {
+    fn from(error: AgentFileError) -> Self {
         match error {
-            ArtifactError::NotFound => Self::Storage(StorageError::NotFound),
+            AgentFileError::NotFound => Self::Storage(StorageError::NotFound),
             error => Self::Internal(error.into()),
         }
     }
@@ -139,7 +139,7 @@ async fn download(
         query.expires,
         query.signature.expose(),
     )?;
-    let presentation = check_artifact_download(&state.library, &location).await?;
+    let presentation = check_agent_file_download(&state.library, &location).await?;
     let (file, size) = state.storage.open_download(&location).await?;
     let headers = download_headers(&presentation, size).map_err(anyhow::Error::from)?;
     Ok((headers, Body::from_stream(try_unfold(file, file_chunk))).into_response())

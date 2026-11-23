@@ -13,7 +13,7 @@ use crate::domain::caller::PersonSessionError;
 use crate::domain::login_session::LoginError;
 use lorebay_lib_core::ProposalError;
 use lorebay_lib_core::{
-    ArtifactError, CallerError as LibraryCallerError, SpaceAccessError, SpaceError,
+    AgentFileError, CallerError as LibraryCallerError, SpaceAccessError, SpaceError,
     SpaceInputError, TaskAccessError, TaskError,
 };
 use lorebay_lib_core::{KnowledgeError, KnowledgeInputError};
@@ -209,13 +209,13 @@ impl From<LibraryCallerError> for ApiError {
     }
 }
 
-impl From<ArtifactError> for ApiError {
-    fn from(error: ArtifactError) -> Self {
+impl From<AgentFileError> for ApiError {
+    fn from(error: AgentFileError) -> Self {
         let status = match error {
-            ArtifactError::Access(error) => return error.into(),
-            ArtifactError::Caller(error) => return error.into(),
-            ArtifactError::NotFound => StatusCode::NOT_FOUND,
-            ArtifactError::NotUploaded | ArtifactError::Refused | ArtifactError::TooLarge => {
+            AgentFileError::Access(error) => return error.into(),
+            AgentFileError::Caller(error) => return error.into(),
+            AgentFileError::NotFound => StatusCode::NOT_FOUND,
+            AgentFileError::NotUploaded | AgentFileError::Refused | AgentFileError::TooLarge => {
                 StatusCode::CONFLICT
             }
             _ => StatusCode::INTERNAL_SERVER_ERROR,

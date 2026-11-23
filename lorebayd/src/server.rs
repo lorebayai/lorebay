@@ -104,8 +104,7 @@ const API_PREFIX: &str = "/api/v1";
 const ACCEPT_RETRY_DELAY: Duration = Duration::from_millis(100);
 const DATABASE_FILE: &str = "lorebay.sqlite3";
 const EARLIER_SCHEMA_MIGRATION: &str = "m20261116_000001_create_tables";
-const ARTIFACT_TABLE: &str = "space_artifact";
-const REFUSED_ARTIFACT_COLUMN: &str = "refused_at";
+const EARLIER_FILE_TABLE: &str = "space_artifact";
 const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
 fn identity(config: Config, users: Arc<dyn UserStore>) -> Result<Identity> {
@@ -181,10 +180,12 @@ async fn reject_earlier_data_directory(
     directory: &Path,
 ) -> Result<()> {
     if has_earlier_schema_migration(transaction).await?
-        || lacks_refused_artifact_column(transaction).await?
+        || SchemaManager::new(transaction)
+            .has_table(EARLIER_FILE_TABLE)
+            .await?
     {
         anyhow::bail!(
-            "Data directory {} was created by an earlier lorebayd build and must be recreated. Move it aside and restart with an empty data directory.",
+            "Data directory {} was written by an earlier release. Delete it and restart with an empty data directory; the users file recreates the accounts.",
             directory.display()
         );
     }
@@ -200,16 +201,6 @@ async fn has_earlier_schema_migration(transaction: &DatabaseTransaction) -> Resu
             .one(transaction)
             .await?
             .is_some())
-}
-
-// Builds before v0.1.0 recorded the library's first migration over a schema without this column;
-// a migration that drops or renames it must retire this check.
-async fn lacks_refused_artifact_column(transaction: &DatabaseTransaction) -> Result<bool> {
-    let schema = SchemaManager::new(transaction);
-    Ok(schema.has_table(ARTIFACT_TABLE).await?
-        && !schema
-            .has_column(ARTIFACT_TABLE, REFUSED_ARTIFACT_COLUMN)
-            .await?)
 }
 
 async fn serve_until_shutdown(
@@ -264,8 +255,8 @@ fn start_workers(state: &ServerState, stopped: watch::Receiver<bool>) -> JoinSet
         Duration::from_secs(config.unused_client_lifetime_seconds),
         stopped.clone(),
     ));
-    let interval = Duration::from_secs(config.artifact_cleanup_interval_seconds);
-    workers.spawn(worker::remove_abandoned_artifacts(
+    let interval = Duration::from_secs(config.file_cleanup_interval_seconds);
+    workers.spawn(worker::remove_abandoned_agent_files(
         state.library.clone(),
         interval,
         stopped.clone(),

@@ -11,13 +11,13 @@ use futures_util::stream::{self, BoxStream};
 use futures_util::{FutureExt, StreamExt};
 use http::HeaderMap;
 use lorebay_lib_core::{
-    ArtifactCleanupError, ArtifactCompleted, ArtifactError, ArtifactRegistered, Caller,
+    AgentFileCleanupError, AgentFileCompleted, AgentFileError, AgentFileRegistered, Caller,
     CallerResolver, CreatedTask, DatabaseTransactions, DownloadRequest, DownloadSpec, FileStorage,
-    LibraryInterfaces, LibrarySettings, LibraryState, Membership, MembershipPage, NewArtifact,
+    LibraryInterfaces, LibrarySettings, LibraryState, Membership, MembershipPage, NewAgentFile,
     NewSpace, NoteAdded, OperationHandle, PageOptions, PersonNames, SpaceRole, SpaceRoles,
     StoredFile, TaskFilters, TaskTarget, UploadRequest, UploadSpec, WriteOperation, WriteRecord,
-    add_note, complete_artifact, create_space, create_task, delete_artifact,
-    prepare_artifact_completion, register_artifact, remove_abandoned_artifacts,
+    add_note, complete_agent_file, create_space, create_task, delete_agent_file,
+    prepare_agent_file_completion, register_agent_file, remove_abandoned_agent_files,
 };
 use lorebay_lib_migration::Migrator;
 use lorebay_lib_types::Secret;
@@ -233,7 +233,7 @@ impl Files {
         self.deletes.load(Ordering::Relaxed)
     }
 
-    pub fn upload(&self, registration: &ArtifactRegistered, bytes: &[u8]) -> String {
+    pub fn upload(&self, registration: &AgentFileRegistered, bytes: &[u8]) -> String {
         let location = registration.upload.url.expose().clone();
         let old = self
             .files
@@ -454,14 +454,14 @@ pub async fn register(
     state: &LibraryState,
     caller: &Caller,
     task: &CreatedTask,
-) -> ArtifactRegistered {
+) -> AgentFileRegistered {
     state
         .run_write(async |write| {
-            register_artifact(
+            register_agent_file(
                 write,
                 caller,
                 target(task),
-                NewArtifact {
+                NewAgentFile {
                     file_name: "report.txt".to_owned().try_into().unwrap(),
                     summary: "Result".to_owned().try_into().unwrap(),
                 },
@@ -480,10 +480,10 @@ pub async fn complete(
     caller: &Caller,
     target: TaskTarget<'_>,
     key: &str,
-) -> Result<ArtifactCompleted, ArtifactError> {
-    let prepared = prepare_artifact_completion(state, caller, target, key).await?;
+) -> Result<AgentFileCompleted, AgentFileError> {
+    let prepared = prepare_agent_file_completion(state, caller, target, key).await?;
     state
-        .run_write(async |write| complete_artifact(write, caller, target, prepared).await)
+        .run_write(async |write| complete_agent_file(write, caller, target, prepared).await)
         .await?
         .into_result()
 }
@@ -493,15 +493,15 @@ pub fn spawn_completion(
     caller: &Caller,
     task: &CreatedTask,
     key: &str,
-) -> JoinHandle<Result<ArtifactCompleted, ArtifactError>> {
+) -> JoinHandle<Result<AgentFileCompleted, AgentFileError>> {
     let caller = caller.clone();
     let task = task.clone();
     let key = key.to_owned();
     tokio::spawn(async move { complete(&state, &caller, target(&task), &key).await })
 }
 
-pub fn artifact_input() -> NewArtifact {
-    NewArtifact {
+pub fn agent_file_input() -> NewAgentFile {
+    NewAgentFile {
         file_name: "report.txt".to_owned().try_into().unwrap(),
         summary: "Result".to_owned().try_into().unwrap(),
     }
@@ -512,15 +512,15 @@ pub async fn delete(
     caller: &Caller,
     target: TaskTarget<'_>,
     key: &str,
-) -> Result<(), ArtifactError> {
+) -> Result<(), AgentFileError> {
     state
-        .run_write(async |write| delete_artifact(write, caller, target, key).await)
+        .run_write(async |write| delete_agent_file(write, caller, target, key).await)
         .await
 }
 
-pub async fn cleanup(state: &LibraryState) -> Result<u64, ArtifactCleanupError> {
+pub async fn cleanup(state: &LibraryState) -> Result<u64, AgentFileCleanupError> {
     state
-        .run_write(async |write| remove_abandoned_artifacts(write).await)
+        .run_write(async |write| remove_abandoned_agent_files(write).await)
         .await
 }
 
@@ -658,7 +658,7 @@ fn state(
             .upload_url_lifetime(lifetime)
             .download_url_lifetime(lifetime)
             .inline_content_types(Vec::new())
-            .abandoned_artifact_lifetime(lifetime * 2)
+            .abandoned_agent_file_lifetime(lifetime * 2)
             .orphaned_file_lifetime(lifetime * 2)
             .build(),
         LibraryInterfaces::builder()

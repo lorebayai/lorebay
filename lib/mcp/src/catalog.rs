@@ -4,7 +4,7 @@ use rmcp::model::{JsonObject, Tool, ToolAnnotations};
 use serde_json::{Value, json};
 
 use lorebay_lib_core::{
-    ARTIFACT_FILE_NAME_MAX_BYTES, ARTIFACT_SUMMARY_MAX_CHARACTERS, KEYWORD_MAX_CHARACTERS,
+    AGENT_FILE_NAME_MAX_BYTES, AGENT_FILE_SUMMARY_MAX_CHARACTERS, KEYWORD_MAX_CHARACTERS,
     NOTE_MAX_CHARACTERS, RESULT_MAX_CHARACTERS, TITLE_MAX_CHARACTERS, TaskStatus,
 };
 use lorebay_lib_core::{DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};
@@ -14,11 +14,11 @@ mod knowledge;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ToolName {
     AddNote,
-    CompleteArtifact,
-    CreateArtifact,
+    CompleteAgentFile,
+    CreateAgentFile,
     CreateProposal,
     CreateTask,
-    GetArtifactUrl,
+    GetAgentFileUrl,
     GetProposal,
     GetTask,
     ListKnowledge,
@@ -33,11 +33,11 @@ impl ToolName {
     fn as_str(self) -> &'static str {
         match self {
             Self::AddNote => "add_note",
-            Self::CompleteArtifact => "complete_artifact",
-            Self::CreateArtifact => "create_artifact",
+            Self::CompleteAgentFile => "complete_file",
+            Self::CreateAgentFile => "create_file",
             Self::CreateProposal => "create_proposal",
             Self::CreateTask => "create_task",
-            Self::GetArtifactUrl => "get_artifact_url",
+            Self::GetAgentFileUrl => "get_file_url",
             Self::GetProposal => "get_proposal",
             Self::GetTask => "get_task",
             Self::ListKnowledge => "list_knowledge",
@@ -93,7 +93,7 @@ fn build_catalog() -> Vec<(ToolName, Tool)> {
         ),
         tool(
             ToolName::GetTask,
-            "Read a task by space and key such as TK-1, including its result and artifacts. Set include_scratchpad to true to read notes; page_size and cursor then page the Scratchpad.",
+            "Read a task by space and key such as TK-1, including its result and files. Set include_scratchpad to true to read notes; page_size and cursor then page the Scratchpad.",
             paged(
                 json!({"space":space(), "key":{"type":"string"}, "include_scratchpad":{"type":"boolean", "default":false}}),
             ),
@@ -107,9 +107,9 @@ fn build_catalog() -> Vec<(ToolName, Tool)> {
             &["task_id", "content"],
             false,
         ),
-        create_artifact(),
-        complete_artifact(),
-        get_artifact_url(),
+        create_agent_file(),
+        complete_agent_file(),
+        get_agent_file_url(),
         knowledge::list_knowledge(),
         knowledge::read_knowledge(),
         knowledge::create_proposal(),
@@ -163,34 +163,34 @@ fn task_list_properties() -> Value {
     }))
 }
 
-fn create_artifact() -> (ToolName, Tool) {
+fn create_agent_file() -> (ToolName, Tool) {
     tool(
-        ToolName::CreateArtifact,
-        "Register an artifact using task_id, a file name and a summary. Returns its key, upload_url, method, headers and task title. Upload the file bytes with an HTTP PUT to upload_url carrying every returned header; files never pass through MCP. HTTP 412 means the file is already in storage: call complete_artifact with the returned key. Ended tasks must be reopened before registration.",
+        ToolName::CreateAgentFile,
+        "Register a file using task_id, a file name and a summary. Returns its key, upload_url, method, headers and task title. Upload the file's content with an HTTP PUT to upload_url carrying every returned header; file content never passes through MCP. HTTP 412 means the file is already in storage: call complete_file with the returned key. Ended tasks must be reopened before registration.",
         json!({
             "task_id":{"type":"string"},
-            "file_name":{"type":"string", "minLength":1, "maxLength":ARTIFACT_FILE_NAME_MAX_BYTES, "description":"Nonempty file name, at most 255 UTF-8 bytes."},
-            "summary":{"type":"string", "minLength":1, "maxLength":ARTIFACT_SUMMARY_MAX_CHARACTERS}
+            "file_name":{"type":"string", "minLength":1, "maxLength":AGENT_FILE_NAME_MAX_BYTES, "description":"Nonempty file name, at most 255 UTF-8 bytes."},
+            "summary":{"type":"string", "minLength":1, "maxLength":AGENT_FILE_SUMMARY_MAX_CHARACTERS}
         }),
         &["task_id", "file_name", "summary"],
         false,
     )
 }
 
-fn complete_artifact() -> (ToolName, Tool) {
+fn complete_agent_file() -> (ToolName, Tool) {
     tool(
-        ToolName::CompleteArtifact,
-        "Report an artifact upload complete using task_id and its artifact key, such as AR-1. Call after a successful upload or HTTP 412. Checks that the file is in storage and returns the artifact with its size and the current task title. Repeating completion succeeds without changing it; a registered upload may be completed after the task ends.",
+        ToolName::CompleteAgentFile,
+        "Report a file upload complete using task_id and its file key, such as FL-1. Call after a successful upload or HTTP 412. Checks that the file content is in storage and returns the file with its size and the current task title. Repeating completion succeeds without changing it; a registered upload may be completed after the task ends.",
         json!({"task_id":{"type":"string"}, "key":{"type":"string"}}),
         &["task_id", "key"],
         false,
     )
 }
 
-fn get_artifact_url() -> (ToolName, Tool) {
+fn get_agent_file_url() -> (ToolName, Tool) {
     tool(
-        ToolName::GetArtifactUrl,
-        "Get a short-lived download URL and its expiry for a completed artifact in a space, using its key such as AR-1. Everyone in the space can read its artifacts. Download the file over HTTP GET using the returned url; files never pass through MCP.",
+        ToolName::GetAgentFileUrl,
+        "Get a short-lived download URL and its expiry for a completed file in a space, using its key such as FL-1. Everyone in the space can read its files. Download the file's content over HTTP GET using the returned url; file content never passes through MCP.",
         json!({"space":space(), "key":{"type":"string"}}),
         &["space", "key"],
         true,

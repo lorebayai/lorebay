@@ -38,7 +38,7 @@ async fn create_task_returns_task_id_and_key() {
     assert!(task["started_at"].as_i64().unwrap() > 0);
     assert!(task["ended_at"].is_null());
     assert_eq!(task["result"], "");
-    assert_eq!(task["artifacts"], json!([]));
+    assert_eq!(task["files"], json!([]));
     assert!(task.get("scratchpad").is_none());
     assert_eq!(read(&server, &agent, "TK-1").await, task);
     assert_eq!(scratchpad(&server, &person, "TK-1").await, json!([]));

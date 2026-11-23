@@ -8,7 +8,7 @@ use super::{
     ACCEPT_TYPES, NEWEST_VERSION, SESSION_HEADER, VERSION_HEADER, notify_initialized, request_body,
 };
 
-mod artifacts;
+mod agent_files;
 mod filters;
 mod knowledge;
 mod proposals;

@@ -8,7 +8,7 @@ use super::{
     Server, assert_cancelled, assert_success, assert_task_error, body, piped_yes, read_task,
 };
 
-pub fn printed_artifact_url(output: &Output, mode: &str) -> Url {
+pub fn printed_agent_file_url(output: &Output, mode: &str) -> Url {
     let text = if mode == "json" {
         let response = body(output);
         assert_eq!(response.as_object().unwrap().len(), 2);
@@ -36,47 +36,47 @@ pub fn printed_artifact_url(output: &Output, mode: &str) -> Url {
 
 pub async fn download_url(server: &Server, space: &str, key: &str, mode: &str) -> Url {
     let output = server
-        .run(&["artifact", "url", space, key, "--output", mode])
+        .run(&["file", "url", space, key, "--output", mode])
         .await;
     assert_success(&output);
     assert!(output.stderr.is_empty());
-    let url = printed_artifact_url(&output, mode);
+    let url = printed_agent_file_url(&output, mode);
     assert_eq!(url.origin().ascii_serialization(), server.url);
     url
 }
 
-pub async fn fetch_artifact(server: &Server, url: &Url) -> Response {
+pub async fn fetch_agent_file(server: &Server, url: &Url) -> Response {
     server
         .client
         .get(url.clone())
         .send()
         .await
-        .map_err(|_| "artifact download failed")
+        .map_err(|_| "file download failed")
         .unwrap()
 }
 
-pub async fn assert_artifact_delete_refusals(
+pub async fn assert_agent_file_delete_refusals(
     server: &Server,
     space: &str,
     task: &Value,
     mode: &str,
 ) {
-    let key = task["artifacts"][0]["key"].as_str().unwrap();
+    let key = task["files"][0]["key"].as_str().unwrap();
     let task_key = task["key"].as_str().unwrap();
     let id = task["task_id"].as_str().unwrap();
     let cancelled = piped_yes(
         server,
-        &["artifact", "delete", space, id, key, "--output", mode],
+        &["file", "delete", space, id, key, "--output", mode],
     )
     .await;
     assert_cancelled(
         &cancelled,
         mode,
-        &format!("artifact {key} of task {id} in {space}"),
+        &format!("file {key} of task {id} in {space}"),
     );
     let refused = server
         .run(&[
-            "artifact", "delete", space, task_key, key, "--yes", "--output", mode,
+            "file", "delete", space, task_key, key, "--yes", "--output", mode,
         ])
         .await;
     assert_task_error(&refused, mode, "task.not_found");
