@@ -1,14 +1,14 @@
 use reqwest::{Method, Response, StatusCode};
 use serde_json::{Value, json};
 
-use crate::artifacts::helpers::{complete, registration};
+use crate::agent_files::helpers::{complete, registration};
 use crate::helpers::{Server, authorize_for, create_space, list_response, login};
 use crate::tasks::helpers::{self as tasks, SPACE};
 
 use super::{NEWEST_VERSION, call, call_error, call_version, initialize};
 
 #[tokio::test]
-async fn call_create_artifact_then_upload_then_complete_lists_artifact() {
+async fn call_create_agent_file_then_upload_then_complete_lists_agent_file() {
     let (server, person, agent) = tasks::setup().await;
     let peer = authorize_for(&server, &person, "Completing agent").await;
     for version in [NEWEST_VERSION, "2025-03-26", "2025-06-18", "2025-11-25"] {
@@ -26,16 +26,16 @@ async fn call_create_artifact_then_upload_then_complete_lists_artifact() {
         let registered = call_version(
             &server,
             &agent,
-            "create_artifact",
+            "create_file",
             json!({"task_id":task["task_id"], "file_name":"report.txt", "summary":"The report"}),
             version,
         )
         .await;
         assert_eq!(registered["task_title"], version);
-        assert!(registered["key"].as_str().unwrap().starts_with("AR-"));
+        assert!(registered["key"].as_str().unwrap().starts_with("FL-"));
         assert!(registered["expires_at"].as_i64().unwrap() > 0);
         let before = read_task(&server, &agent, &task).await;
-        assert_eq!(before["artifacts"], json!([]));
+        assert_eq!(before["files"], json!([]));
         assert_eq!(
             upload(&server, &registered, "The file").await.status(),
             StatusCode::CREATED
@@ -44,7 +44,7 @@ async fn call_create_artifact_then_upload_then_complete_lists_artifact() {
         let completed = call_version(
             &server,
             &peer,
-            "complete_artifact",
+            "complete_file",
             json!({"task_id":task["task_id"], "key":registered["key"]}),
             version,
         )
@@ -64,7 +64,7 @@ async fn call_create_artifact_then_upload_then_complete_lists_artifact() {
 }
 
 #[tokio::test]
-async fn call_create_artifact_fails_with_error_result_when_file_name_is_empty() {
+async fn call_create_agent_file_fails_with_error_result_when_file_name_is_empty() {
     let (server, person, agent) = tasks::setup().await;
     let task = tasks::create(&server, &agent, SPACE, "Valid title").await;
     for body in [
@@ -84,7 +84,7 @@ async fn call_create_artifact_fails_with_error_result_when_file_name_is_empty() 
     ] {
         let mut arguments = body.clone();
         arguments["task_id"] = task["task_id"].clone();
-        let error = call_error(&server, &agent, "create_artifact", arguments).await;
+        let error = call_error(&server, &agent, "create_file", arguments).await;
         let response = registration(
             &server,
             &agent,
@@ -97,13 +97,13 @@ async fn call_create_artifact_fails_with_error_result_when_file_name_is_empty() 
         assert_problem_matches(error, response).await;
     }
     assert_eq!(
-        tasks::read(&server, &person, "TK-1").await["artifacts"],
+        tasks::read(&server, &person, "TK-1").await["files"],
         json!([])
     );
-    let registered = call(&server, &agent, "create_artifact", json!({
+    let registered = call(&server, &agent, "create_file", json!({
         "task_id":task["task_id"], "file_name":"\u{754c}".repeat(85), "summary":"\u{754c}".repeat(500)
     })).await;
-    assert_eq!(registered["key"], "AR-1");
+    assert_eq!(registered["key"], "FL-1");
     assert_eq!(
         upload(&server, &registered, "").await.status(),
         StatusCode::CREATED
@@ -111,7 +111,7 @@ async fn call_create_artifact_fails_with_error_result_when_file_name_is_empty() 
     let completed = call(
         &server,
         &agent,
-        "complete_artifact",
+        "complete_file",
         json!({
             "task_id":task["task_id"], "key":registered["key"]
         }),
@@ -125,7 +125,7 @@ async fn call_create_artifact_fails_with_error_result_when_file_name_is_empty() 
 }
 
 #[tokio::test]
-async fn call_complete_artifact_succeeds_when_upload_returned_precondition_failed() {
+async fn call_complete_agent_file_succeeds_when_upload_returned_precondition_failed() {
     let (server, person, agent) = tasks::setup().await;
     let task = tasks::create(&server, &agent, SPACE, "Retry upload").await;
     let registered = register(&server, &agent, &task).await;
@@ -140,18 +140,18 @@ async fn call_complete_artifact_succeeds_when_upload_returned_precondition_faile
         "file.already_exists"
     );
     let arguments = json!({"task_id":task["task_id"], "key":registered["key"]});
-    let completed = call(&server, &agent, "complete_artifact", arguments.clone()).await;
+    let completed = call(&server, &agent, "complete_file", arguments.clone()).await;
     assert_eq!(completed["task_title"], "Retry upload");
     assert_eq!(completed["size"], 8);
     assert_completed(&server, &person, &agent, &task, &completed).await;
     let before = read_task(&server, &agent, &task).await;
     assert_eq!(
-        call(&server, &agent, "complete_artifact", arguments).await,
+        call(&server, &agent, "complete_file", arguments).await,
         completed
     );
     assert_eq!(read_task(&server, &agent, &task).await, before);
     assert_eq!(
-        complete(&server, &agent, &task, "AR-1")
+        complete(&server, &agent, &task, "FL-1")
             .await
             .json::<Value>()
             .await
@@ -162,15 +162,15 @@ async fn call_complete_artifact_succeeds_when_upload_returned_precondition_faile
 }
 
 #[tokio::test]
-async fn call_complete_artifact_fails_when_file_was_not_uploaded() {
+async fn call_complete_agent_file_fails_when_file_was_not_uploaded() {
     let (server, person, agent) = tasks::setup().await;
     let task = tasks::create(&server, &agent, SPACE, "Pending upload").await;
     let registered = register(&server, &agent, &task).await;
-    for key in ["AR-1", "AR-999", "AR-01", "TK-1"] {
+    for key in ["FL-1", "FL-999", "FL-01", "TK-1"] {
         let error = call_error(
             &server,
             &agent,
-            "complete_artifact",
+            "complete_file",
             json!({
                 "task_id":task["task_id"], "key":key
             }),
@@ -178,31 +178,31 @@ async fn call_complete_artifact_fails_when_file_was_not_uploaded() {
         .await;
         assert_eq!(
             error["code"],
-            if key == "AR-1" {
-                "artifact.not_uploaded"
+            if key == "FL-1" {
+                "agent_file.not_uploaded"
             } else {
-                "artifact.not_found"
+                "agent_file.not_found"
             }
         );
         assert_problem_matches(error, complete(&server, &agent, &task, key).await).await;
     }
     let other = tasks::create(&server, &agent, SPACE, "Other task").await;
-    let other_artifact = register(&server, &agent, &other).await;
+    let other_agent_file = register(&server, &agent, &other).await;
     assert_eq!(
         call_error(
             &server,
             &agent,
-            "complete_artifact",
+            "complete_file",
             json!({
-                "task_id":task["task_id"], "key":other_artifact["key"]
+                "task_id":task["task_id"], "key":other_agent_file["key"]
             })
         )
         .await["code"],
-        "artifact.not_found"
+        "agent_file.not_found"
     );
     assert_invalid_completion_arguments(&server, &agent, &task).await;
     assert_eq!(
-        tasks::read(&server, &person, "TK-1").await["artifacts"],
+        tasks::read(&server, &person, "TK-1").await["files"],
         json!([])
     );
     assert_eq!(
@@ -212,7 +212,7 @@ async fn call_complete_artifact_fails_when_file_was_not_uploaded() {
     let completed = call(
         &server,
         &agent,
-        "complete_artifact",
+        "complete_file",
         json!({
             "task_id":task["task_id"], "key":registered["key"]
         }),
@@ -224,7 +224,7 @@ async fn call_complete_artifact_fails_when_file_was_not_uploaded() {
 }
 
 #[tokio::test]
-async fn call_create_artifact_fails_when_task_is_outside_writable_party() {
+async fn call_create_agent_file_fails_when_task_is_outside_writable_party() {
     let (server, person, agent) = tasks::setup().await;
     let task = tasks::create(&server, &agent, SPACE, "Alice task").await;
     register(&server, &agent, &task).await;
@@ -259,19 +259,19 @@ async fn call_create_artifact_fails_when_task_is_outside_writable_party() {
     )
     .await;
     assert_eq!(
-        tasks::read(&server, &person, "TK-1").await["artifacts"],
+        tasks::read(&server, &person, "TK-1").await["files"],
         json!([])
     );
     assert_eq!(
-        tasks::read(&server, &person, "TK-2").await["artifacts"],
+        tasks::read(&server, &person, "TK-2").await["files"],
         json!([])
     );
-    assert_eq!(register(&server, &agent, &task).await["key"], "AR-2");
+    assert_eq!(register(&server, &agent, &task).await["key"], "FL-2");
     server.stop().await;
 }
 
 #[tokio::test]
-async fn call_create_artifact_fails_with_reopen_hint_when_task_is_ended() {
+async fn call_create_agent_file_fails_with_reopen_hint_when_task_is_ended() {
     let (server, person, agent) = tasks::setup().await;
     let task = tasks::create(&server, &agent, SPACE, "Before ending").await;
     let registered = register(&server, &agent, &task).await;
@@ -287,7 +287,7 @@ async fn call_create_artifact_fails_with_reopen_hint_when_task_is_ended() {
     let error = call_error(
         &server,
         &agent,
-        "create_artifact",
+        "create_file",
         json!({
             "task_id":task["task_id"], "file_name":"rejected.txt", "summary":"Rejected"
         }),
@@ -296,7 +296,7 @@ async fn call_create_artifact_fails_with_reopen_hint_when_task_is_ended() {
     assert_eq!(error["code"], "task.ended");
     assert_eq!(
         error["message"],
-        "Set the task back to in progress before registering an artifact"
+        "Set the task back to in progress before registering a file"
     );
     assert_eq!(
         upload(&server, &registered, "Pending").await.status(),
@@ -305,7 +305,7 @@ async fn call_create_artifact_fails_with_reopen_hint_when_task_is_ended() {
     let completed = call(
         &server,
         &agent,
-        "complete_artifact",
+        "complete_file",
         json!({
             "task_id":task["task_id"], "key":registered["key"]
         }),
@@ -325,14 +325,14 @@ async fn call_create_artifact_fails_with_reopen_hint_when_task_is_ended() {
         }),
     )
     .await;
-    assert_eq!(register(&server, &agent, &task).await["key"], "AR-2");
+    assert_eq!(register(&server, &agent, &task).await["key"], "FL-2");
     server.stop().await;
 }
 
 #[tokio::test]
-async fn call_get_artifact_url_returns_url_that_serves_file() {
+async fn call_get_agent_file_url_returns_url_that_serves_file() {
     let (server, person, agent) = tasks::setup().await;
-    let task = tasks::create(&server, &agent, SPACE, "Shared artifact").await;
+    let task = tasks::create(&server, &agent, SPACE, "Shared file").await;
     let registered = register(&server, &agent, &task).await;
     assert_eq!(
         upload(&server, &registered, "Download bytes\0")
@@ -343,7 +343,7 @@ async fn call_get_artifact_url_returns_url_that_serves_file() {
     call(
         &server,
         &agent,
-        "complete_artifact",
+        "complete_file",
         json!({
             "task_id":task["task_id"], "key":registered["key"]
         }),
@@ -351,7 +351,7 @@ async fn call_get_artifact_url_returns_url_that_serves_file() {
     .await;
     let bob = login(&server, "bob").await;
     tasks::participant(&server, &person, Method::POST, "viewer").await;
-    let reader = authorize_for(&server, &bob, "Artifact reader").await;
+    let reader = authorize_for(&server, &bob, "File reader").await;
     let before = tasks::read(&server, &person, "TK-1").await;
     for version in [NEWEST_VERSION, "2025-03-26", "2025-06-18", "2025-11-25"] {
         if version != NEWEST_VERSION {
@@ -360,7 +360,7 @@ async fn call_get_artifact_url_returns_url_that_serves_file() {
         let download = call_version(
             &server,
             &reader,
-            "get_artifact_url",
+            "get_file_url",
             json!({
                 "space":SPACE, "key":registered["key"]
             }),
@@ -390,27 +390,27 @@ async fn call_get_artifact_url_returns_url_that_serves_file() {
 }
 
 #[tokio::test]
-async fn call_get_artifact_url_fails_when_artifact_is_not_readable() {
+async fn call_get_agent_file_url_fails_when_agent_file_is_not_readable() {
     let (server, person, agent) = tasks::setup().await;
-    let task = tasks::create(&server, &agent, SPACE, "Pending artifact").await;
+    let task = tasks::create(&server, &agent, SPACE, "Pending file").await;
     let registered = register(&server, &agent, &task).await;
     create_space(&server, &person, "Other", "Other space").await;
     for (space, key) in [
-        (SPACE, "AR-1"),
-        (SPACE, "AR-999"),
+        (SPACE, "FL-1"),
+        (SPACE, "FL-999"),
         (SPACE, "TK-1"),
-        ("SPACE-2", "AR-1"),
+        ("SPACE-2", "FL-1"),
     ] {
         let error = call_error(
             &server,
             &agent,
-            "get_artifact_url",
+            "get_file_url",
             json!({"space":space, "key":key}),
         )
         .await;
-        assert_eq!(error["code"], "artifact.not_found");
+        assert_eq!(error["code"], "agent_file.not_found");
         let response = list_response(
-            &format!("/api/v1/spaces/{space}/artifacts/{key}/url"),
+            &format!("/api/v1/spaces/{space}/files/{key}/url"),
             &server,
             &agent,
             &[],
@@ -424,7 +424,7 @@ async fn call_get_artifact_url_fails_when_artifact_is_not_readable() {
         call_error(
             &server,
             &outsider,
-            "get_artifact_url",
+            "get_file_url",
             json!({
                 "space":SPACE, "key":registered["key"]
             })
@@ -433,20 +433,17 @@ async fn call_get_artifact_url_fails_when_artifact_is_not_readable() {
         "space.not_found"
     );
     for arguments in [
-        json!({"key":"AR-1"}),
+        json!({"key":"FL-1"}),
         json!({"space":SPACE}),
         json!({"space":SPACE, "key":null}),
-        json!({"space":false, "key":"AR-1"}),
-        json!({"space":SPACE, "key":"AR-1", "task_id":task["task_id"]}),
+        json!({"space":false, "key":"FL-1"}),
+        json!({"space":SPACE, "key":"FL-1", "task_id":task["task_id"]}),
     ] {
-        let error = call_error(&server, &agent, "get_artifact_url", arguments).await;
+        let error = call_error(&server, &agent, "get_file_url", arguments).await;
         assert_eq!(error["code"], "request.invalid_body");
         assert!(!error["errors"].as_array().unwrap().is_empty());
     }
-    assert_eq!(
-        read_task(&server, &agent, &task).await["artifacts"],
-        json!([])
-    );
+    assert_eq!(read_task(&server, &agent, &task).await["files"], json!([]));
     server.stop().await;
 }
 
@@ -454,7 +451,7 @@ async fn register(server: &Server, agent: &Value, task: &Value) -> Value {
     call(
         server,
         agent,
-        "create_artifact",
+        "create_file",
         json!({
             "task_id":task["task_id"], "file_name":"report.txt", "summary":"The report"
         }),
@@ -502,9 +499,9 @@ async fn assert_completed(
         read,
         tasks::read(server, person, task["key"].as_str().unwrap()).await
     );
-    let mut artifact = completed.clone();
-    artifact.as_object_mut().unwrap().remove("task_title");
-    assert_eq!(read["artifacts"], json!([artifact]));
+    let mut agent_file = completed.clone();
+    agent_file.as_object_mut().unwrap().remove("task_title");
+    assert_eq!(read["files"], json!([agent_file]));
     assert_eq!(read["last_activity_at"], completed["completed_at"]);
 }
 
@@ -522,13 +519,10 @@ async fn assert_problem_matches(error: Value, response: Response) {
 async fn assert_refusals(server: &Server, agent: &Value, task_id: &str, code: &str) {
     for (tool, arguments) in [
         (
-            "create_artifact",
+            "create_file",
             json!({"task_id":task_id, "file_name":"a", "summary":"b"}),
         ),
-        (
-            "complete_artifact",
-            json!({"task_id":task_id, "key":"AR-1"}),
-        ),
+        ("complete_file", json!({"task_id":task_id, "key":"FL-1"})),
     ] {
         assert_eq!(
             call_error(server, agent, tool, arguments).await["code"],
@@ -541,9 +535,9 @@ async fn assert_invalid_completion_arguments(server: &Server, agent: &Value, tas
     for arguments in [
         json!({"task_id":task["task_id"]}),
         json!({"task_id":task["task_id"], "key":false}),
-        json!({"task_id":task["task_id"], "key":"AR-1", "unknown":"private-sentinel"}),
+        json!({"task_id":task["task_id"], "key":"FL-1", "unknown":"private-sentinel"}),
     ] {
-        let error = call_error(server, agent, "complete_artifact", arguments).await;
+        let error = call_error(server, agent, "complete_file", arguments).await;
         assert_eq!(error["code"], "request.invalid_body");
         assert!(!error.to_string().contains("private-sentinel"));
     }

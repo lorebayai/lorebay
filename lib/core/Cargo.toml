@@ -1,6 +1,6 @@
 [package]
 name = "lorebay-lib-core"
-description = "Spaces, tasks, and artifact operations for a product."
+description = "Spaces, tasks, and file operations for a product."
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true

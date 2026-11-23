@@ -65,7 +65,7 @@ reach one outcome the contract promises.
   may write to the database directly only for state the API cannot create,
   such as an expired authorization code.
 - Each test gets its own data directory in a temporary folder, holding a
-  fresh SQLite file and the artifact files, and its own users file.
+  fresh SQLite file and the file content, and its own users file.
 - Third-party services are fakes at the network boundary: a server the test
   controls.
 - Each test stands alone: it creates its own data, never reads or changes

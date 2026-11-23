@@ -33,22 +33,22 @@ It does not cover:
 ## 3. File storage
 
 - **The interface abstracts issuing URLs, not reading and writing bytes.**
-  A backend issues short-lived URLs, and files travel between the caller and
-  the backend without passing through the library.
-- **Each artifact file is written once.** Each artifact has its own location
+  A backend issues short-lived URLs, and file content travels between the
+  caller and the backend without passing through the library.
+- **Each file's content is written once.** Each file has its own location
   in storage, which the library generates and never takes from the file
   name. Every backend answers 403 to an upload that lacks the headers its
   upload URL came with, and 412 to a second upload to a location, so a
-  client that gets 412 knows the file is already stored. What a client sees
-  is in [Tasks](../contracts/tasks.md#5-artifacts).
+  client that gets 412 knows the content is already stored. What a client
+  sees is in [Tasks](../contracts/tasks.md#5-files).
 - **The client reports a finished upload.** A backend may not see when an
-  upload finishes, so the client must call `complete_artifact` after the
+  upload finishes, so the client must call `complete_file` after the
   transfer. The library then asks storage for the file's size and records
   it.
 - **The size limit is checked after the upload**, as
   [Library architecture](library.md#9-files) states.
-- **The interface lists the stored files.** The orphaned-file round finds
-  them in that list, and the abandoned-registration round deletes the files
+- **The interface lists stored content.** The orphaned-file round finds
+  it in that list, and the abandoned-registration round deletes the content
   of the registrations it removes. A backend's own leftovers, such as
   partial uploads, are its own to remove.
 - **Only the configured types open in the browser.** The library works out
@@ -70,10 +70,10 @@ It does not cover:
   that spans several tables, such as approving a proposal, deleting a task,
   or taking the next key for a new record, writes inside it; see
   [Library architecture](library.md#7-writes-and-transactions).
-- **Task and artifact deletion remove files after commit.** A file left
+- **Task and file deletion remove content after commit.** Content left
   behind is removed by the orphaned-file round. The
-  [oversize refusal](library.md#9-files) commits before deleting the file,
-  and the round removes a refused file whose deletion failed.
+  [oversize refusal](library.md#9-files) commits before deleting the content,
+  and the round removes refused content whose deletion failed.
 - **Keyword search is substring matching.** It uses SQL `LIKE`, not
   full-text search. This is enough at team scale, and it matches Chinese
   text without splitting it into words. On both backends it treats ASCII

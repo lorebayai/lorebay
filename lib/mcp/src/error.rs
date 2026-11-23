@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use lorebay_lib_core::{
-    ArtifactError, ArtifactTextError, KnowledgeError, KnowledgeInputError, PageSizeError,
+    AgentFileError, AgentFileTextError, KnowledgeError, KnowledgeInputError, PageSizeError,
     ProposalError, SpaceError, TaskChangeError, TaskError, TaskTextError,
 };
 use rmcp::model::CallToolResult;
@@ -48,10 +48,10 @@ impl ToolError {
         )
     }
 
-    pub fn artifact_text(field: &str, error: ArtifactTextError) -> Self {
+    pub fn agent_file_text(field: &str, error: AgentFileTextError) -> Self {
         let code = match error {
-            ArtifactTextError::Empty => "required",
-            ArtifactTextError::TooManyBytes(_) | ArtifactTextError::TooManyCharacters(_) => {
+            AgentFileTextError::Empty => "required",
+            AgentFileTextError::TooManyBytes(_) | AgentFileTextError::TooManyCharacters(_) => {
                 "too_long"
             }
             _ => "invalid",
@@ -90,8 +90,8 @@ impl ToolError {
     }
 }
 
-impl From<ArtifactError> for ToolError {
-    fn from(error: ArtifactError) -> Self {
+impl From<AgentFileError> for ToolError {
+    fn from(error: AgentFileError) -> Self {
         Self::from_operation(error.code(), error)
     }
 }

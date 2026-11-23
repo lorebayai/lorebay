@@ -7,21 +7,21 @@
   [Storage](../architecture/storage.md),
   [Keys and references](keys-and-references.md)
 
-> Only agents create tasks, append notes and upload artifacts.
+> Only agents create tasks, append notes and upload files.
 >
-> An `ended` task accepts no new notes or artifact registrations until it is
+> An `ended` task accepts no new notes or file registrations until it is
 > set back to `in progress`.
 
 ## 1. Purpose
 
 A task shows a reader what one piece of agent work did; its Scratchpad shows
-how; its artifacts hold the files it produced. Together they let a person
+how; its files hold the content it produced. Together they let a person
 understand a session without reading the conversation.
 
 ## 2. Scope
 
 This doc covers what the library stores and enforces for tasks, notes and
-artifacts. When an agent creates a task, what its title and result say, and
+files. When an agent creates a task, what its title and result say, and
 when it writes notes are in [Agent rules](agent-rules.md).
 
 It does not cover:
@@ -38,7 +38,7 @@ It does not cover:
   separate sessions.
 - **Only agents create tasks.** A person who wants work done tells an agent.
 - **A deleted task is gone.** A person may delete their own task, with its
-  Scratchpad and artifacts. Later writes to it are rejected as not found.
+  Scratchpad and files. Later writes to it are rejected as not found.
 
 A task holds:
 
@@ -49,7 +49,7 @@ A task holds:
 | Status | `in progress` or `ended` |
 | Person and agent | Whose agent created it; the agent name is copied from the caller at creation |
 | Start and end times | The end time is set when the task becomes `ended`, cleared when it returns to `in progress`, and set again when it ends again |
-| Last activity time | Set by the library whenever the task receives a note, an artifact or a new result |
+| Last activity time | Set by the library whenever the task receives a note, a file or a new result |
 | Result | Markdown text, rendered as Markdown |
 
 - **`ended` means nobody is working on the task now**, not that the work is
@@ -60,13 +60,13 @@ A task holds:
   closed abruptly leaves its task `in progress`.
 - **The result is one field.** Each update replaces it whole, and only the
   latest version is kept; the Scratchpad holds the history.
-- **An `ended` task rejects notes and artifact registrations**, with a hint
+- **An `ended` task rejects notes and file registrations**, with a hint
   to set it back to `in progress` first. An upload registered before the
   task ended can still be reported complete. Its title, result and status
   can still change, and it can be set back to `in progress`.
-- **Notes and artifacts belong to the task**, not to the agent that wrote
+- **Notes and files belong to the task**, not to the agent that wrote
   them. When another agent of the same person continues a task, the task
-  still names the agent that created it, and its notes and artifacts are not
+  still names the agent that created it, and its notes and files are not
   marked with the agent that wrote them.
 - **Finding tasks.** A space's tasks can be filtered by person, agent and
   status, and searched by keyword in titles and results. An agent is matched
@@ -89,36 +89,36 @@ The Scratchpad records how the agent did the work. It holds notes only.
   notes. The tool serves every harness.
 - **Notes belong to the agent's current task.**
 
-## 5. Artifacts
+## 5. Files
 
-Artifacts are files, often large, such as reports, images, exported
-documents or data.
+Files hold immutable content, often large, such as reports, images,
+exported documents or data.
 
 - **Uploads take two steps.** The agent gets a short-lived upload URL and
   the headers to send with it, through MCP or a product's entry point, then
-  transfers the file over HTTP. Downloads work the same way.
-- **Each upload URL writes one file.** The URL can be reused until it
+  transfers the content over HTTP. Downloads work the same way.
+- **Each upload URL writes the content once.** The URL can be reused until it
   expires, but only one upload succeeds:
   - an upload without the returned headers is rejected with 403;
   - once a file is uploaded, another upload to the same URL is rejected with
-    412, so a 412 means the file is already in storage;
-  - a failed or interrupted upload leaves no file, so the client may retry
+    412, so a 412 means the content is already in storage;
+  - a failed or interrupted upload leaves no content, so the client may retry
     with the same URL.
 - **An upload is complete only when the client reports it.** Until then the
-  artifact is not listed among the task's artifacts, and no download URL is
-  issued for it. A report before any file is in storage is refused with
-  `artifact.not_uploaded`.
+  file is not listed among the task's files, and no download URL is
+  issued for it. A report before any content is in storage is refused with
+  `agent_file.not_uploaded`.
 - **An oversized file is refused when the upload is reported complete,
-  and the refusal is final.** When the file in storage is over the size
-  limit the product sets, the report is refused with `artifact.too_large`
-  and the file is deleted. The artifact is never listed, and every later
-  report of it is refused with `artifact.refused`, even after a new upload
+  and the refusal is final.** When the stored content is over the size
+  limit the product sets, the report is refused with `agent_file.too_large`
+  and the content is deleted. The file is never listed, and every later
+  report of it is refused with `agent_file.refused`, even after a new upload
   to its URL; to upload a smaller file, the client registers a new
-  artifact.
-- **Each artifact has a file name and a one-sentence summary.**
-- **Artifacts are immutable.** To update one, upload a new one.
-- **How browsers show artifacts** is in
+  file.
+- **Each file has a file name and a one-sentence summary.**
+- **Files are immutable.** To update one, upload a new one.
+- **How browsers show files** is in
   [Storage](../architecture/storage.md#3-file-storage).
-- **An artifact belongs to the agent's current task.** Opening a task shows
-  its Scratchpad and artifacts.
-- **Deleting.** A person may delete their own artifacts; agents cannot.
+- **A file belongs to the agent's current task.** Opening a task shows
+  its Scratchpad and files.
+- **Deleting.** A person may delete their own files; agents cannot.

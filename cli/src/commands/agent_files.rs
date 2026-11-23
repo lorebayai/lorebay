@@ -2,7 +2,7 @@ use lorebay_lib_types::Secret;
 use reqwest::Method;
 use typed_builder::TypedBuilder;
 
-use crate::args::ArtifactCommand;
+use crate::args::AgentFileCommand;
 use crate::constants::{CLI_CONNECTION, DATA};
 use crate::credentials::Store;
 use crate::error::{Failure, Result};
@@ -11,39 +11,36 @@ use crate::output::{self, Outcome, Render};
 
 use super::{api_path, delete};
 
-pub(super) async fn run(command: ArtifactCommand, store: &Store) -> Result<Outcome> {
+pub(super) async fn run(command: AgentFileCommand, store: &Store) -> Result<Outcome> {
     match command {
-        ArtifactCommand::Delete {
+        AgentFileCommand::Delete {
             space,
             task_id,
-            artifact,
+            file,
             yes,
         } => {
             delete(
                 store,
-                &api_path(&[SPACES, &space, TASKS, &task_id, ARTIFACTS, &artifact])?,
-                &format!("artifact {artifact} of task {task_id} in {space}"),
+                &api_path(&[SPACES, &space, TASKS, &task_id, AGENT_FILES, &file])?,
+                &format!("file {file} of task {task_id} in {space}"),
                 yes,
-                "Artifact deleted.",
+                "File deleted.",
             )
             .await
         }
-        ArtifactCommand::Url { space, artifact } => {
+        AgentFileCommand::Url { space, file } => {
             let body = Http::new()?
                 .authorized(
                     store,
                     Method::GET,
-                    &api_path(&[SPACES, &space, ARTIFACTS, &artifact, URL])?,
+                    &api_path(&[SPACES, &space, AGENT_FILES, &file, URL])?,
                     None,
                 )
                 .await?;
             let url = body[DATA][URL]
                 .as_str()
                 .ok_or_else(|| {
-                    Failure::local(
-                        CLI_CONNECTION,
-                        "The server returned an invalid artifact URL.",
-                    )
+                    Failure::local(CLI_CONNECTION, "The server returned an invalid file URL.")
                 })?
                 .to_owned();
             Ok(Outcome::new(body, DownloadUrl::builder().url(url).build()))
@@ -51,7 +48,7 @@ pub(super) async fn run(command: ArtifactCommand, store: &Store) -> Result<Outco
     }
 }
 
-const ARTIFACTS: &str = "artifacts";
+const AGENT_FILES: &str = "files";
 const SPACES: &str = "spaces";
 const TASKS: &str = "tasks";
 const URL: &str = "url";

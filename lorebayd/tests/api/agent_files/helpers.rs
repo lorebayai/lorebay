@@ -14,7 +14,7 @@ pub async fn prepare(server: &Server) -> (Value, Value, Value) {
     let person = server.tokens().await;
     create_space(server, &person, "Team", "Shared work").await;
     let agent = authorize_for(server, &person, "Upload agent").await;
-    let task = create(server, &agent, SPACE, "Artifact work").await;
+    let task = create(server, &agent, SPACE, "File work").await;
     (person, agent, task)
 }
 
@@ -58,7 +58,7 @@ pub async fn registration(
         server,
         agent,
         Method::POST,
-        &format!("/api/v1/spaces/{space}/tasks/{task}/artifacts"),
+        &format!("/api/v1/spaces/{space}/tasks/{task}/files"),
         body,
     )
     .await
@@ -79,7 +79,7 @@ pub async fn completion(
         server,
         agent,
         Method::POST,
-        &format!("/api/v1/spaces/{space}/tasks/{task}/artifacts/{key}/complete"),
+        &format!("/api/v1/spaces/{space}/tasks/{task}/files/{key}/complete"),
         Value::Null,
     )
     .await
@@ -163,9 +163,9 @@ pub async fn age_registration(server: &Server, key: &str) {
     ))
     .await
     .unwrap();
-    let number = key.strip_prefix("AR-").unwrap().parse::<i64>().unwrap();
+    let number = key.strip_prefix("FL-").unwrap().parse::<i64>().unwrap();
     let statement = Query::update()
-        .table(Alias::new("space_artifact"))
+        .table(Alias::new("space_agent_file"))
         .value(Alias::new("created_at"), Expr::value(0_i64))
         .and_where(Expr::col(Alias::new("number")).eq(number))
         .to_owned();

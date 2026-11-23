@@ -18,17 +18,17 @@ pub(crate) enum AgentCommand {
 }
 
 #[derive(Clone, Debug, Subcommand)]
-pub(crate) enum ArtifactCommand {
-    /// Delete an artifact from a task named by its task ID.
+pub(crate) enum AgentFileCommand {
+    /// Delete a file from a task named by its task ID.
     Delete {
         space: String,
         task_id: String,
-        artifact: String,
+        file: String,
         #[arg(long)]
         yes: bool,
     },
-    /// Print an artifact's short-lived download URL.
-    Url { space: String, artifact: String },
+    /// Print a file's short-lived download URL.
+    Url { space: String, file: String },
 }
 
 #[derive(Clone, Debug, Subcommand)]
@@ -38,10 +38,11 @@ pub(crate) enum Command {
         #[command(subcommand)]
         command: AgentCommand,
     },
-    /// Read and delete task artifacts.
-    Artifact {
+    /// Read and delete task files.
+    #[command(name = "file")]
+    AgentFile {
         #[command(subcommand)]
-        command: ArtifactCommand,
+        command: AgentFileCommand,
     },
     /// Read and change a space's Knowledge.
     Knowledge {
@@ -304,7 +305,7 @@ pub(crate) enum UserCommand {
 pub(crate) enum TaskCommand {
     /// End a task named by its task ID.
     Close { space: String, task_id: String },
-    /// Delete a task, its notes, artifacts and their files.
+    /// Delete a task, its notes, files and their content.
     Delete {
         space: String,
         task_id: String,

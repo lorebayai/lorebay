@@ -42,10 +42,11 @@ It does not cover:
 | File storage | Local directory | S3 |
 
 - **No external dependencies by default.** `lorebayd` starts with a data
-  directory that holds the SQLite file and the artifact files.
-- **A data directory made by `v0.1.0` or a later release is upgraded in
-  place at startup**, by the migrations it lacks. One made by a build before
-  `v0.1.0` is refused.
+  directory that holds the SQLite file and the file content.
+- **A data directory from `v0.1.1` or later is upgraded in place at
+  startup**, by the migrations it lacks. One from before `v0.1.1` is
+  refused: delete it and start with an empty one; the users file recreates
+  the accounts.
 - **One database holds the library's tables and Lorebay's.** On SQLite,
   `lorebayd` holds one connection to it. It turns on the library's backend
   that matches its database, and hands the library the transactions it
@@ -65,17 +66,17 @@ It does not cover:
   rejects an upload without the header the upload URL came with, and an
   upload over the size limit. An interrupted upload leaves only the
   temporary file. A background job removes old temporary uploads and old
-  regular artifact files with names outside the library's location format.
+  stored content in regular files with names outside the library's location format.
   It rechecks file type and modification time before deleting. See
   [System architecture](system.md#6-background-jobs).
 - **Every download is checked against its record.** The file URLs
-  `lorebayd` serves ask the library whether the artifact is still recorded,
-  so a URL stops working once its artifact is deleted.
-- **With S3**, `lorebayd` issues presigned URLs, and files never pass
+  `lorebayd` serves ask the library whether the file is still recorded,
+  so a URL stops working once its file is deleted.
+- **With S3**, `lorebayd` issues presigned URLs, and file content never passes
   through `lorebayd`. It signs `If-None-Match: *` into each upload URL. S3
   rejects an upload that leaves the header out, and refuses to write over an
   existing object.
-- **An artifact must not exceed 5 GB**, the limit of a single S3 upload, and
+- **A file must not exceed 5 GB**, the limit of a single S3 upload, and
   the most the size limit can be set to.
 - **PNG, JPEG, GIF and WebP images and PDFs open in the browser.** Lorebay
   gives the library this fixed list, under the library's

@@ -17,7 +17,7 @@ use lorebay_lib_core::{
 use lorebay_lib_core::{Page, PageOptions, TaskStatusError, TaskSummary, TaskTarget};
 
 use super::login_session::invalid_json;
-use lorebay_lib_core::Artifact;
+use lorebay_lib_core::AgentFile;
 
 #[derive(Clone, Debug, Deserialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
@@ -84,7 +84,7 @@ pub(crate) struct TaskResponse {
     result: String,
     started_at: i64,
     ended_at: Option<i64>,
-    artifacts: Vec<Artifact>,
+    files: Vec<AgentFile>,
     #[serde(skip_serializing_if = "Option::is_none")]
     scratchpad: Option<Envelope<Vec<Note>>>,
 }
@@ -205,7 +205,7 @@ impl From<TaskRead> for TaskResponse {
             .started_at(read.task.started_at)
             .ended_at(read.task.ended_at)
             .summary(TaskSummary::from(read.task))
-            .artifacts(read.artifacts)
+            .files(read.files)
             .scratchpad(read.scratchpad.map(note_page))
             .build()
     }

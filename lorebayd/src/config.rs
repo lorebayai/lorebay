@@ -63,11 +63,11 @@ pub struct Config {
     pub upload_concurrency_limit: u32,
     #[builder(default = DEFAULT_UPLOAD_IDLE_TIMEOUT_SECONDS)]
     pub upload_idle_timeout_seconds: u64,
-    #[builder(default = DEFAULT_ARTIFACT_CLEANUP_INTERVAL_SECONDS)]
-    pub artifact_cleanup_interval_seconds: u64,
-    #[builder(default = DEFAULT_ARTIFACT_LIFETIME_SECONDS)]
-    pub abandoned_artifact_lifetime_seconds: u64,
-    #[builder(default = DEFAULT_ARTIFACT_LIFETIME_SECONDS)]
+    #[builder(default = DEFAULT_AGENT_FILE_CLEANUP_INTERVAL_SECONDS)]
+    pub file_cleanup_interval_seconds: u64,
+    #[builder(default = DEFAULT_AGENT_FILE_LIFETIME_SECONDS)]
+    pub abandoned_file_lifetime_seconds: u64,
+    #[builder(default = DEFAULT_AGENT_FILE_LIFETIME_SECONDS)]
     pub orphaned_file_lifetime_seconds: u64,
     #[builder(default = LoggingConfig::default())]
     pub logging: LoggingConfig,
@@ -145,25 +145,25 @@ impl Config {
             ));
         }
         self.validate_upload()?;
-        self.validate_artifact_cleanup()?;
+        self.validate_agent_file_cleanup()?;
         self.validate_device()?;
         self.validate_registration()?;
         self.logging.validate()
     }
 
-    fn validate_artifact_cleanup(&self) -> Result<(), ConfigError> {
+    fn validate_agent_file_cleanup(&self) -> Result<(), ConfigError> {
         for (key, value) in [
             (
-                "artifact_cleanup_interval_seconds",
-                self.artifact_cleanup_interval_seconds,
+                "file_cleanup_interval_seconds",
+                self.file_cleanup_interval_seconds,
             ),
             (
                 "upload_idle_timeout_seconds",
                 self.upload_idle_timeout_seconds,
             ),
             (
-                "abandoned_artifact_lifetime_seconds",
-                self.abandoned_artifact_lifetime_seconds,
+                "abandoned_file_lifetime_seconds",
+                self.abandoned_file_lifetime_seconds,
             ),
             (
                 "orphaned_file_lifetime_seconds",
@@ -179,8 +179,8 @@ impl Config {
         }
         for (key, value) in [
             (
-                "abandoned_artifact_lifetime_seconds",
-                self.abandoned_artifact_lifetime_seconds,
+                "abandoned_file_lifetime_seconds",
+                self.abandoned_file_lifetime_seconds,
             ),
             (
                 "orphaned_file_lifetime_seconds",
@@ -368,5 +368,5 @@ const MAX_UPLOAD_SIZE_BYTES: u64 = 5_000_000_000;
 const DEFAULT_UPLOAD_CONCURRENCY_LIMIT: u32 = 4;
 
 const DEFAULT_UPLOAD_IDLE_TIMEOUT_SECONDS: u64 = 30;
-const DEFAULT_ARTIFACT_CLEANUP_INTERVAL_SECONDS: u64 = 3600;
-const DEFAULT_ARTIFACT_LIFETIME_SECONDS: u64 = 86_400;
+const DEFAULT_AGENT_FILE_CLEANUP_INTERVAL_SECONDS: u64 = 3600;
+const DEFAULT_AGENT_FILE_LIFETIME_SECONDS: u64 = 86_400;

@@ -63,7 +63,7 @@ pub(crate) struct LocalDirectory {
 
 impl LocalDirectory {
     pub async fn open(config: &Config, size_limit: u64) -> Result<Self> {
-        let files = config.data_directory.join("artifacts");
+        let files = config.data_directory.join("agent_files");
         let temporary = config.data_directory.join("uploads");
         fs::create_dir_all(&files).await?;
         fs::create_dir_all(&temporary).await?;
@@ -205,7 +205,7 @@ impl LocalDirectory {
 
     fn resolve(&self, location: &str) -> Result<PathBuf> {
         if !valid_location(location) {
-            bail!("invalid artifact storage location");
+            bail!("invalid file storage location");
         }
         Ok(self.files.join(location))
     }
@@ -248,7 +248,7 @@ impl FileStorage for LocalDirectory {
         Box::pin(async move {
             match fs::symlink_metadata(self.resolve(location)?).await {
                 Ok(metadata) if metadata.is_file() => Ok(Some(metadata.len())),
-                Ok(_) => bail!("artifact storage location is not a regular file"),
+                Ok(_) => bail!("file storage location is not a regular file"),
                 Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
                 Err(error) => Err(error.into()),
             }
@@ -268,7 +268,7 @@ impl FileStorage for LocalDirectory {
     }
 
     fn list(&self) -> BoxStream<'_, Result<StoredFile>> {
-        list_files(self.files.clone(), StoredFileKind::Artifact)
+        list_files(self.files.clone(), StoredFileKind::AgentFile)
             .filter_map(async |entry| match entry {
                 Ok(file) => file
                     .name
@@ -293,8 +293,8 @@ impl LocalDirectory {
             .checked_sub(lifetime)
             .context("Local file cleanup cutoff is out of range")?;
         let uploads = list_files(self.temporary.clone(), StoredFileKind::Temporary);
-        let artifacts = list_files(self.files.clone(), StoredFileKind::Artifact);
-        let mut entries = uploads.chain(artifacts).boxed();
+        let agent_files = list_files(self.files.clone(), StoredFileKind::AgentFile);
+        let mut entries = uploads.chain(agent_files).boxed();
         let mut removed = 0;
         while let Some(file) = entries.next().await {
             let file = file?;
@@ -310,7 +310,7 @@ impl LocalDirectory {
 
     async fn remove_listed(&self, file: &LocalFile) -> Result<bool> {
         let directory = match file.kind {
-            StoredFileKind::Artifact => &self.files,
+            StoredFileKind::AgentFile => &self.files,
             StoredFileKind::Temporary => &self.temporary,
         };
         storage_directory(directory).await?;

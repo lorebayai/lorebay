@@ -34,7 +34,7 @@ pub(super) fn list_files(
 
 pub(super) async fn storage_directory(path: &Path) -> Result<()> {
     if !fs::symlink_metadata(path).await?.is_dir() {
-        bail!("artifact storage directory must be a directory, not a symbolic link");
+        bail!("file storage directory must be a directory, not a symbolic link");
     }
     Ok(())
 }

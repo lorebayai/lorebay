@@ -13,7 +13,7 @@ use tokio::process::{Child, ChildStderr, Command};
 use tokio::time::{Instant, sleep, timeout};
 use url::Url;
 
-mod artifacts;
+mod agent_files;
 mod device;
 mod knowledge;
 mod knowledge_history;
@@ -22,7 +22,7 @@ mod task_deletion;
 mod task_filters;
 mod tasks;
 mod team;
-pub use artifacts::*;
+pub use agent_files::*;
 pub use device::*;
 pub use knowledge::*;
 pub use knowledge_history::*;

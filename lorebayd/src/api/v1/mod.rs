@@ -13,8 +13,8 @@ pub(crate) fn router() -> Router<ServerState> {
         .merge(knowledge_router())
         .merge(proposals_router())
         .route(
-            "/spaces/{space}/artifacts/{key}/url",
-            get(artifacts::download_url),
+            "/spaces/{space}/files/{key}/url",
+            get(agent_files::download_url),
         )
         .route(
             "/spaces/{space}/tasks",
@@ -37,16 +37,16 @@ pub(crate) fn router() -> Router<ServerState> {
             get(tasks::scratchpad),
         )
         .route(
-            "/spaces/{space}/tasks/{task}/artifacts",
-            post(artifacts::register),
+            "/spaces/{space}/tasks/{task}/files",
+            post(agent_files::register),
         )
         .route(
-            "/spaces/{space}/tasks/{task}/artifacts/{key}",
-            delete(artifacts::delete),
+            "/spaces/{space}/tasks/{task}/files/{key}",
+            delete(agent_files::delete),
         )
         .route(
-            "/spaces/{space}/tasks/{task}/artifacts/{key}/complete",
-            post(artifacts::complete),
+            "/spaces/{space}/tasks/{task}/files/{key}/complete",
+            post(agent_files::complete),
         )
         .route("/users", get(users::list))
         .route("/spaces/{space}/participants", get(participants::list))
@@ -67,8 +67,8 @@ pub(crate) fn router() -> Router<ServerState> {
         .route("/login-session/refresh", post(login_session::refresh))
 }
 
+mod agent_files;
 mod agents;
-mod artifacts;
 mod authorization;
 mod device_sign_in;
 mod knowledge;

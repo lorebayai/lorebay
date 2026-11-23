@@ -1,7 +1,7 @@
 #![cfg(test)]
 
+mod agent_files;
 mod agents;
-mod artifacts;
 mod authorization;
 mod device_sign_in;
 mod health;

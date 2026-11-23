@@ -1,4 +1,4 @@
-//! Library operations for spaces, tasks, and artifacts.
+//! Library operations for spaces, tasks, and files.
 
 pub use operation::*;
 pub use storage::*;

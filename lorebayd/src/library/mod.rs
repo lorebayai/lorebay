@@ -31,9 +31,7 @@ pub(crate) fn settings(config: &Config) -> LibrarySettings {
         .upload_url_lifetime(Duration::from_secs(config.upload_url_lifetime_seconds))
         .download_url_lifetime(Duration::from_secs(config.upload_url_lifetime_seconds))
         .inline_content_types(INLINE_CONTENT_TYPES.map(str::to_owned).to_vec())
-        .abandoned_artifact_lifetime(Duration::from_secs(
-            config.abandoned_artifact_lifetime_seconds,
-        ))
+        .abandoned_agent_file_lifetime(Duration::from_secs(config.abandoned_file_lifetime_seconds))
         .orphaned_file_lifetime(Duration::from_secs(config.orphaned_file_lifetime_seconds))
         .build()
 }

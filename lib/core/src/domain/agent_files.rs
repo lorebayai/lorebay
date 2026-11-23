@@ -3,8 +3,8 @@ use serde::Serialize;
 use thiserror::Error;
 use typed_builder::TypedBuilder;
 
-use crate::entity::{space, space_artifact as artifact, space_task as task};
-use crate::repository::{ArtifactRepository, SpaceRepository, TaskRepository};
+use crate::entity::{space, space_agent_file as agent_file, space_task as task};
+use crate::repository::{AgentFileRepository, SpaceRepository, TaskRepository};
 use crate::{
     Caller, DownloadPresentation, DownloadRequest, DownloadSpec, LibraryState, OperationHandle,
     UploadRequest, UploadSpec, Write, WriteOperation,
@@ -15,11 +15,11 @@ use super::key::{format_key, parse_key};
 use super::space_access::{READ_ROLES, SpaceAccessError, check_space};
 use super::task_access::{TaskAccessError, TaskAction, check_task};
 use super::time::now_millis;
-use super::{CallerError, NewArtifact, TaskTarget};
+use super::{CallerError, NewAgentFile, TaskTarget};
 
 #[derive(Debug, Error)]
 #[non_exhaustive]
-pub enum ArtifactError {
+pub enum AgentFileError {
     #[error(transparent)]
     Access(#[from] TaskAccessError),
     #[error(transparent)]
@@ -28,26 +28,26 @@ pub enum ArtifactError {
     Database(#[from] DbErr),
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
-    #[error("Artifact not found")]
+    #[error("File not found")]
     NotFound,
-    #[error("The artifact file has not been uploaded")]
+    #[error("The file content has not been uploaded")]
     NotUploaded,
-    #[error("The artifact registration was refused; register a new artifact")]
+    #[error("The file registration was refused; register a new file")]
     Refused,
-    #[error("The artifact file exceeds the size limit")]
+    #[error("The file content exceeds the size limit")]
     TooLarge,
 }
 
 #[derive(Clone, Debug)]
 #[non_exhaustive]
-pub enum ArtifactCompletion {
-    Completed(ArtifactCompleted),
+pub enum AgentFileCompletion {
+    Completed(AgentFileCompleted),
     Refused,
 }
 
 #[derive(Clone, Debug, Serialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
-pub struct Artifact {
+pub struct AgentFile {
     pub key: String,
     pub file_name: String,
     pub summary: String,
@@ -58,15 +58,15 @@ pub struct Artifact {
 
 #[derive(Clone, Debug, Serialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
-pub struct ArtifactCompleted {
+pub struct AgentFileCompleted {
     #[serde(flatten)]
-    pub artifact: Artifact,
+    pub agent_file: AgentFile,
     pub task_title: String,
 }
 
 #[derive(Clone, Debug, Serialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
-pub struct ArtifactRegistered {
+pub struct AgentFileRegistered {
     pub key: String,
     #[serde(flatten)]
     pub upload: UploadRequest,
@@ -75,7 +75,7 @@ pub struct ArtifactRegistered {
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(builder_method(vis = "pub(crate)"), field_defaults(setter(into)))]
-pub struct ArtifactRegistration {
+pub struct AgentFileRegistration {
     key: String,
     location: String,
     task_title: String,
@@ -83,19 +83,19 @@ pub struct ArtifactRegistration {
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(builder_method(vis = "pub(crate)"), field_defaults(setter(into)))]
-pub struct PreparedArtifactCompletion {
-    artifact_id: String,
+pub struct PreparedAgentFileCompletion {
+    agent_file_id: String,
     key: String,
     size: Option<u64>,
     time: i64,
 }
 
-impl ArtifactRegistration {
+impl AgentFileRegistration {
     /// Issues the upload URL after the registration's write has committed.
     pub async fn issue_upload(
         self,
         state: &LibraryState,
-    ) -> Result<ArtifactRegistered, ArtifactError> {
+    ) -> Result<AgentFileRegistered, AgentFileError> {
         let upload = state
             .storage
             .upload_url(UploadSpec {
@@ -103,7 +103,7 @@ impl ArtifactRegistration {
                 lifetime: state.settings().upload_url_lifetime,
             })
             .await?;
-        Ok(ArtifactRegistered {
+        Ok(AgentFileRegistered {
             key: self.key,
             upload,
             task_title: self.task_title,
@@ -111,72 +111,72 @@ impl ArtifactRegistration {
     }
 }
 
-impl ArtifactCompletion {
+impl AgentFileCompletion {
     /// Converts a committed refusal into the caller's size-limit error.
-    pub fn into_result(self) -> Result<ArtifactCompleted, ArtifactError> {
+    pub fn into_result(self) -> Result<AgentFileCompleted, AgentFileError> {
         match self {
-            Self::Completed(artifact) => Ok(artifact),
-            Self::Refused => Err(ArtifactError::TooLarge),
+            Self::Completed(agent_file) => Ok(agent_file),
+            Self::Refused => Err(AgentFileError::TooLarge),
         }
     }
 }
 
-impl TryFrom<artifact::Model> for Artifact {
+impl TryFrom<agent_file::Model> for AgentFile {
     type Error = DbErr;
 
-    fn try_from(model: artifact::Model) -> Result<Self, Self::Error> {
+    fn try_from(model: agent_file::Model) -> Result<Self, Self::Error> {
         Ok(Self::builder()
-            .key(format_key("AR", model.number))
+            .key(format_key("FL", model.number))
             .file_name(model.file_name)
             .summary(model.summary)
             .size(
                 model
                     .size
-                    .ok_or_else(|| DbErr::Type("Incomplete artifact size".into()))?,
+                    .ok_or_else(|| DbErr::Type("Incomplete file size".into()))?,
             )
             .created_at(model.created_at)
             .completed_at(
                 model
                     .completed_at
-                    .ok_or_else(|| DbErr::Type("Incomplete artifact time".into()))?,
+                    .ok_or_else(|| DbErr::Type("Incomplete file time".into()))?,
             )
             .build())
     }
 }
 
-impl From<SpaceAccessError> for ArtifactError {
+impl From<SpaceAccessError> for AgentFileError {
     fn from(error: SpaceAccessError) -> Self {
         Self::Access(error.into())
     }
 }
 
-impl ArtifactError {
+impl AgentFileError {
     pub const fn code(&self) -> &'static str {
         match self {
             Self::Access(error) => error.code(),
             Self::Caller(error) => error.code(),
             Self::Database(_) | Self::Internal(_) => "server.internal",
-            Self::NotFound => "artifact.not_found",
-            Self::NotUploaded => "artifact.not_uploaded",
-            Self::Refused => "artifact.refused",
-            Self::TooLarge => "artifact.too_large",
+            Self::NotFound => "agent_file.not_found",
+            Self::NotUploaded => "agent_file.not_uploaded",
+            Self::Refused => "agent_file.refused",
+            Self::TooLarge => "agent_file.too_large",
         }
     }
 }
 
-pub async fn check_artifact_download(
+pub async fn check_agent_file_download(
     state: &LibraryState,
     location: &str,
-) -> Result<DownloadPresentation, ArtifactError> {
+) -> Result<DownloadPresentation, AgentFileError> {
     let file_name = state
         .run_read(async |handle| {
-            Ok::<_, ArtifactError>(
-                ArtifactRepository::builder()
+            Ok::<_, AgentFileError>(
+                AgentFileRepository::builder()
                     .connection(handle.transaction())
                     .build()
                     .completed_by_storage_key(location)
                     .await?
-                    .ok_or(ArtifactError::NotFound)?
+                    .ok_or(AgentFileError::NotFound)?
                     .file_name,
             )
         })
@@ -184,112 +184,112 @@ pub async fn check_artifact_download(
     Ok(presentation(state, file_name))
 }
 
-pub async fn get_artifact_download_url(
+pub async fn get_agent_file_download_url(
     state: &LibraryState,
     caller: &Caller,
     space: &str,
     key: &str,
-) -> Result<DownloadRequest, ArtifactError> {
-    let artifact = state
+) -> Result<DownloadRequest, AgentFileError> {
+    let agent_file = state
         .run_read(async |handle| {
             let space = check_space(state, handle, caller, space, READ_ROLES).await?;
-            let number = artifact_number(key)?;
-            ArtifactRepository::builder()
+            let number = agent_file_number(key)?;
+            AgentFileRepository::builder()
                 .connection(handle.transaction())
                 .build()
                 .completed_by_space_number(&space.space.id, number)
                 .await?
-                .ok_or(ArtifactError::NotFound)
+                .ok_or(AgentFileError::NotFound)
         })
         .await?;
     Ok(state
         .storage
         .download_url(DownloadSpec {
-            location: &artifact.storage_key,
+            location: &agent_file.storage_key,
             lifetime: state.settings().download_url_lifetime,
-            presentation: presentation(state, artifact.file_name),
+            presentation: presentation(state, agent_file.file_name),
         })
         .await?)
 }
 
-pub async fn register_artifact(
+pub async fn register_agent_file(
     write: &mut Write<'_>,
     caller: &Caller,
     target: TaskTarget<'_>,
-    input: NewArtifact,
-) -> Result<ArtifactRegistration, ArtifactError> {
+    input: NewAgentFile,
+) -> Result<AgentFileRegistration, AgentFileError> {
     caller.agent()?;
     let (number, location, task_title) = insert_registration(write, caller, target, input).await?;
-    Ok(ArtifactRegistration::builder()
-        .key(format_key("AR", number))
+    Ok(AgentFileRegistration::builder()
+        .key(format_key("FL", number))
         .location(location)
         .task_title(task_title)
         .build())
 }
 
 /// Reads the file size before opening the completion's write transaction.
-pub async fn prepare_artifact_completion(
+pub async fn prepare_agent_file_completion(
     state: &LibraryState,
     caller: &Caller,
     target: TaskTarget<'_>,
     key: &str,
-) -> Result<PreparedArtifactCompletion, ArtifactError> {
+) -> Result<PreparedAgentFileCompletion, AgentFileError> {
     caller.agent()?;
-    let (_, artifact) = state
-        .run_read(async |handle| checked_artifact(state, handle, caller, target, key).await)
+    let (_, agent_file) = state
+        .run_read(async |handle| checked_agent_file(state, handle, caller, target, key).await)
         .await?;
-    if artifact.refused_at.is_some() {
-        return Err(ArtifactError::Refused);
+    if agent_file.refused_at.is_some() {
+        return Err(AgentFileError::Refused);
     }
-    let size = if artifact.completed_at.is_some() {
+    let size = if agent_file.completed_at.is_some() {
         None
     } else {
-        Some(stored_size(state, &artifact.storage_key).await?)
+        Some(stored_size(state, &agent_file.storage_key).await?)
     };
-    Ok(PreparedArtifactCompletion::builder()
-        .artifact_id(artifact.id)
+    Ok(PreparedAgentFileCompletion::builder()
+        .agent_file_id(agent_file.id)
         .key(key)
         .size(size)
         .time(now_millis()?)
         .build())
 }
 
-pub async fn delete_artifact(
+pub async fn delete_agent_file(
     write: &mut Write<'_>,
     caller: &Caller,
     target: TaskTarget<'_>,
     key: &str,
-) -> Result<(), ArtifactError> {
+) -> Result<(), AgentFileError> {
     write.begin_operation(Some(caller))?;
     caller.person()?;
     let task = check_task(
         write.state(),
         write.handle(),
         caller,
-        target.check(TaskAction::DeleteArtifact),
+        target.check(TaskAction::DeleteAgentFile),
     )
     .await?;
-    let number = artifact_number(key)?;
-    let location = ArtifactRepository::builder()
+    let number = agent_file_number(key)?;
+    let location = AgentFileRepository::builder()
         .connection(write.transaction())
         .build()
         .delete_completed(&task.id, number)
         .await?
-        .ok_or(ArtifactError::NotFound)?;
+        .ok_or(AgentFileError::NotFound)?;
     write.delete.push(location);
-    write.record(WriteOperation::DeleteArtifact, Some(task.space_id));
+    write.record(WriteOperation::DeleteAgentFile, Some(task.space_id));
     Ok(())
 }
 
-pub async fn complete_artifact(
+pub async fn complete_agent_file(
     write: &mut Write<'_>,
     caller: &Caller,
     target: TaskTarget<'_>,
-    completion: PreparedArtifactCompletion,
-) -> Result<ArtifactCompletion, ArtifactError> {
+    completion: PreparedAgentFileCompletion,
+) -> Result<AgentFileCompletion, AgentFileError> {
     write.begin_operation(Some(caller))?;
     caller.agent()?;
-    let (task, current) = checked_artifact(
+    let (task, current) = checked_agent_file(
         write.state(),
         write.handle(),
         caller,
@@ -297,19 +297,19 @@ pub async fn complete_artifact(
         &completion.key,
     )
     .await?;
-    if current.id != completion.artifact_id {
-        return Err(ArtifactError::NotFound);
+    if current.id != completion.agent_file_id {
+        return Err(AgentFileError::NotFound);
     }
     if current.refused_at.is_some() {
-        return Err(ArtifactError::Refused);
+        return Err(AgentFileError::Refused);
     }
     let space_id = task.space_id.clone();
     if current.completed_at.is_some() {
         let result = completed(current, task.title)?;
         write.finish_without_record();
-        return Ok(ArtifactCompletion::Completed(result));
+        return Ok(AgentFileCompletion::Completed(result));
     }
-    let size = completion.size.ok_or(ArtifactError::NotUploaded)?;
+    let size = completion.size.ok_or(AgentFileError::NotUploaded)?;
     if size > write.state().settings().upload_size_limit {
         return refuse_completion(write, current, space_id, completion.time).await;
     }
@@ -319,7 +319,7 @@ pub async fn complete_artifact(
     let mut current = current.into_active_model();
     current.size = Set(Some(size));
     current.completed_at = Set(Some(time));
-    let current = ArtifactRepository::builder()
+    let current = AgentFileRepository::builder()
         .connection(transaction)
         .build()
         .update(current)
@@ -333,22 +333,22 @@ pub async fn complete_artifact(
         .update(task)
         .await?;
     let result = completed(current, title)?;
-    write.record(WriteOperation::CompleteArtifact, Some(space_id));
-    Ok(ArtifactCompletion::Completed(result))
+    write.record(WriteOperation::CompleteAgentFile, Some(space_id));
+    Ok(AgentFileCompletion::Completed(result))
 }
 
 async fn insert_registration(
     write: &mut Write<'_>,
     caller: &Caller,
     target: TaskTarget<'_>,
-    input: NewArtifact,
-) -> Result<(i64, String, String), ArtifactError> {
+    input: NewAgentFile,
+) -> Result<(i64, String, String), AgentFileError> {
     write.begin_operation(Some(caller))?;
     let task = check_task(
         write.state(),
         write.handle(),
         caller,
-        target.check(TaskAction::RegisterArtifact),
+        target.check(TaskAction::RegisterAgentFile),
     )
     .await?;
     let transaction = write.transaction();
@@ -356,13 +356,13 @@ async fn insert_registration(
     let number = SpaceRepository::builder()
         .connection(transaction)
         .build()
-        .take_number(&space_id, space::Column::NextArtifactNumber)
+        .take_number(&space_id, space::Column::NextAgentFileNumber)
         .await?;
     let location = primary_key();
-    ArtifactRepository::builder()
+    AgentFileRepository::builder()
         .connection(transaction)
         .build()
-        .insert(artifact::ActiveModel {
+        .insert(agent_file::ActiveModel {
             id: Set(primary_key()),
             space_id: Set(space_id.clone()),
             task_id: Set(task.id),
@@ -376,53 +376,53 @@ async fn insert_registration(
             refused_at: Set(None),
         })
         .await?;
-    write.record(WriteOperation::RegisterArtifact, Some(space_id));
+    write.record(WriteOperation::RegisterAgentFile, Some(space_id));
     Ok((number, location, task.title))
 }
 
 async fn refuse_completion(
     write: &mut Write<'_>,
-    current: artifact::Model,
+    current: agent_file::Model,
     space_id: String,
     time: i64,
-) -> Result<ArtifactCompletion, ArtifactError> {
+) -> Result<AgentFileCompletion, AgentFileError> {
     let location = current.storage_key.clone();
     let mut current = current.into_active_model();
     current.refused_at = Set(Some(time));
-    ArtifactRepository::builder()
+    AgentFileRepository::builder()
         .connection(write.transaction())
         .build()
         .update(current)
         .await?;
     write.delete.push(location);
-    write.record(WriteOperation::RefuseArtifact, Some(space_id));
-    Ok(ArtifactCompletion::Refused)
+    write.record(WriteOperation::RefuseAgentFile, Some(space_id));
+    Ok(AgentFileCompletion::Refused)
 }
 
-async fn stored_size(state: &LibraryState, location: &str) -> Result<u64, ArtifactError> {
+async fn stored_size(state: &LibraryState, location: &str) -> Result<u64, AgentFileError> {
     state
         .storage
         .size(location)
         .await?
-        .ok_or(ArtifactError::NotUploaded)
+        .ok_or(AgentFileError::NotUploaded)
 }
 
-async fn checked_artifact(
+async fn checked_agent_file(
     state: &LibraryState,
     handle: OperationHandle<'_>,
     caller: &Caller,
     target: TaskTarget<'_>,
     key: &str,
-) -> Result<(task::Model, artifact::Model), ArtifactError> {
+) -> Result<(task::Model, agent_file::Model), AgentFileError> {
     let task = check_task(
         state,
         handle,
         caller,
-        target.check(TaskAction::CompleteArtifact),
+        target.check(TaskAction::CompleteAgentFile),
     )
     .await?;
-    let number = artifact_number(key)?;
-    let artifact = ArtifactRepository::builder()
+    let number = agent_file_number(key)?;
+    let agent_file = AgentFileRepository::builder()
         .connection(handle.transaction())
         .build()
         .by_number(
@@ -431,20 +431,20 @@ async fn checked_artifact(
             matches!(handle, OperationHandle::Write(_)),
         )
         .await?
-        .ok_or(ArtifactError::NotFound)?;
-    Ok((task, artifact))
+        .ok_or(AgentFileError::NotFound)?;
+    Ok((task, agent_file))
 }
 
-fn artifact_number(key: &str) -> Result<i64, ArtifactError> {
-    parse_key("AR", key).ok_or(ArtifactError::NotFound)
+fn agent_file_number(key: &str) -> Result<i64, AgentFileError> {
+    parse_key("FL", key).ok_or(AgentFileError::NotFound)
 }
 
 fn completed(
-    artifact: artifact::Model,
+    agent_file: agent_file::Model,
     task_title: String,
-) -> Result<ArtifactCompleted, ArtifactError> {
-    Ok(ArtifactCompleted {
-        artifact: Artifact::try_from(artifact)?,
+) -> Result<AgentFileCompleted, AgentFileError> {
+    Ok(AgentFileCompleted {
+        agent_file: AgentFile::try_from(agent_file)?,
         task_title,
     })
 }

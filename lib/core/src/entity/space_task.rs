@@ -37,8 +37,8 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     Space,
-    #[sea_orm(has_many = "super::space_artifact::Entity")]
-    SpaceArtifact,
+    #[sea_orm(has_many = "super::space_agent_file::Entity")]
+    SpaceAgentFile,
     #[sea_orm(has_many = "super::space_note::Entity")]
     SpaceNote,
     #[sea_orm(has_many = "super::space_proposal::Entity")]
@@ -51,9 +51,9 @@ impl Related<super::space::Entity> for Entity {
     }
 }
 
-impl Related<super::space_artifact::Entity> for Entity {
+impl Related<super::space_agent_file::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::SpaceArtifact.def()
+        Relation::SpaceAgentFile.def()
     }
 }
 

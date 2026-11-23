@@ -18,7 +18,7 @@
 
 ## 1. Purpose
 
-A product that wants spaces, tasks, notes, artifacts, Knowledge and the MCP
+A product that wants spaces, tasks, notes, files, Knowledge and the MCP
 tools for agents should not have to run a second server beside itself and
 repeat identity, teams and storage. The library gives it those features as
 Rust crates it builds into its own process, on its own database and file
@@ -79,14 +79,14 @@ flowchart TD
 
 ### 3.1 What the library holds
 
-- **Data:** spaces, tasks, notes, the Scratchpad, artifacts, Knowledge and
+- **Data:** spaces, tasks, notes, the Scratchpad, files, Knowledge and
   proposals, and the keys of each.
 - **Rules:** the four roles, owner, admin, contributor and viewer; what each
   may do; the agent's cap at contributor; and the space and task checks
   every operation runs.
 - **Operations:** the domain operations on that data, one per row of the
   permission matrix the library owns, and the two cleanup rounds for
-  artifact files.
+  file content.
 - **The MCP layer** and its tools, which call the operations.
 - **Agent rules:** what an agent follows so that the records it writes
   through the tools make sense, with each rule's backstop, in
@@ -218,7 +218,7 @@ Entities, repositories and the role checks stay private, so a product
 reaches data only through the operations and the reads above.
 
 - **Results are shared, not duplicated.** The operations' result types,
-  such as a task with its artifacts or one page of spaces, live in
+  such as a task with its files or one page of spaces, live in
   `lorebay-lib-core` and serialize to the field names both entry points
   return. The MCP layer serializes them into tool results; a product may
   serialize them in its own responses, as Lorebay does, or map them to its
@@ -376,7 +376,7 @@ methods:
   Postgres the default isolation suffices, because the library locks the
   rows it reads and then writes.
 - **A read sees one state.** A read of several statements, such as a task
-  with its notes and artifacts, or a role check and the content it guards,
+  with its notes and files, or a role check and the content it guards,
   runs in one read transaction, as the
   [SeaORM rules](../../../playbook/topics/seaorm.md#transactions) require.
   On SQLite it is a deferred transaction; on Postgres it is a repeatable-read
@@ -400,7 +400,7 @@ use it as a single path segment or object key.
 
 Every implementation:
 
-- accepts one upload per location and refuses a second, so an artifact is
+- accepts one upload per location and refuses a second, so a file is
   written once;
 - refuses an upload without the headers the tool descriptions promise;
 - expires its URLs;
@@ -448,7 +448,7 @@ sequenceDiagram
 - **Every write operation has one shape.** It takes the write the entry
   hands it, names its own caller and space for the record, and returns its
   result. The entry takes no caller of its own, and one write runs exactly
-  one library operation, so a product can compose any of them, artifact
+  one library operation, so a product can compose any of them, file
   registration, completion and the abandoned-registration round included,
   with its own rows.
 - **Inside, the permission check comes first.** The first statement of
@@ -465,15 +465,15 @@ sequenceDiagram
   storage gives the entry point a step before the write, a step after the
   commit, or both: registration returns a value that issues the upload URL
   once the write has committed; completion reads the size in a step before
-  the write, decides under the task and artifact locks, and resolves its
+  the write, decides under the task and file locks, and resolves its
   answer after the commit ([section 9](#9-files)).
 
   | Operation | Before | Inside | After |
   | --- | --- | --- | --- |
-  | Register an artifact | | Check the task, take the number, insert the registration | Issue the upload URL |
-  | Report an upload complete | Check the registration, answer one already refused, and read the stored size | Lock the task and artifact, recheck the registration, and record completion or the refusal of an oversized file | Delete a refused file |
+  | Register a file | | Check the task, take the number, insert the registration | Issue the upload URL |
+  | Report an upload complete | Check the registration, answer one already refused, and read the stored size | Lock the task and file, recheck the registration, and record completion or the refusal of an oversized file | Delete a refused file |
   | Issue a download URL | Check the space, read the completed record | | Issue the download URL |
-  | Delete a task or an artifact | | Check, then delete the rows | Delete the files |
+  | Delete a task or a file | | Check, then delete the rows | Delete the files |
   | Remove abandoned registrations | | Delete the rows neither completed nor refused | Delete their files |
   | Remove orphaned files | List the files, read which have records | | Delete the files without records |
 
@@ -517,10 +517,10 @@ is called outside it, never another connection:
 A write's rows and a product's rows commit together or not at all. Between
 the commit and the after-commit work:
 
-- a crash after registering an artifact leaves a registration nobody can
+- a crash after registering a file leaves a registration nobody can
   complete, which the abandoned-registration round removes;
-- a crash after deleting a task, an artifact or abandoned registrations
-  leaves their files, which the orphaned-file round removes;
+- a crash after deleting a task, a file or abandoned registrations
+  leaves their content, which the orphaned-file round removes;
 - a crash after an oversize refusal and before its deletion leaves the
   file with its refused registration, which no longer holds it; the
   orphaned-file round removes the file, and every later report answers that
@@ -555,23 +555,23 @@ Both rounds are safe to run again.
 
 - **The size limit is checked after the upload.** When an upload is
   reported complete, the library reads the file's size before the write
-  transaction. Inside the transaction it locks the task and artifact and
+  transaction. Inside the transaction it locks the task and file and
   checks that the registration is neither completed nor refused. A backend
   can also enforce the limit at upload. The completion check covers
   backends that defer it and a limit lowered after the upload.
 - **An oversize refusal is a committed write, and final.** If the observed
   size exceeds the limit, the library marks the registration refused and
-  commits, then deletes the file, and answers `artifact.too_large` whether
+  commits, then deletes the file, and answers `agent_file.too_large` whether
   or not the deletion succeeds. Every later report of that registration
-  answers `artifact.refused`, so no file at its location can ever complete,
-  and the client registers a new artifact at a new location. Rolling the
+  answers `agent_file.refused`, so no file at its location can ever complete,
+  and the client registers a new file at a new location. Rolling the
   refusal back instead would leave the registration open, and a deletion
   delayed past a new upload to the same location could remove a file a
   later report had completed.
-- **A refused registration keeps its row but not its file.** The
-  orphaned-file round treats its file as having no record, so a file whose
+- **A refused registration keeps its row but not its content.** The
+  orphaned-file round treats its content as having no record, so content whose
   deletion failed is still removed. The abandoned-registration round leaves
-  the row, so a late report keeps answering `artifact.refused`; the row
+  the row, so a late report keeps answering `agent_file.refused`; the row
   goes when its task is deleted.
 - **A download URL may outlive its content.** A URL issued before its
   content was deleted may work until it expires or the file is gone.
@@ -604,7 +604,7 @@ state:
 | The MCP entry's public address and path | Allowed origins, the challenge and the metadata |
 | The MCP server's name and version | The server information agents see |
 | Where to authorize | The authorization server the metadata names |
-| The artifact size limit | Startup policy for receiving uploads and the check at completion |
+| The file size limit | Startup policy for receiving uploads and the check at completion |
 | The upload and download URL lifetimes | The URLs storage issues |
 | The types a browser may open inline | Download URLs |
 | The age after which an incomplete registration is abandoned | The abandoned-registration round |
@@ -616,13 +616,13 @@ state:
   cleanup ages must exceed the upload URL lifetime, or a round could remove
   an upload still in flight.
 - **Fixed, not configurable:** the permission matrix, task statuses, key
-  formats, tool names and arguments, and that an artifact is written once.
+  formats, tool names and arguments, and that a file is written once.
   Page sizes and input lengths are constants, not settings.
 
 ## 12. Data
 
 The library has seven tables: `space`, `space_task`, `space_note`,
-`space_artifact`, `space_knowledge`, `space_knowledge_version` and
+`space_agent_file`, `space_knowledge`, `space_knowledge_version` and
 `space_proposal`. No library table refers to a product's table.
 
 - **People are IDs.** The library has no table of people. It stores a
@@ -660,8 +660,8 @@ each row it reads and then writes, in the read. Code that runs on both does
 both.
 
 - **Locks are taken in one order:** a product's locks, through the roles
-  interface, then a task, a proposal, a knowledge entry, a space, and an
-  artifact. No write locks an earlier kind after a later one, so two writes
+  interface, then a task, a proposal, a knowledge entry, a space, and a
+  file. No write locks an earlier kind after a later one, so two writes
   never wait on each other in a cycle.
 - **A counter is taken in one statement** that adds one to the space's
   counter and returns the value, so concurrent takers queue on the space
@@ -679,11 +679,11 @@ both.
 | Append a note | Task | The state is checked under the lock, and the note's time exceeds the task's last activity and latest note, so times within a task strictly increase |
 | Delete a note | None | It deletes by task and time; a task's person never changes, so the party check needs no lock; a deleted time stays below the task's last activity and is never given again |
 | Delete a task | Task | A registration or note waiting on the task finds it gone; the files deleted are those of the rows deleted |
-| Register an artifact | Task, then space counter | The state is checked under the lock; numbers are distinct |
-| Report an upload complete | Task, then artifact | A second report of a completed registration returns the existing result and records no change. The first report to refuse an oversized file commits the refusal; a report that read the size before then finds the refusal under the lock and answers `artifact.refused`, so one deletion is queued. The task's last activity becomes the later of its current value and the completion. |
-| Delete an artifact | None | One statement deletes the row only if complete and returns its location |
-| Remove abandoned registrations | Each deleted row | One statement deletes only rows neither completed nor refused when it deletes them and returns their locations; only those files are deleted |
-| Remove orphaned files | None | A record commits before any URL for its location exists, and locations are never reused, so a file old enough with no record never gets one; a refused registration never completes, so its file is never needed |
+| Register a file | Task, then space counter | The state is checked under the lock; numbers are distinct |
+| Report an upload complete | Task, then file | A second report of a completed registration returns the existing result and records no change. The first report to refuse an oversized file commits the refusal; a report that read the size before then finds the refusal under the lock and answers `agent_file.refused`, so one deletion is queued. The task's last activity becomes the later of its current value and the completion. |
+| Delete a file | None | One statement deletes the row only if complete and returns its location |
+| Remove abandoned registrations | Each deleted row | One statement deletes only rows neither completed nor refused when it deletes them and returns their locations; only their content is deleted |
+| Remove orphaned files | None | A record commits before any URL for its location exists, and locations are never reused, so a file old enough with no record never gets one; a refused registration never completes, so its content is never needed |
 | Change Knowledge directly | Entry, then space counter for a new entry | The next version is computed from the locked entry; the unique name refuses a second entry of one name |
 | Submit a proposal | Task, when it names one; then space counter | The task cannot be deleted before the proposal refers to it; the base version is a snapshot by design |
 | Approve or reject a proposal | Proposal, then entry, then space counter for a new entry | The status is checked under the lock, so a proposal is decided once |
@@ -692,8 +692,8 @@ The oversize refusal uses the size read before taking the locks, and is
 final once it commits. A deletion delayed after that commit can remove only
 the refused file, or a file uploaded again to the same location, which no
 report can complete. A replacement is a new registration at a new
-location, so the delayed deletion never reaches a completed artifact's
-file.
+location, so the delayed deletion never reaches a completed file's
+content.
 
 The Knowledge and proposal writes follow the same rules.
 

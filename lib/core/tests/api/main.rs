@@ -4,18 +4,19 @@ use std::sync::atomic::Ordering;
 use futures_util::future::join_all;
 use lorebay_lib_core::{
     Caller, NewSpace, NoteContent, SpaceError, SpaceInputError, SpaceRole, TaskChanges, TaskStatus,
-    WriteOperation, add_note, change_task, complete_artifact as record_completion, create_space,
-    delete_task, get_artifact_download_url, highest_space_number, list_tasks,
-    prepare_artifact_completion, read_task, register_artifact, remove_orphaned_files,
+    WriteOperation, add_note, change_task, complete_agent_file as record_completion, create_space,
+    delete_task, get_agent_file_download_url, highest_space_number, list_tasks,
+    prepare_agent_file_completion, read_task, register_agent_file, remove_orphaned_files,
     resolve_space,
 };
 use sea_orm::TransactionTrait;
 use tokio::sync::{Barrier, mpsc};
 
 use helpers::{
-    Gates, Pause, Records, SPACE, append, artifact_input, cleanup as remove_abandoned_artifacts,
-    complete as complete_artifact, delete as remove_artifact, filters, new_task, next_pid,
-    now_millis, page, register, spawn_completion, target, wait_until_after, with_postgres,
+    Gates, Pause, Records, SPACE, agent_file_input, append,
+    cleanup as remove_abandoned_agent_files, complete as complete_agent_file,
+    delete as remove_agent_file, filters, new_task, next_pid, now_millis, page, register,
+    spawn_completion, target, wait_until_after, with_postgres,
 };
 
 #[expect(
@@ -30,34 +31,34 @@ mod knowledge;
 mod proposals;
 
 #[tokio::test]
-async fn complete_artifact_refuses_registration_after_oversize_report() {
+async fn complete_agent_file_refuses_registration_after_oversize_report() {
     with_postgres(async |fixture| {
         fixture.space().await;
         let task = fixture.task("Final oversize refusal").await;
         let item = register(&fixture.state, &fixture.agent, &task).await;
         let location = fixture.storage.upload(&item, &[0; 101]);
         fixture.storage.fail_next_delete();
-        let error = complete_artifact(&fixture.state, &fixture.agent, target(&task), &item.key)
+        let error = complete_agent_file(&fixture.state, &fixture.agent, target(&task), &item.key)
             .await
             .unwrap_err();
-        assert_eq!(error.code(), "artifact.too_large");
+        assert_eq!(error.code(), "agent_file.too_large");
         assert!(fixture.storage.contains(&location, &[0; 101]));
-        let error = complete_artifact(&fixture.state, &fixture.agent, target(&task), &item.key)
+        let error = complete_agent_file(&fixture.state, &fixture.agent, target(&task), &item.key)
             .await
             .unwrap_err();
-        assert_eq!(error.code(), "artifact.refused");
-        assert!(fixture.read(&task).await.artifacts.is_empty());
+        assert_eq!(error.code(), "agent_file.refused");
+        assert!(fixture.read(&task).await.files.is_empty());
         let cleaner = fixture.state_with(Gates::default(), true);
         wait_until_after(now_millis() + 2).await;
-        assert_eq!(remove_abandoned_artifacts(&cleaner).await.unwrap(), 0);
+        assert_eq!(remove_abandoned_agent_files(&cleaner).await.unwrap(), 0);
         fixture.storage.age();
         assert_eq!(remove_orphaned_files(&fixture.state).await.unwrap(), 1);
         assert!(!fixture.storage.contains(&location, &[0; 101]));
         fixture.storage.upload(&item, b"retry");
-        let error = complete_artifact(&fixture.state, &fixture.agent, target(&task), &item.key)
+        let error = complete_agent_file(&fixture.state, &fixture.agent, target(&task), &item.key)
             .await
             .unwrap_err();
-        assert_eq!(error.code(), "artifact.refused");
+        assert_eq!(error.code(), "agent_file.refused");
         assert!(fixture.storage.contains(&location, b"retry"));
     })
     .await;
@@ -118,7 +119,7 @@ async fn create_task_assigns_distinct_keys_when_created_concurrently() {
 }
 
 #[tokio::test]
-async fn create_artifact_assigns_distinct_keys_when_registered_concurrently() {
+async fn create_agent_file_assigns_distinct_keys_when_registered_concurrently() {
     with_postgres(async |fixture| {
         fixture.space().await;
         let tasks = join_all(
@@ -135,10 +136,10 @@ async fn create_artifact_assigns_distinct_keys_when_registered_concurrently() {
             }
         }))
         .await;
-        assert_consecutive(registrations.iter().map(|(_, item)| item.key.clone()), "AR");
+        assert_consecutive(registrations.iter().map(|(_, item)| item.key.clone()), "FL");
         for (task, item) in registrations {
             fixture.storage.upload(&item, b"result");
-            complete_artifact(&fixture.state, &fixture.agent, target(task), &item.key)
+            complete_agent_file(&fixture.state, &fixture.agent, target(task), &item.key)
                 .await
                 .unwrap();
         }
@@ -147,9 +148,9 @@ async fn create_artifact_assigns_distinct_keys_when_registered_concurrently() {
             let read = read_task(&fixture.state, &fixture.person, SPACE, &task.key, None)
                 .await
                 .unwrap();
-            keys.extend(read.artifacts.into_iter().map(|artifact| artifact.key));
+            keys.extend(read.files.into_iter().map(|agent_file| agent_file.key));
         }
-        assert_consecutive(keys, "AR");
+        assert_consecutive(keys, "FL");
     })
     .await;
 }
@@ -260,12 +261,12 @@ async fn add_note_fails_when_task_ends_concurrently() {
 }
 
 #[tokio::test]
-async fn complete_artifact_keeps_last_activity_when_note_is_newer() {
+async fn complete_agent_file_keeps_last_activity_when_note_is_newer() {
     with_postgres(async |fixture| {
         fixture.space().await;
         let task = fixture.task("Completion and newer note").await;
-        let artifact = register(&fixture.state, &fixture.agent, &task).await;
-        fixture.storage.upload(&artifact, b"file");
+        let agent_file = register(&fixture.state, &fixture.agent, &task).await;
+        fixture.storage.upload(&agent_file, b"file");
         let complete_pause = Pause::default();
         let (report_pid, mut pid) = mpsc::unbounded_channel();
         let completion_state = fixture.state_with(
@@ -279,11 +280,11 @@ async fn complete_artifact_keeps_last_activity_when_note_is_newer() {
         let agent = fixture.agent.clone();
         let completing = task.clone();
         let complete = tokio::spawn(async move {
-            complete_artifact(
+            complete_agent_file(
                 &completion_state,
                 &agent,
                 target(&completing),
-                &artifact.key,
+                &agent_file.key,
             )
             .await
         });
@@ -311,16 +312,16 @@ async fn complete_artifact_keeps_last_activity_when_note_is_newer() {
         note_pause.release();
         let note = note.await.unwrap();
         assert!(note.time > older);
-        assert_eq!(complete.await.unwrap().unwrap().artifact.size, 4);
+        assert_eq!(complete.await.unwrap().unwrap().agent_file.size, 4);
         let read = fixture.read(&task).await;
         assert_eq!(read.task.last_activity_at, note.time);
-        assert_eq!(read.artifacts.len(), 1);
+        assert_eq!(read.files.len(), 1);
     })
     .await;
 }
 
 #[tokio::test]
-async fn remove_abandoned_artifacts_keeps_artifact_when_completed_concurrently() {
+async fn remove_abandoned_agent_files_keeps_agent_file_when_completed_concurrently() {
     with_postgres(async |fixture| {
         fixture.space().await;
         let task = fixture.task("Cleanup and completion").await;
@@ -337,7 +338,7 @@ async fn remove_abandoned_artifacts_keeps_artifact_when_completed_concurrently()
         let agent = fixture.agent.clone();
         let completing = task.clone();
         let complete = tokio::spawn(async move {
-            complete_artifact(&completer, &agent, target(&completing), &item.key).await
+            complete_agent_file(&completer, &agent, target(&completing), &item.key).await
         });
         complete_pause.reached().await;
         wait_until_after(now_millis() + 2).await;
@@ -349,7 +350,7 @@ async fn remove_abandoned_artifacts_keeps_artifact_when_completed_concurrently()
             },
             true,
         );
-        let cleanup = tokio::spawn(async move { remove_abandoned_artifacts(&cleaner).await });
+        let cleanup = tokio::spawn(async move { remove_abandoned_agent_files(&cleaner).await });
         fixture.wait_for_lock(next_pid(&mut pid).await).await;
         complete_pause.release();
         complete.await.unwrap().unwrap();
@@ -357,7 +358,7 @@ async fn remove_abandoned_artifacts_keeps_artifact_when_completed_concurrently()
         let read = read_task(&fixture.state, &fixture.person, SPACE, &task.key, None)
             .await
             .unwrap();
-        assert_eq!(read.artifacts[0].key, "AR-1");
+        assert_eq!(read.files[0].key, "FL-1");
         assert!(fixture.storage.contains(&location, b"kept"));
     })
     .await;
@@ -418,11 +419,16 @@ async fn delete_task_keeps_rows_and_files_when_product_rolls_back() {
         fixture.space().await;
         let task = fixture.task("Rolled back task deletion").await;
         let note = append(&fixture.state, &fixture.agent, &task, "Keep this note").await;
-        let artifact = register(&fixture.state, &fixture.agent, &task).await;
-        let location = fixture.storage.upload(&artifact, b"keep");
-        complete_artifact(&fixture.state, &fixture.agent, target(&task), &artifact.key)
-            .await
-            .unwrap();
+        let agent_file = register(&fixture.state, &fixture.agent, &task).await;
+        let location = fixture.storage.upload(&agent_file, b"keep");
+        complete_agent_file(
+            &fixture.state,
+            &fixture.agent,
+            target(&task),
+            &agent_file.key,
+        )
+        .await
+        .unwrap();
 
         let outcome: anyhow::Result<()> = fixture
             .state
@@ -450,9 +456,9 @@ async fn delete_task_keeps_rows_and_files_when_product_rolls_back() {
         let scratchpad = read.scratchpad.unwrap();
         assert_eq!(scratchpad.items[0].time, note.time);
         assert_eq!(scratchpad.items[0].content, "Keep this note");
-        assert_eq!(read.artifacts[0].key, artifact.key);
+        assert_eq!(read.files[0].key, agent_file.key);
         let download =
-            get_artifact_download_url(&fixture.state, &fixture.person, SPACE, &artifact.key)
+            get_agent_file_download_url(&fixture.state, &fixture.person, SPACE, &agent_file.key)
                 .await
                 .unwrap();
         assert_eq!(download.url.expose(), &location);
@@ -491,7 +497,7 @@ async fn get_task_fails_as_not_found_when_space_has_another_owner() {
 }
 
 #[tokio::test]
-async fn complete_artifact_refuses_second_report_when_oversize_reports_race() {
+async fn complete_agent_file_refuses_second_report_when_oversize_reports_race() {
     with_postgres(async |fixture| {
         fixture.space().await;
         let task = fixture.task("Concurrent oversize reports").await;
@@ -520,21 +526,21 @@ async fn complete_artifact_refuses_second_report_when_oversize_reports_race() {
         held.release();
         assert_eq!(
             report.await.unwrap().unwrap_err().code(),
-            "artifact.too_large"
+            "agent_file.too_large"
         );
         assert_eq!(
             duplicate.await.unwrap().unwrap_err().code(),
-            "artifact.refused"
+            "agent_file.refused"
         );
         assert_eq!(fixture.storage.deletes(), 1);
         assert!(!fixture.storage.contains(&location, &[0; 101]));
-        assert!(fixture.read(&task).await.artifacts.is_empty());
+        assert!(fixture.read(&task).await.files.is_empty());
     })
     .await;
 }
 
 #[tokio::test]
-async fn complete_artifact_preserves_replacement_when_refusal_delete_is_delayed() {
+async fn complete_agent_file_preserves_replacement_when_refusal_delete_is_delayed() {
     with_postgres(async |fixture| {
         fixture.space().await;
         let task = fixture.task("Delayed refusal deletion").await;
@@ -556,11 +562,14 @@ async fn complete_artifact_preserves_replacement_when_refusal_delete_is_delayed(
         let report = spawn_completion(first, &fixture.agent, &task, &item.key);
         deleting.reached().await;
         pending.release();
-        assert_eq!(stale.await.unwrap().unwrap_err().code(), "artifact.refused");
+        assert_eq!(
+            stale.await.unwrap().unwrap_err().code(),
+            "agent_file.refused"
+        );
         let replacement = register(&fixture.state, &fixture.agent, &task).await;
         let replacement_location = fixture.storage.upload(&replacement, b"valid");
         assert_ne!(replacement_location, location);
-        let completed = complete_artifact(
+        let completed = complete_agent_file(
             &fixture.state,
             &fixture.agent,
             target(&task),
@@ -568,18 +577,18 @@ async fn complete_artifact_preserves_replacement_when_refusal_delete_is_delayed(
         )
         .await
         .unwrap();
-        assert_eq!(completed.artifact.size, 5);
+        assert_eq!(completed.agent_file.size, 5);
         deleting.release();
         assert_eq!(
             report.await.unwrap().unwrap_err().code(),
-            "artifact.too_large"
+            "agent_file.too_large"
         );
         let read = fixture.read(&task).await;
-        assert_eq!(read.artifacts.len(), 1);
-        assert_eq!(read.artifacts[0].key, replacement.key);
-        assert_eq!(read.artifacts[0].size, 5);
+        assert_eq!(read.files.len(), 1);
+        assert_eq!(read.files[0].key, replacement.key);
+        assert_eq!(read.files[0].size, 5);
         let download =
-            get_artifact_download_url(&fixture.state, &fixture.person, SPACE, &replacement.key)
+            get_agent_file_download_url(&fixture.state, &fixture.person, SPACE, &replacement.key)
                 .await
                 .unwrap();
         assert_eq!(download.url.expose(), &replacement_location);
@@ -591,7 +600,7 @@ async fn complete_artifact_preserves_replacement_when_refusal_delete_is_delayed(
 }
 
 #[tokio::test]
-async fn register_artifact_fails_when_task_is_deleted_concurrently() {
+async fn register_agent_file_fails_when_task_is_deleted_concurrently() {
     with_postgres(async |fixture| {
         fixture.space().await;
         let task = fixture.task("Delete before registration").await;
@@ -624,7 +633,8 @@ async fn register_artifact_fails_when_task_is_deleted_concurrently() {
         let registration = tokio::spawn(async move {
             registrar
                 .run_write(async |write| {
-                    register_artifact(write, &agent, target(&registering), artifact_input()).await
+                    register_agent_file(write, &agent, target(&registering), agent_file_input())
+                        .await
                 })
                 .await
         });
@@ -648,7 +658,7 @@ async fn register_artifact_fails_when_task_is_deleted_concurrently() {
 }
 
 #[tokio::test]
-async fn complete_artifact_fails_when_artifact_is_deleted_concurrently() {
+async fn complete_agent_file_fails_when_agent_file_is_deleted_concurrently() {
     with_postgres(async |fixture| {
         fixture.space().await;
         let task = fixture.task("Delete before repeat completion").await;
@@ -664,13 +674,13 @@ async fn complete_artifact_fails_when_artifact_is_deleted_concurrently() {
         );
         let completion = spawn_completion(first, &fixture.agent, &task, &item.key);
         pending.reached().await;
-        let error = remove_artifact(&fixture.state, &fixture.person, target(&task), &item.key)
+        let error = remove_agent_file(&fixture.state, &fixture.person, target(&task), &item.key)
             .await
             .unwrap_err();
-        assert_eq!(error.code(), "artifact.not_found");
+        assert_eq!(error.code(), "agent_file.not_found");
         assert!(fixture.storage.contains(&location, b"file"));
         pending.release();
-        assert_eq!(completion.await.unwrap().unwrap().artifact.key, item.key);
+        assert_eq!(completion.await.unwrap().unwrap().agent_file.key, item.key);
         let held = Pause::default();
         let deleter = fixture.state_with(
             Gates {
@@ -683,7 +693,7 @@ async fn complete_artifact_fails_when_artifact_is_deleted_concurrently() {
         let deleting = task.clone();
         let key = item.key.clone();
         let deletion = tokio::spawn(async move {
-            remove_artifact(&deleter, &person, target(&deleting), &key).await
+            remove_agent_file(&deleter, &person, target(&deleting), &key).await
         });
         held.reached().await;
         let (report_pid, mut pid) = mpsc::unbounded_channel();
@@ -700,16 +710,16 @@ async fn complete_artifact_fails_when_artifact_is_deleted_concurrently() {
         deletion.await.unwrap().unwrap();
         assert_eq!(
             completion.await.unwrap().unwrap_err().code(),
-            "artifact.not_found"
+            "agent_file.not_found"
         );
-        assert!(fixture.read(&task).await.artifacts.is_empty());
+        assert!(fixture.read(&task).await.files.is_empty());
         assert!(!fixture.storage.contains(&location, b"file"));
     })
     .await;
 }
 
 #[tokio::test]
-async fn complete_artifact_records_caller_once_when_reports_race() {
+async fn complete_agent_file_records_caller_once_when_reports_race() {
     with_postgres(async |fixture| {
         fixture.space().await;
         let task = fixture.task("One completion record").await;
@@ -749,7 +759,7 @@ async fn complete_artifact_records_caller_once_when_reports_race() {
         assert_eq!(records.len(), 2);
         assert_eq!(records.iter().filter(|record| record.is_none()).count(), 1);
         let record = records.iter().flatten().next().unwrap();
-        assert_eq!(record.operation, WriteOperation::CompleteArtifact);
+        assert_eq!(record.operation, WriteOperation::CompleteAgentFile);
         let caller = record.caller.as_ref().unwrap();
         assert_eq!(caller.person_id, fixture.agent.person_id);
         assert_eq!(caller.agent_name, fixture.agent.agent_name);
@@ -760,7 +770,7 @@ async fn complete_artifact_records_caller_once_when_reports_race() {
             .unwrap();
         transaction.commit().await.unwrap();
         assert_eq!(record.space_id.as_deref(), Some(space.id.as_str()));
-        assert_eq!(fixture.read(&task).await.artifacts.len(), 1);
+        assert_eq!(fixture.read(&task).await.files.len(), 1);
         assert!(fixture.storage.contains(&location, b"file"));
     })
     .await;
@@ -770,7 +780,7 @@ async fn complete_artifact_records_caller_once_when_reports_race() {
 async fn run_write_preserves_registration_and_refusal_atomicity_when_product_abandons() {
     with_postgres(async |fixture| {
         fixture.space().await;
-        let task = fixture.task("Compose artifact writes").await;
+        let task = fixture.task("Compose file writes").await;
         let records = Records::default();
         let state = fixture.state_with(
             Gates {
@@ -781,7 +791,8 @@ async fn run_write_preserves_registration_and_refusal_atomicity_when_product_aba
         );
         let registration: anyhow::Result<()> = state
             .run_write(async |write| {
-                register_artifact(write, &fixture.agent, target(&task), artifact_input()).await?;
+                register_agent_file(write, &fixture.agent, target(&task), agent_file_input())
+                    .await?;
                 anyhow::bail!("product abandoned registration");
             })
             .await;
@@ -790,10 +801,10 @@ async fn run_write_preserves_registration_and_refusal_atomicity_when_product_aba
             "product abandoned registration"
         );
         let item = register(&fixture.state, &fixture.agent, &task).await;
-        assert_eq!(item.key, "AR-1");
+        assert_eq!(item.key, "FL-1");
         let location = fixture.storage.upload(&item, &[0; 101]);
         let prepared =
-            prepare_artifact_completion(&state, &fixture.agent, target(&task), &item.key)
+            prepare_agent_file_completion(&state, &fixture.agent, target(&task), &item.key)
                 .await
                 .unwrap();
         let refusal: anyhow::Result<()> = state
@@ -802,7 +813,7 @@ async fn run_write_preserves_registration_and_refusal_atomicity_when_product_aba
                     record_completion(write, &fixture.agent, target(&task), prepared).await?;
                 assert_eq!(
                     outcome.into_result().unwrap_err().code(),
-                    "artifact.too_large"
+                    "agent_file.too_large"
                 );
                 anyhow::bail!("product abandoned refusal");
             })
@@ -814,12 +825,12 @@ async fn run_write_preserves_registration_and_refusal_atomicity_when_product_aba
         assert!(records.lock().unwrap().is_empty());
         assert!(fixture.storage.contains(&location, &[0; 101]));
         assert_eq!(fixture.storage.deletes(), 0);
-        let error = complete_artifact(&fixture.state, &fixture.agent, target(&task), &item.key)
+        let error = complete_agent_file(&fixture.state, &fixture.agent, target(&task), &item.key)
             .await
             .unwrap_err();
-        assert_eq!(error.code(), "artifact.too_large");
+        assert_eq!(error.code(), "agent_file.too_large");
         assert!(!fixture.storage.contains(&location, &[0; 101]));
-        assert!(fixture.read(&task).await.artifacts.is_empty());
+        assert!(fixture.read(&task).await.files.is_empty());
     })
     .await;
 }

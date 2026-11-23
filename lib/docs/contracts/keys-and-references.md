@@ -24,8 +24,8 @@ It does not cover showing an object which other objects reference it.
 
 ## 3. Keys
 
-- **Tasks, knowledge entries, artifacts and proposals have keys**: a prefix
-  and a number that counts up, such as `TK-1`, `KN-1`, `AR-1` and `PP-1`.
+- **Tasks, knowledge entries, files and proposals have keys**: a prefix
+  and a number that counts up, such as `TK-1`, `KN-1`, `FL-1` and `PP-1`.
   Each space counts from 1, and a deleted key is never reused. Products
   show keys.
 - **A space's key**, such as `SPACE-1`, carries the number the product

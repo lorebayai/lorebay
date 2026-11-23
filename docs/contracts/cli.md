@@ -62,7 +62,7 @@ It does not cover:
 
 In the table, `<space>` is a space key, `<task>` a task key, `<task-id>` a
 task ID, `<entry>` a knowledge entry's name or key, `<version>` an integer
-version returned by its history, `<artifact>` an artifact key, `<proposal>` a
+version returned by its history, `<file>` a file key, `<proposal>` a
 proposal key, and `<note>` the note's time as the Scratchpad shows it,
 which names one note; see
 [Tasks](../../lib/docs/contracts/tasks.md#4-scratchpad).
@@ -89,13 +89,13 @@ contains spaces. Optional arguments appear in brackets. List rows follow
 | `participant set-role <space> <username> --role <role>` | Change a participant's role | Updated participant |
 | `participant remove <space> <username>` | Remove a participant | Removal result |
 | `task list <space> [--person <username>] [--agent <name>] [--status <status>] [--keyword <text>] [--own-open]` | List tasks | Task keys, titles, statuses, people, agent names and last activity times |
-| `task show <space> <task>` | Read a task | Task fields, including its task ID, result and completed artifact list |
+| `task show <space> <task>` | Read a task | Task fields, including its task ID, result and completed file list |
 | `task scratchpad <space> <task>` | Read a task's Scratchpad | One page of notes, with their times, in time order |
 | `task close <space> <task-id>` | Change a task, setting only its status to `ended` | Updated task |
 | `task delete <space> <task-id>` | Delete a task | Deletion result |
 | `note delete <space> <task-id> <note>` | Delete a note | Deletion result |
-| `artifact url <space> <artifact>` | Get an artifact download URL | The short-lived download URL |
-| `artifact delete <space> <task-id> <artifact>` | Delete an artifact | Deletion result |
+| `file url <space> <file>` | Get a file download URL | The short-lived download URL |
+| `file delete <space> <task-id> <file>` | Delete a file | Deletion result |
 | `knowledge list <space> [--prefix <prefix>] [--keyword <text>]` | List Knowledge | Entry names, keys and summaries, and the next level's prefixes |
 | `knowledge show <space> <entry> [--version <version>]` | Read the latest or an old knowledge version | Name, key, summary and content, or a deletion version |
 | `knowledge history <space> <entry>` | View a knowledge entry's history | Versions and their authors and times, including deletions |
@@ -121,9 +121,9 @@ contains spaces. Optional arguments appear in brackets. List rows follow
   `contributor` or `viewer`. Ownership is not assigned by these commands.
   Task statuses are `in progress` and `ended`; proposal statuses are
   `pending`, `approved` and `rejected`. Another value is a usage error.
-- **Artifact lists come from `task show`.** `artifact url` returns the Web
-  API's URL; the person can transfer the file with it over HTTP as
-  [Tasks](../../lib/docs/contracts/tasks.md#5-artifacts) describes.
+- **File lists come from `task show`.** `file url` returns the Web
+  API's URL; the person can transfer the file's content with it over HTTP as
+  [Tasks](../../lib/docs/contracts/tasks.md#5-files) describes.
 - **`--own-open` lists only the person's own tasks that are not `ended`**,
   as `list_tasks` does for an agent's party; see
   [MCP tools](../../lib/docs/contracts/mcp-tools.md#6-wrong-task-ids).
@@ -251,7 +251,7 @@ Exit codes:
 ## 7. Deletion confirmation
 
 - **A deleting command needs an explicit yes.** This covers `task delete`,
-  `note delete`, `artifact delete`, `knowledge delete` and `agent revoke`.
+  `note delete`, `file delete`, `knowledge delete` and `agent revoke`.
   Before sending the operation it names the target on standard error and
   accepts only `y` or `yes`, ignoring case. An empty
   answer, end of input or any other answer cancels the operation. When input

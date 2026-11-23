@@ -29,12 +29,12 @@ mod deletion;
 mod download;
 
 #[tokio::test]
-async fn register_artifact_returns_key_upload_url_and_headers() {
+async fn register_agent_file_returns_key_upload_url_and_headers() {
     let (server, person, agent) = setup().await;
-    let task = create(&server, &agent, SPACE, "Artifact title").await;
+    let task = create(&server, &agent, SPACE, "File title").await;
     let first = register(&server, &agent, &task).await;
-    assert_eq!(first["key"], "AR-1");
-    assert_eq!(first["task_title"], "Artifact title");
+    assert_eq!(first["key"], "FL-1");
+    assert_eq!(first["task_title"], "File title");
     assert_eq!(first["method"], "PUT");
     assert_eq!(first["headers"], json!({"If-None-Match":"*"}));
     let url = Url::parse(first["upload_url"].as_str().unwrap()).unwrap();
@@ -51,7 +51,7 @@ async fn register_artifact_returns_key_upload_url_and_headers() {
         third["key"].as_str().unwrap(),
     ];
     keys.sort_unstable();
-    assert_eq!(keys, ["AR-2", "AR-3"]);
+    assert_eq!(keys, ["FL-2", "FL-3"]);
     assert!(second["upload_url"] != third["upload_url"]);
     create_space(&server, &person, "Other", "Other work").await;
     let other = create(&server, &agent, "SPACE-2", "Other task").await;
@@ -65,7 +65,7 @@ async fn register_artifact_returns_key_upload_url_and_headers() {
     .await;
     assert_eq!(
         response.json::<Value>().await.unwrap()["data"]["key"],
-        "AR-1"
+        "FL-1"
     );
     upload_ok(&server, &first, "Persisted file").await;
     let directory = server.stop().await;
@@ -75,47 +75,47 @@ async fn register_artifact_returns_key_upload_url_and_headers() {
     )
     .await;
     assert_eq!(
-        complete(&server, &agent, &task, "AR-1").await.status(),
+        complete(&server, &agent, &task, "FL-1").await.status(),
         StatusCode::OK
     );
-    assert_eq!(register(&server, &agent, &task).await["key"], "AR-4");
+    assert_eq!(register(&server, &agent, &task).await["key"], "FL-4");
     server.stop().await;
 }
 
 #[tokio::test]
-async fn complete_artifact_lists_artifact_on_task_with_size() {
+async fn complete_agent_file_lists_agent_file_on_task_with_size() {
     let (server, person, agent) = setup().await;
-    let task = create(&server, &agent, SPACE, "Artifact title").await;
+    let task = create(&server, &agent, SPACE, "File title").await;
     let registered = register(&server, &agent, &task).await;
     let before = read(&server, &person, "TK-1").await;
-    assert_eq!(before["artifacts"], json!([]));
+    assert_eq!(before["files"], json!([]));
     upload_ok(&server, &registered, "The file").await;
-    assert_eq!(read(&server, &person, "TK-1").await["artifacts"], json!([]));
+    assert_eq!(read(&server, &person, "TK-1").await["files"], json!([]));
     let other = authorize_for(&server, &person, "Completing agent").await;
     let (first, concurrent) = tokio::join!(
-        complete(&server, &other, &task, "AR-1"),
-        complete(&server, &agent, &task, "AR-1")
+        complete(&server, &other, &task, "FL-1"),
+        complete(&server, &agent, &task, "FL-1")
     );
     assert_eq!(first.status(), StatusCode::OK);
     assert_eq!(concurrent.status(), StatusCode::OK);
     let completed = first.json::<Value>().await.unwrap()["data"].clone();
     assert_eq!(concurrent.json::<Value>().await.unwrap()["data"], completed);
     assert_eq!(completed["size"], 8);
-    assert_eq!(completed["task_title"], "Artifact title");
+    assert_eq!(completed["task_title"], "File title");
     assert!(
         completed["completed_at"].as_i64().unwrap() >= completed["created_at"].as_i64().unwrap()
     );
     let after = read(&server, &person, "TK-1").await;
     assert!(after["last_activity_at"].as_i64() >= before["last_activity_at"].as_i64());
     assert_eq!(after["last_activity_at"], completed["completed_at"]);
-    assert_eq!(after["artifacts"][0]["file_name"], "report.txt");
-    assert_eq!(after["artifacts"][0]["summary"], "The report");
+    assert_eq!(after["files"][0]["file_name"], "report.txt");
+    assert_eq!(after["files"][0]["summary"], "The report");
     append(&server, &agent, &task, "Later activity").await;
     append(&server, &agent, &task, "Still later").await;
     let after = read(&server, &person, "TK-1").await;
     assert!(after["last_activity_at"].as_i64() > completed["completed_at"].as_i64());
     assert_eq!(
-        complete(&server, &agent, &task, "AR-1")
+        complete(&server, &agent, &task, "FL-1")
             .await
             .json::<Value>()
             .await
@@ -196,7 +196,7 @@ async fn upload_file_fails_with_precondition_failed_when_file_already_uploaded()
     )
     .await;
     assert_eq!(
-        complete(&server, &agent, &task, "AR-1")
+        complete(&server, &agent, &task, "FL-1")
             .await
             .json::<Value>()
             .await
@@ -228,7 +228,7 @@ async fn upload_file_succeeds_on_retry_when_first_attempt_was_interrupted() {
     .await
     .unwrap();
     assert_eq!(
-        complete(&server, &agent, &task, "AR-1")
+        complete(&server, &agent, &task, "FL-1")
             .await
             .json::<Value>()
             .await
@@ -272,14 +272,14 @@ async fn upload_file_fails_when_file_exceeds_size_limit() {
     assert!(headers.contains("application/problem+json"));
     drop(chunked);
     assert_problem(
-        complete(&server, &agent, &task, "AR-1").await,
+        complete(&server, &agent, &task, "FL-1").await,
         StatusCode::CONFLICT,
-        "artifact.not_uploaded",
+        "agent_file.not_uploaded",
     )
     .await;
     upload_ok(&server, &registered, "fits").await;
     assert_eq!(
-        complete(&server, &agent, &task, "AR-1")
+        complete(&server, &agent, &task, "FL-1")
             .await
             .json::<Value>()
             .await
@@ -339,9 +339,9 @@ async fn upload_file_fails_when_url_is_expired() {
     )
     .await;
     assert_problem(
-        complete(&server, &agent, &task, "AR-1").await,
+        complete(&server, &agent, &task, "FL-1").await,
         StatusCode::CONFLICT,
-        "artifact.not_uploaded",
+        "agent_file.not_uploaded",
     )
     .await;
     let directory = server.stop().await;
@@ -374,40 +374,40 @@ async fn upload_file_fails_when_too_many_uploads_are_in_progress() {
 }
 
 #[tokio::test]
-async fn complete_artifact_fails_when_file_was_not_uploaded() {
+async fn complete_agent_file_fails_when_file_was_not_uploaded() {
     let server = Server::start().await;
     let (_, agent, task) = prepare(&server).await;
     register(&server, &agent, &task).await;
     assert_problem(
-        complete(&server, &agent, &task, "AR-1").await,
+        complete(&server, &agent, &task, "FL-1").await,
         StatusCode::CONFLICT,
-        "artifact.not_uploaded",
+        "agent_file.not_uploaded",
     )
     .await;
-    for key in ["AR-999", "AR-01", "TK-1"] {
+    for key in ["FL-999", "FL-01", "TK-1"] {
         assert_problem(
             complete(&server, &agent, &task, key).await,
             StatusCode::NOT_FOUND,
-            "artifact.not_found",
+            "agent_file.not_found",
         )
         .await;
     }
     let second = create(&server, &agent, SPACE, "Second task").await;
-    let artifact = register(&server, &agent, &second).await;
-    assert_eq!(artifact["key"], "AR-2");
+    let agent_file = register(&server, &agent, &second).await;
+    assert_eq!(agent_file["key"], "FL-2");
     assert_problem(
-        complete(&server, &agent, &task, "AR-2").await,
+        complete(&server, &agent, &task, "FL-2").await,
         StatusCode::NOT_FOUND,
-        "artifact.not_found",
+        "agent_file.not_found",
     )
     .await;
     server.stop().await;
 }
 
 #[tokio::test]
-async fn register_artifact_fails_with_reopen_hint_when_task_is_ended() {
+async fn register_agent_file_fails_with_reopen_hint_when_task_is_ended() {
     let (server, person, agent) = setup().await;
-    let task = create(&server, &agent, SPACE, "Paused artifact work").await;
+    let task = create(&server, &agent, SPACE, "Paused file work").await;
     let registered = register(&server, &agent, &task).await;
     let ended = set_status(&server, &agent, &task, "ended").await;
     let refusal = assert_problem(
@@ -425,33 +425,30 @@ async fn register_artifact_fails_with_reopen_hint_when_task_is_ended() {
     .await;
     assert_eq!(
         refusal["title"],
-        "Set the task back to in progress before registering an artifact"
+        "Set the task back to in progress before registering a file"
     );
     assert_eq!(read(&server, &person, "TK-1").await, ended);
     upload_ok(&server, &registered, "Before ending").await;
-    let response = complete(&server, &agent, &task, "AR-1").await;
+    let response = complete(&server, &agent, &task, "FL-1").await;
     assert_eq!(response.status(), StatusCode::OK);
     let completed = response.json::<Value>().await.unwrap()["data"].clone();
-    assert_eq!(completed["key"], "AR-1");
-    assert_eq!(completed["task_title"], "Paused artifact work");
+    assert_eq!(completed["key"], "FL-1");
+    assert_eq!(completed["task_title"], "Paused file work");
     assert_eq!(completed["size"], 13);
     let after = read(&server, &person, "TK-1").await;
     assert_eq!(after["status"], "ended");
     assert_eq!(after["ended_at"], ended["ended_at"]);
-    assert_eq!(after["artifacts"][0]["key"], "AR-1");
-    assert_eq!(
-        after["artifacts"][0]["completed_at"],
-        completed["completed_at"]
-    );
+    assert_eq!(after["files"][0]["key"], "FL-1");
+    assert_eq!(after["files"][0]["completed_at"], completed["completed_at"]);
     let reopened = set_status(&server, &person, &task, "in progress").await;
-    assert_eq!(reopened["artifacts"], after["artifacts"]);
+    assert_eq!(reopened["files"], after["files"]);
     assert_eq!(read(&server, &person, "TK-1").await, reopened);
-    assert_eq!(register(&server, &agent, &task).await["key"], "AR-2");
+    assert_eq!(register(&server, &agent, &task).await["key"], "FL-2");
     server.stop().await;
 }
 
 #[tokio::test]
-async fn register_artifact_fails_when_caller_is_person() {
+async fn register_agent_file_fails_when_caller_is_person() {
     let (server, person, agent) = setup().await;
     let task = create(&server, &agent, SPACE, "Agent only").await;
     let bob = login(&server, "bob").await;
@@ -476,7 +473,7 @@ async fn register_artifact_fails_when_caller_is_person() {
                     tokens,
                     space,
                     task["task_id"].as_str().unwrap(),
-                    "AR-1",
+                    "FL-1",
                 )
                 .await,
                 StatusCode::FORBIDDEN,
@@ -489,7 +486,7 @@ async fn register_artifact_fails_when_caller_is_person() {
 }
 
 #[tokio::test]
-async fn register_artifact_fails_when_file_name_is_too_long() {
+async fn register_agent_file_fails_when_file_name_is_too_long() {
     let server = Server::start().await;
     let (_, agent, task) = prepare(&server).await;
     for (file, summary, field, code) in [
@@ -532,7 +529,7 @@ async fn register_artifact_fails_when_file_name_is_too_long() {
     let registered = response.json::<Value>().await.unwrap()["data"].clone();
     upload_ok(&server, &registered, "").await;
     assert_eq!(
-        complete(&server, &agent, &task, "AR-1")
+        complete(&server, &agent, &task, "FL-1")
             .await
             .json::<Value>()
             .await
@@ -543,7 +540,7 @@ async fn register_artifact_fails_when_file_name_is_too_long() {
 }
 
 #[tokio::test]
-async fn register_artifact_fails_when_task_belongs_to_another_party() {
+async fn register_agent_file_fails_when_task_belongs_to_another_party() {
     let (server, person, agent) = setup().await;
     let task = create(&server, &agent, SPACE, "Alice task").await;
     register(&server, &agent, &task).await;
@@ -620,7 +617,7 @@ async fn assert_refusals(
     )
     .await;
     assert_problem(
-        completion(server, tokens, space, id, "AR-1").await,
+        completion(server, tokens, space, id, "FL-1").await,
         status,
         code,
     )
@@ -628,15 +625,15 @@ async fn assert_refusals(
 }
 
 #[tokio::test]
-async fn complete_artifact_fails_with_not_found_when_registration_was_abandoned() {
-    let server = Server::configured(|config| config.artifact_cleanup_interval_seconds = 1).await;
+async fn complete_agent_file_fails_with_not_found_when_registration_was_abandoned() {
+    let server = Server::configured(|config| config.file_cleanup_interval_seconds = 1).await;
     let (person, agent, task) = prepare(&server).await;
     let abandoned = register(&server, &agent, &task).await;
     let completed = register(&server, &agent, &task).await;
     upload_ok(&server, &abandoned, "Abandoned file").await;
     upload_ok(&server, &completed, "Complete file").await;
     assert_eq!(
-        complete(&server, &agent, &task, "AR-2").await.status(),
+        complete(&server, &agent, &task, "FL-2").await.status(),
         StatusCode::OK
     );
     assert_problem(
@@ -645,8 +642,8 @@ async fn complete_artifact_fails_with_not_found_when_registration_was_abandoned(
         "file.already_exists",
     )
     .await;
-    age_registration(&server, "AR-2").await;
-    age_registration(&server, "AR-1").await;
+    age_registration(&server, "FL-2").await;
+    age_registration(&server, "FL-1").await;
     timeout(TEST_TIMEOUT, async {
         loop {
             let response = upload(&server, &abandoned, "Retry").await;
@@ -661,27 +658,27 @@ async fn complete_artifact_fails_with_not_found_when_registration_was_abandoned(
     .await
     .unwrap();
     assert_problem(
-        complete(&server, &agent, &task, "AR-1").await,
+        complete(&server, &agent, &task, "FL-1").await,
         StatusCode::NOT_FOUND,
-        "artifact.not_found",
+        "agent_file.not_found",
     )
     .await;
     let fresh = register(&server, &agent, &task).await;
-    assert_eq!(fresh["key"], "AR-3");
+    assert_eq!(fresh["key"], "FL-3");
     upload_ok(&server, &fresh, "Fresh file").await;
     assert_eq!(
-        complete(&server, &agent, &task, "AR-3").await.status(),
+        complete(&server, &agent, &task, "FL-3").await.status(),
         StatusCode::OK
     );
     let read_back = read(&server, &person, "TK-1").await;
     assert_eq!(
-        read_back["artifacts"]
+        read_back["files"]
             .as_array()
             .unwrap()
             .iter()
-            .map(|artifact| artifact["key"].as_str().unwrap())
+            .map(|agent_file| agent_file["key"].as_str().unwrap())
             .collect::<Vec<_>>(),
-        ["AR-2", "AR-3"]
+        ["FL-2", "FL-3"]
     );
     server.stop().await;
 }
@@ -728,15 +725,15 @@ async fn upload_file_releases_slot_when_upload_stalls() {
     upload_ok(&server, &second, "next").await;
     upload_ok(&server, &first, "done").await;
     assert_eq!(
-        complete(&server, &agent, &task, "AR-1").await.status(),
+        complete(&server, &agent, &task, "FL-1").await.status(),
         StatusCode::OK
     );
     assert_eq!(
-        complete(&server, &agent, &task, "AR-2").await.status(),
+        complete(&server, &agent, &task, "FL-2").await.status(),
         StatusCode::OK
     );
     assert_eq!(
-        read(&server, &agent, "TK-1").await["artifacts"]
+        read(&server, &agent, "TK-1").await["files"]
             .as_array()
             .unwrap()
             .len(),
@@ -746,7 +743,7 @@ async fn upload_file_releases_slot_when_upload_stalls() {
 }
 
 #[tokio::test]
-async fn complete_artifact_fails_when_file_exceeds_size_limit() {
+async fn complete_agent_file_fails_when_file_exceeds_size_limit() {
     let server = Server::start().await;
     let (person, agent, task) = prepare(&server).await;
     let registration = register(&server, &agent, &task).await;
@@ -756,29 +753,29 @@ async fn complete_artifact_fails_when_file_exceeds_size_limit() {
     let server =
         Server::restart_configured(directory, |config| config.upload_size_limit_bytes = 4).await;
     assert_problem(
-        complete(&server, &agent, &task, "AR-1").await,
+        complete(&server, &agent, &task, "FL-1").await,
         StatusCode::CONFLICT,
-        "artifact.too_large",
+        "agent_file.too_large",
     )
     .await;
-    assert_eq!(read(&server, &person, "TK-1").await["artifacts"], json!([]));
+    assert_eq!(read(&server, &person, "TK-1").await["files"], json!([]));
     assert_problem(
         request(
             &server,
             &person,
             Method::GET,
-            "/api/v1/spaces/SPACE-1/artifacts/AR-1/url",
+            "/api/v1/spaces/SPACE-1/files/FL-1/url",
             Value::Null,
         )
         .await,
         StatusCode::NOT_FOUND,
-        "artifact.not_found",
+        "agent_file.not_found",
     )
     .await;
     assert_problem(
-        complete(&server, &agent, &task, "AR-1").await,
+        complete(&server, &agent, &task, "FL-1").await,
         StatusCode::CONFLICT,
-        "artifact.refused",
+        "agent_file.refused",
     )
     .await;
     server.stop().await;
@@ -787,15 +784,15 @@ async fn complete_artifact_fails_when_file_exceeds_size_limit() {
 #[cfg(unix)]
 #[tokio::test]
 async fn orphan_cleanup_removes_old_unreferenced_regular_files() {
-    let server = Server::configured(|config| config.artifact_cleanup_interval_seconds = 1).await;
+    let server = Server::configured(|config| config.file_cleanup_interval_seconds = 1).await;
     let (person, agent, task) = prepare(&server).await;
     let registration = register(&server, &agent, &task).await;
     upload_ok(&server, &registration, "Referenced").await;
     assert_eq!(
-        complete(&server, &agent, &task, "AR-1").await.status(),
+        complete(&server, &agent, &task, "FL-1").await.status(),
         StatusCode::OK
     );
-    let stored = server.directory.path().join("data/artifacts");
+    let stored = server.directory.path().join("data/agent_files");
     let referenced = fs::read_dir(&stored)
         .unwrap()
         .next()
@@ -830,8 +827,8 @@ async fn orphan_cleanup_removes_old_unreferenced_regular_files() {
     assert!(fs::symlink_metadata(link).unwrap().is_symlink());
     assert_eq!(fs::read(referenced).unwrap(), b"Referenced");
     assert_eq!(
-        read(&server, &person, "TK-1").await["artifacts"][0]["key"],
-        "AR-1"
+        read(&server, &person, "TK-1").await["files"][0]["key"],
+        "FL-1"
     );
     server.stop().await;
 }

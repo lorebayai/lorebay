@@ -45,7 +45,7 @@ flowchart TD
         end
     end
     db[("Database")]
-    store[("Artifact files")]
+    store[("File content")]
     person -- "product credential" --> own
     program -- "product credential" --> own
     agent -- "product credential" --> mcp
@@ -72,9 +72,9 @@ flowchart TD
 - **A product's entry point calls the same operations.** It verifies its
   own callers, builds the caller and calls the operation, as
   [Library architecture](library.md#61-caller) describes.
-- **Artifact files bypass every entry point.** A caller first gets a
-  short-lived URL, then transfers the file over HTTP, straight to the
+- **File content bypasses every entry point.** A caller first gets a
+  short-lived URL, then transfers the content over HTTP, straight to the
   product's file storage. See [Storage](storage.md#3-file-storage).
-- **Cleanup has no caller.** The two cleanup rounds for artifact files are
+- **Cleanup has no caller.** The two cleanup rounds for file content is
   library functions a product runs on its own schedule; each is safe to run
   again. See [Storage](storage.md#3-file-storage).

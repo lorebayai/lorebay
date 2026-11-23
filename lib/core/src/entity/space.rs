@@ -17,7 +17,7 @@ pub struct Model {
     pub summary: String,
     pub next_task_number: i64,
     pub next_knowledge_number: i64,
-    pub next_artifact_number: i64,
+    pub next_agent_file_number: i64,
     pub next_proposal_number: i64,
     pub created_at: i64,
     pub updated_at: i64,
@@ -25,8 +25,8 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_many = "super::space_artifact::Entity")]
-    SpaceArtifact,
+    #[sea_orm(has_many = "super::space_agent_file::Entity")]
+    SpaceAgentFile,
     #[sea_orm(has_many = "super::space_knowledge::Entity")]
     SpaceKnowledge,
     #[sea_orm(has_many = "super::space_proposal::Entity")]
@@ -35,9 +35,9 @@ pub enum Relation {
     SpaceTask,
 }
 
-impl Related<super::space_artifact::Entity> for Entity {
+impl Related<super::space_agent_file::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::SpaceArtifact.def()
+        Relation::SpaceAgentFile.def()
     }
 }
 

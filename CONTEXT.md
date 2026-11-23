@@ -2,7 +2,7 @@
 
 Canonical terms for Lorebay's docs and code. Use them exactly, and don't
 introduce synonyms. The terms Lorebay shares with the library it builds on,
-such as space, task, note, artifact, Knowledge, proposal, agent, role and
+such as space, task, note, file, Knowledge, proposal, agent, role and
 key, are in the [library's glossary](lib/CONTEXT.md) and mean the same here.
 Terms are written in lowercase in running text.
 

@@ -51,7 +51,7 @@ POST /api/v1/spaces/{space}/proposals/{key}/approve
   authorization server metadata names the device authorization endpoint and
   its grant; device sign-in follows
   [Identity](../architecture/identity.md#5-sign-in).
-- **Artifact file URLs are outside `/api/v1`.** They are short-lived URLs
+- **File content URLs are outside `/api/v1`.** They are short-lived URLs
   that point at `lorebayd` with a local directory, and at S3 with S3, a
   backend not yet built ([Storage](../architecture/storage.md)).
 - **Health checks are outside `/api/v1`** and need no credential. `/healthz`
@@ -76,12 +76,12 @@ POST /api/v1/spaces/{space}/proposals/{key}/approve
 - **Library errors keep their codes.** A library operation's refusal
   carries the library's error code, such as `task.not_found`, with an HTTP
   status Lorebay chooses in one place; `task.ended`,
-  `artifact.not_uploaded`, `artifact.refused`, `artifact.too_large`,
+  `agent_file.not_uploaded`, `agent_file.refused`, `agent_file.too_large`,
   `space.number_taken`, `knowledge.name_taken` and `proposal.decided`
   answer 409.
 - **Writes don't check references**; see
   [Keys and references](../../lib/docs/contracts/keys-and-references.md#5-references).
-- **Ended tasks reject notes and artifact registrations**; see
+- **Ended tasks reject notes and file registrations**; see
   [Tasks](../../lib/docs/contracts/tasks.md#3-tasks).
 
 ## 5. Operations
