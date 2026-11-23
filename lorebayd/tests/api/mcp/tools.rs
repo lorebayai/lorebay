@@ -196,7 +196,7 @@ async fn call_add_note_fails_when_content_is_invalid() {
 async fn call_add_note_fails_when_task_id_does_not_exist() {
     let (server, person, _) = tasks::setup().await;
     let bob = login(&server, "bob").await;
-    tasks::participant(&server, &person, Method::POST, "contributor").await;
+    tasks::space_member(&server, &person, Method::POST, "contributor").await;
     let agent = authorize_for(&server, &bob, "Bob agent").await;
     let task = tasks::create(&server, &agent, SPACE, "Bob task").await;
     let unknown = call_error(
@@ -222,7 +222,7 @@ async fn call_add_note_fails_when_task_id_does_not_exist() {
             unknown
         );
     }
-    tasks::participant(&server, &person, Method::DELETE, "").await;
+    tasks::space_member(&server, &person, Method::DELETE, "").await;
     assert_eq!(
         call_error(
             &server,
@@ -248,13 +248,13 @@ async fn call_add_note_fails_when_task_belongs_to_another_party() {
         call_error(&server, &bob_agent, "add_note", arguments.clone()).await["code"],
         "task.not_found"
     );
-    tasks::participant(&server, &person, Method::POST, "contributor").await;
+    tasks::space_member(&server, &person, Method::POST, "contributor").await;
     assert_eq!(
         call_error(&server, &bob_agent, "add_note", arguments).await["code"],
         "space.permission_required"
     );
     let own = tasks::create(&server, &bob_agent, SPACE, "Bob task").await;
-    tasks::participant(&server, &person, Method::PATCH, "viewer").await;
+    tasks::space_member(&server, &person, Method::PATCH, "viewer").await;
     assert_eq!(
         call_error(
             &server,

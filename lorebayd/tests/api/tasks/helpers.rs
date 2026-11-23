@@ -77,12 +77,12 @@ pub async fn scratchpad(server: &Server, tokens: &Value, key: &str) -> Value {
         .clone()
 }
 
-pub async fn participant(server: &Server, owner: &Value, method: Method, role: &str) {
+pub async fn space_member(server: &Server, owner: &Value, method: Method, role: &str) {
     let response = request(
         server,
         owner,
         method.clone(),
-        "/api/v1/spaces/SPACE-1/participants/bob",
+        "/api/v1/spaces/SPACE-1/members/bob",
         json!({"role":role}),
     )
     .await;

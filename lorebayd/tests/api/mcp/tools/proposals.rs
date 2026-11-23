@@ -61,7 +61,7 @@ async fn call_create_proposal_returns_task_title_and_pending_proposal() {
 #[tokio::test]
 async fn call_create_proposal_fails_when_task_belongs_to_another_party() {
     let (server, person, agent) = tasks::setup().await;
-    tasks::participant(&server, &person, Method::POST, "contributor").await;
+    tasks::space_member(&server, &person, Method::POST, "contributor").await;
     let bob = login(&server, "bob").await;
     let other = authorize_for(&server, &bob, "Other party").await;
     let task = tasks::create(&server, &agent, SPACE, "Private write target").await;

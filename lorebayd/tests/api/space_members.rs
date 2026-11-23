@@ -9,22 +9,22 @@ use helpers::*;
 mod helpers;
 
 #[tokio::test]
-async fn add_participant_fails_when_caller_is_agent() {
+async fn add_space_member_fails_when_caller_is_agent() {
     let (server, owner) = setup().await;
     let agent = authorize_for(&server, &owner, "Owner agent").await;
-    let before = list(&server, &owner, PARTICIPANTS).await;
+    let before = list(&server, &owner, SPACE_MEMBERS).await;
     assert_problem(
         mutation(&server, &agent, Method::POST, "bob", "contributor").await,
         StatusCode::FORBIDDEN,
         "auth.person_required",
     )
     .await;
-    assert_eq!(list(&server, &owner, PARTICIPANTS).await, before);
+    assert_eq!(list(&server, &owner, SPACE_MEMBERS).await, before);
     server.stop().await;
 }
 
 #[tokio::test]
-async fn add_participant_lets_person_and_their_agent_enter_space() {
+async fn add_space_member_lets_person_and_their_agent_enter_space() {
     let (server, owner) = setup().await;
     let bob = login(&server, "bob").await;
     let agent = authorize_for(&server, &bob, "Bob agent").await;
@@ -42,8 +42,8 @@ async fn add_participant_lets_person_and_their_agent_enter_space() {
         for tokens in [&bob, &agent] {
             assert_role(&server, tokens, role).await;
             assert_eq!(
-                list(&server, tokens, PARTICIPANTS).await,
-                list(&server, &owner, PARTICIPANTS).await
+                list(&server, tokens, SPACE_MEMBERS).await,
+                list(&server, &owner, SPACE_MEMBERS).await
             );
         }
     }
@@ -51,7 +51,7 @@ async fn add_participant_lets_person_and_their_agent_enter_space() {
 }
 
 #[tokio::test]
-async fn add_participant_fails_when_caller_is_contributor() {
+async fn add_space_member_fails_when_caller_is_contributor() {
     let (server, owner) = setup().await;
     let bob = login(&server, "bob").await;
     add(&server, &owner, "bob", "contributor").await;
@@ -73,7 +73,7 @@ async fn add_participant_fails_when_caller_is_contributor() {
 }
 
 #[tokio::test]
-async fn add_participant_fails_when_role_is_admin() {
+async fn add_space_member_fails_when_role_is_admin() {
     let (server, owner) = setup().await;
     for role in ["admin", "owner", "invalid", ""] {
         assert_problem(
@@ -84,14 +84,14 @@ async fn add_participant_fails_when_role_is_admin() {
         .await;
     }
     assert_eq!(
-        list(&server, &owner, PARTICIPANTS).await,
+        list(&server, &owner, SPACE_MEMBERS).await,
         json!([{"type":"human", "username":"alice", "role":"owner"}])
     );
     server.stop().await;
 }
 
 #[tokio::test]
-async fn add_participant_fails_when_username_is_not_in_users_file() {
+async fn add_space_member_fails_when_username_is_not_in_users_file() {
     let (server, owner) = setup().await;
     assert_problem(
         mutation(&server, &owner, Method::POST, "unknown", "contributor").await,
@@ -103,7 +103,7 @@ async fn add_participant_fails_when_username_is_not_in_users_file() {
     assert_problem(
         mutation(&server, &owner, Method::POST, "bob", "contributor").await,
         StatusCode::CONFLICT,
-        "participant.already_exists",
+        "space_member.already_exists",
     )
     .await;
     assert_target_role(&server, &owner, "bob", "viewer").await;
@@ -112,7 +112,7 @@ async fn add_participant_fails_when_username_is_not_in_users_file() {
             assert_problem(
                 mutation(&server, &owner, method, username, "contributor").await,
                 StatusCode::NOT_FOUND,
-                "participant.not_found",
+                "space_member.not_found",
             )
             .await;
         }
@@ -125,7 +125,7 @@ async fn add_participant_fails_when_username_is_not_in_users_file() {
                 &server,
                 &carol,
                 method,
-                &format!("/api/v1/spaces/{key}/participants/bob"),
+                &format!("/api/v1/spaces/{key}/members/bob"),
                 json!({"role":"viewer"}),
             )
             .await;
@@ -137,23 +137,23 @@ async fn add_participant_fails_when_username_is_not_in_users_file() {
 }
 
 #[tokio::test]
-async fn change_participant_role_fails_when_caller_is_agent() {
+async fn change_space_member_role_fails_when_caller_is_agent() {
     let (server, owner) = setup().await;
     let agent = authorize_for(&server, &owner, "Owner agent").await;
     add(&server, &owner, "bob", "viewer").await;
-    let before = list(&server, &owner, PARTICIPANTS).await;
+    let before = list(&server, &owner, SPACE_MEMBERS).await;
     assert_problem(
         mutation(&server, &agent, Method::PATCH, "bob", "contributor").await,
         StatusCode::FORBIDDEN,
         "auth.person_required",
     )
     .await;
-    assert_eq!(list(&server, &owner, PARTICIPANTS).await, before);
+    assert_eq!(list(&server, &owner, SPACE_MEMBERS).await, before);
     server.stop().await;
 }
 
 #[tokio::test]
-async fn change_participant_role_makes_admin_when_caller_is_owner() {
+async fn change_space_member_role_makes_admin_when_caller_is_owner() {
     let (server, owner) = setup().await;
     let bob = login(&server, "bob").await;
     let agent = authorize_for(&server, &bob, "Bob agent").await;
@@ -184,7 +184,7 @@ async fn change_participant_role_makes_admin_when_caller_is_owner() {
     let response = mutation(&server, &bob, Method::DELETE, "carol", "").await;
     assert_eq!(response.status(), StatusCode::OK);
     assert!(
-        !list(&server, &owner, PARTICIPANTS)
+        !list(&server, &owner, SPACE_MEMBERS)
             .await
             .as_array()
             .unwrap()
@@ -210,7 +210,7 @@ async fn change_participant_role_makes_admin_when_caller_is_owner() {
 }
 
 #[tokio::test]
-async fn change_participant_role_fails_when_admin_changes_another_admin() {
+async fn change_space_member_role_fails_when_admin_changes_another_admin() {
     let (server, owner) = setup().await;
     let bob = login(&server, "bob").await;
     for username in ["bob", "carol", "dave"] {
@@ -280,7 +280,7 @@ async fn change_space_fails_when_caller_is_contributor() {
 }
 
 #[tokio::test]
-async fn remove_participant_blocks_person_and_their_agent() {
+async fn remove_space_member_blocks_person_and_their_agent() {
     let (server, owner) = setup().await;
     let bob = login(&server, "bob").await;
     let agent = authorize_for(&server, &bob, "Bob agent").await;
@@ -289,7 +289,7 @@ async fn remove_participant_blocks_person_and_their_agent() {
         assert_role(&server, tokens, "contributor").await;
     }
     assert_eq!(
-        list(&server, &owner, PARTICIPANTS)
+        list(&server, &owner, SPACE_MEMBERS)
             .await
             .as_array()
             .unwrap()
@@ -307,7 +307,7 @@ async fn remove_participant_blocks_person_and_their_agent() {
         assert_eq!(list(&server, tokens, "/api/v1/spaces").await, json!([]));
     }
     assert_eq!(
-        list(&server, &owner, PARTICIPANTS).await,
+        list(&server, &owner, SPACE_MEMBERS).await,
         json!([{"type":"human", "username":"alice", "role":"owner"}])
     );
     add(&server, &owner, "bob", "viewer").await;
@@ -318,23 +318,23 @@ async fn remove_participant_blocks_person_and_their_agent() {
 }
 
 #[tokio::test]
-async fn remove_participant_fails_when_caller_is_agent() {
+async fn remove_space_member_fails_when_caller_is_agent() {
     let (server, owner) = setup().await;
     let agent = authorize_for(&server, &owner, "Owner agent").await;
     add(&server, &owner, "bob", "contributor").await;
-    let before = list(&server, &owner, PARTICIPANTS).await;
+    let before = list(&server, &owner, SPACE_MEMBERS).await;
     assert_problem(
         mutation(&server, &agent, Method::DELETE, "bob", "").await,
         StatusCode::FORBIDDEN,
         "auth.person_required",
     )
     .await;
-    assert_eq!(list(&server, &owner, PARTICIPANTS).await, before);
+    assert_eq!(list(&server, &owner, SPACE_MEMBERS).await, before);
     server.stop().await;
 }
 
 #[tokio::test]
-async fn remove_participant_fails_when_target_is_owner() {
+async fn remove_space_member_fails_when_target_is_owner() {
     let (server, owner) = setup().await;
     assert_problem(
         mutation(&server, &owner, Method::DELETE, "alice", "").await,
@@ -348,7 +348,7 @@ async fn remove_participant_fails_when_target_is_owner() {
 }
 
 #[tokio::test]
-async fn remove_participant_fails_when_admin_removes_admin() {
+async fn remove_space_member_fails_when_admin_removes_admin() {
     let (server, owner) = setup().await;
     let bob = login(&server, "bob").await;
     for username in ["bob", "carol"] {
@@ -373,7 +373,7 @@ async fn remove_participant_fails_when_admin_removes_admin() {
 }
 
 #[tokio::test]
-async fn list_participants_includes_agents_with_capped_roles() {
+async fn list_space_members_includes_agents_with_capped_roles() {
     let (server, owner) = setup().await;
     let agent = authorize_for(&server, &owner, "Shared agent").await;
     authorize_for(&server, &owner, "Second agent").await;
@@ -396,11 +396,11 @@ async fn list_participants_includes_agents_with_capped_roles() {
     }
     for size in ["1", "2", "4"] {
         assert_eq!(
-            walk(&server, &agent, PARTICIPANTS, size, 99).await,
+            walk(&server, &agent, SPACE_MEMBERS, size, 99).await,
             expected
         );
     }
-    assert_eq!(list(&server, &owner, PARTICIPANTS).await, json!(expected));
+    assert_eq!(list(&server, &owner, SPACE_MEMBERS).await, json!(expected));
     assert_roster_cursors(&server, &owner, &agent).await;
     let response = request(
         &server,
@@ -412,12 +412,15 @@ async fn list_participants_includes_agents_with_capped_roles() {
     .await;
     assert_eq!(response.status(), StatusCode::OK);
     expected.remove(1);
-    assert_eq!(walk(&server, &agent, PARTICIPANTS, "2", 99).await, expected);
+    assert_eq!(
+        walk(&server, &agent, SPACE_MEMBERS, "2", 99).await,
+        expected
+    );
     server.stop().await;
 }
 
 #[tokio::test]
-async fn list_participants_omits_person_when_account_was_removed_from_users_file() {
+async fn list_space_members_omits_person_when_account_was_removed_from_users_file() {
     let (server, owner) = setup().await;
     let bob = login(&server, "bob").await;
     let agent = authorize_for(&server, &bob, "Bob agent").await;
@@ -427,7 +430,7 @@ async fn list_participants_omits_person_when_account_was_removed_from_users_file
         &server,
         &owner,
         Method::POST,
-        "/api/v1/spaces/SPACE-2/participants/bob",
+        "/api/v1/spaces/SPACE-2/members/bob",
         json!({"role":"viewer"}),
     )
     .await;
@@ -436,7 +439,7 @@ async fn list_participants_omits_person_when_account_was_removed_from_users_file
     let server = Server::restart_with_users(directory, &USERS[..1]).await;
     let owner = server.tokens().await;
     for key in ["SPACE-1", "SPACE-2"] {
-        let path = format!("/api/v1/spaces/{key}/participants");
+        let path = format!("/api/v1/spaces/{key}/members");
         assert_eq!(
             list(&server, &owner, &path).await,
             json!([{"type":"human","username":"alice","role":"owner"}])
@@ -444,7 +447,7 @@ async fn list_participants_omits_person_when_account_was_removed_from_users_file
     }
     for tokens in [&bob, &agent] {
         assert_problem(
-            list_response(PARTICIPANTS, &server, tokens, &[]).await,
+            list_response(SPACE_MEMBERS, &server, tokens, &[]).await,
             StatusCode::UNAUTHORIZED,
             "auth.unauthorized",
         )
@@ -470,7 +473,7 @@ async fn list_participants_omits_person_when_account_was_removed_from_users_file
 async fn assert_hidden_space(server: &Server, tokens: &Value) {
     let mut expected = None;
     for key in ["SPACE-1", "SPACE-999"] {
-        for suffix in ["", "/participants"] {
+        for suffix in ["", "/members"] {
             let path = format!("/api/v1/spaces/{key}{suffix}");
             let problem = assert_problem(
                 request(server, tokens, Method::GET, &path, Value::Null).await,
@@ -488,18 +491,18 @@ async fn assert_hidden_space(server: &Server, tokens: &Value) {
 }
 
 async fn assert_roster_cursors(server: &Server, owner: &Value, agent: &Value) {
-    let response = list_response(PARTICIPANTS, server, agent, &[("page_size", "1")]).await;
+    let response = list_response(SPACE_MEMBERS, server, agent, &[("page_size", "1")]).await;
     let page = response.json::<Value>().await.unwrap();
     let cursor = page["meta"]["next_cursor"].as_str().unwrap();
     let bob = login(server, "bob").await;
     assert_problem(
-        list_response(PARTICIPANTS, server, &bob, &[("cursor", cursor)]).await,
+        list_response(SPACE_MEMBERS, server, &bob, &[("cursor", cursor)]).await,
         StatusCode::BAD_REQUEST,
         "request.invalid_query",
     )
     .await;
     create_space(server, owner, "Team", "Shared work").await;
-    let second_roster = list(server, owner, "/api/v1/spaces/SPACE-2/participants").await;
+    let second_roster = list(server, owner, "/api/v1/spaces/SPACE-2/members").await;
     assert_eq!(second_roster.as_array().unwrap().len(), 3);
     assert!(
         second_roster
@@ -510,7 +513,7 @@ async fn assert_roster_cursors(server: &Server, owner: &Value, agent: &Value) {
     );
     assert_problem(
         list_response(
-            "/api/v1/spaces/SPACE-2/participants",
+            "/api/v1/spaces/SPACE-2/members",
             server,
             owner,
             &[("cursor", cursor)],
@@ -532,7 +535,7 @@ async fn assert_roster_cursors(server: &Server, owner: &Value, agent: &Value) {
         [("cursor", "invalid")],
     ] {
         assert_problem(
-            list_response(PARTICIPANTS, server, agent, &query).await,
+            list_response(SPACE_MEMBERS, server, agent, &query).await,
             StatusCode::BAD_REQUEST,
             "request.invalid_query",
         )

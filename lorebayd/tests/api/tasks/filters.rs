@@ -5,7 +5,7 @@ use crate::helpers::{
     Server, assert_problem, authorize_for, create_space, list_page, list_response, login, request,
 };
 
-use super::helpers::{SPACE, TASKS, append, create, participant, read, setup};
+use super::helpers::{SPACE, TASKS, append, create, read, setup, space_member};
 
 #[tokio::test]
 async fn list_tasks_returns_only_matching_tasks_when_filtered_by_person_agent_and_status() {
@@ -14,7 +14,7 @@ async fn list_tasks_returns_only_matching_tasks_when_filtered_by_person_agent_an
     let bob = login(&server, "bob").await;
     let bob_shared = authorize_for(&server, &bob, "Shared").await;
     let bob_other = authorize_for(&server, &bob, "Other").await;
-    participant(&server, &person, Method::POST, "contributor").await;
+    space_member(&server, &person, Method::POST, "contributor").await;
     for (tokens, title) in [
         (&agent, "Alice research"),
         (&shared, "Alice shared"),
@@ -74,10 +74,10 @@ async fn list_tasks_returns_persons_tasks_when_person_was_removed_from_space() {
     let (server, person, agent) = setup().await;
     let bob = login(&server, "bob").await;
     let other = authorize_for(&server, &bob, "Bob agent").await;
-    participant(&server, &person, Method::POST, "contributor").await;
+    space_member(&server, &person, Method::POST, "contributor").await;
     create(&server, &other, SPACE, "Historical task").await;
     create(&server, &agent, SPACE, "Alice task").await;
-    participant(&server, &person, Method::DELETE, "").await;
+    space_member(&server, &person, Method::DELETE, "").await;
     assert_keys(&server, &agent, &[("person", "bob")], &["TK-1"]).await;
     let directory = server.stop().await;
     let server = Server::restart(directory).await;
@@ -95,7 +95,7 @@ async fn list_tasks_returns_own_party_tasks_not_ended_when_asked() {
     let second = authorize_for(&server, &person, "Second").await;
     let bob = login(&server, "bob").await;
     let other = authorize_for(&server, &bob, "Bob agent").await;
-    participant(&server, &person, Method::POST, "contributor").await;
+    space_member(&server, &person, Method::POST, "contributor").await;
     create(&server, &agent, SPACE, "Alice current").await;
     let task = create(&server, &second, SPACE, "Alice second").await;
     create(&server, &agent, SPACE, "Alice ended").await;
@@ -120,7 +120,7 @@ async fn list_tasks_returns_own_party_tasks_not_ended_when_asked() {
     }
     append(&server, &agent, &task, "Found and continued").await;
     append(&server, &agent, &task, "Still working").await;
-    participant(&server, &person, Method::PATCH, "viewer").await;
+    space_member(&server, &person, Method::PATCH, "viewer").await;
     assert_keys(&server, &other, &[("own_open", "true")], &["TK-4"]).await;
     assert_keys(
         &server,

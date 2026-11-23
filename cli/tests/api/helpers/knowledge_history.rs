@@ -139,7 +139,7 @@ pub async fn assert_viewer_reads_history(server: &Server, space: &str, original:
     assert_success(
         &server
             .run(&[
-                "participant",
+                "member",
                 "set-role",
                 space,
                 SECOND_USERNAME,

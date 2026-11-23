@@ -148,7 +148,7 @@ async fn call_list_tasks_fails_when_filters_are_invalid() {
 
 async fn add_bob_agent(server: &Server, person: &Value) -> Value {
     let bob = login(server, "bob").await;
-    tasks::participant(server, person, Method::POST, "contributor").await;
+    tasks::space_member(server, person, Method::POST, "contributor").await;
     authorize_for(server, &bob, "Research agent").await
 }
 

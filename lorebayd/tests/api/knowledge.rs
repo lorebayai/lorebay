@@ -5,7 +5,7 @@ use crate::helpers::{
     assert_problem, authorize_for, create_space, list, list_page, list_response, login, request,
     two_people, walk,
 };
-use crate::tasks::helpers::participant;
+use crate::tasks::helpers::space_member;
 
 use helpers::*;
 
@@ -16,8 +16,8 @@ async fn list_knowledge_versions_returns_every_version_with_who_applied_it() {
     let server = two_people().await;
     let owner = server.tokens().await;
     create_space(&server, &owner, "Team", "Shared").await;
-    participant(&server, &owner, Method::POST, "contributor").await;
-    participant(&server, &owner, Method::PATCH, "admin").await;
+    space_member(&server, &owner, Method::POST, "contributor").await;
+    space_member(&server, &owner, Method::PATCH, "admin").await;
     let bob = login(&server, "bob").await;
     let first = seed(&server, &owner, "Guide").await;
     let second = change(&server, &bob, &by_key("KN-1"), json!({"summary":"Updated"})).await;
@@ -69,7 +69,7 @@ async fn list_knowledge_versions_succeeds_when_caller_is_viewer() {
     let server = two_people().await;
     let owner = server.tokens().await;
     create_space(&server, &owner, "Team", "Shared").await;
-    participant(&server, &owner, Method::POST, "viewer").await;
+    space_member(&server, &owner, Method::POST, "viewer").await;
     let bob = login(&server, "bob").await;
     let first = seed(&server, &owner, "Guide").await;
     let deleted = delete(&server, &owner, &by_key("KN-1")).await;
@@ -248,8 +248,8 @@ async fn list_deleted_knowledge_returns_deleted_entries_only() {
     let server = two_people().await;
     let owner = server.tokens().await;
     create_space(&server, &owner, "Team", "Shared").await;
-    participant(&server, &owner, Method::POST, "contributor").await;
-    participant(&server, &owner, Method::PATCH, "admin").await;
+    space_member(&server, &owner, Method::POST, "contributor").await;
+    space_member(&server, &owner, Method::PATCH, "admin").await;
     let bob = login(&server, "bob").await;
     let path = format!("{PATH}/deleted");
     assert_eq!(list(&server, &owner, &path).await, json!([]));
@@ -314,8 +314,8 @@ async fn roll_back_knowledge_entry_adds_version_copying_old_content() {
     let server = two_people().await;
     let owner = server.tokens().await;
     create_space(&server, &owner, "Team", "Shared").await;
-    participant(&server, &owner, Method::POST, "contributor").await;
-    participant(&server, &owner, Method::PATCH, "admin").await;
+    space_member(&server, &owner, Method::POST, "contributor").await;
+    space_member(&server, &owner, Method::PATCH, "admin").await;
     let bob = login(&server, "bob").await;
     let first = seed(&server, &owner, "Guide").await;
     let second = change(
@@ -480,11 +480,11 @@ async fn roll_back_knowledge_entry_fails_when_caller_is_contributor() {
     let server = two_people().await;
     let owner = server.tokens().await;
     create_space(&server, &owner, "Team", "Shared").await;
-    participant(&server, &owner, Method::POST, "contributor").await;
+    space_member(&server, &owner, Method::POST, "contributor").await;
     let bob = login(&server, "bob").await;
     let first = seed(&server, &owner, "Guide").await;
     for role in ["contributor", "viewer"] {
-        participant(&server, &owner, Method::PATCH, role).await;
+        space_member(&server, &owner, Method::PATCH, role).await;
         assert_eq!(
             read(&server, &bob, &resource(&by_name("Guide"), "versions/1")).await,
             first
@@ -534,9 +534,9 @@ async fn create_knowledge_entry_fails_when_caller_is_contributor() {
     let bob = login(&server, "bob").await;
     for role in ["contributor", "viewer"] {
         if role == "contributor" {
-            participant(&server, &owner, Method::POST, role).await;
+            space_member(&server, &owner, Method::POST, role).await;
         } else {
-            participant(&server, &owner, Method::PATCH, role).await;
+            space_member(&server, &owner, Method::PATCH, role).await;
         }
         assert_problem(
             request(
@@ -553,7 +553,7 @@ async fn create_knowledge_entry_fails_when_caller_is_contributor() {
         .await;
     }
     assert_eq!(list(&server, &owner, PATH).await, json!([]));
-    participant(&server, &owner, Method::PATCH, "admin").await;
+    space_member(&server, &owner, Method::PATCH, "admin").await;
     assert_eq!(seed(&server, &bob, "Guide").await["applied_by"], "bob");
 }
 
@@ -1008,7 +1008,7 @@ async fn read_knowledge_entry_fails_when_caller_is_not_in_space() {
         "space.not_found",
     )
     .await;
-    participant(&server, &owner, Method::POST, "viewer").await;
+    space_member(&server, &owner, Method::POST, "viewer").await;
     let viewer = authorize_for(&server, &bob, "Viewer").await;
     assert_eq!(
         read(&server, &viewer, &by_key("KN-1")).await["content"],

@@ -6,7 +6,7 @@ use crate::helpers::{
     Server, TEST_PASSWORD, assert_problem, authorize_for, create_space, list_page, list_response,
     login, request,
 };
-use crate::tasks::helpers::{create as create_task, participant};
+use crate::tasks::helpers::{create as create_task, space_member};
 
 use helpers::*;
 
@@ -119,11 +119,11 @@ async fn submit_proposal_succeeds_when_task_is_ended() {
 #[tokio::test]
 async fn submit_proposal_fails_when_person_is_viewer() {
     let (server, owner) = setup().await;
-    participant(&server, &owner, Method::POST, "contributor").await;
+    space_member(&server, &owner, Method::POST, "contributor").await;
     let bob = login(&server, "bob").await;
     let agent = authorize_for(&server, &bob, "Viewer").await;
     let task = create_task(&server, &agent, "SPACE-1", "Existing task").await;
-    participant(&server, &owner, Method::PATCH, "viewer").await;
+    space_member(&server, &owner, Method::PATCH, "viewer").await;
     for (caller, path) in [(&bob, PATH.to_owned()), (&agent, task_path(&task))] {
         assert_problem(
             request(&server, caller, Method::POST, &path, creation("Denied")).await,
@@ -172,7 +172,7 @@ async fn submit_proposal_fails_when_task_belongs_to_another_party() {
     let (server, owner) = setup().await;
     let owner_agent = authorize_for(&server, &owner, "Owner writer").await;
     let task = create_task(&server, &owner_agent, "SPACE-1", "Owner work").await;
-    participant(&server, &owner, Method::POST, "contributor").await;
+    space_member(&server, &owner, Method::POST, "contributor").await;
     let bob = login(&server, "bob").await;
     let agent = authorize_for(&server, &bob, "Other writer").await;
     assert_problem(
@@ -188,7 +188,7 @@ async fn submit_proposal_fails_when_task_belongs_to_another_party() {
         "space.permission_required",
     )
     .await;
-    participant(&server, &owner, Method::DELETE, "contributor").await;
+    space_member(&server, &owner, Method::DELETE, "contributor").await;
     assert_problem(
         request(
             &server,
@@ -512,7 +512,7 @@ async fn read_proposal_keeps_proposal_when_source_task_was_deleted() {
 #[tokio::test]
 async fn approve_proposal_creates_entry_that_agents_can_read() {
     let (server, owner) = setup().await;
-    participant(&server, &owner, Method::POST, "contributor").await;
+    space_member(&server, &owner, Method::POST, "contributor").await;
     let bob = login(&server, "bob").await;
     let agent = authorize_for(&server, &bob, "Reader").await;
     let proposed = submit(&server, &bob, creation("Guide")).await;
@@ -528,7 +528,7 @@ async fn approve_proposal_creates_entry_that_agents_can_read() {
 #[tokio::test]
 async fn approve_proposal_fails_when_contributor_approves_own_partys_proposal() {
     let (server, owner) = setup().await;
-    participant(&server, &owner, Method::POST, "contributor").await;
+    space_member(&server, &owner, Method::POST, "contributor").await;
     let bob = login(&server, "bob").await;
     submit(&server, &bob, creation("Person guide")).await;
     let agent = authorize_for(&server, &bob, "Writer").await;
@@ -555,8 +555,8 @@ async fn approve_proposal_fails_when_contributor_approves_own_partys_proposal() 
 #[tokio::test]
 async fn approve_proposal_succeeds_when_admin_approves_own_proposal() {
     let (server, owner) = setup().await;
-    participant(&server, &owner, Method::POST, "contributor").await;
-    participant(&server, &owner, Method::PATCH, "admin").await;
+    space_member(&server, &owner, Method::POST, "contributor").await;
+    space_member(&server, &owner, Method::PATCH, "admin").await;
     let bob = login(&server, "bob").await;
     submit(&server, &bob, creation("Admin guide")).await;
     assert_eq!(approve(&server, &bob, "PP-1").await["decided_by"], "bob");
@@ -582,7 +582,7 @@ async fn approve_proposal_succeeds_when_another_contributor_approves() {
                 &server,
                 &owner,
                 Method::POST,
-                &format!("/api/v1/spaces/SPACE-1/participants/{person}"),
+                &format!("/api/v1/spaces/SPACE-1/members/{person}"),
                 json!({"role":"contributor"}),
             )
             .await,
@@ -630,7 +630,7 @@ async fn approve_proposal_fails_when_caller_is_agent() {
 async fn approve_proposal_fails_when_person_is_viewer() {
     let (server, owner) = setup().await;
     submit(&server, &owner, creation("Guide")).await;
-    participant(&server, &owner, Method::POST, "viewer").await;
+    space_member(&server, &owner, Method::POST, "viewer").await;
     let bob = login(&server, "bob").await;
     for (action, body) in [
         ("approve", Value::Null),
@@ -749,7 +749,7 @@ async fn reject_proposal_keeps_proposal_with_reason() {
     assert_eq!(rejected["proposed_by"], "alice");
     assert_eq!(rejected["decided_by"], "alice");
     assert!(rejected["decided_at"].as_i64().unwrap() > 0);
-    participant(&server, &owner, Method::POST, "viewer").await;
+    space_member(&server, &owner, Method::POST, "viewer").await;
     let bob = login(&server, "bob").await;
     assert_eq!(read(&server, &bob, "PP-1").await, rejected);
     assert_eq!(
@@ -802,7 +802,7 @@ async fn reject_proposal_fails_when_reason_is_missing() {
 #[tokio::test]
 async fn reject_proposal_withdraws_own_partys_proposal() {
     let (server, owner) = setup().await;
-    participant(&server, &owner, Method::POST, "contributor").await;
+    space_member(&server, &owner, Method::POST, "contributor").await;
     let bob = login(&server, "bob").await;
     submit(&server, &bob, creation("Person guide")).await;
     let agent = authorize_for(&server, &bob, "Writer").await;
@@ -825,7 +825,7 @@ async fn approve_proposal_adds_version_with_approver_and_proposal() {
     let before = versions(&server, &owner, "KN-1").await;
     assert_eq!(before.as_array().unwrap().len(), 1);
     assert_version(&before[0], 1, "content", "alice", None);
-    participant(&server, &owner, Method::POST, "contributor").await;
+    space_member(&server, &owner, Method::POST, "contributor").await;
     let bob = login(&server, "bob").await;
     let agent = authorize_for(&server, &owner, "Writer").await;
     let task = create_task(&server, &agent, "SPACE-1", "Revise guide").await;

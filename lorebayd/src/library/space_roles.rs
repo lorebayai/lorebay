@@ -2,7 +2,7 @@ use futures_util::future::BoxFuture;
 use lorebay_lib_core::{Membership, MembershipPage, OperationHandle, SpaceRole, SpaceRoles};
 
 use crate::domain::{OWNER_ID, read_role};
-use crate::repository::participant::ParticipantRepository;
+use crate::repository::member::MemberRepository;
 
 pub(super) struct Roles;
 
@@ -25,7 +25,7 @@ impl SpaceRoles for Roles {
             if request.owner_id != OWNER_ID {
                 return Ok(Vec::new());
             }
-            let rows = ParticipantRepository::builder()
+            let rows = MemberRepository::builder()
                 .connection(handle.transaction())
                 .build()
                 .memberships(request.person_id, request.after_number, request.limit)

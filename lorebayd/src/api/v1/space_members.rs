@@ -9,8 +9,8 @@ use typed_builder::TypedBuilder;
 use crate::api::{ApiError, Envelope, FieldError, ListQuery, Meta, invalid_query};
 use crate::domain::caller::VerifiedCaller;
 use crate::domain::{
-    Participant, ParticipantError, add_participant, change_participant_role, list_participants,
-    remove_participant,
+    SpaceMember, SpaceMemberError, add_space_member, change_space_member_role, list_space_members,
+    remove_space_member,
 };
 use crate::server::ServerState;
 
@@ -25,7 +25,7 @@ pub(crate) struct RoleRequest {
 
 #[derive(Clone, Debug, Serialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
-pub(crate) struct ParticipantResponse {
+pub(crate) struct SpaceMemberResponse {
     #[serde(rename = "type")]
     kind: &'static str,
     username: String,
@@ -52,32 +52,32 @@ impl TryFrom<RoleRequest> for SpaceRole {
     }
 }
 
-impl From<Participant> for ParticipantResponse {
-    fn from(participant: Participant) -> Self {
+impl From<SpaceMember> for SpaceMemberResponse {
+    fn from(space_member: SpaceMember) -> Self {
         Self::builder()
-            .kind(if participant.agent_name.is_some() {
+            .kind(if space_member.agent_name.is_some() {
                 "agent"
             } else {
                 "human"
             })
-            .username(participant.username)
-            .role(participant.role.as_str())
-            .agent_name(participant.agent_name)
+            .username(space_member.username)
+            .role(space_member.role.as_str())
+            .agent_name(space_member.agent_name)
             .build()
     }
 }
 
-impl From<ParticipantError> for ApiError {
-    fn from(error: ParticipantError) -> Self {
+impl From<SpaceMemberError> for ApiError {
+    fn from(error: SpaceMemberError) -> Self {
         match error {
-            ParticipantError::Access(error) => error.into(),
-            ParticipantError::AlreadyExists => Self::ParticipantAlreadyExists,
-            ParticipantError::Caller(error) => error.into(),
-            ParticipantError::InvalidCursor => invalid_query("cursor"),
-            ParticipantError::NotFound => Self::ParticipantNotFound,
-            ParticipantError::UserNotFound => Self::UserNotFound,
-            error @ (ParticipantError::Database(_) | ParticipantError::Internal(_)) => {
-                tracing::error!(%error, "participant operation failed");
+            SpaceMemberError::Access(error) => error.into(),
+            SpaceMemberError::AlreadyExists => Self::SpaceMemberAlreadyExists,
+            SpaceMemberError::Caller(error) => error.into(),
+            SpaceMemberError::InvalidCursor => invalid_query("cursor"),
+            SpaceMemberError::NotFound => Self::SpaceMemberNotFound,
+            SpaceMemberError::UserNotFound => Self::UserNotFound,
+            error @ (SpaceMemberError::Database(_) | SpaceMemberError::Internal(_)) => {
+                tracing::error!(%error, "space member operation failed");
                 Self::Internal
             }
         }
@@ -89,15 +89,15 @@ pub(crate) async fn list(
     caller: VerifiedCaller,
     key: Result<Path<String>, PathRejection>,
     query: Result<Query<ListQuery>, QueryRejection>,
-) -> Result<Envelope<Vec<ParticipantResponse>>, ApiError> {
+) -> Result<Envelope<Vec<SpaceMemberResponse>>, ApiError> {
     let Path(key) = key.map_err(invalid_path)?;
     let Query(query) = query.map_err(|_| invalid_query("query"))?;
-    let page = list_participants(&state.database, &caller, &key, query.try_into()?).await?;
+    let page = list_space_members(&state.database, &caller, &key, query.try_into()?).await?;
     Ok(Envelope::builder()
         .data(
             page.items
                 .into_iter()
-                .map(ParticipantResponse::from)
+                .map(SpaceMemberResponse::from)
                 .collect::<Vec<_>>(),
         )
         .meta(Meta::builder().next_cursor(page.next_cursor).build())
@@ -109,14 +109,14 @@ pub(crate) async fn add(
     caller: VerifiedCaller,
     path: Result<Path<(String, String)>, PathRejection>,
     request: Result<Json<RoleRequest>, JsonRejection>,
-) -> Result<(StatusCode, Envelope<ParticipantResponse>), ApiError> {
+) -> Result<(StatusCode, Envelope<SpaceMemberResponse>), ApiError> {
     let Path((key, username)) = path.map_err(invalid_path)?;
     let Json(request) = request.map_err(invalid_json)?;
     let role = request.added_role()?;
-    let participant = add_participant(&state.database, &caller, &key, &username, role).await?;
+    let space_member = add_space_member(&state.database, &caller, &key, &username, role).await?;
     Ok((
         StatusCode::CREATED,
-        Envelope::builder().data(participant).build(),
+        Envelope::builder().data(space_member).build(),
     ))
 }
 
@@ -125,10 +125,10 @@ pub(crate) async fn change_role(
     caller: VerifiedCaller,
     path: Result<Path<(String, String)>, PathRejection>,
     request: Result<Json<RoleRequest>, JsonRejection>,
-) -> Result<Envelope<ParticipantResponse>, ApiError> {
+) -> Result<Envelope<SpaceMemberResponse>, ApiError> {
     let Path((key, username)) = path.map_err(invalid_path)?;
     let Json(request) = request.map_err(invalid_json)?;
-    let participant = change_participant_role(
+    let space_member = change_space_member_role(
         &state.database,
         &caller,
         &key,
@@ -136,7 +136,7 @@ pub(crate) async fn change_role(
         request.try_into()?,
     )
     .await?;
-    Ok(Envelope::builder().data(participant).build())
+    Ok(Envelope::builder().data(space_member).build())
 }
 
 pub(crate) async fn remove(
@@ -145,7 +145,7 @@ pub(crate) async fn remove(
     path: Result<Path<(String, String)>, PathRejection>,
 ) -> Result<Envelope<()>, ApiError> {
     let Path((key, username)) = path.map_err(invalid_path)?;
-    remove_participant(&state.database, &caller, &key, &username).await?;
+    remove_space_member(&state.database, &caller, &key, &username).await?;
     Ok(Envelope::builder().data(()).build())
 }
 
@@ -154,7 +154,7 @@ fn invalid_role() -> ApiError {
         FieldError::builder()
             .field("role")
             .code("invalid")
-            .message("Expected an allowed participant role.")
+            .message("Expected an allowed space member role.")
             .build(),
     ])
 }

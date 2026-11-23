@@ -7,9 +7,9 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use typed_builder::TypedBuilder;
 
-use crate::entity::participant;
+use crate::entity::member;
 use crate::repository::account::AccountRepository;
-use crate::repository::participant::{ParticipantRecord, ParticipantRepository, RosterAfter};
+use crate::repository::member::{MemberRecord, MemberRepository, RosterAfter};
 
 use crate::time::now_millis;
 
@@ -18,7 +18,7 @@ use super::pagination::{Page, PageOptions, decode_cursor, encode_cursor};
 use super::primary_key;
 
 #[derive(Debug, Error)]
-pub(crate) enum ParticipantError {
+pub(crate) enum SpaceMemberError {
     #[error(transparent)]
     Access(#[from] SpaceAccessError),
     #[error("The person is already in the space")]
@@ -31,7 +31,7 @@ pub(crate) enum ParticipantError {
     Internal(#[from] anyhow::Error),
     #[error("Invalid cursor")]
     InvalidCursor,
-    #[error("Participant not found")]
+    #[error("Space member not found")]
     NotFound,
     #[error("User not found")]
     UserNotFound,
@@ -39,7 +39,7 @@ pub(crate) enum ParticipantError {
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub(crate) enum ParticipantKind {
+pub(crate) enum SpaceMemberKind {
     Agent,
     #[serde(rename = "human")]
     Person,
@@ -47,7 +47,7 @@ pub(crate) enum ParticipantKind {
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
-pub(crate) struct Participant {
+pub(crate) struct SpaceMember {
     pub username: String,
     pub role: SpaceRole,
     pub agent_name: Option<String>,
@@ -57,23 +57,23 @@ pub(crate) struct Participant {
 #[builder(field_defaults(setter(into)))]
 pub(crate) struct RosterPosition {
     pub username: String,
-    pub kind: ParticipantKind,
+    pub kind: SpaceMemberKind,
     pub agent_name: String,
 }
 
-impl TryFrom<&str> for ParticipantKind {
+impl TryFrom<&str> for SpaceMemberKind {
     type Error = DbErr;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         match value {
             "agent" => Ok(Self::Agent),
             "human" => Ok(Self::Person),
-            _ => Err(DbErr::Type("Invalid participant kind".into())),
+            _ => Err(DbErr::Type("Invalid space member kind".into())),
         }
     }
 }
 
-impl ParticipantKind {
+impl SpaceMemberKind {
     fn as_str(self) -> &'static str {
         match self {
             Self::Agent => "agent",
@@ -97,7 +97,7 @@ pub(crate) async fn read_role(
     person_id: &str,
     space_id: &str,
 ) -> Result<Option<SpaceRole>, DbErr> {
-    ParticipantRepository::builder()
+    MemberRepository::builder()
         .connection(transaction)
         .build()
         .by_space_and_account(space_id, person_id)
@@ -108,32 +108,32 @@ pub(crate) async fn read_role(
         .transpose()
 }
 
-pub(crate) async fn list_participants(
+pub(crate) async fn list_space_members(
     database: &DatabaseConnection,
     caller: &VerifiedCaller,
     key: &str,
     options: PageOptions,
-) -> Result<Page<Participant>, ParticipantError> {
+) -> Result<Page<SpaceMember>, SpaceMemberError> {
     let transaction = database.begin().await?;
     let authorized = check_space(&transaction, caller, key, READ_ROLES).await?;
-    let version = format!("participants-v2:{key}");
+    let version = format!("members-v2:{key}");
     let after = options
         .cursor
         .map(|cursor| {
             let value = decode_cursor(&version, caller.account_id(), &cursor)
-                .ok_or(ParticipantError::InvalidCursor)?;
+                .ok_or(SpaceMemberError::InvalidCursor)?;
             let position: RosterPosition =
-                serde_json::from_str(&value).map_err(|_| ParticipantError::InvalidCursor)?;
+                serde_json::from_str(&value).map_err(|_| SpaceMemberError::InvalidCursor)?;
             if position.username.is_empty()
-                || matches!(position.kind, ParticipantKind::Person)
+                || matches!(position.kind, SpaceMemberKind::Person)
                     && !position.agent_name.is_empty()
             {
-                return Err(ParticipantError::InvalidCursor);
+                return Err(SpaceMemberError::InvalidCursor);
             }
             Ok(RosterAfter::from(&position))
         })
         .transpose()?;
-    let mut records = ParticipantRepository::builder()
+    let mut records = MemberRepository::builder()
         .connection(&transaction)
         .build()
         .list(&authorized.space.id, after.as_ref(), options.page_size + 1)
@@ -147,7 +147,7 @@ pub(crate) async fn list_participants(
         .transpose()?;
     let items = records
         .into_iter()
-        .map(participant_from_record)
+        .map(space_member_from_record)
         .collect::<Result<Vec<_>, _>>()?;
     transaction.commit().await?;
     Ok(Page::builder()
@@ -156,13 +156,13 @@ pub(crate) async fn list_participants(
         .build())
 }
 
-pub(crate) async fn add_participant(
+pub(crate) async fn add_space_member(
     database: &DatabaseConnection,
     caller: &VerifiedCaller,
     key: &str,
     username: &str,
     role: SpaceRole,
-) -> Result<Participant, ParticipantError> {
+) -> Result<SpaceMember, SpaceMemberError> {
     caller.person()?;
     let transaction = write_transaction(database).await?;
     let authorized = check_space(&transaction, caller, key, MANAGE_ROLES).await?;
@@ -175,20 +175,18 @@ pub(crate) async fn add_participant(
         .by_username(username)
         .await?
         .filter(|account| account.deleted_at.is_none())
-        .ok_or(ParticipantError::UserNotFound)?;
-    let repository = ParticipantRepository::builder()
-        .connection(&transaction)
-        .build();
+        .ok_or(SpaceMemberError::UserNotFound)?;
+    let repository = MemberRepository::builder().connection(&transaction).build();
     if repository
         .by_space_and_account(&authorized.space.id, &account.id)
         .await?
         .is_some()
     {
-        return Err(ParticipantError::AlreadyExists);
+        return Err(SpaceMemberError::AlreadyExists);
     }
     let now = now_millis()?;
     repository
-        .insert(participant::ActiveModel {
+        .insert(member::ActiveModel {
             id: Set(primary_key()),
             space_id: Set(authorized.space.id),
             account_id: Set(account.id),
@@ -199,49 +197,49 @@ pub(crate) async fn add_participant(
         })
         .await?;
     transaction.commit().await?;
-    Ok(Participant::builder()
+    Ok(SpaceMember::builder()
         .username(username)
         .role(role)
         .agent_name(None)
         .build())
 }
 
-pub(crate) async fn change_participant_role(
+pub(crate) async fn change_space_member_role(
     database: &DatabaseConnection,
     caller: &VerifiedCaller,
     key: &str,
     username: &str,
     role: SpaceRole,
-) -> Result<Participant, ParticipantError> {
+) -> Result<SpaceMember, SpaceMemberError> {
     caller.person()?;
     let transaction = write_transaction(database).await?;
     let model = mutation_target(&transaction, caller, key, username, Some(role)).await?;
     let mut model = model.into_active_model();
     model.role = Set(role.as_str().to_owned());
     model.updated_at = Set(now_millis()?);
-    ParticipantRepository::builder()
+    MemberRepository::builder()
         .connection(&transaction)
         .build()
         .update(model)
         .await?;
     transaction.commit().await?;
-    Ok(Participant::builder()
+    Ok(SpaceMember::builder()
         .username(username)
         .role(role)
         .agent_name(None)
         .build())
 }
 
-pub(crate) async fn remove_participant(
+pub(crate) async fn remove_space_member(
     database: &DatabaseConnection,
     caller: &VerifiedCaller,
     key: &str,
     username: &str,
-) -> Result<(), ParticipantError> {
+) -> Result<(), SpaceMemberError> {
     caller.person()?;
     let transaction = write_transaction(database).await?;
     let model = mutation_target(&transaction, caller, key, username, None).await?;
-    ParticipantRepository::builder()
+    MemberRepository::builder()
         .connection(&transaction)
         .build()
         .delete(&model.id)
@@ -258,16 +256,16 @@ const READ_ROLES: &[SpaceRole] = &[
 ];
 const MANAGE_ROLES: &[SpaceRole] = &[SpaceRole::Owner, SpaceRole::Admin];
 
-fn participant_from_record(record: ParticipantRecord) -> Result<Participant, DbErr> {
+fn space_member_from_record(record: MemberRecord) -> Result<SpaceMember, DbErr> {
     let mut role = SpaceRole::try_from(record.role.as_str())
         .map_err(|error| DbErr::Type(error.to_string()))?;
     if matches!(
-        ParticipantKind::try_from(record.kind.as_str())?,
-        ParticipantKind::Agent
+        SpaceMemberKind::try_from(record.kind.as_str())?,
+        SpaceMemberKind::Agent
     ) {
         role = role.for_agent();
     }
-    Ok(Participant::builder()
+    Ok(SpaceMember::builder()
         .username(record.username)
         .role(role)
         .agent_name(record.agent_name)
@@ -275,13 +273,13 @@ fn participant_from_record(record: ParticipantRecord) -> Result<Participant, DbE
 }
 
 fn roster_cursor(
-    record: &ParticipantRecord,
+    record: &MemberRecord,
     version: &str,
     account_id: &str,
-) -> Result<String, ParticipantError> {
+) -> Result<String, SpaceMemberError> {
     let position = RosterPosition::builder()
         .username(&record.username)
-        .kind(ParticipantKind::try_from(record.kind.as_str())?)
+        .kind(SpaceMemberKind::try_from(record.kind.as_str())?)
         .agent_name(record.agent_name.as_deref().unwrap_or_default())
         .build();
     let value = serde_json::to_string(&position).map_err(anyhow::Error::from)?;
@@ -294,7 +292,7 @@ async fn mutation_target(
     key: &str,
     username: &str,
     role: Option<SpaceRole>,
-) -> Result<participant::Model, ParticipantError> {
+) -> Result<member::Model, SpaceMemberError> {
     let authorized = check_space(transaction, caller, key, MANAGE_ROLES).await?;
     let account = AccountRepository::builder()
         .connection(transaction)
@@ -302,13 +300,13 @@ async fn mutation_target(
         .by_username(username)
         .await?
         .filter(|account| account.deleted_at.is_none())
-        .ok_or(ParticipantError::NotFound)?;
-    let target = ParticipantRepository::builder()
+        .ok_or(SpaceMemberError::NotFound)?;
+    let target = MemberRepository::builder()
         .connection(transaction)
         .build()
         .by_space_and_account(&authorized.space.id, &account.id)
         .await?
-        .ok_or(ParticipantError::NotFound)?;
+        .ok_or(SpaceMemberError::NotFound)?;
     let target_role = SpaceRole::try_from(target.role.as_str())
         .map_err(|error| DbErr::Type(error.to_string()))?;
     if target_role == SpaceRole::Owner

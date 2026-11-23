@@ -9,7 +9,7 @@ use crate::helpers::{
 };
 
 use super::helpers::{
-    SPACE, TASKS, append, create, note_request, participant, read, scratchpad, setup,
+    SPACE, TASKS, append, create, note_request, read, scratchpad, setup, space_member,
 };
 
 #[tokio::test]
@@ -178,7 +178,7 @@ async fn change_task_fails_when_task_belongs_to_another_party() {
     let (server, person, owner_agent) = setup().await;
     let bob = login(&server, "bob").await;
     let bob_agent = authorize_for(&server, &bob, "Bob agent").await;
-    participant(&server, &person, Method::POST, "contributor").await;
+    space_member(&server, &person, Method::POST, "contributor").await;
     let alice_task = create(&server, &owner_agent, SPACE, "Alice task").await;
     let bob_task = create(&server, &bob_agent, SPACE, "Bob task").await;
     for tokens in [&bob, &bob_agent] {
@@ -191,11 +191,11 @@ async fn change_task_fails_when_task_belongs_to_another_party() {
         }
     }
     for role in ["contributor", "admin"] {
-        participant(&server, &person, Method::PATCH, role).await;
+        space_member(&server, &person, Method::PATCH, role).await;
         assert_change_denied(&server, &bob_agent, &alice_task, json!({"status":"ended"})).await;
     }
     assert_change_denied(&server, &owner_agent, &bob_task, json!({"status":"ended"})).await;
-    participant(&server, &person, Method::DELETE, "").await;
+    space_member(&server, &person, Method::DELETE, "").await;
     create_space(&server, &bob, "Bob only", "Bob work").await;
     for tokens in [&bob, &bob_agent] {
         for task in [&alice_task, &bob_task] {
@@ -251,8 +251,8 @@ async fn change_task_closes_another_persons_task_when_caller_is_admin() {
     let (server, person, agent) = setup().await;
     let bob = login(&server, "bob").await;
     let bob_agent = authorize_for(&server, &bob, "Bob agent").await;
-    participant(&server, &person, Method::POST, "contributor").await;
-    participant(&server, &person, Method::PATCH, "admin").await;
+    space_member(&server, &person, Method::POST, "contributor").await;
+    space_member(&server, &person, Method::PATCH, "admin").await;
     let alice_task = create(&server, &agent, SPACE, "Alice task").await;
     let bob_task = create(&server, &bob_agent, SPACE, "Bob task").await;
     let alice_original = read(&server, &person, "TK-1").await;
@@ -263,7 +263,7 @@ async fn change_task_closes_another_persons_task_when_caller_is_admin() {
     expected["ended_at"] = ended["ended_at"].clone();
     assert!(ended["ended_at"].is_i64());
     assert_eq!(ended, expected);
-    participant(&server, &person, Method::DELETE, "").await;
+    space_member(&server, &person, Method::DELETE, "").await;
     let ended = change(&server, &person, &bob_task, json!({"status":"ended"})).await;
     let mut expected = bob_original;
     expected["status"] = json!("ended");
@@ -278,8 +278,8 @@ async fn change_task_fails_when_admin_edits_another_persons_title() {
     let (server, person, agent) = setup().await;
     let bob = login(&server, "bob").await;
     let bob_agent = authorize_for(&server, &bob, "Bob agent").await;
-    participant(&server, &person, Method::POST, "contributor").await;
-    participant(&server, &person, Method::PATCH, "admin").await;
+    space_member(&server, &person, Method::POST, "contributor").await;
+    space_member(&server, &person, Method::PATCH, "admin").await;
     let alice_task = create(&server, &agent, SPACE, "Original").await;
     let bob_task = create(&server, &bob_agent, SPACE, "Original").await;
     for (tokens, task) in [(&bob, &alice_task), (&person, &bob_task)] {
@@ -310,10 +310,10 @@ async fn change_task_fails_when_person_became_viewer() {
     let (server, person, _) = setup().await;
     let bob = login(&server, "bob").await;
     let agent = authorize_for(&server, &bob, "Bob agent").await;
-    participant(&server, &person, Method::POST, "contributor").await;
+    space_member(&server, &person, Method::POST, "contributor").await;
     let task = create(&server, &agent, SPACE, "Bob task").await;
     change(&server, &bob, &task, json!({"result":"Existing result"})).await;
-    participant(&server, &person, Method::PATCH, "viewer").await;
+    space_member(&server, &person, Method::PATCH, "viewer").await;
     for tokens in [&bob, &agent] {
         for changes in [
             json!({"title":"Forbidden"}),

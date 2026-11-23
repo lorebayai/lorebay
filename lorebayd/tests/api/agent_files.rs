@@ -19,7 +19,7 @@ use crate::helpers::{
     Server, TEST_PASSWORD, TEST_TIMEOUT, assert_problem, authorize_for, create_space, login,
     request,
 };
-use crate::tasks::helpers::{SPACE, append, create, participant, read, setup};
+use crate::tasks::helpers::{SPACE, append, create, read, setup, space_member};
 
 use helpers::*;
 
@@ -124,7 +124,7 @@ async fn complete_agent_file_lists_agent_file_on_task_with_size() {
     );
     assert_eq!(read(&server, &person, "TK-1").await, after);
     let bob = login(&server, "bob").await;
-    participant(&server, &person, Method::POST, "viewer").await;
+    space_member(&server, &person, Method::POST, "viewer").await;
     assert_eq!(read(&server, &bob, "TK-1").await, after);
     let bob_agent = authorize_for(&server, &bob, "Reader").await;
     assert_eq!(read(&server, &bob_agent, "TK-1").await, after);
@@ -546,7 +546,7 @@ async fn register_agent_file_fails_when_task_belongs_to_another_party() {
     register(&server, &agent, &task).await;
     let bob = login(&server, "bob").await;
     let bob_agent = authorize_for(&server, &bob, "Bob agent").await;
-    participant(&server, &person, Method::POST, "contributor").await;
+    space_member(&server, &person, Method::POST, "contributor").await;
     assert_refusals(
         &server,
         &bob_agent,
@@ -556,7 +556,7 @@ async fn register_agent_file_fails_when_task_belongs_to_another_party() {
     )
     .await;
     let own = create(&server, &bob_agent, SPACE, "Bob task").await;
-    participant(&server, &person, Method::PATCH, "viewer").await;
+    space_member(&server, &person, Method::PATCH, "viewer").await;
     assert_refusals(
         &server,
         &bob_agent,
@@ -565,7 +565,7 @@ async fn register_agent_file_fails_when_task_belongs_to_another_party() {
         (StatusCode::FORBIDDEN, "space.permission_required"),
     )
     .await;
-    participant(&server, &person, Method::DELETE, "").await;
+    space_member(&server, &person, Method::DELETE, "").await;
     create_space(&server, &bob, "Other", "Bob space").await;
     assert_refusals(
         &server,

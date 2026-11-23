@@ -15,7 +15,7 @@ pub async fn contributor(server: &Server, space: &str) {
     assert_success(
         &server
             .run(&[
-                "participant",
+                "member",
                 "add",
                 space,
                 SECOND_USERNAME,

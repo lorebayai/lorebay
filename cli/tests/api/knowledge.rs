@@ -299,7 +299,7 @@ async fn knowledge_create_fails_with_server_error_when_caller_is_contributor() {
     assert_success(
         &server
             .run(&[
-                "participant",
+                "member",
                 "add",
                 &space,
                 SECOND_USERNAME,
@@ -701,7 +701,7 @@ async fn knowledge_rollback_fails_with_server_error_when_caller_is_contributor()
     assert_success(
         &server
             .run(&[
-                "participant",
+                "member",
                 "add",
                 &space,
                 SECOND_USERNAME,

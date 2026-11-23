@@ -1,12 +1,12 @@
 use serde_json::{Value, json};
 
 use crate::helpers::{
-    SECOND_USERNAME, assert_participant, assert_removal, assert_removed, assert_success,
+    SECOND_USERNAME, assert_removal, assert_removed, assert_space_member, assert_success,
     assert_usage, body, create, pages, team,
 };
 
 #[tokio::test]
-async fn participant_add_lets_second_person_list_space() {
+async fn member_add_lets_second_person_list_space() {
     let server = team().await;
     let space = create(&server, "Team", "Team work").await;
     for mode in ["human", "json"] {
@@ -26,7 +26,7 @@ async fn participant_add_lets_second_person_list_space() {
     }
     let added = server
         .run(&[
-            "participant",
+            "member",
             "add",
             &space,
             SECOND_USERNAME,
@@ -106,14 +106,14 @@ async fn space_rename_updates_name_and_summary() {
 }
 
 #[tokio::test]
-async fn participant_set_role_changes_role_in_participant_list() {
+async fn member_set_role_changes_role_in_member_list() {
     let server = team().await;
     let space = create(&server, "Team", "Team work").await;
     for mode in ["human", "json"] {
         assert_success(
             &server
                 .run(&[
-                    "participant",
+                    "member",
                     "add",
                     &space,
                     SECOND_USERNAME,
@@ -127,7 +127,7 @@ async fn participant_set_role_changes_role_in_participant_list() {
         for role in ["contributor", "admin", "viewer"] {
             let changed = server
                 .run(&[
-                    "participant",
+                    "member",
                     "set-role",
                     &space,
                     SECOND_USERNAME,
@@ -137,9 +137,9 @@ async fn participant_set_role_changes_role_in_participant_list() {
                     mode,
                 ])
                 .await;
-            assert_participant(&changed, mode, role);
+            assert_space_member(&changed, mode, role);
             let roster = server
-                .run(&["participant", "list", &space, "--output", "json"])
+                .run(&["member", "list", &space, "--output", "json"])
                 .await;
             assert_success(&roster);
             assert!(
@@ -151,7 +151,7 @@ async fn participant_set_role_changes_role_in_participant_list() {
         }
         let removed = server
             .run(&[
-                "participant",
+                "member",
                 "remove",
                 &space,
                 SECOND_USERNAME,
@@ -165,13 +165,13 @@ async fn participant_set_role_changes_role_in_participant_list() {
 }
 
 #[tokio::test]
-async fn participant_add_fails_with_server_error_when_caller_is_contributor() {
+async fn member_add_fails_with_server_error_when_caller_is_contributor() {
     let server = team().await;
     let space = create(&server, "Team", "Team work").await;
     assert_success(
         &server
             .run(&[
-                "participant",
+                "member",
                 "add",
                 &space,
                 SECOND_USERNAME,
@@ -185,7 +185,7 @@ async fn participant_add_fails_with_server_error_when_caller_is_contributor() {
             .run_as(
                 SECOND_USERNAME,
                 &[
-                    "participant",
+                    "member",
                     "add",
                     &space,
                     &server.username,
@@ -211,7 +211,7 @@ async fn participant_add_fails_with_server_error_when_caller_is_contributor() {
         }
     }
     let roster = server
-        .run(&["participant", "list", &space, "--output", "json"])
+        .run(&["member", "list", &space, "--output", "json"])
         .await;
     assert_success(&roster);
     assert_eq!(body(&roster)["data"].as_array().unwrap().len(), 2);
@@ -227,14 +227,7 @@ async fn lists_return_one_page_and_preserve_roster_order() {
     server.agent("Alpha").await;
     assert_success(
         &server
-            .run(&[
-                "participant",
-                "add",
-                &first,
-                SECOND_USERNAME,
-                "--role",
-                "viewer",
-            ])
+            .run(&["member", "add", &first, SECOND_USERNAME, "--role", "viewer"])
             .await,
     );
     pages(
@@ -253,7 +246,7 @@ async fn lists_return_one_page_and_preserve_roster_order() {
     .await;
     let roster = pages(
         &server,
-        &["participant", "list", &first],
+        &["member", "list", &first],
         "username",
         &[
             &server.username,
@@ -305,32 +298,11 @@ async fn commands_reject_invalid_arguments_before_calling_server() {
     let commands = [
         vec!["space", "change", &space],
         vec!["space", "create", "--name", "Missing summary"],
+        vec!["member", "add", &space, SECOND_USERNAME, "--role", "admin"],
+        vec!["member", "add", &space, SECOND_USERNAME, "--role", "owner"],
+        vec!["member", "add", &space, SECOND_USERNAME, "--role", "vewer"],
         vec![
-            "participant",
-            "add",
-            &space,
-            SECOND_USERNAME,
-            "--role",
-            "admin",
-        ],
-        vec![
-            "participant",
-            "add",
-            &space,
-            SECOND_USERNAME,
-            "--role",
-            "owner",
-        ],
-        vec![
-            "participant",
-            "add",
-            &space,
-            SECOND_USERNAME,
-            "--role",
-            "vewer",
-        ],
-        vec![
-            "participant",
+            "member",
             "set-role",
             &space,
             SECOND_USERNAME,
@@ -338,14 +310,14 @@ async fn commands_reject_invalid_arguments_before_calling_server() {
             "owner",
         ],
         vec![
-            "participant",
+            "member",
             "set-role",
             &space,
             SECOND_USERNAME,
             "--role",
             "vewer",
         ],
-        vec!["participant", "add", &space, SECOND_USERNAME],
+        vec!["member", "add", &space, SECOND_USERNAME],
     ];
     for mut arguments in commands {
         arguments.extend(["--output", "json"]);
@@ -354,7 +326,7 @@ async fn commands_reject_invalid_arguments_before_calling_server() {
     }
     for arguments in [
         vec!["space", "--help"],
-        vec!["participant", "set-role", "--help"],
+        vec!["member", "set-role", "--help"],
         vec!["user", "list", "--help"],
     ] {
         assert_success(&server.run(&arguments).await);
@@ -370,7 +342,7 @@ async fn commands_preserve_server_validation_and_hidden_space_errors() {
             vec!["space", "create", "--name", "", "--summary", "Summary"],
             vec!["space", "list", "--page-size", "0"],
             vec!["user", "list", "--cursor", "invalid"],
-            vec!["participant", "list", &space, "--page-size", "0"],
+            vec!["member", "list", &space, "--page-size", "0"],
         ] {
             let mut arguments = arguments;
             arguments.extend(["--output", mode]);

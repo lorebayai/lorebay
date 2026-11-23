@@ -6,7 +6,7 @@ use tokio::time::sleep;
 use url::Url;
 
 use crate::helpers::{Server, assert_problem, authorize_for, create_space, login, request};
-use crate::tasks::helpers::{SPACE, create, participant, read, setup};
+use crate::tasks::helpers::{SPACE, create, read, setup, space_member};
 
 use super::helpers::{complete, file_url, prepare, register, registration, upload_ok};
 
@@ -16,7 +16,7 @@ async fn get_agent_file_download_url_returns_url_that_serves_uploaded_bytes() {
     let task = create(&server, &agent, SPACE, "Shared file").await;
     let agent_file = uploaded(&server, &agent, &task, "report.txt").await;
     let bob = login(&server, "bob").await;
-    participant(&server, &person, Method::POST, "viewer").await;
+    space_member(&server, &person, Method::POST, "viewer").await;
     let reader = authorize_for(&server, &bob, "Reader").await;
     let before = read(&server, &person, "TK-1").await;
     for caller in [&person, &bob, &reader] {
@@ -36,7 +36,7 @@ async fn get_agent_file_download_url_returns_url_that_serves_uploaded_bytes() {
         assert_eq!(response.bytes().await.unwrap(), "Uploaded bytes");
     }
     assert_eq!(read(&server, &person, "TK-1").await, before);
-    participant(&server, &person, Method::DELETE, "").await;
+    space_member(&server, &person, Method::DELETE, "").await;
     for caller in [&bob, &reader] {
         assert_problem(
             url_request(&server, caller, SPACE, &agent_file).await,

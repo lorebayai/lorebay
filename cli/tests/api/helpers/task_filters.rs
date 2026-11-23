@@ -19,7 +19,7 @@ pub async fn filtered_tasks() -> (Server, String) {
     assert_success(
         &server
             .run(&[
-                "participant",
+                "member",
                 "add",
                 &space,
                 SECOND_USERNAME,
