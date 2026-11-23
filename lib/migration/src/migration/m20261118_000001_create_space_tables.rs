@@ -48,7 +48,7 @@ fn space() -> TableCreateStatement {
         .table(Space::Table)
         .col(text(Space::Id).primary_key())
         .col(big_integer(Space::Number).unique_key())
-        .col(text(Space::OwnerId))
+        .col(text(Space::TenantId))
         .col(text(Space::Name))
         .col(text(Space::Summary))
         .col(big_integer(Space::NextTaskNumber).default(1))
@@ -502,9 +502,9 @@ enum Space {
     NextProposalNumber,
     NextTaskNumber,
     Number,
-    OwnerId,
     Summary,
     Table,
+    TenantId,
     UpdatedAt,
 }
 
