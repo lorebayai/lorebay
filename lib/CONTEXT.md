@@ -7,7 +7,7 @@ other terms are written in lowercase in running text.
 ## Library
 
 **Library**: The features every product shares: spaces, tasks, notes,
-artifacts, Knowledge, proposals and the MCP tools, built into a product's
+files, Knowledge, proposals and the MCP tools, built into a product's
 process as the `lorebay-lib-*` crates.
 
 **Product**: A program built on the library. It holds people, how they sign
@@ -77,7 +77,7 @@ agent rule.
 ## Data
 
 **Task**: The record of one piece of work an agent does for a person in a
-space: its title, status, result, Scratchpad and artifacts.
+space: its title, status, result, Scratchpad and files.
 
 **Result**: A task's Markdown summary of the work so far.
 
@@ -86,11 +86,12 @@ while it works.
 
 **Scratchpad**: A task's notes, in time order.
 
-**Artifact**: An immutable file an agent uploads to a task.
+**File**: Immutable content an agent uploads to a task, with a name and a
+summary.
 
-**Refused registration**: An artifact registration whose file was over the
+**Refused registration**: A file registration whose content was over the
 size limit when its upload was reported complete. It never completes; the
-client registers a new artifact instead.
+client registers a new file instead.
 
 **Knowledge**: A space's shared Markdown documents, kept with their history.
 
@@ -107,10 +108,10 @@ takes effect only when a person approves it.
 its own schedule to remove what interrupted writes leave behind. There are
 two: the abandoned-registration round and the orphaned-file round.
 
-**Abandoned-registration round**: The cleanup round that removes artifact
-registrations neither completed nor refused, and their files.
+**Abandoned-registration round**: The cleanup round that removes file
+registrations neither completed nor refused, and their stored content.
 
-**Orphaned-file round**: The cleanup round that deletes stored files that no
+**Orphaned-file round**: The cleanup round that deletes stored content that no
 record points to, other than a refused registration.
 
 ## Identifiers
@@ -121,7 +122,7 @@ ordering ties; it never defines business order and never reaches a caller.
 A product receives a space's ID only to refer to the space in its own rows.
 
 **Key**: A short identifier with a type prefix, such as `TK-12`, shown to
-people and used in references. Keys of tasks, knowledge entries, artifacts
+people and used in references. Keys of tasks, knowledge entries, files
 and proposals count up per space; a space's key carries its space number.
 
 **Space number**: The permanent number in a space key, such as the 1 in

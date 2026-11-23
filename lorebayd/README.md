@@ -20,9 +20,8 @@ lorebayd --config /path/to/lorebayd.json --dotenv /path/to/lorebayd.env
 ```
 
 The second command regenerates Lorebay's entities. Startup applies the
-library's migrations, then Lorebay's, so a data directory made by `v0.1.0` or
-a later release is upgraded in place; one made by a build before `v0.1.0` is
-refused: move it aside and start with an empty one, and the users file
+library's migrations, then Lorebay's. A data directory from an earlier
+release is refused: delete it and start with an empty one; the users file
 recreates the accounts. Open the metadata's `/oauth/authorize` endpoint with
 the client's authorization parameters to sign in and consent. The CLI's
 client ID is `lorebay-cli`; it accepts loopback redirects on any port and
@@ -80,8 +79,8 @@ configuration environment. Relative paths resolve against the working directory.
 | `upload_size_limit_bytes` | `LOREBAYD__UPLOAD_SIZE_LIMIT_BYTES` | `5000000000` | 1..5000000000 bytes |
 | `upload_concurrency_limit` | `LOREBAYD__UPLOAD_CONCURRENCY_LIMIT` | `4` | Positive u32 concurrent uploads |
 | `upload_idle_timeout_seconds` | `LOREBAYD__UPLOAD_IDLE_TIMEOUT_SECONDS` | `30` | 1..315360000 seconds without an upload chunk |
-| `artifact_cleanup_interval_seconds` | `LOREBAYD__ARTIFACT_CLEANUP_INTERVAL_SECONDS` | `3600` | 1..315360000 seconds; the three artifact cleanup jobs |
-| `abandoned_artifact_lifetime_seconds` | `LOREBAYD__ABANDONED_ARTIFACT_LIFETIME_SECONDS` | `86400` | 1..315360000 seconds; longer than `upload_url_lifetime_seconds` |
+| `file_cleanup_interval_seconds` | `LOREBAYD__FILE_CLEANUP_INTERVAL_SECONDS` | `3600` | 1..315360000 seconds; the three file cleanup jobs |
+| `abandoned_file_lifetime_seconds` | `LOREBAYD__ABANDONED_FILE_LIFETIME_SECONDS` | `86400` | 1..315360000 seconds; longer than `upload_url_lifetime_seconds` |
 | `orphaned_file_lifetime_seconds` | `LOREBAYD__ORPHANED_FILE_LIFETIME_SECONDS` | `86400` | 1..315360000 seconds; longer than `upload_url_lifetime_seconds` and `upload_idle_timeout_seconds`; also the age for the local directory's temporary uploads and out-of-format files |
 | `logging.level` | `LOREBAYD__LOGGING__LEVEL` | `info` | `off`, `error`, `warn`, `info`, `debug`, `trace` |
 

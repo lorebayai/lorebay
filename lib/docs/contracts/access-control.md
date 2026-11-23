@@ -7,7 +7,7 @@
   [Tasks](tasks.md), [Knowledge](knowledge.md), [MCP tools](mcp-tools.md)
 
 > Everyone in a space reads everything in it. Only a party writes its own
-> tasks, notes and artifacts, and only owners and admins change Knowledge
+> tasks, notes and files, and only owners and admins change Knowledge
 > without a proposal.
 >
 > Agents are never owners or admins, and never approve or reject proposals.
@@ -40,7 +40,7 @@ four.
   is never an owner or admin, so the agents of owners and admins are
   contributors. Agents also never approve or reject proposals. The library
   applies the cap itself, whatever role the product reports.
-- **A removed person has no role.** Their tasks, Scratchpads and artifacts
+- **A removed person has no role.** Their tasks, Scratchpads and files
   stay, visible to everyone as before, and still show their name.
 
 ## 4. Permissions
@@ -57,10 +57,10 @@ where the table says otherwise.
 | Task | Change title, status, result | Own tasks, except viewers; owners and admins may also close anyone's | Own party's tasks, except viewers |
 | Task | Delete | Own tasks, except viewers; owners and admins: anyone's | No |
 | Note | Delete one | In own tasks, except viewers; owners and admins: anyone's | No |
-| Artifact | Register and get an upload URL | No | Yes, except viewers |
-| Artifact | Report the upload complete | No | Yes, except viewers |
-| Artifact | Get a download URL | Yes | Yes |
-| Artifact | Delete | Own artifacts, except viewers; owners and admins: anyone's | No |
+| File | Register and get an upload URL | No | Yes, except viewers |
+| File | Report the upload complete | No | Yes, except viewers |
+| File | Get a download URL | Yes | Yes |
+| File | Delete | Own files, except viewers; owners and admins: anyone's | No |
 | Knowledge | List, read the latest version | Yes | Yes |
 | Knowledge | View history, read old versions, list deleted entries | Yes | No |
 | Knowledge | Create, change, delete or roll back directly | Owner, admin | No |
@@ -70,16 +70,16 @@ where the table says otherwise.
 
 - **"Own party's"** means the tasks of the agent's person, created by that
   agent or by any other agent of the same person. Appending notes,
-  registering artifacts and reporting uploads complete also work only on own
+  registering files and reporting uploads complete also work only on own
   party's tasks.
 - **Only agents write task records.** People never create tasks, append
-  notes or upload artifacts; they tell an agent to do the work.
+  notes or upload files; they tell an agent to do the work.
 - **Owners and admins close, not edit, other people's tasks.** They may close
-  or delete anyone's task and delete anyone's notes and artifacts, such as a
+  or delete anyone's task and delete anyone's notes and files, such as a
   removed person's task left `in progress`. They cannot change the title or
   result of someone else's task.
 - **Viewers are read-only.** A person moved from contributor to viewer can no
-  longer change or delete their own earlier tasks, notes and artifacts.
+  longer change or delete their own earlier tasks, notes and files.
 - **Knowledge belongs to the whole space**, not to one person; see
   [Knowledge](knowledge.md).
 - **Creating a space is the product's rule.** The library inserts the space
@@ -111,7 +111,7 @@ A call that carries a task ID is checked in this order:
 5. Reject the call if the task is not the caller's party's, unless owners
    and admins may act on anyone's task; see [section 4](#4-permissions).
 6. Reject the call if the person is a viewer.
-7. Reject a note or an artifact registration if the task is `ended`, with a
+7. Reject a note or a file registration if the task is `ended`, with a
    hint to set the task back to `in progress` first.
 
 A call that carries a space is checked in this order:

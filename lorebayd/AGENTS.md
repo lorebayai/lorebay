@@ -31,7 +31,7 @@ Follow these playbook fragments:
   |-- library/      Lorebay's implementations of the library interfaces
   |-- oauth/        The OAuth endpoints and the authorization page
   |-- pages/        The embedded web pages
-  |-- files/        Artifact file URLs served with the local directory backend
+  |-- files/        File content URLs served with the local directory backend
   |-- domain/       Product operations, one module per area
   |-- worker/       Background jobs, one file per job
   |-- storage/      The file storage layer and its backends

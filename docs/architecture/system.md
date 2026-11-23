@@ -43,7 +43,7 @@ flowchart TD
         library["Library, with its MCP layer"]
     end
     sqlite["SQLite"]
-    store["Artifact files<br/>local directory or S3"]
+    store["File content<br/>local directory or S3"]
     human -- "login session" --> web
     program -- "agent authorization" --> web
     agent -- "agent authorization" --> library
@@ -55,7 +55,7 @@ flowchart TD
     impls --> store
 ```
 
-`v0.1.0` keeps artifact files in a local directory; the S3 backend is
+`v0.1.0` keeps file content in a local directory; the S3 backend is
 designed but not built ([Storage](storage.md)).
 
 | Caller | Entry point | Credential |
@@ -75,9 +75,9 @@ designed but not built ([Storage](storage.md)).
 - **The MCP layer is the library's.** `lorebayd` mounts its router and
   answers who is calling through Lorebay's credentials; see
   [Identity](identity.md#4-credentials).
-- **Artifact files bypass MCP and `/api/v1`.** With a local directory,
+- **File content bypasses MCP and `/api/v1`.** With a local directory,
   `lorebayd` serves the file URLs itself; with S3, once
-  [built](storage.md), files go straight to S3 and never pass through
+  [built](storage.md), content goes straight to S3 and never passes through
   `lorebayd`. See [Storage](storage.md#4-file-storage).
 
 ## 5. Technology
@@ -92,7 +92,7 @@ They include:
 
 - the library's abandoned-registration and orphaned-file rounds; see
   [Entry points](../../lib/docs/architecture/entry-points.md#4-entry-points);
-- removing old temporary uploads and old artifact files with out-of-format
+- removing old temporary uploads and old stored content with out-of-format
   names in the local directory; see [Storage](storage.md#4-file-storage);
 - removing expired authorization codes, device sign-in requests, login
   sessions and agent authorizations, and replaced refresh tokens past their

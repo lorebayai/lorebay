@@ -51,7 +51,7 @@ reviews, landing, cleanup and releases. Applies to every change in the repo.
 
 - Title: `<type>(<scope>): <outcome>`, where `<type>` is a Conventional
   Commits type and the optional `<scope>` names the project or topic:
-  `docs(contracts): define artifact uploads`.
+  `docs(contracts): define file uploads`.
 - The title carries no issue number; the squash merge appends the PR number.
 - The body fills in the sections of the pull request template, and opens
   with one intent line per linked issue:

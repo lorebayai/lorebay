@@ -73,7 +73,7 @@ It does not cover:
   hides a space from a Lorebay caller; see
   [Library architecture](../../lib/docs/architecture/library.md#8-scope-and-space-numbers).
 - **Operations only people perform accept only a login session**, such as
-  approving and rejecting proposals, deleting tasks, notes and artifacts,
+  approving and rejecting proposals, deleting tasks, notes and files,
   changing Knowledge directly, rolling back, and managing participants. The
   full list is in the library's
   [permission matrix](../../lib/docs/contracts/access-control.md#4-permissions)

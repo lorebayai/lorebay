@@ -122,17 +122,17 @@ Write notes with `add_note`:
 - **No closing note:** the conclusion goes in the result.
 
 Never write secrets, such as keys, passwords, credentials, or upload and
-download URLs, into notes, a task's title or result, or an artifact's name or
+download URLs, into notes, a task's title or result, or a file's name or
 summary. A person can delete a note that holds a secret with
 `lorebay note delete`.
 
-### 6. Upload artifacts
+### 6. Upload files
 
 Upload each file the work produces for the person to take away, such as a
 report, an image, an exported document or data, also when the person never says
 "deliverable" or "upload", or only asks to save it, and also when it is saved
 inside a Git folder. The uploaded bytes must match the final file: if a file
-changes after its upload, upload it again as a new artifact and reference that
+changes after its upload, upload it again as a new file and reference that
 one in the result.
 
 Don't upload a change to a repository's own content, a file tracked there or
@@ -144,12 +144,12 @@ request, the result names the repository, the branch and the changed files,
 and says whether the change is committed; once it is there, link the commit or
 pull request in Deliverables.
 
-Upload with the URL and headers that `create_artifact` returns, then call
-`complete_artifact`, also when the upload returns 412: the file is already
-uploaded. If the upload URL expires first, register the artifact again. A
-failed upload does not stop the work. If `complete_artifact` refuses the file
-as over the size limit, the refusal is final: don't report that artifact
-again, and register a new artifact to upload a smaller file.
+Upload with the URL and headers that `create_file` returns, then call
+`complete_file`, also when the upload returns 412: the file is already
+uploaded. If the upload URL expires first, register the file again. A
+failed upload does not stop the work. If `complete_file` refuses the file
+as over the size limit, the refusal is final: don't report that file
+again, and register a new file to upload smaller content.
 
 ### 7. Write references
 
@@ -185,8 +185,8 @@ Write the result with `update_task` in four sections, leaving out any that
 would be empty:
 
 - **Deliverables:** what was delivered, with links where possible, such as
-  pull requests, commits or artifacts. Link an artifact by its reference, such
-  as `#AR-1`.
+  pull requests, commits or files. Link a file by its reference, such
+  as `#FL-1`.
 - **Decisions:** what was decided.
 - **Open:** what is unresolved.
 - **Next:** the suggested next step.

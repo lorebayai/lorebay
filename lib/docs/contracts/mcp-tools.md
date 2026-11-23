@@ -47,11 +47,11 @@ It does not cover:
 | `create_task` | Space | Creates a task from a space and a title; returns the task ID and key | Create a task |
 | `update_task` | Task ID | Changes the title, status or result, each optional; the status may go back to `in progress`; the result is replaced whole | Change a task |
 | `list_tasks` | Space | Lists the space's tasks, filtered by person, agent or status, or only the caller's party's tasks that are not `ended`; takes a keyword; each row has the agent name and last activity time; newest activity first | List tasks |
-| `get_task` | Space | Reads one task: its result and artifact list, and optionally its Scratchpad | Read a task |
+| `get_task` | Space | Reads one task: its result and file list, and optionally its Scratchpad | Read a task |
 | `add_note` | Task ID | Appends a note to the task | Append a note |
-| `create_artifact` | Task ID | Registers a file name and summary; returns a short-lived upload URL and the headers the upload must carry | Register an artifact |
-| `complete_artifact` | Task ID | Reports the upload finished; the library checks the file is in storage and within the size limit, and only then is the upload complete | Report an upload complete |
-| `get_artifact_url` | Space | Returns a short-lived download URL | Get a download URL |
+| `create_file` | Task ID | Registers a file name and summary; returns a short-lived upload URL and the headers the upload must carry | Register a file |
+| `complete_file` | Task ID | Reports the upload finished; the library checks the content is in storage and within the size limit, and only then is the upload complete | Report an upload complete |
+| `get_file_url` | Space | Returns a short-lived download URL | Get a download URL |
 | `list_knowledge` | Space | Lists one level by name prefix: its entries, with names, keys and summaries, and the next level's prefixes; no prefix lists the top level; a keyword searches names, summaries and content across the space | List Knowledge |
 | `read_knowledge` | Space | Reads one entry by name or key, latest version only | Read a knowledge entry |
 | `create_proposal` | Task ID | Proposes creating, changing or deleting an entry | Submit a proposal |
@@ -63,16 +63,16 @@ It does not cover:
   unbounded result into the model's context. Each page follows a cursor,
   in a fixed order, with a default page size the caller may change, up to
   the library's limit.
-- **`create_artifact` returns an object, not a bare URL**, so multipart
+- **`create_file` returns an object, not a bare URL**, so multipart
   upload can be added without changing the tool. How an upload uses the URL
-  and headers is in [Tasks](tasks.md#5-artifacts).
-- **Files never pass through MCP.** Agents upload and download them over
+  and headers is in [Tasks](tasks.md#5-files).
+- **File content never passes through MCP.** Agents upload and download it over
   HTTP with the URLs they get.
 - **Objects to read may be named by key**; see
   [Keys and references](keys-and-references.md#3-keys).
 
 What MCP leaves out, people do through a product's entry points: deleting
-tasks, notes and artifacts; approving and rejecting proposals; changing
+tasks, notes and files; approving and rejecting proposals; changing
 Knowledge directly; viewing history and rolling back. Creating spaces and
 managing who is in them are the product's. Agents may also read one space
 through a product's entry point; that operation has no tool.

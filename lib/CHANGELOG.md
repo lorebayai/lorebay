@@ -7,6 +7,11 @@ crates `lorebay-lib-types`, `lorebay-lib-core`, `lorebay-lib-migration` and
 
 ## Unreleased
 
+- **Breaking:** Task uploads become files throughout the library API, MCP
+  tools and task fields, with `AgentFile` code names, `agent_file.*` errors,
+  `FL-` keys and the rewritten `space_agent_file` schema. Earlier data is
+  refused; `v0.1.1` is the first release whose data is kept.
+
 Version 0.1.0, the first version, not yet tagged.
 
 - MCP adds `list_knowledge`, `read_knowledge`, `create_proposal`,
