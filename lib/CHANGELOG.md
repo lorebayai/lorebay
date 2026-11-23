@@ -19,10 +19,10 @@ crates `lorebay-lib-types`, `lorebay-lib-core`, `lorebay-lib-migration` and
   migration `m20261118_000001_create_space_tables` changes in place; a
   database that applied it must be recreated.
 
-- **Breaking:** A product sets `tenant_id` on `Caller` and
-  `MembershipPage`; the space column becomes `tenant_id`. The created
-  migration changes in place, and tenant isolation checks keep their
-  behavior.
+- **Breaking:** A product sets `tenant_id` on `Caller`, and its space-roles
+  implementation reads `MembershipPage.tenant_id`; the `space` column
+  becomes `tenant_id`. The created migration changes in place, and tenant
+  isolation checks keep their behavior.
 
 Version 0.1.0, the first version, not yet tagged.
 
