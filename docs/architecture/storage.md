@@ -6,7 +6,7 @@
 - **Related:** [Data model](data-model.md),
   [Library storage](../../lib/docs/architecture/storage.md)
 
-> `v0.1.1` runs SQLite and a local directory only, both in one data
+> `v0.1.0` runs SQLite and a local directory only, both in one data
 > directory, with no external services. The Postgres and S3 backends this
 > doc describes are designed but not built, and no setting chooses them.
 >

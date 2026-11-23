@@ -8,7 +8,7 @@ person deploying it gives. Older harness versions are untested.
 ## Usage
 
 Install the skill as a plugin from this repo's marketplace at the server's
-release tag, such as `v0.1.1`, or at `main` for a server built from `main`.
+release tag, such as `v0.1.0`, or at `main` for a server built from `main`.
 Connect the harness at user level, so every project and worktree has the server,
 under the name `lorebay` that the skill uses. `<url>` is `https://` with the
 host and port, such as `https://lorebay.test:8443`; both harnesses refuse OAuth
@@ -16,7 +16,7 @@ over `http://` except on `localhost`, `127.0.0.1` or `::1`. For Claude Code, in
 a terminal, since `mcp login` needs one:
 
 ```bash
-claude plugin marketplace add https://github.com/lorebayai/lorebay.git#v0.1.1
+claude plugin marketplace add https://github.com/lorebayai/lorebay.git#v0.1.0
 claude plugin install lorebay@lorebay
 claude mcp add --scope user --transport http lorebay <url>/mcp
 claude mcp login lorebay
@@ -30,7 +30,7 @@ agent's shell reach the network, in every project, to upload files; the approval
 lets non-interactive runs, such as `codex exec`, call the tools.
 
 ```bash
-codex plugin marketplace add https://github.com/lorebayai/lorebay.git --ref v0.1.1
+codex plugin marketplace add https://github.com/lorebayai/lorebay.git --ref v0.1.0
 codex plugin add lorebay@lorebay
 codex mcp add lorebay --url <url>/mcp
 ```
