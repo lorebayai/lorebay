@@ -151,14 +151,14 @@ async fn update_and_reopen(
     let error = call_error(
         server,
         agent,
-        "add_note",
+        "add_checkpoint",
         json!({"task_id":task["task_id"], "content":"Refused"}),
     )
     .await;
     assert_eq!(error["code"], "task.ended");
     assert_eq!(
         error["message"],
-        "Set the task back to in progress before appending a note"
+        "Set the task back to in progress before appending a checkpoint"
     );
     let reopened = call_version(
         server,
@@ -174,18 +174,18 @@ async fn update_and_reopen(
     assert_eq!(reopened["result"], updated["result"]);
     assert_readback(server, person, &reopened).await;
     replace_and_clear_result(server, person, agent, task, version).await;
-    let note = call(
+    let checkpoint = call(
         server,
         agent,
-        "add_note",
+        "add_checkpoint",
         json!({"task_id":task["task_id"], "content":"After reopening"}),
     )
     .await;
-    assert_eq!(note["task_title"], "Revised title");
+    assert_eq!(checkpoint["task_title"], "Revised title");
     let key = task["key"].as_str().unwrap();
     assert_eq!(
         tasks::scratchpad(server, person, key).await,
-        json!([{"time":note["time"], "content":"After reopening"}])
+        json!([{"time":checkpoint["time"], "content":"After reopening"}])
     );
 }
 

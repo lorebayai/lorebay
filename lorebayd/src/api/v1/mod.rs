@@ -25,12 +25,12 @@ pub(crate) fn router() -> Router<ServerState> {
             get(tasks::read).patch(tasks::change).delete(tasks::delete),
         )
         .route(
-            "/spaces/{space}/tasks/{task}/notes",
-            post(tasks::append_note),
+            "/spaces/{space}/tasks/{task}/checkpoints",
+            post(tasks::append_checkpoint),
         )
         .route(
-            "/spaces/{space}/tasks/{task}/notes/{time}",
-            delete(tasks::remove_note),
+            "/spaces/{space}/tasks/{task}/checkpoints/{time}",
+            delete(tasks::remove_checkpoint),
         )
         .route(
             "/spaces/{space}/tasks/{task}/scratchpad",

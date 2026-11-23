@@ -7,9 +7,9 @@
   [Storage](../architecture/storage.md),
   [Keys and references](keys-and-references.md)
 
-> Only agents create tasks, append notes and upload files.
+> Only agents create tasks, append checkpoints and upload files.
 >
-> An `ended` task accepts no new notes or file registrations until it is
+> An `ended` task accepts no new checkpoints or file registrations until it is
 > set back to `in progress`.
 
 ## 1. Purpose
@@ -20,9 +20,9 @@ understand a session without reading the conversation.
 
 ## 2. Scope
 
-This doc covers what the library stores and enforces for tasks, notes and
+This doc covers what the library stores and enforces for tasks, checkpoints and
 files. When an agent creates a task, what its title and result say, and
-when it writes notes are in [Agent rules](agent-rules.md).
+when it writes checkpoints are in [Agent rules](agent-rules.md).
 
 It does not cover:
 
@@ -49,7 +49,7 @@ A task holds:
 | Status | `in progress` or `ended` |
 | Person and agent | Whose agent created it; the agent name is copied from the caller at creation |
 | Start and end times | The end time is set when the task becomes `ended`, cleared when it returns to `in progress`, and set again when it ends again |
-| Last activity time | Set by the library whenever the task receives a note, a file or a new result |
+| Last activity time | Set by the library whenever the task receives a checkpoint, a file or a new result |
 | Result | Markdown text, rendered as Markdown |
 
 - **`ended` means nobody is working on the task now**, not that the work is
@@ -60,13 +60,13 @@ A task holds:
   closed abruptly leaves its task `in progress`.
 - **The result is one field.** Each update replaces it whole, and only the
   latest version is kept; the Scratchpad holds the history.
-- **An `ended` task rejects notes and file registrations**, with a hint
+- **An `ended` task rejects checkpoints and file registrations**, with a hint
   to set it back to `in progress` first. An upload registered before the
   task ended can still be reported complete. Its title, result and status
   can still change, and it can be set back to `in progress`.
-- **Notes and files belong to the task**, not to the agent that wrote
+- **Checkpoints and files belong to the task**, not to the agent that wrote
   them. When another agent of the same person continues a task, the task
-  still names the agent that created it, and its notes and files are not
+  still names the agent that created it, and its checkpoints and files are not
   marked with the agent that wrote them.
 - **Finding tasks.** A space's tasks can be filtered by person, agent and
   status, and searched by keyword in titles and results. An agent is matched
@@ -78,16 +78,16 @@ A task holds:
 
 ## 4. Scratchpad
 
-The Scratchpad records how the agent did the work. It holds notes only.
+The Scratchpad records how the agent did the work. It holds checkpoints only.
 
-- **A note** is a short Markdown entry with a time, rendered as Markdown.
-  Times strictly increase within a task, so a note's time names it. A
-  task's Scratchpad is its notes in time order.
-- **The Scratchpad is append-only.** A note cannot be edited. A person may
-  delete single notes in their own tasks; agents cannot delete notes.
+- **A checkpoint** is a short Markdown entry with a time, rendered as Markdown.
+  Times strictly increase within a task, so a checkpoint's time names it. A
+  task's Scratchpad is its checkpoints in time order.
+- **The Scratchpad is append-only.** A checkpoint cannot be edited. A person may
+  delete single checkpoints in their own tasks; agents cannot delete checkpoints.
 - **One tool for every harness.** The library offers one MCP tool for writing
-  notes. The tool serves every harness.
-- **Notes belong to the agent's current task.**
+  checkpoints. The tool serves every harness.
+- **Checkpoints belong to the agent's current task.**
 
 ## 5. Files
 

@@ -336,7 +336,7 @@ impl From<TaskError> for ApiError {
                 return invalid_query(PageSizeError::FIELD).with_library_code(code);
             }
             TaskError::NoChanges(error) => return Self::from(error).with_library_code(code),
-            TaskError::NotFound | TaskError::NoteNotFound => StatusCode::NOT_FOUND,
+            TaskError::NotFound | TaskError::CheckpointNotFound => StatusCode::NOT_FOUND,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
         Self::library(status, code, error)

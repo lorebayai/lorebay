@@ -23,7 +23,7 @@ the rules they keep, and the SQL that creates them.
 ## 2. Scope
 
 This doc covers the library's seven tables: `space`, `space_task`,
-`space_note`, `space_agent_file`, `space_knowledge`,
+`space_checkpoint`, `space_agent_file`, `space_knowledge`,
 `space_knowledge_version` and `space_proposal`. Behavior observable through
 the public API is in the contract docs, and how the library's migrations
 sit beside a product's is in
@@ -95,20 +95,20 @@ erDiagram
     space ||--o{ space_task : "holds"
     space ||--o{ space_knowledge : "holds"
     space ||--o{ space_proposal : "holds"
-    space_task ||--o{ space_note : "has"
+    space_task ||--o{ space_checkpoint : "has"
     space_task ||--o{ space_agent_file : "has"
     space_task |o--o{ space_proposal : "is the source of"
     space_knowledge ||--|{ space_knowledge_version : "has"
     space_knowledge |o--o{ space_proposal : "is the target of"
 ```
 
-Tasks, knowledge entries and proposals belong to a space; notes and
+Tasks, knowledge entries and proposals belong to a space; checkpoints and
 files belong to a task; each knowledge entry's history is in
 `space_knowledge_version`. Who belongs to a space is the product's record;
 the library reads it through the
 [space roles interface](library.md#63-space-roles).
 
-## 5. Spaces, tasks, notes and files
+## 5. Spaces, tasks, checkpoints and files
 
 ### 5.1 `space`
 
@@ -157,7 +157,7 @@ the library reads it through the
 | `result` | TEXT | Not null, default empty | Markdown, replaced whole on each update |
 | `started_at` | INTEGER | Not null | |
 | `ended_at` | INTEGER | Nullable | Set when the task becomes `ended`, cleared when it returns to `in progress` |
-| `last_activity_at` | INTEGER | Not null | Equal to `started_at` at creation; moved to the time of each note, file or result update, never backward |
+| `last_activity_at` | INTEGER | Not null | Equal to `started_at` at creation; moved to the time of each checkpoint, file or result update, never backward |
 
 - **A task names its agent by the copied name**, not by a reference to the
   product's record of the agent. Filtering by agent matches
@@ -174,7 +174,7 @@ the library reads it through the
   `in progress`.
 - **`(id, space_id)` is unique** so that `space_agent_file` can reference a
   task together with its space; see [section 5.4](#54-space_agent_file).
-- **Deletion is real.** Deleting a task cascades to its notes and file
+- **Deletion is real.** Deleting a task cascades to its checkpoints and file
   rows, and clears the source task of its proposals; keys written in text
   stay and show as plain text. The file content is deleted after the
   transaction commits; see [Storage](storage.md#4-database).
@@ -184,19 +184,19 @@ the library reads it through the
   `ended`.
 - **Keyword search** covers `title` and `result`.
 
-### 5.3 `space_note`
+### 5.3 `space_checkpoint`
 
 | Column | Type | Constraints | Meaning |
 | --- | --- | --- | --- |
 | `id` | TEXT | Primary key, not null | |
 | `task_id` | TEXT | Not null, foreign key to `space_task`, cascades on delete | |
 | `content` | TEXT | Not null | Markdown |
-| `created_at` | INTEGER | Not null | The note's time; strictly increasing within a task |
+| `created_at` | INTEGER | Not null | The checkpoint's time; strictly increasing within a task |
 
-- **No agent is recorded**, because notes belong to the task; see
-  [Tasks](../contracts/tasks.md#3-tasks). Notes are only appended and
+- **No agent is recorded**, because checkpoints belong to the task; see
+  [Tasks](../contracts/tasks.md#3-tasks). Checkpoints are only appended and
   deleted, so there is no `updated_at`.
-- **Index:** `space_note_task_time`, on `(task_id, created_at)`, for time
+- **Index:** `space_checkpoint_task_time`, on `(task_id, created_at)`, for time
   order and paging.
 
 ### 5.4 `space_agent_file`
@@ -390,13 +390,13 @@ CREATE TABLE space_task (
 CREATE INDEX space_task_space_activity ON space_task (space_id, last_activity_at);
 CREATE INDEX space_task_space_person ON space_task (space_id, person_id, status);
 
-CREATE TABLE space_note (
+CREATE TABLE space_checkpoint (
   id          TEXT    NOT NULL PRIMARY KEY,
   task_id     TEXT    NOT NULL REFERENCES space_task (id) ON DELETE CASCADE,
   content     TEXT    NOT NULL,
   created_at  INTEGER NOT NULL
 );
-CREATE INDEX space_note_task_time ON space_note (task_id, created_at);
+CREATE INDEX space_checkpoint_task_time ON space_checkpoint (task_id, created_at);
 
 CREATE TABLE space_agent_file (
   id            TEXT    NOT NULL PRIMARY KEY,

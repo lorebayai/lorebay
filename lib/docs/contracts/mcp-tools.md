@@ -48,7 +48,7 @@ It does not cover:
 | `update_task` | Task ID | Changes the title, status or result, each optional; the status may go back to `in progress`; the result is replaced whole | Change a task |
 | `list_tasks` | Space | Lists the space's tasks, filtered by person, agent or status, or only the caller's party's tasks that are not `ended`; takes a keyword; each row has the agent name and last activity time; newest activity first | List tasks |
 | `get_task` | Space | Reads one task: its result and file list, and optionally its Scratchpad | Read a task |
-| `add_note` | Task ID | Appends a note to the task | Append a note |
+| `add_checkpoint` | Task ID | Appends a checkpoint to the task | Append a checkpoint |
 | `create_file` | Task ID | Registers a file name and summary; returns a short-lived upload URL and the headers the upload must carry | Register a file |
 | `complete_file` | Task ID | Reports the upload finished; the library checks the content is in storage and within the size limit, and only then is the upload complete | Report an upload complete |
 | `get_file_url` | Space | Returns a short-lived download URL | Get a download URL |
@@ -72,7 +72,7 @@ It does not cover:
   [Keys and references](keys-and-references.md#3-keys).
 
 What MCP leaves out, people do through a product's entry points: deleting
-tasks, notes and files; approving and rejecting proposals; changing
+tasks, checkpoints and files; approving and rejecting proposals; changing
 Knowledge directly; viewing history and rolling back. Creating spaces and
 managing who is in them are the product's. Agents may also read one space
 through a product's entry point; that operation has no tool.
@@ -104,7 +104,7 @@ ID can be wrong:
 | --- | --- | --- |
 | An ID that doesn't exist | Rejects the call | The agent sees the error and fills it in again |
 | Another party's task ID | Rejects the call | The agent sees the error and fills it in again |
-| Another task of the caller's own party | Passes every check | The note lands in the wrong task; agents cannot delete it, so a person deletes it |
+| Another task of the caller's own party | Passes every check | The checkpoint lands in the wrong task; agents cannot delete it, so a person deletes it |
 
 Three rules reduce the risk:
 

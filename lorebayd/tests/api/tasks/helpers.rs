@@ -32,7 +32,7 @@ pub async fn create(server: &Server, tokens: &Value, space: &str, title: &str) -
     body["data"].clone()
 }
 
-pub async fn note_request(
+pub async fn checkpoint_request(
     server: &Server,
     tokens: &Value,
     space: &str,
@@ -43,14 +43,14 @@ pub async fn note_request(
         server,
         tokens,
         Method::POST,
-        &format!("/api/v1/spaces/{space}/tasks/{id}/notes"),
+        &format!("/api/v1/spaces/{space}/tasks/{id}/checkpoints"),
         json!({"content":content}),
     )
     .await
 }
 
 pub async fn append(server: &Server, tokens: &Value, task: &Value, content: &str) -> Value {
-    let response = note_request(
+    let response = checkpoint_request(
         server,
         tokens,
         SPACE,
@@ -93,7 +93,7 @@ pub async fn space_member(server: &Server, owner: &Value, method: Method, role: 
     assert_eq!(response.status(), status);
 }
 
-pub async fn read_note_pages(server: &Server, tokens: &Value, key: &str, expected: &[Value]) {
+pub async fn read_checkpoint_pages(server: &Server, tokens: &Value, key: &str, expected: &[Value]) {
     let path = format!("{TASKS}/{key}");
     let mut rows = Vec::new();
     let mut cursor: Option<String> = None;
@@ -104,12 +104,12 @@ pub async fn read_note_pages(server: &Server, tokens: &Value, key: &str, expecte
         }
         let page = list_page(server, tokens, &path, &query).await;
         assert_eq!(page["data"]["key"], key);
-        let notes = &page["data"]["scratchpad"];
-        let items = notes["data"].as_array().unwrap();
+        let checkpoints = &page["data"]["scratchpad"];
+        let items = checkpoints["data"].as_array().unwrap();
         assert!(items.len() <= 2);
         rows.extend(items.iter().cloned());
         assert!(rows.len() <= expected.len());
-        match notes["meta"]["next_cursor"].as_str() {
+        match checkpoints["meta"]["next_cursor"].as_str() {
             Some(next) => {
                 assert_eq!(items.len(), 2);
                 assert_ne!(cursor.as_deref(), Some(next));
@@ -121,7 +121,12 @@ pub async fn read_note_pages(server: &Server, tokens: &Value, key: &str, expecte
     assert_eq!(rows, expected);
 }
 
-pub async fn assert_note_cursors(server: &Server, person: &Value, bob: &Value, expected: &[Value]) {
+pub async fn assert_checkpoint_cursors(
+    server: &Server,
+    person: &Value,
+    bob: &Value,
+    expected: &[Value],
+) {
     let path = format!("{TASKS}/TK-1");
     let page = list_page(
         server,

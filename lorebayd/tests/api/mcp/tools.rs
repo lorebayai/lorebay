@@ -126,7 +126,7 @@ async fn call_create_task_returns_task_id_and_key() {
 }
 
 #[tokio::test]
-async fn call_add_note_returns_task_title() {
+async fn call_add_checkpoint_returns_task_title() {
     let (server, person, agent) = tasks::setup().await;
     let peer = authorize_for(&server, &person, "Other agent in same party").await;
     for version in [NEWEST_VERSION, "2025-03-26", "2025-06-18", "2025-11-25"] {
@@ -144,7 +144,7 @@ async fn call_add_note_returns_task_title() {
         let result = call_version(
             &server,
             &peer,
-            "add_note",
+            "add_checkpoint",
             json!({"task_id":created["task_id"], "content":"Work recorded"}),
             version,
         )
@@ -165,18 +165,18 @@ async fn call_add_note_returns_task_title() {
 }
 
 #[tokio::test]
-async fn call_add_note_fails_when_content_is_invalid() {
+async fn call_add_checkpoint_fails_when_content_is_invalid() {
     let (server, person, agent) = tasks::setup().await;
     let task = tasks::create(&server, &agent, SPACE, "Valid title").await;
     for content in [String::new(), "x".repeat(10_001)] {
         let error = call_error(
             &server,
             &agent,
-            "add_note",
+            "add_checkpoint",
             json!({"task_id":task["task_id"], "content":content}),
         )
         .await;
-        let response = tasks::note_request(
+        let response = tasks::checkpoint_request(
             &server,
             &agent,
             SPACE,
@@ -193,7 +193,7 @@ async fn call_add_note_fails_when_content_is_invalid() {
 }
 
 #[tokio::test]
-async fn call_add_note_fails_when_task_id_does_not_exist() {
+async fn call_add_checkpoint_fails_when_task_id_does_not_exist() {
     let (server, person, _) = tasks::setup().await;
     let bob = login(&server, "bob").await;
     tasks::space_member(&server, &person, Method::POST, "contributor").await;
@@ -202,7 +202,7 @@ async fn call_add_note_fails_when_task_id_does_not_exist() {
     let unknown = call_error(
         &server,
         &agent,
-        "add_note",
+        "add_checkpoint",
         json!({"task_id":"unknown", "content":"Forbidden"}),
     )
     .await;
@@ -215,7 +215,7 @@ async fn call_add_note_fails_when_task_id_does_not_exist() {
             call_error(
                 &server,
                 &agent,
-                "add_note",
+                "add_checkpoint",
                 json!({"task_id":id, "content":"Forbidden"})
             )
             .await,
@@ -227,7 +227,7 @@ async fn call_add_note_fails_when_task_id_does_not_exist() {
         call_error(
             &server,
             &agent,
-            "add_note",
+            "add_checkpoint",
             json!({"task_id":task["task_id"], "content":"Forbidden"})
         )
         .await,
@@ -238,19 +238,19 @@ async fn call_add_note_fails_when_task_id_does_not_exist() {
 }
 
 #[tokio::test]
-async fn call_add_note_fails_when_task_belongs_to_another_party() {
+async fn call_add_checkpoint_fails_when_task_belongs_to_another_party() {
     let (server, person, agent) = tasks::setup().await;
     let bob = login(&server, "bob").await;
     let bob_agent = authorize_for(&server, &bob, "Bob agent").await;
     let task = tasks::create(&server, &agent, SPACE, "Alice task").await;
     let arguments = json!({"task_id":task["task_id"], "content":"Forbidden"});
     assert_eq!(
-        call_error(&server, &bob_agent, "add_note", arguments.clone()).await["code"],
+        call_error(&server, &bob_agent, "add_checkpoint", arguments.clone()).await["code"],
         "task.not_found"
     );
     tasks::space_member(&server, &person, Method::POST, "contributor").await;
     assert_eq!(
-        call_error(&server, &bob_agent, "add_note", arguments).await["code"],
+        call_error(&server, &bob_agent, "add_checkpoint", arguments).await["code"],
         "space.permission_required"
     );
     let own = tasks::create(&server, &bob_agent, SPACE, "Bob task").await;
@@ -259,7 +259,7 @@ async fn call_add_note_fails_when_task_belongs_to_another_party() {
         call_error(
             &server,
             &bob_agent,
-            "add_note",
+            "add_checkpoint",
             json!({"task_id":own["task_id"], "content":"Forbidden"})
         )
         .await["code"],
@@ -300,14 +300,14 @@ async fn call_list_tasks_returns_tasks_with_reusable_ids() {
             .collect::<Vec<_>>(),
         ["Third", "Second", "First"]
     );
-    let note = call(
+    let checkpoint = call(
         &server,
         &agent,
-        "add_note",
+        "add_checkpoint",
         json!({"task_id":rows[0]["task_id"], "content":"Recovered ID"}),
     )
     .await;
-    assert_eq!(note["task_title"], "Third");
+    assert_eq!(checkpoint["task_title"], "Third");
     assert_eq!(
         tasks::scratchpad(&server, &person, "TK-3").await[0]["content"],
         "Recovered ID"
@@ -318,7 +318,7 @@ async fn call_list_tasks_returns_tasks_with_reusable_ids() {
 #[tokio::test]
 async fn call_get_task_returns_scratchpad_page_when_requested() {
     let (server, person, agent) = tasks::setup().await;
-    let task = tasks::create(&server, &agent, SPACE, "Paged notes").await;
+    let task = tasks::create(&server, &agent, SPACE, "Paged checkpoints").await;
     let mut expected = Vec::new();
     for content in ["First", "Second", "Third", "Fourth", "Fifth"] {
         let added = tasks::append(&server, &agent, &task, content).await;

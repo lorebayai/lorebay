@@ -12,11 +12,11 @@ use futures_util::{FutureExt, StreamExt};
 use http::HeaderMap;
 use lorebay_lib_core::{
     AgentFileCleanupError, AgentFileCompleted, AgentFileError, AgentFileRegistered, Caller,
-    CallerResolver, CreatedTask, DatabaseTransactions, DownloadRequest, DownloadSpec, FileStorage,
-    LibraryInterfaces, LibrarySettings, LibraryState, Membership, MembershipPage, NewAgentFile,
-    NewSpace, NoteAdded, OperationHandle, PageOptions, PersonNames, SpaceRole, SpaceRoles,
-    StoredFile, TaskFilters, TaskTarget, UploadRequest, UploadSpec, WriteOperation, WriteRecord,
-    add_note, complete_agent_file, create_space, create_task, delete_agent_file,
+    CallerResolver, CheckpointAdded, CreatedTask, DatabaseTransactions, DownloadRequest,
+    DownloadSpec, FileStorage, LibraryInterfaces, LibrarySettings, LibraryState, Membership,
+    MembershipPage, NewAgentFile, NewSpace, OperationHandle, PageOptions, PersonNames, SpaceRole,
+    SpaceRoles, StoredFile, TaskFilters, TaskTarget, UploadRequest, UploadSpec, WriteOperation,
+    WriteRecord, add_checkpoint, complete_agent_file, create_space, create_task, delete_agent_file,
     prepare_agent_file_completion, register_agent_file, remove_abandoned_agent_files,
 };
 use lorebay_lib_migration::Migrator;
@@ -559,10 +559,10 @@ pub async fn append(
     caller: &Caller,
     task: &CreatedTask,
     content: &str,
-) -> NoteAdded {
+) -> CheckpointAdded {
     let content = content.to_owned().try_into().unwrap();
     state
-        .run_write(async |write| add_note(write, caller, target(task), content).await)
+        .run_write(async |write| add_checkpoint(write, caller, target(task), content).await)
         .await
         .unwrap()
 }

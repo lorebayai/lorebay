@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 pub const KEYWORD_MAX_CHARACTERS: usize = 200;
-pub const NOTE_MAX_CHARACTERS: usize = 10_000;
+pub const CHECKPOINT_MAX_CHARACTERS: usize = 10_000;
 pub const RESULT_MAX_CHARACTERS: usize = 100_000;
 pub const TITLE_MAX_CHARACTERS: usize = 200;
 
@@ -25,7 +25,7 @@ pub struct TaskResult {
 }
 
 #[derive(Clone, Debug)]
-pub struct NoteContent {
+pub struct CheckpointContent {
     value: String,
 }
 
@@ -66,18 +66,18 @@ impl From<TaskResult> for String {
     }
 }
 
-impl TryFrom<String> for NoteContent {
+impl TryFrom<String> for CheckpointContent {
     type Error = TaskTextError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        validate_text(&value, NOTE_MAX_CHARACTERS)?;
+        validate_text(&value, CHECKPOINT_MAX_CHARACTERS)?;
         Ok(Self { value })
     }
 }
 
-impl From<NoteContent> for String {
-    fn from(note: NoteContent) -> Self {
-        note.value
+impl From<CheckpointContent> for String {
+    fn from(checkpoint: CheckpointContent) -> Self {
+        checkpoint.value
     }
 }
 

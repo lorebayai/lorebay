@@ -18,7 +18,7 @@
 
 ## 1. Purpose
 
-A product that wants spaces, tasks, notes, files, Knowledge and the MCP
+A product that wants spaces, tasks, checkpoints, files, Knowledge and the MCP
 tools for agents should not have to run a second server beside itself and
 repeat identity, teams and storage. The library gives it those features as
 Rust crates it builds into its own process, on its own database and file
@@ -79,7 +79,7 @@ flowchart TD
 
 ### 3.1 What the library holds
 
-- **Data:** spaces, tasks, notes, the Scratchpad, files, Knowledge and
+- **Data:** spaces, tasks, checkpoints, the Scratchpad, files, Knowledge and
   proposals, and the keys of each.
 - **Rules:** the four roles, owner, admin, contributor and viewer; what each
   may do; the agent's cap at contributor; and the space and task checks
@@ -226,7 +226,7 @@ reaches data only through the operations and the reads above.
   MCP layer may not depend on a product, and copying them into the MCP crate
   lets the two entry points drift.
 - **Inputs validate themselves.** Input types, such as a task title or a
-  note, check their own length and format when built. Task changes, statuses
+  checkpoint, check their own length and format when built. Task changes, statuses
   and page sizes have shared validation and field errors. Each entry point
   maps those errors to its protocol. Page sizes and input lengths are
   constants.
@@ -362,7 +362,7 @@ methods:
   as approving a proposal that creates an entry does when the name is taken.
 - **On SQLite the product enables foreign key checks** on every
   connection it hands to the library. Task deletion relies on the cascade
-  to its notes and on clearing the source task from proposals.
+  to its checkpoints and on clearing the source task from proposals.
 - **The operation supplies the write label, its caller and its space.** The
   write entry passes the record to the commit hook; only the
   abandoned-registration round's record has no caller. A repeated report of
@@ -376,7 +376,7 @@ methods:
   Postgres the default isolation suffices, because the library locks the
   rows it reads and then writes.
 - **A read sees one state.** A read of several statements, such as a task
-  with its notes and files, or a role check and the content it guards,
+  with its checkpoints and files, or a role check and the content it guards,
   runs in one read transaction, as the
   [SeaORM rules](../../../playbook/topics/seaorm.md#transactions) require.
   On SQLite it is a deferred transaction; on Postgres it is a repeatable-read
@@ -621,7 +621,7 @@ state:
 
 ## 12. Data
 
-The library has seven tables: `space`, `space_task`, `space_note`,
+The library has seven tables: `space`, `space_task`, `space_checkpoint`,
 `space_agent_file`, `space_knowledge`, `space_knowledge_version` and
 `space_proposal`. No library table refers to a product's table.
 
@@ -676,9 +676,9 @@ both.
 | Change a space | Space, by its update | Each change sets only its own fields |
 | Create a task | Space counter | Concurrent creations take distinct, consecutive numbers |
 | Change a task | Task | Status, end time and last activity are computed from the locked row; last activity never moves backward |
-| Append a note | Task | The state is checked under the lock, and the note's time exceeds the task's last activity and latest note, so times within a task strictly increase |
-| Delete a note | None | It deletes by task and time; a task's person never changes, so the party check needs no lock; a deleted time stays below the task's last activity and is never given again |
-| Delete a task | Task | A registration or note waiting on the task finds it gone; the files deleted are those of the rows deleted |
+| Append a checkpoint | Task | The state is checked under the lock, and the checkpoint's time exceeds the task's last activity and latest checkpoint, so times within a task strictly increase |
+| Delete a checkpoint | None | It deletes by task and time; a task's person never changes, so the party check needs no lock; a deleted time stays below the task's last activity and is never given again |
+| Delete a task | Task | A registration or checkpoint waiting on the task finds it gone; the files deleted are those of the rows deleted |
 | Register a file | Task, then space counter | The state is checked under the lock; numbers are distinct |
 | Report an upload complete | Task, then file | A second report of a completed registration returns the existing result and records no change. The first report to refuse an oversized file commits the refusal; a report that read the size before then finds the refusal under the lock and answers `agent_file.refused`, so one deletion is queued. The task's last activity becomes the later of its current value and the completion. |
 | Delete a file | None | One statement deletes the row only if complete and returns its location |

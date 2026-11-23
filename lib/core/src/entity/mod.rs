@@ -2,8 +2,8 @@
 
 pub mod space;
 pub mod space_agent_file;
+pub mod space_checkpoint;
 pub mod space_knowledge;
 pub mod space_knowledge_version;
-pub mod space_note;
 pub mod space_proposal;
 pub mod space_task;

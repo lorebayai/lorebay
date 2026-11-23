@@ -8,9 +8,10 @@ use serde::Serialize;
 use thiserror::Error;
 use typed_builder::TypedBuilder;
 
-use crate::entity::{space, space_note as note, space_task as task};
+use crate::entity::{space, space_checkpoint as checkpoint, space_task as task};
 use crate::repository::{
-    AgentFileRepository, NoteRepository, SpaceRepository, TaskAfter, TaskListFilter, TaskRepository,
+    AgentFileRepository, CheckpointRepository, SpaceRepository, TaskAfter, TaskListFilter,
+    TaskRepository,
 };
 use crate::{Caller, LibraryState, OperationHandle, Write, WriteOperation};
 
@@ -21,7 +22,7 @@ use super::space_access::{READ_ROLES, SpaceAccessError, WRITE_ROLES, check_space
 use super::task_access::{TaskAccessError, TaskAction, TaskCheck, check_task};
 use super::time::now_millis;
 use super::{
-    AgentFile, CallerError, NoteContent, TaskFilterError, TaskFilters, TaskResult, TaskTitle,
+    AgentFile, CallerError, CheckpointContent, TaskFilterError, TaskFilters, TaskResult, TaskTitle,
 };
 
 #[derive(Debug, Error)]
@@ -31,6 +32,8 @@ pub enum TaskError {
     Access(#[from] TaskAccessError),
     #[error(transparent)]
     Caller(#[from] CallerError),
+    #[error("Checkpoint not found")]
+    CheckpointNotFound,
     #[error(transparent)]
     Database(#[from] DbErr),
     #[error(transparent)]
@@ -45,8 +48,6 @@ pub enum TaskError {
     NoChanges(#[from] TaskChangeError),
     #[error("Task not found")]
     NotFound,
-    #[error("Note not found")]
-    NoteNotFound,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
@@ -67,14 +68,14 @@ pub struct CreatedTask {
 
 #[derive(Clone, Debug, Serialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
-pub struct Note {
+pub struct Checkpoint {
     pub time: i64,
     pub content: String,
 }
 
 #[derive(Clone, Debug, Serialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
-pub struct NoteAdded {
+pub struct CheckpointAdded {
     pub time: i64,
     pub task_title: String,
 }
@@ -106,7 +107,7 @@ pub struct TaskChanges {
 #[builder(field_defaults(setter(into)))]
 pub struct TaskRead {
     pub task: Task,
-    pub scratchpad: Option<Page<Note>>,
+    pub scratchpad: Option<Page<Checkpoint>>,
     pub files: Vec<AgentFile>,
 }
 
@@ -180,11 +181,11 @@ impl TryFrom<(task::Model, String)> for Task {
     }
 }
 
-impl From<note::Model> for Note {
-    fn from(note: note::Model) -> Self {
+impl From<checkpoint::Model> for Checkpoint {
+    fn from(checkpoint: checkpoint::Model) -> Self {
         Self::builder()
-            .time(note.created_at)
-            .content(note.content)
+            .time(checkpoint.created_at)
+            .content(checkpoint.content)
             .build()
     }
 }
@@ -206,7 +207,7 @@ impl TaskError {
             }
             Self::NoChanges(_) => "request.invalid_body",
             Self::NotFound => "task.not_found",
-            Self::NoteNotFound => "note.not_found",
+            Self::CheckpointNotFound => "checkpoint.not_found",
         }
     }
 }
@@ -281,24 +282,26 @@ pub async fn create_task(
     })
 }
 
-pub async fn add_note(
+pub async fn add_checkpoint(
     write: &mut Write<'_>,
     caller: &Caller,
     target: TaskTarget<'_>,
-    content: NoteContent,
-) -> Result<NoteAdded, TaskError> {
+    content: CheckpointContent,
+) -> Result<CheckpointAdded, TaskError> {
     write.begin_operation(Some(caller))?;
     caller.agent()?;
     let task = check_task(
         write.state(),
         write.handle(),
         caller,
-        target.check(TaskAction::AppendNote),
+        target.check(TaskAction::AppendCheckpoint),
     )
     .await?;
     let transaction = write.transaction();
-    let notes = NoteRepository::builder().connection(transaction).build();
-    let latest = notes
+    let checkpoints = CheckpointRepository::builder()
+        .connection(transaction)
+        .build();
+    let latest = checkpoints
         .latest_time(&task.id)
         .await?
         .unwrap_or(task.last_activity_at)
@@ -306,10 +309,10 @@ pub async fn add_note(
     let time = now_millis()?.max(
         latest
             .checked_add(1)
-            .ok_or_else(|| DbErr::Type("Note times exhausted".into()))?,
+            .ok_or_else(|| DbErr::Type("Checkpoint times exhausted".into()))?,
     );
-    notes
-        .insert(note::ActiveModel {
+    checkpoints
+        .insert(checkpoint::ActiveModel {
             id: Set(primary_key()),
             task_id: Set(task.id.clone()),
             content: Set(content.into()),
@@ -325,8 +328,8 @@ pub async fn add_note(
         .build()
         .update(task)
         .await?;
-    write.record(WriteOperation::AddNote, Some(space_id));
-    Ok(NoteAdded {
+    write.record(WriteOperation::AddCheckpoint, Some(space_id));
+    Ok(CheckpointAdded {
         time,
         task_title: title,
     })
@@ -392,7 +395,7 @@ pub async fn delete_task(
     Ok(())
 }
 
-pub async fn delete_note(
+pub async fn delete_checkpoint(
     write: &mut Write<'_>,
     caller: &Caller,
     target: TaskTarget<'_>,
@@ -404,18 +407,18 @@ pub async fn delete_note(
         write.state(),
         write.handle(),
         caller,
-        target.check(TaskAction::DeleteNote),
+        target.check(TaskAction::DeleteCheckpoint),
     )
     .await?;
-    let deleted = NoteRepository::builder()
+    let deleted = CheckpointRepository::builder()
         .connection(write.transaction())
         .build()
         .delete_by_time(&task.id, time)
         .await?;
     if deleted == 0 {
-        return Err(TaskError::NoteNotFound);
+        return Err(TaskError::CheckpointNotFound);
     }
-    write.record(WriteOperation::DeleteNote, Some(task.space_id));
+    write.record(WriteOperation::DeleteCheckpoint, Some(task.space_id));
     Ok(())
 }
 
@@ -494,13 +497,13 @@ pub async fn read_task(
     state
         .run_read(async |handle| {
             let task = task_by_key(state, handle, caller, space, key).await?;
-            let notes = match scratchpad {
-                Some(options) => {
-                    Some(note_page(handle.transaction(), caller, &task, space, options).await?)
-                }
+            let checkpoints = match scratchpad {
+                Some(options) => Some(
+                    checkpoint_page(handle.transaction(), caller, &task, space, options).await?,
+                ),
                 None => None,
             };
-            full_task(state, handle, task, notes).await
+            full_task(state, handle, task, checkpoints).await
         })
         .await
 }
@@ -511,11 +514,11 @@ pub async fn read_scratchpad(
     space: &str,
     key: &str,
     options: PageOptions,
-) -> Result<Page<Note>, TaskError> {
+) -> Result<Page<Checkpoint>, TaskError> {
     state
         .run_read(async |handle| {
             let task = task_by_key(state, handle, caller, space, key).await?;
-            note_page(handle.transaction(), caller, &task, space, options).await
+            checkpoint_page(handle.transaction(), caller, &task, space, options).await
         })
         .await
 }
@@ -584,13 +587,13 @@ async fn full_task(
     state: &LibraryState,
     handle: OperationHandle<'_>,
     task: task::Model,
-    notes: Option<Page<Note>>,
+    checkpoints: Option<Page<Checkpoint>>,
 ) -> Result<TaskRead, TaskError> {
     let names = names_for(state, handle, from_ref(&task)).await?;
     let files = completed_agent_files(handle.transaction(), &task.id).await?;
     Ok(TaskRead {
         task: named_task(task, &names)?,
-        scratchpad: notes,
+        scratchpad: checkpoints,
         files,
     })
 }
@@ -626,15 +629,15 @@ async fn completed_agent_files(
         .collect()
 }
 
-async fn note_page(
+async fn checkpoint_page(
     transaction: &DatabaseTransaction,
     caller: &Caller,
     task: &task::Model,
     space: &str,
     options: PageOptions,
-) -> Result<Page<Note>, TaskError> {
+) -> Result<Page<Checkpoint>, TaskError> {
     options.validate()?;
-    let version = format!("notes-v1:{space}:{}", task.number);
+    let version = format!("checkpoints-v1:{space}:{}", task.number);
     let after = options
         .cursor
         .map(|cursor| {
@@ -644,19 +647,27 @@ async fn note_page(
                 .ok_or(TaskError::InvalidCursor)
         })
         .transpose()?;
-    let mut records = NoteRepository::builder()
+    let mut records = CheckpointRepository::builder()
         .connection(transaction)
         .build()
         .list(&task.id, after, options.page_size + 1)
         .await?;
     let has_more = records.len() as u64 > options.page_size;
     records.truncate(options.page_size as usize);
-    let next_cursor = records
-        .last()
-        .filter(|_| has_more)
-        .map(|note| encode_cursor(&version, caller.person_id(), &note.created_at.to_string()));
+    let next_cursor = records.last().filter(|_| has_more).map(|checkpoint| {
+        encode_cursor(
+            &version,
+            caller.person_id(),
+            &checkpoint.created_at.to_string(),
+        )
+    });
     Ok(Page::builder()
-        .items(records.into_iter().map(Note::from).collect::<Vec<_>>())
+        .items(
+            records
+                .into_iter()
+                .map(Checkpoint::from)
+                .collect::<Vec<_>>(),
+        )
         .next_cursor(next_cursor)
         .build())
 }

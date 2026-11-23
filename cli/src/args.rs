@@ -44,6 +44,11 @@ pub(crate) enum Command {
         #[command(subcommand)]
         command: AgentFileCommand,
     },
+    /// Delete a task's checkpoints.
+    Checkpoint {
+        #[command(subcommand)]
+        command: CheckpointCommand,
+    },
     /// Read and change a space's Knowledge.
     Knowledge {
         #[command(subcommand)]
@@ -63,11 +68,6 @@ pub(crate) enum Command {
     Member {
         #[command(subcommand)]
         command: MemberCommand,
-    },
-    /// Delete a task's notes.
-    Note {
-        #[command(subcommand)]
-        command: NoteCommand,
     },
     /// Submit, read and decide Knowledge proposals.
     Proposal {
@@ -160,13 +160,13 @@ pub(crate) enum KnowledgeCommand {
 }
 
 #[derive(Clone, Debug, Subcommand)]
-pub(crate) enum NoteCommand {
-    /// Delete a note named by the time printed in its Scratchpad.
+pub(crate) enum CheckpointCommand {
+    /// Delete a checkpoint named by the time printed in its Scratchpad.
     Delete {
         space: String,
         task_id: String,
         #[arg(allow_negative_numbers = true)]
-        note: String,
+        checkpoint: String,
         #[arg(long)]
         yes: bool,
     },
@@ -305,7 +305,7 @@ pub(crate) enum UserCommand {
 pub(crate) enum TaskCommand {
     /// End a task named by its task ID.
     Close { space: String, task_id: String },
-    /// Delete a task, its notes, files and their content.
+    /// Delete a task, its checkpoints, files and their content.
     Delete {
         space: String,
         task_id: String,
@@ -320,7 +320,7 @@ pub(crate) enum TaskCommand {
         #[command(flatten)]
         filters: TaskFilters,
     },
-    /// Read one page of a task's notes in time order.
+    /// Read one page of a task's checkpoints in time order.
     Scratchpad {
         space: String,
         task: String,

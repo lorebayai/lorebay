@@ -39,7 +39,7 @@ cargo run -p lorebay-cli -- task show SPACE-1 TK-1
 cargo run -p lorebay-cli -- task scratchpad SPACE-1 TK-1 --page-size 20
 cargo run -p lorebay-cli -- task close SPACE-1 '<task-id>'
 cargo run -p lorebay-cli -- task delete SPACE-1 '<task-id>' --yes
-cargo run -p lorebay-cli -- note delete SPACE-1 '<task-id>' '<note-time>' --yes
+cargo run -p lorebay-cli -- checkpoint delete SPACE-1 '<task-id>' '<checkpoint-time>' --yes
 cargo run -p lorebay-cli -- file url SPACE-1 FL-1
 cargo run -p lorebay-cli -- file delete SPACE-1 '<task-id>' FL-1 --yes
 cargo run -p lorebay-cli -- knowledge list SPACE-1 --prefix deploy/ --page-size 20

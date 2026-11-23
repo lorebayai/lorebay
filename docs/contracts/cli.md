@@ -63,8 +63,8 @@ It does not cover:
 In the table, `<space>` is a space key, `<task>` a task key, `<task-id>` a
 task ID, `<entry>` a knowledge entry's name or key, `<version>` an integer
 version returned by its history, `<file>` a file key, `<proposal>` a
-proposal key, and `<note>` the note's time as the Scratchpad shows it,
-which names one note; see
+proposal key, and `<checkpoint>` the checkpoint's time as the Scratchpad
+shows it, which names one checkpoint; see
 [Tasks](../../lib/docs/contracts/tasks.md#4-scratchpad).
 An `<entry>` in the exact key form `KN-<n>` is sent as a key, and any other
 value as a name; an entry whose name has the key form is reachable by its own key.
@@ -90,10 +90,10 @@ contains spaces. Optional arguments appear in brackets. List rows follow
 | `member remove <space> <username>` | Remove a space member | Removal result |
 | `task list <space> [--person <username>] [--agent <name>] [--status <status>] [--keyword <text>] [--own-open]` | List tasks | Task keys, titles, statuses, people, agent names and last activity times |
 | `task show <space> <task>` | Read a task | Task fields, including its task ID, result and completed file list |
-| `task scratchpad <space> <task>` | Read a task's Scratchpad | One page of notes, with their times, in time order |
+| `task scratchpad <space> <task>` | Read a task's Scratchpad | One page of checkpoints, with their times, in time order |
 | `task close <space> <task-id>` | Change a task, setting only its status to `ended` | Updated task |
 | `task delete <space> <task-id>` | Delete a task | Deletion result |
-| `note delete <space> <task-id> <note>` | Delete a note | Deletion result |
+| `checkpoint delete <space> <task-id> <checkpoint>` | Delete a checkpoint | Deletion result |
 | `file url <space> <file>` | Get a file download URL | The short-lived download URL |
 | `file delete <space> <task-id> <file>` | Delete a file | Deletion result |
 | `knowledge list <space> [--prefix <prefix>] [--keyword <text>]` | List Knowledge | Entry names, keys and summaries, and the next level's prefixes |
@@ -251,7 +251,7 @@ Exit codes:
 ## 7. Deletion confirmation
 
 - **A deleting command needs an explicit yes.** This covers `task delete`,
-  `note delete`, `file delete`, `knowledge delete` and `agent revoke`.
+  `checkpoint delete`, `file delete`, `knowledge delete` and `agent revoke`.
   Before sending the operation it names the target on standard error and
   accepts only `y` or `yes`, ignoring case. An empty
   answer, end of input or any other answer cancels the operation. When input

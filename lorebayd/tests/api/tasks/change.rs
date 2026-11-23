@@ -9,7 +9,7 @@ use crate::helpers::{
 };
 
 use super::helpers::{
-    SPACE, TASKS, append, create, note_request, read, scratchpad, setup, space_member,
+    SPACE, TASKS, append, checkpoint_request, create, read, scratchpad, setup, space_member,
 };
 
 #[tokio::test]
@@ -132,19 +132,19 @@ async fn change_task_replaces_result_and_updates_last_activity() {
 }
 
 #[tokio::test]
-async fn add_note_fails_with_reopen_hint_when_task_is_ended() {
+async fn add_checkpoint_fails_with_reopen_hint_when_task_is_ended() {
     let (server, person, agent) = setup().await;
     let task = create(&server, &agent, SPACE, "Paused work").await;
     append(&server, &agent, &task, "Before ending").await;
-    let notes = scratchpad(&server, &person, "TK-1").await;
+    let checkpoints = scratchpad(&server, &person, "TK-1").await;
     let ended = change(&server, &agent, &task, json!({"status":"ended"})).await;
     let refusal = assert_problem(
-        note_request(
+        checkpoint_request(
             &server,
             &agent,
             SPACE,
             task["task_id"].as_str().unwrap(),
-            "Rejected note",
+            "Rejected checkpoint",
         )
         .await,
         StatusCode::CONFLICT,
@@ -153,17 +153,17 @@ async fn add_note_fails_with_reopen_hint_when_task_is_ended() {
     .await;
     assert_eq!(
         refusal["title"],
-        "Set the task back to in progress before appending a note"
+        "Set the task back to in progress before appending a checkpoint"
     );
-    assert_eq!(scratchpad(&server, &person, "TK-1").await, notes);
+    assert_eq!(scratchpad(&server, &person, "TK-1").await, checkpoints);
     assert_eq!(read(&server, &person, "TK-1").await, ended);
     change(&server, &person, &task, json!({"status":"in progress"})).await;
     let added = append(&server, &agent, &task, "After reopening").await;
     assert_eq!(added["task_title"], "Paused work");
-    let notes = scratchpad(&server, &person, "TK-1").await;
-    assert_eq!(notes.as_array().unwrap().len(), 2);
+    let checkpoints = scratchpad(&server, &person, "TK-1").await;
+    assert_eq!(checkpoints.as_array().unwrap().len(), 2);
     assert_eq!(
-        notes[1],
+        checkpoints[1],
         json!({"time":added["time"],"content":"After reopening"})
     );
     let reopened = read(&server, &person, "TK-1").await;

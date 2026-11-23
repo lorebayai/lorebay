@@ -7,6 +7,12 @@ crates `lorebay-lib-types`, `lorebay-lib-core`, `lorebay-lib-migration` and
 
 ## Unreleased
 
+- **Breaking:** Task notes become checkpoints throughout the core API and
+  MCP tools, with `Checkpoint` code names, `add_checkpoint`,
+  `checkpoint.not_found` errors and the rewritten `space_checkpoint` schema.
+  The created migration changes in place; a database that applied it must
+  be recreated.
+
 - **Breaking:** Task uploads become files throughout the library API, MCP
   tools and task fields, with `AgentFile` code names, `agent_file.*` errors,
   `FL-` keys and the rewritten `space_agent_file` schema. The created

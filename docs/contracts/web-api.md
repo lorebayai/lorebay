@@ -42,7 +42,7 @@ It does not cover:
 
 ```text
 GET  /api/v1/spaces/{space}/tasks
-POST /api/v1/spaces/{space}/tasks/{task_id}/notes
+POST /api/v1/spaces/{space}/tasks/{task_id}/checkpoints
 POST /api/v1/spaces/{space}/proposals/{key}/approve
 ```
 
@@ -81,7 +81,7 @@ POST /api/v1/spaces/{space}/proposals/{key}/approve
   answer 409.
 - **Writes don't check references**; see
   [Keys and references](../../lib/docs/contracts/keys-and-references.md#5-references).
-- **Ended tasks reject notes and file registrations**; see
+- **Ended tasks reject checkpoints and file registrations**; see
   [Tasks](../../lib/docs/contracts/tasks.md#3-tasks).
 
 ## 5. Operations

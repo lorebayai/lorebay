@@ -41,7 +41,7 @@ pub async fn piped_yes(server: &Server, arguments: &[&str]) -> Output {
         .unwrap()
 }
 
-pub async fn notes_output(server: &Server, space: &str, key: &str, mode: &str) -> Output {
+pub async fn checkpoints_output(server: &Server, space: &str, key: &str, mode: &str) -> Output {
     let output = server
         .run(&["task", "scratchpad", space, key, "--output", mode])
         .await;
@@ -50,7 +50,7 @@ pub async fn notes_output(server: &Server, space: &str, key: &str, mode: &str) -
     output
 }
 
-pub fn printed_note_time(output: &Output, mode: &str) -> String {
+pub fn printed_checkpoint_time(output: &Output, mode: &str) -> String {
     if mode == "json" {
         assert!(body(output)["data"][0]["time"].is_i64());
         return body(output)["data"][0]["time"].to_string();

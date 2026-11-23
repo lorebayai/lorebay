@@ -73,7 +73,7 @@ It does not cover:
   hides a space from a Lorebay caller; see
   [Library architecture](../../lib/docs/architecture/library.md#8-scope-and-space-numbers).
 - **Operations only people perform accept only a sign-in**, such as
-  approving and rejecting proposals, deleting tasks, notes and files,
+  approving and rejecting proposals, deleting tasks, checkpoints and files,
   changing Knowledge directly, rolling back, and managing space members. The
   full list is in the library's
   [permission matrix](../../lib/docs/contracts/access-control.md#4-permissions)

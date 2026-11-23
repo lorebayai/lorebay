@@ -27,7 +27,7 @@ pub async fn create_task(server: &Server, space: &str, agent: &Value, title: &st
         .clone()
 }
 
-pub async fn append_note(
+pub async fn append_checkpoint(
     server: &Server,
     space: &str,
     task: &Value,
@@ -38,7 +38,7 @@ pub async fn append_note(
     server
         .json(
             Method::POST,
-            &format!("/api/v1/spaces/{space}/tasks/{id}/notes"),
+            &format!("/api/v1/spaces/{space}/tasks/{id}/checkpoints"),
             json!({"content": content}),
             agent["access_token"].as_str(),
         )

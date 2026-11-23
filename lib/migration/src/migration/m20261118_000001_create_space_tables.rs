@@ -11,7 +11,7 @@ impl MigrationTrait for Migration {
         for table in [
             space(),
             task(),
-            note(),
+            checkpoint(),
             agent_file(),
             knowledge(manager.get_database_backend()),
             proposal(),
@@ -31,7 +31,7 @@ impl MigrationTrait for Migration {
             SpaceProposal::Table.into_iden(),
             SpaceKnowledge::Table.into_iden(),
             SpaceAgentFile::Table.into_iden(),
-            SpaceNote::Table.into_iden(),
+            SpaceCheckpoint::Table.into_iden(),
             SpaceTask::Table.into_iden(),
             Space::Table.into_iden(),
         ] {
@@ -101,16 +101,16 @@ fn task() -> TableCreateStatement {
         .to_owned()
 }
 
-fn note() -> TableCreateStatement {
+fn checkpoint() -> TableCreateStatement {
     Table::create()
-        .table(SpaceNote::Table)
-        .col(text(SpaceNote::Id).primary_key())
-        .col(text(SpaceNote::TaskId))
-        .col(text(SpaceNote::Content))
-        .col(big_integer(SpaceNote::CreatedAt))
+        .table(SpaceCheckpoint::Table)
+        .col(text(SpaceCheckpoint::Id).primary_key())
+        .col(text(SpaceCheckpoint::TaskId))
+        .col(text(SpaceCheckpoint::Content))
+        .col(big_integer(SpaceCheckpoint::CreatedAt))
         .foreign_key(
             ForeignKey::create()
-                .from(SpaceNote::Table, SpaceNote::TaskId)
+                .from(SpaceCheckpoint::Table, SpaceCheckpoint::TaskId)
                 .to(SpaceTask::Table, SpaceTask::Id)
                 .on_delete(ForeignKeyAction::Cascade),
         )
@@ -378,9 +378,9 @@ fn indexes() -> [IndexCreateStatement; 6] {
             [SpaceTask::SpaceId, SpaceTask::PersonId, SpaceTask::Status],
         ),
         index(
-            "space_note_task_time",
-            SpaceNote::Table,
-            [SpaceNote::TaskId, SpaceNote::CreatedAt],
+            "space_checkpoint_task_time",
+            SpaceCheckpoint::Table,
+            [SpaceCheckpoint::TaskId, SpaceCheckpoint::CreatedAt],
         ),
         index(
             "space_agent_file_task",
@@ -462,7 +462,7 @@ enum SpaceKnowledgeVersion {
 }
 
 #[derive(DeriveIden)]
-enum SpaceNote {
+enum SpaceCheckpoint {
     Content,
     CreatedAt,
     Id,

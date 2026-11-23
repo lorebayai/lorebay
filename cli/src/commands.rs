@@ -15,10 +15,10 @@ use crate::login;
 use crate::output::{self, Outcome, Table};
 
 mod agent_files;
+mod checkpoints;
 mod content;
 mod deletion;
 mod knowledge;
-mod notes;
 mod pages;
 mod proposals;
 mod space_members;
@@ -48,7 +48,7 @@ pub(crate) async fn run(command: Command, mode: OutputMode) -> Result<Outcome> {
         }
         Command::Member { command } => space_members::run(command, &store, mode).await,
         Command::Proposal { command } => proposals::run(command, &store, mode).await,
-        Command::Note { command } => notes::run(command, &store).await,
+        Command::Checkpoint { command } => checkpoints::run(command, &store).await,
         Command::Space { command } => spaces::run(command, &store, mode).await,
         Command::Task { command } => tasks::run(command, &store, mode).await,
         Command::User { command } => users::run(command, &store, mode).await,

@@ -4,15 +4,15 @@ use sea_orm::{
 };
 use typed_builder::TypedBuilder;
 
-use crate::entity::space_note::{ActiveModel, Column, Entity, Model};
+use crate::entity::space_checkpoint::{ActiveModel, Column, Entity, Model};
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
-pub(crate) struct NoteRepository<'a, C> {
+pub(crate) struct CheckpointRepository<'a, C> {
     pub connection: &'a C,
 }
 
-impl<C: ConnectionTrait> NoteRepository<'_, C> {
+impl<C: ConnectionTrait> CheckpointRepository<'_, C> {
     pub async fn latest_time(&self, task_id: &str) -> Result<Option<i64>, DbErr> {
         Entity::find()
             .select_only()

@@ -11,4 +11,4 @@ trap 'rm -rf -- "$schema_dir"' EXIT
 database="$schema_dir/library.sqlite3"
 cargo run -p lorebay-lib-migration --locked --features entity-generation --bin prepare-library-entity-database -- "$database"
 generate_entities "$cli" "$database" "$schema_dir/entities" lib/core/src/entity \
-  space,space_task,space_note,space_agent_file,space_knowledge,space_knowledge_version,space_proposal
+  space,space_task,space_checkpoint,space_agent_file,space_knowledge,space_knowledge_version,space_proposal

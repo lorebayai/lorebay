@@ -1,5 +1,5 @@
 use lorebay_lib_core::{
-    Caller, LibraryState, NoteContent, Page, TaskRead, TaskTarget, TaskTitle, add_note,
+    Caller, CheckpointContent, LibraryState, Page, TaskRead, TaskTarget, TaskTitle, add_checkpoint,
     change_task, complete_agent_file, create_task, get_agent_file_download_url, list_spaces,
     list_tasks, prepare_agent_file_completion, read_task, register_agent_file,
 };
@@ -38,7 +38,7 @@ pub(super) async fn call(
             )
             .await?,
         ),
-        ToolName::AddNote => append(state, caller, &arguments).await,
+        ToolName::AddCheckpoint => append(state, caller, &arguments).await,
         ToolName::CreateAgentFile => register(state, caller, &arguments).await,
         ToolName::CompleteAgentFile => complete(state, caller, &arguments).await,
         ToolName::GetAgentFileUrl => value(
@@ -123,12 +123,12 @@ async fn append(
     arguments: &Arguments,
 ) -> Result<Value, ToolError> {
     let task_id = arguments.string("task_id")?;
-    let content = NoteContent::try_from(arguments.string("content")?)
+    let content = CheckpointContent::try_from(arguments.string("content")?)
         .map_err(|error| ToolError::task_text("content", error))?;
-    let note = state
-        .run_write(async |write| add_note(write, caller, target(&task_id), content).await)
+    let checkpoint = state
+        .run_write(async |write| add_checkpoint(write, caller, target(&task_id), content).await)
         .await?;
-    value(note)
+    value(checkpoint)
 }
 
 fn target(task_id: &str) -> TaskTarget<'_> {
