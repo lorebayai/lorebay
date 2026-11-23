@@ -12,7 +12,7 @@ impl MigrationTrait for Migration {
             space(),
             task(),
             note(),
-            artifact(),
+            agent_file(),
             knowledge(manager.get_database_backend()),
             proposal(),
             knowledge_version(),
@@ -30,7 +30,7 @@ impl MigrationTrait for Migration {
             SpaceKnowledgeVersion::Table.into_iden(),
             SpaceProposal::Table.into_iden(),
             SpaceKnowledge::Table.into_iden(),
-            SpaceArtifact::Table.into_iden(),
+            SpaceAgentFile::Table.into_iden(),
             SpaceNote::Table.into_iden(),
             SpaceTask::Table.into_iden(),
             Space::Table.into_iden(),
@@ -53,7 +53,7 @@ fn space() -> TableCreateStatement {
         .col(text(Space::Summary))
         .col(big_integer(Space::NextTaskNumber).default(1))
         .col(big_integer(Space::NextKnowledgeNumber).default(1))
-        .col(big_integer(Space::NextArtifactNumber).default(1))
+        .col(big_integer(Space::NextAgentFileNumber).default(1))
         .col(big_integer(Space::NextProposalNumber).default(1))
         .col(big_integer(Space::CreatedAt))
         .col(big_integer(Space::UpdatedAt))
@@ -117,46 +117,46 @@ fn note() -> TableCreateStatement {
         .to_owned()
 }
 
-fn artifact() -> TableCreateStatement {
+fn agent_file() -> TableCreateStatement {
     Table::create()
-        .table(SpaceArtifact::Table)
-        .col(text(SpaceArtifact::Id).primary_key())
-        .col(text(SpaceArtifact::SpaceId))
-        .col(text(SpaceArtifact::TaskId))
-        .col(big_integer(SpaceArtifact::Number))
-        .col(text(SpaceArtifact::FileName))
-        .col(text(SpaceArtifact::Summary))
-        .col(text_uniq(SpaceArtifact::StorageKey))
-        .col(big_integer_null(SpaceArtifact::Size))
-        .col(big_integer(SpaceArtifact::CreatedAt))
-        .col(big_integer_null(SpaceArtifact::CompletedAt))
-        .col(big_integer_null(SpaceArtifact::RefusedAt))
+        .table(SpaceAgentFile::Table)
+        .col(text(SpaceAgentFile::Id).primary_key())
+        .col(text(SpaceAgentFile::SpaceId))
+        .col(text(SpaceAgentFile::TaskId))
+        .col(big_integer(SpaceAgentFile::Number))
+        .col(text(SpaceAgentFile::FileName))
+        .col(text(SpaceAgentFile::Summary))
+        .col(text_uniq(SpaceAgentFile::StorageKey))
+        .col(big_integer_null(SpaceAgentFile::Size))
+        .col(big_integer(SpaceAgentFile::CreatedAt))
+        .col(big_integer_null(SpaceAgentFile::CompletedAt))
+        .col(big_integer_null(SpaceAgentFile::RefusedAt))
         .index(
             Index::create()
                 .unique()
-                .col(SpaceArtifact::SpaceId)
-                .col(SpaceArtifact::Number),
+                .col(SpaceAgentFile::SpaceId)
+                .col(SpaceAgentFile::Number),
         )
         .check(
-            Expr::col(SpaceArtifact::CompletedAt)
+            Expr::col(SpaceAgentFile::CompletedAt)
                 .is_null()
-                .eq(Expr::col(SpaceArtifact::Size).is_null()),
+                .eq(Expr::col(SpaceAgentFile::Size).is_null()),
         )
         .check(
-            Expr::col(SpaceArtifact::RefusedAt)
+            Expr::col(SpaceAgentFile::RefusedAt)
                 .is_null()
-                .or(Expr::col(SpaceArtifact::CompletedAt).is_null()),
+                .or(Expr::col(SpaceAgentFile::CompletedAt).is_null()),
         )
         .foreign_key(
             ForeignKey::create()
-                .from(SpaceArtifact::Table, SpaceArtifact::SpaceId)
+                .from(SpaceAgentFile::Table, SpaceAgentFile::SpaceId)
                 .to(Space::Table, Space::Id),
         )
         .foreign_key(
             ForeignKey::create()
                 .from(
-                    SpaceArtifact::Table,
-                    (SpaceArtifact::TaskId, SpaceArtifact::SpaceId),
+                    SpaceAgentFile::Table,
+                    (SpaceAgentFile::TaskId, SpaceAgentFile::SpaceId),
                 )
                 .to(SpaceTask::Table, (SpaceTask::Id, SpaceTask::SpaceId))
                 .on_delete(ForeignKeyAction::Cascade),
@@ -383,9 +383,9 @@ fn indexes() -> [IndexCreateStatement; 6] {
             [SpaceNote::TaskId, SpaceNote::CreatedAt],
         ),
         index(
-            "space_artifact_task",
-            SpaceArtifact::Table,
-            [SpaceArtifact::TaskId],
+            "space_agent_file_task",
+            SpaceAgentFile::Table,
+            [SpaceAgentFile::TaskId],
         ),
         index(
             "space_proposal_space_status",
@@ -418,7 +418,7 @@ fn index<T: IntoIden>(
 }
 
 #[derive(DeriveIden)]
-enum SpaceArtifact {
+enum SpaceAgentFile {
     CompletedAt,
     CreatedAt,
     FileName,
@@ -497,7 +497,7 @@ enum Space {
     CreatedAt,
     Id,
     Name,
-    NextArtifactNumber,
+    NextAgentFileNumber,
     NextKnowledgeNumber,
     NextProposalNumber,
     NextTaskNumber,

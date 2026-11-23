@@ -23,7 +23,7 @@ the rules they keep, and the SQL that creates them.
 ## 2. Scope
 
 This doc covers the library's seven tables: `space`, `space_task`,
-`space_note`, `space_artifact`, `space_knowledge`,
+`space_note`, `space_agent_file`, `space_knowledge`,
 `space_knowledge_version` and `space_proposal`. Behavior observable through
 the public API is in the contract docs, and how the library's migrations
 sit beside a product's is in
@@ -62,7 +62,7 @@ It does not cover:
   cannot replace it.
 - **Keys.** A table whose rows have keys has a `number` column, unique
   together with `space_id`. The table fixes the prefix: `TK` for
-  `space_task`, `KN` for `space_knowledge`, `AR` for `space_artifact` and
+  `space_task`, `KN` for `space_knowledge`, `FL` for `space_agent_file` and
   `PP` for `space_proposal`. Numbers come from counters on `space`; see
   [section 5.1](#51-space).
 - **Statuses and kinds** are stored as lowercase English values, as the
@@ -96,19 +96,19 @@ erDiagram
     space ||--o{ space_knowledge : "holds"
     space ||--o{ space_proposal : "holds"
     space_task ||--o{ space_note : "has"
-    space_task ||--o{ space_artifact : "has"
+    space_task ||--o{ space_agent_file : "has"
     space_task |o--o{ space_proposal : "is the source of"
     space_knowledge ||--|{ space_knowledge_version : "has"
     space_knowledge |o--o{ space_proposal : "is the target of"
 ```
 
 Tasks, knowledge entries and proposals belong to a space; notes and
-artifacts belong to a task; each knowledge entry's history is in
+files belong to a task; each knowledge entry's history is in
 `space_knowledge_version`. Who belongs to a space is the product's record;
 the library reads it through the
 [space roles interface](library.md#63-space-roles).
 
-## 5. Spaces, tasks, notes and artifacts
+## 5. Spaces, tasks, notes and files
 
 ### 5.1 `space`
 
@@ -121,7 +121,7 @@ the library reads it through the
 | `summary` | TEXT | Not null | |
 | `next_task_number` | INTEGER | Not null, default 1 | The next `TK` number |
 | `next_knowledge_number` | INTEGER | Not null, default 1 | The next `KN` number |
-| `next_artifact_number` | INTEGER | Not null, default 1 | The next `AR` number |
+| `next_agent_file_number` | INTEGER | Not null, default 1 | The next `FL` number |
 | `next_proposal_number` | INTEGER | Not null, default 1 | The next `PP` number |
 | `created_at` | INTEGER | Not null | |
 | `updated_at` | INTEGER | Not null | When the name or summary last changed |
@@ -130,7 +130,7 @@ the library reads it through the
   with the caller's scope and answers a space of another owner as not found;
   see [Library architecture](library.md#8-scope-and-space-numbers). Who
   holds the owner role in a space is the product's record.
-- **Taking a key.** Creating a task, knowledge entry, artifact or proposal
+- **Taking a key.** Creating a task, knowledge entry, file or proposal
   adds one to the matching counter and returns the value in one statement,
   inside the same transaction, and uses the value before the increment.
   Taking the current maximum plus one would reuse the keys of deleted
@@ -157,7 +157,7 @@ the library reads it through the
 | `result` | TEXT | Not null, default empty | Markdown, replaced whole on each update |
 | `started_at` | INTEGER | Not null | |
 | `ended_at` | INTEGER | Nullable | Set when the task becomes `ended`, cleared when it returns to `in progress` |
-| `last_activity_at` | INTEGER | Not null | Equal to `started_at` at creation; moved to the time of each note, artifact or result update, never backward |
+| `last_activity_at` | INTEGER | Not null | Equal to `started_at` at creation; moved to the time of each note, file or result update, never backward |
 
 - **A task names its agent by the copied name**, not by a reference to the
   product's record of the agent. Filtering by agent matches
@@ -172,11 +172,11 @@ the library reads it through the
   still show their name and are still found by it.
 - **A CHECK ties `ended_at` to `status`**: set when `ended`, empty when
   `in progress`.
-- **`(id, space_id)` is unique** so that `space_artifact` can reference a
-  task together with its space; see [section 5.4](#54-space_artifact).
-- **Deletion is real.** Deleting a task cascades to its notes and artifact
+- **`(id, space_id)` is unique** so that `space_agent_file` can reference a
+  task together with its space; see [section 5.4](#54-space_agent_file).
+- **Deletion is real.** Deleting a task cascades to its notes and file
   rows, and clears the source task of its proposals; keys written in text
-  stay and show as plain text. The artifact files are deleted after the
+  stay and show as plain text. The file content is deleted after the
   transaction commits; see [Storage](storage.md#4-database).
 - **Indexes:** `space_task_space_activity`, on
   `(space_id, last_activity_at)`, to list tasks; `space_task_space_person`,
@@ -199,28 +199,28 @@ the library reads it through the
 - **Index:** `space_note_task_time`, on `(task_id, created_at)`, for time
   order and paging.
 
-### 5.4 `space_artifact`
+### 5.4 `space_agent_file`
 
 | Column | Type | Constraints | Meaning |
 | --- | --- | --- | --- |
 | `id` | TEXT | Primary key, not null | |
 | `space_id` | TEXT | Not null, foreign key to `space` | The same as its task's space |
 | `task_id` | TEXT | Not null; `(task_id, space_id)` is a foreign key to `space_task`, cascades on delete | |
-| `number` | INTEGER | Not null | The `AR` number; `(space_id, number)` is unique |
+| `number` | INTEGER | Not null | The `FL` number; `(space_id, number)` is unique |
 | `file_name` | TEXT | Not null | |
 | `summary` | TEXT | Not null | |
 | `storage_key` | TEXT | Not null, unique | The file's location, a UUIDv7 generated by the library |
 | `size` | INTEGER | Nullable | Bytes, read from storage when the upload is reported complete |
-| `created_at` | INTEGER | Not null | When the artifact was registered |
-| `completed_at` | INTEGER | Nullable | When the upload was reported complete; until then the artifact is not listed among the task's artifacts |
-| `refused_at` | INTEGER | Nullable | When a report found the file over the size limit; a refused artifact is never completed |
+| `created_at` | INTEGER | Not null | When the file was registered |
+| `completed_at` | INTEGER | Nullable | When the upload was reported complete; until then the file is not listed among the task's files |
+| `refused_at` | INTEGER | Nullable | When a report found the file over the size limit; a refused file is never completed |
 
-- **The key is taken at registration**, and `complete_artifact` names the
-  artifact by it. The abandoned-registration round removes registrations
+- **The key is taken at registration**, and `complete_agent_file` names the
+  file by it. The abandoned-registration round removes registrations
   neither completed nor refused; their keys stay unused.
 - **A refused registration stays until its task is deleted**, so a later
-  report answers `artifact.refused`. Its `storage_key` holds no file: the
-  orphaned-file round does not count it as a record; see
+  report answers `agent_file.refused`. Its `storage_key` holds no stored
+  content: the orphaned-file round does not count it as a record; see
   [Library architecture](library.md#9-files).
 - **The library generates `storage_key`**, never from the file name, so
   files with the same name never overwrite each other; see
@@ -232,7 +232,7 @@ the library reads it through the
   foreign key `(task_id, space_id)` keeps it equal to the task's space. A
   CHECK allows `size` only once the upload is complete, and another forbids
   a registration from being both completed and refused.
-- **Index:** `space_artifact_task`, on `task_id`.
+- **Index:** `space_agent_file_task`, on `task_id`.
 
 ## 6. Knowledge and proposals
 
@@ -342,7 +342,7 @@ One row per knowledge entry; its content is in `space_knowledge_version`.
 - **The source task's space.** The task in `from_task_id` must be in the
   proposal's space. Code ensures it: an agent's proposal takes its
   `space_id` from that task. A composite foreign key like
-  `space_artifact`'s cannot work here: when the task is deleted,
+  `space_agent_file`'s cannot work here: when the task is deleted,
   `ON DELETE SET NULL` would clear `space_id` too, which is not null.
 - **Indexes:** `space_proposal_space_status`, on
   `(space_id, status, created_at)`, to list proposals by status;
@@ -364,7 +364,7 @@ CREATE TABLE space (
   summary                TEXT    NOT NULL,
   next_task_number       INTEGER NOT NULL DEFAULT 1,
   next_knowledge_number  INTEGER NOT NULL DEFAULT 1,
-  next_artifact_number   INTEGER NOT NULL DEFAULT 1,
+  next_agent_file_number INTEGER NOT NULL DEFAULT 1,
   next_proposal_number   INTEGER NOT NULL DEFAULT 1,
   created_at             INTEGER NOT NULL,
   updated_at             INTEGER NOT NULL
@@ -398,7 +398,7 @@ CREATE TABLE space_note (
 );
 CREATE INDEX space_note_task_time ON space_note (task_id, created_at);
 
-CREATE TABLE space_artifact (
+CREATE TABLE space_agent_file (
   id            TEXT    NOT NULL PRIMARY KEY,
   space_id      TEXT    NOT NULL REFERENCES space (id),
   task_id       TEXT    NOT NULL,
@@ -415,7 +415,7 @@ CREATE TABLE space_artifact (
   CHECK ((completed_at IS NULL) = (size IS NULL)),
   CHECK (refused_at IS NULL OR completed_at IS NULL)
 );
-CREATE INDEX space_artifact_task ON space_artifact (task_id);
+CREATE INDEX space_agent_file_task ON space_agent_file (task_id);
 
 CREATE TABLE space_knowledge (
   id              TEXT    NOT NULL PRIMARY KEY,
