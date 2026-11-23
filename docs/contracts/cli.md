@@ -74,8 +74,8 @@ contains spaces. Optional arguments appear in brackets. List rows follow
 
 | Command after `lorebay` | Web API operation | Result in `human` output |
 | --- | --- | --- |
-| `login <server-url> [--no-browser]` | Start and complete CLI sign-in through OAuth; receive a sign-in | Sign-in completion; the browser link is on standard error |
-| `login <server-url> --device` | Request device sign-in and exchange it through OAuth; receive a sign-in | Sign-in completion; the address, short code and link carrying it are on standard error |
+| `login <server-url> [--no-browser]` | Start and complete CLI sign-in through OAuth; receive a CLI sign-in | Sign-in completion; the browser link is on standard error |
+| `login <server-url> --device` | Request device sign-in and exchange it through OAuth; receive a CLI sign-in | Sign-in completion; the address, short code and link carrying it are on standard error |
 | `logout` | Log out | Sign-out completion after removing local credentials |
 | `agent list` | List own agents | Agent names and the other fields the operation returns |
 | `agent revoke <name>` | Revoke one agent | Revocation result |
@@ -138,7 +138,7 @@ contains spaces. Optional arguments appear in brackets. List rows follow
   when the host is `localhost`, any IPv4 address in `127.0.0.0/8`, or the
   IPv6 address `::1`. Every other host requires `https`.
   An invalid URL or another `http` host is a usage error, before
-  requesting credentials. The CLI keeps the URL with the sign-in and
+  requesting credentials. The CLI keeps the URL with the CLI sign-in and
   sends authenticated calls only to that server until another login
   succeeds, including after an HTTP redirect. Other commands have no server
   override.

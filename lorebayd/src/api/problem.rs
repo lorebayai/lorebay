@@ -42,7 +42,7 @@ pub(crate) enum ApiError {
     NotFound,
     #[error("Payload Too Large")]
     PayloadTooLarge,
-    #[error("A sign-in is required")]
+    #[error("A person's sign-in is required")]
     PersonRequired,
     #[error("Too Many Requests")]
     RateLimited(u64),
@@ -202,7 +202,7 @@ impl From<LibraryCallerError> for ApiError {
     fn from(error: LibraryCallerError) -> Self {
         let message = match error {
             LibraryCallerError::AgentRequired => "An agent sign-in is required",
-            LibraryCallerError::PersonRequired => "A sign-in is required",
+            LibraryCallerError::PersonRequired => "A person's sign-in is required",
             _ => return Self::library(StatusCode::INTERNAL_SERVER_ERROR, error.code(), error),
         };
         Self::library(StatusCode::FORBIDDEN, error.code(), message)

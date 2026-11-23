@@ -378,8 +378,8 @@ CREATE TABLE person_sign_in (
 CREATE TABLE refresh_token_history (
   id                      TEXT NOT NULL PRIMARY KEY,
   token_hash              TEXT NOT NULL UNIQUE,
-  agent_sign_in_id         TEXT REFERENCES agent_sign_in (id) ON DELETE CASCADE,
-  person_sign_in_id        TEXT REFERENCES person_sign_in (id) ON DELETE CASCADE,
+  agent_sign_in_id        TEXT REFERENCES agent_sign_in (id) ON DELETE CASCADE,
+  person_sign_in_id       TEXT REFERENCES person_sign_in (id) ON DELETE CASCADE,
   expires_at              INTEGER NOT NULL,
   CHECK ((agent_sign_in_id IS NULL) <> (person_sign_in_id IS NULL))
 );
@@ -395,12 +395,12 @@ CREATE TABLE oauth_code (
   redirect_uri            TEXT NOT NULL,
   code_challenge          TEXT NOT NULL,
   agent_name              TEXT,
-  replaces_sign_in_id      TEXT REFERENCES agent_sign_in (id) ON DELETE SET NULL,
+  replaces_sign_in_id     TEXT REFERENCES agent_sign_in (id) ON DELETE SET NULL,
   created_at              INTEGER NOT NULL,
   expires_at              INTEGER NOT NULL,
   exchanged_at            INTEGER,
-  agent_sign_in_id         TEXT REFERENCES agent_sign_in (id) ON DELETE SET NULL,
-  person_sign_in_id        TEXT REFERENCES person_sign_in (id) ON DELETE SET NULL,
+  agent_sign_in_id        TEXT REFERENCES agent_sign_in (id) ON DELETE SET NULL,
+  person_sign_in_id       TEXT REFERENCES person_sign_in (id) ON DELETE SET NULL,
   CHECK (agent_sign_in_id IS NULL OR person_sign_in_id IS NULL)
 );
 

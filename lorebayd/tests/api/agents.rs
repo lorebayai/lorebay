@@ -434,7 +434,7 @@ async fn assert_person_required(response: Response) {
     let body = assert_problem(response, StatusCode::FORBIDDEN, "auth.person_required").await;
     assert_eq!(
         body,
-        json!({"type": "about:blank", "title": "A sign-in is required",
+        json!({"type": "about:blank", "title": "A person's sign-in is required",
         "status": 403, "code": "auth.person_required", "errors": []})
     );
 }

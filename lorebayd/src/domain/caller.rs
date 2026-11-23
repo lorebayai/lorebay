@@ -7,7 +7,7 @@ use super::access::{AgentCaller, PersonCaller};
 
 #[derive(Debug, Error)]
 pub(crate) enum PersonCallerError {
-    #[error("A sign-in is required")]
+    #[error("A person's sign-in is required")]
     PersonRequired,
 }
 

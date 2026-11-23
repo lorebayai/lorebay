@@ -256,7 +256,7 @@ async fn logout_preserves_server_error_when_caller_is_agent() {
     assert!(output.stdout.is_empty());
     let error: Value = serde_json::from_slice(&output.stderr).unwrap();
     assert_eq!(error["code"], "auth.person_required");
-    assert_eq!(error["title"], "A sign-in is required");
+    assert_eq!(error["title"], "A person's sign-in is required");
     assert_eq!(error["status"], 403);
     assert_eq!(error["errors"], json!([]));
     assert!(

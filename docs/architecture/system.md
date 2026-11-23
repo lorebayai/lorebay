@@ -61,7 +61,7 @@ designed but not built ([Storage](storage.md)).
 | Caller | Entry point | Credential |
 | --- | --- | --- |
 | Person, in a browser | Web API and web pages | Sign-in |
-| Person, in a terminal | Web API, through the [`lorebay` CLI](../contracts/cli.md) | Sign-in |
+| Person, in a terminal | Web API, through the [`lorebay` CLI](../contracts/cli.md) | CLI sign-in |
 | External program | Web API | Agent sign-in |
 | Agent | MCP | Agent sign-in |
 
