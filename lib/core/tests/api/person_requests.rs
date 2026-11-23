@@ -3,17 +3,18 @@ use std::collections::BTreeSet;
 use futures_util::future::try_join_all;
 use lorebay_lib_core::{
     Caller, KnowledgeChanges, KnowledgeEntry, KnowledgeError, KnowledgeInputError, KnowledgeTarget,
-    LibraryState, NewKnowledgeEntry, PageOptions, Proposal, ProposalContent, ProposalError,
-    ProposalFilters, ProposalSource, SubmittedProposal, TaskTarget, WriteOperation,
-    approve_proposal, change_knowledge_entry, create_knowledge_entry, list_proposals,
-    read_knowledge_entry, read_proposal, submit_proposal,
+    LibraryState, NewKnowledgeEntry, PageOptions, PersonRequest, PersonRequestContent,
+    PersonRequestError, PersonRequestFilters, PersonRequestSource, SubmittedPersonRequest,
+    TaskTarget, WriteOperation, approve_person_request, change_knowledge_entry,
+    create_knowledge_entry, list_person_requests, read_knowledge_entry, read_person_request,
+    submit_person_request,
 };
 use tokio::sync::{Barrier, mpsc};
 
 use super::helpers::{Gates, Pause, Records, SPACE, next_pid, with_postgres};
 
 #[tokio::test]
-async fn approve_proposal_decides_once_when_approved_concurrently() {
+async fn approve_person_request_decides_once_when_approved_concurrently() {
     with_postgres(async |fixture| {
         fixture.space().await;
         submit(&fixture.state, &fixture.person, "Guide")
@@ -50,7 +51,7 @@ async fn approve_proposal_decides_once_when_approved_concurrently() {
         );
         assert_eq!(
             concurrent.await.unwrap().unwrap_err().code(),
-            "proposal.decided"
+            "person_request.decided"
         );
         let entry = read_knowledge_entry(&fixture.state, &fixture.person, SPACE, target().unwrap())
             .await
@@ -58,7 +59,7 @@ async fn approve_proposal_decides_once_when_approved_concurrently() {
         assert_eq!(entry.version, 1);
         assert_eq!(entry.content.as_deref(), Some("Proposed"));
         assert_eq!(
-            read_proposal(&fixture.state, &fixture.person, SPACE, "PP-1")
+            read_person_request(&fixture.state, &fixture.person, SPACE, "RQ-1")
                 .await
                 .unwrap()
                 .details
@@ -68,14 +69,14 @@ async fn approve_proposal_decides_once_when_approved_concurrently() {
         );
         assert_eq!(
             records.lock().unwrap()[0].as_ref().unwrap().operation,
-            WriteOperation::ApproveProposal
+            WriteOperation::ApprovePersonRequest
         );
     })
     .await;
 }
 
 #[tokio::test]
-async fn approve_proposal_keeps_versions_consecutive_when_entry_changes_concurrently() {
+async fn approve_person_request_keeps_versions_consecutive_when_entry_changes_concurrently() {
     with_postgres(async |fixture| {
         fixture.space().await;
         prepare_change(&fixture.state, &fixture.person)
@@ -126,10 +127,10 @@ async fn approve_proposal_keeps_versions_consecutive_when_entry_changes_concurre
 }
 
 #[tokio::test]
-async fn submit_proposal_assigns_distinct_keys_when_submitted_concurrently() {
+async fn submit_person_request_assigns_distinct_keys_when_submitted_concurrently() {
     with_postgres(async |fixture| {
         fixture.space().await;
-        let task = fixture.task("Concurrent proposals").await;
+        let task = fixture.task("Concurrent requests").await;
         let held = Pause::default();
         let records = Records::default();
         let first = fixture.state_with(
@@ -156,24 +157,22 @@ async fn submit_proposal_assigns_distinct_keys_when_submitted_concurrently() {
             tokio::spawn(async move { submit_agent(&second, &agent, task.task_id.expose()).await });
         fixture.wait_for_lock(next_pid(&mut pid).await).await;
         held.release();
-        assert_eq!(
-            submission.await.unwrap().unwrap().proposal.details.key,
-            "PP-1"
-        );
+        let first = submission.await.unwrap().unwrap();
+        assert_eq!(first.person_request.details.key, "RQ-1");
         let second = concurrent.await.unwrap().unwrap();
-        assert_eq!(second.proposal.details.key, "PP-2");
-        assert_eq!(second.task_title.as_deref(), Some("Concurrent proposals"));
+        assert_eq!(second.person_request.details.key, "RQ-2");
+        assert_eq!(second.task_title.as_deref(), Some("Concurrent requests"));
         let submissions = submit_many(&fixture.state, &fixture.person).await.unwrap();
         assert_eq!(
             submissions.into_iter().collect::<BTreeSet<_>>(),
-            (3..=22).map(|number| format!("PP-{number}")).collect()
+            (3..=22).map(|number| format!("RQ-{number}")).collect()
         );
-        let listed = list_proposals(
+        let listed = list_person_requests(
             &fixture.state,
             &fixture.person,
             SPACE,
             PageOptions::new(Some(20), None).unwrap(),
-            ProposalFilters::new(None, None).unwrap(),
+            PersonRequestFilters::new(None, None).unwrap(),
         )
         .await
         .unwrap();
@@ -181,7 +180,7 @@ async fn submit_proposal_assigns_distinct_keys_when_submitted_concurrently() {
         assert!(listed.next_cursor.is_some());
         assert_eq!(
             records.lock().unwrap()[0].as_ref().unwrap().operation,
-            WriteOperation::SubmitProposal
+            WriteOperation::SubmitPersonRequest
         );
     })
     .await;
@@ -191,14 +190,14 @@ async fn submit(
     state: &LibraryState,
     caller: &Caller,
     name: &str,
-) -> Result<SubmittedProposal, ProposalError> {
+) -> Result<SubmittedPersonRequest, PersonRequestError> {
     state
         .run_write(async |write| {
-            submit_proposal(
+            submit_person_request(
                 write,
                 caller,
-                ProposalSource::Space(SPACE),
-                ProposalContent::Create(NewKnowledgeEntry::new(
+                PersonRequestSource::Space(SPACE),
+                PersonRequestContent::Create(NewKnowledgeEntry::new(
                     name.to_owned(),
                     "Summary".to_owned(),
                     "Proposed".to_owned(),
@@ -209,9 +208,12 @@ async fn submit(
         .await
 }
 
-async fn approve(state: &LibraryState, caller: &Caller) -> Result<Proposal, ProposalError> {
+async fn approve(
+    state: &LibraryState,
+    caller: &Caller,
+) -> Result<PersonRequest, PersonRequestError> {
     state
-        .run_write(async |write| approve_proposal(write, caller, SPACE, "PP-1").await)
+        .run_write(async |write| approve_person_request(write, caller, SPACE, "RQ-1").await)
         .await
 }
 
@@ -219,7 +221,7 @@ fn target() -> Result<KnowledgeTarget, KnowledgeInputError> {
     KnowledgeTarget::new(None, Some("KN-1".to_owned()))
 }
 
-async fn prepare_change(state: &LibraryState, caller: &Caller) -> Result<(), ProposalError> {
+async fn prepare_change(state: &LibraryState, caller: &Caller) -> Result<(), PersonRequestError> {
     let input = NewKnowledgeEntry::new(
         "Guide".to_owned(),
         "Initial".to_owned(),
@@ -228,13 +230,13 @@ async fn prepare_change(state: &LibraryState, caller: &Caller) -> Result<(), Pro
     state
         .run_write(async |write| create_knowledge_entry(write, caller, SPACE, input).await)
         .await?;
-    let content = ProposalContent::Change(
+    let content = PersonRequestContent::Change(
         target()?,
         KnowledgeChanges::new(None, None, Some("Proposed".to_owned()))?,
     );
     state
         .run_write(async |write| {
-            submit_proposal(write, caller, ProposalSource::Space(SPACE), content).await
+            submit_person_request(write, caller, PersonRequestSource::Space(SPACE), content).await
         })
         .await?;
     Ok(())
@@ -257,18 +259,18 @@ async fn submit_agent(
     state: &LibraryState,
     caller: &Caller,
     task_id: &str,
-) -> Result<SubmittedProposal, ProposalError> {
-    let content = ProposalContent::Create(NewKnowledgeEntry::new(
+) -> Result<SubmittedPersonRequest, PersonRequestError> {
+    let content = PersonRequestContent::Create(NewKnowledgeEntry::new(
         "Second".to_owned(),
         "Summary".to_owned(),
         "Proposed".to_owned(),
     )?);
     state
         .run_write(async |write| {
-            submit_proposal(
+            submit_person_request(
                 write,
                 caller,
-                ProposalSource::Task(TaskTarget {
+                PersonRequestSource::Task(TaskTarget {
                     path_space: None,
                     task_id,
                 }),
@@ -279,7 +281,10 @@ async fn submit_agent(
         .await
 }
 
-async fn submit_many(state: &LibraryState, caller: &Caller) -> Result<Vec<String>, ProposalError> {
+async fn submit_many(
+    state: &LibraryState,
+    caller: &Caller,
+) -> Result<Vec<String>, PersonRequestError> {
     let barrier = Barrier::new(20);
     try_join_all((0..20).map(|number| {
         let barrier = &barrier;
@@ -287,7 +292,7 @@ async fn submit_many(state: &LibraryState, caller: &Caller) -> Result<Vec<String
             barrier.wait().await;
             Ok(submit(state, caller, &format!("Entry {number}"))
                 .await?
-                .proposal
+                .person_request
                 .details
                 .key)
         }

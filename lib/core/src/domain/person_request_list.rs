@@ -4,43 +4,46 @@ use lorebay_lib_types::{decode_cursor, encode_cursor, sha256_hex};
 use serde::Serialize;
 use typed_builder::TypedBuilder;
 
-use crate::repository::{ProposalAfter, ProposalListRequest, ProposalRepository, ProposalRow};
+use crate::repository::{
+    PersonRequestAfter, PersonRequestListRequest, PersonRequestRepository, PersonRequestRow,
+};
 use crate::{Caller, LibraryState};
 
 use super::key::format_key;
 use super::space_access::{READ_ROLES, check_space};
 use super::{
-    Page, PageOptions, ProposalError, ProposalFilters, ProposalKind, ProposalStatus, TaskKeyword,
+    Page, PageOptions, PersonRequestAction, PersonRequestError, PersonRequestFilters,
+    PersonRequestStatus, TaskKeyword,
 };
 
 #[derive(Clone, Debug, Serialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
-pub struct ProposalEntry {
+pub struct PersonRequestEntry {
     pub key: String,
     pub name: String,
 }
 
 #[derive(Clone, Debug, Serialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
-pub struct ProposalListItem {
+pub struct PersonRequestListItem {
     pub key: String,
-    pub kind: ProposalKind,
-    pub status: ProposalStatus,
-    pub proposed_by: String,
-    pub proposer_agent_name: Option<String>,
-    pub target: Option<ProposalEntry>,
+    pub action: PersonRequestAction,
+    pub status: PersonRequestStatus,
+    pub requested_by: String,
+    pub requester_agent_name: Option<String>,
+    pub target: Option<PersonRequestEntry>,
     pub new_name: Option<String>,
     pub new_summary: Option<String>,
     pub created_at: i64,
 }
 
-pub async fn list_proposals(
+pub async fn list_person_requests(
     state: &LibraryState,
     caller: &Caller,
     space: &str,
     options: PageOptions,
-    filters: ProposalFilters,
-) -> Result<Page<ProposalListItem>, ProposalError> {
+    filters: PersonRequestFilters,
+) -> Result<Page<PersonRequestListItem>, PersonRequestError> {
     options.validate()?;
     let scope = serde_json::to_string(&(
         space,
@@ -48,26 +51,26 @@ pub async fn list_proposals(
         filters.keyword.as_ref().map(TaskKeyword::as_str),
     ))
     .map_err(anyhow::Error::from)?;
-    let version = format!("proposals-v1:{}", sha256_hex(&scope));
+    let version = format!("requests-v1:{}", sha256_hex(&scope));
     let after = options
         .cursor
         .as_ref()
         .map(|cursor| {
             decode_cursor(&version, caller.person_id(), cursor)
-                .and_then(|value| serde_json::from_str::<ProposalAfter>(&value).ok())
+                .and_then(|value| serde_json::from_str::<PersonRequestAfter>(&value).ok())
                 .filter(|value| value.number > 0)
-                .ok_or(ProposalError::InvalidCursor)
+                .ok_or(PersonRequestError::InvalidCursor)
         })
         .transpose()?;
     state
         .run_read(async |handle| {
             let space = check_space(state, handle, caller, space, READ_ROLES).await?;
-            let mut rows = ProposalRepository::builder()
+            let mut rows = PersonRequestRepository::builder()
                 .connection(handle.transaction())
                 .build()
-                .list(ProposalListRequest {
+                .list(PersonRequestListRequest {
                     space: &space.space.id,
-                    status: filters.status.map(ProposalStatus::as_str),
+                    status: filters.status.map(PersonRequestStatus::as_str),
                     keyword: filters.keyword.as_ref().map(TaskKeyword::as_str),
                     after,
                     limit: options.page_size + 1,
@@ -78,18 +81,11 @@ pub async fn list_proposals(
             let next_cursor = rows
                 .last()
                 .filter(|_| more)
-                .map(|row| {
-                    let position = serde_json::to_string(&ProposalAfter {
-                        created_at: row.model.created_at,
-                        number: row.model.number,
-                    })
-                    .map_err(anyhow::Error::from)?;
-                    Ok::<_, ProposalError>(encode_cursor(&version, caller.person_id(), &position))
-                })
+                .map(|row| cursor(&version, caller, row))
                 .transpose()?;
             let ids = rows
                 .iter()
-                .map(|row| row.model.proposed_by.clone())
+                .map(|row| row.model.requested_by.clone())
                 .collect::<Vec<_>>();
             let names = state.names().names(handle, &ids).await?;
             Ok(Page {
@@ -101,37 +97,37 @@ pub async fn list_proposals(
 }
 
 pub(super) fn named_items(
-    rows: &[ProposalRow],
+    rows: &[PersonRequestRow],
     names: &HashMap<String, String>,
-) -> Result<Vec<ProposalListItem>, ProposalError> {
+) -> Result<Vec<PersonRequestListItem>, PersonRequestError> {
     rows.iter().map(|row| named_item(row, names)).collect()
 }
 
 pub(super) fn named_item(
-    row: &ProposalRow,
+    row: &PersonRequestRow,
     names: &HashMap<String, String>,
-) -> Result<ProposalListItem, ProposalError> {
+) -> Result<PersonRequestListItem, PersonRequestError> {
     let model = &row.model;
-    let kind = match model.kind.as_str() {
-        "create" => ProposalKind::Create,
-        "change" => ProposalKind::Change,
-        "delete" => ProposalKind::Delete,
-        _ => return Err(anyhow::anyhow!("Invalid proposal kind").into()),
+    let action = match model.action.as_str() {
+        "create" => PersonRequestAction::Create,
+        "change" => PersonRequestAction::Change,
+        "delete" => PersonRequestAction::Delete,
+        _ => return Err(anyhow::anyhow!("Invalid request action").into()),
     };
-    Ok(ProposalListItem {
-        key: format_key("PP", model.number),
-        kind,
-        status: ProposalStatus::try_from(model.status.as_str())?,
-        proposed_by: names
-            .get(&model.proposed_by)
+    Ok(PersonRequestListItem {
+        key: format_key("RQ", model.number),
+        action,
+        status: PersonRequestStatus::try_from(model.status.as_str())?,
+        requested_by: names
+            .get(&model.requested_by)
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("Person name is missing"))?,
-        proposer_agent_name: model.proposer_agent_name.clone(),
+        requester_agent_name: model.requester_agent_name.clone(),
         target: row
             .target_name
             .clone()
             .zip(row.target_number)
-            .map(|(name, number)| ProposalEntry {
+            .map(|(name, number)| PersonRequestEntry {
                 name,
                 key: format_key("KN", number),
             }),
@@ -139,4 +135,17 @@ pub(super) fn named_item(
         new_summary: model.new_summary.clone(),
         created_at: model.created_at,
     })
+}
+
+fn cursor(
+    version: &str,
+    caller: &Caller,
+    row: &PersonRequestRow,
+) -> Result<String, PersonRequestError> {
+    let position = serde_json::to_string(&PersonRequestAfter {
+        created_at: row.model.created_at,
+        number: row.model.number,
+    })
+    .map_err(anyhow::Error::from)?;
+    Ok(encode_cursor(version, caller.person_id(), &position))
 }

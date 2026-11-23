@@ -1,6 +1,6 @@
 use lorebay_lib_core::{
-    Caller, LibraryState, ProposalSource, list_knowledge, list_proposals, read_knowledge_entry,
-    read_proposal, submit_proposal,
+    Caller, LibraryState, PersonRequestSource, list_knowledge, list_person_requests,
+    read_knowledge_entry, read_person_request, submit_person_request,
 };
 use serde_json::Value;
 
@@ -45,14 +45,14 @@ pub(super) async fn propose(
     arguments: &Arguments,
 ) -> Result<Value, ToolError> {
     let task_id = arguments.string("task_id")?;
-    let content = arguments.proposal()?;
+    let content = arguments.person_request()?;
     value(
         state
             .run_write(async |write| {
-                submit_proposal(
+                submit_person_request(
                     write,
                     caller,
-                    ProposalSource::Task(target(&task_id)),
+                    PersonRequestSource::Task(target(&task_id)),
                     content,
                 )
                 .await
@@ -61,30 +61,30 @@ pub(super) async fn propose(
     )
 }
 
-pub(super) async fn proposals(
+pub(super) async fn person_requests(
     state: &LibraryState,
     caller: &Caller,
     arguments: &Arguments,
 ) -> Result<Value, ToolError> {
     page_response(
-        list_proposals(
+        list_person_requests(
             state,
             caller,
             &arguments.string("space")?,
             arguments.page()?,
-            arguments.proposal_filters()?,
+            arguments.person_request_filters()?,
         )
         .await?,
     )
 }
 
-pub(super) async fn proposal(
+pub(super) async fn person_request(
     state: &LibraryState,
     caller: &Caller,
     arguments: &Arguments,
 ) -> Result<Value, ToolError> {
     value(
-        read_proposal(
+        read_person_request(
             state,
             caller,
             &arguments.string("space")?,

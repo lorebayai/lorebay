@@ -12,7 +12,7 @@ mod helpers;
 mod knowledge;
 mod login;
 mod network;
-mod proposals;
+mod person_requests;
 mod spaces;
 mod task_filters;
 mod tasks;

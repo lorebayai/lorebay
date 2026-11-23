@@ -255,7 +255,7 @@ pub(super) async fn apply_changes(
     caller: &Caller,
     entry: entry::Model,
     changes: KnowledgeChanges,
-    proposal_id: Option<&str>,
+    person_request_id: Option<&str>,
 ) -> Result<entry::Model, KnowledgeError> {
     let content =
         if changes.content.is_some() || changes.summary.is_some() || entry.deleted_at.is_some() {
@@ -300,7 +300,14 @@ pub(super) async fn apply_changes(
             }
         })?;
     if let Some(content) = content {
-        append_version(transaction, caller, &entry, Some(content), proposal_id).await?;
+        append_version(
+            transaction,
+            caller,
+            &entry,
+            Some(content),
+            person_request_id,
+        )
+        .await?;
     }
     Ok(entry)
 }
@@ -310,7 +317,7 @@ pub(super) async fn append_version(
     caller: &Caller,
     entry: &entry::Model,
     content: Option<(String, String)>,
-    proposal_id: Option<&str>,
+    person_request_id: Option<&str>,
 ) -> Result<version::Model, KnowledgeError> {
     let (kind, summary, content) = match content {
         Some((summary, content)) => ("content", Some(summary), Some(content)),
@@ -327,7 +334,7 @@ pub(super) async fn append_version(
             content: Set(content),
             summary: Set(summary),
             applied_by: Set(caller.person_id.clone()),
-            proposal_id: Set(proposal_id.map(str::to_owned)),
+            person_request_id: Set(person_request_id.map(str::to_owned)),
             created_at: Set(entry.updated_at),
         })
         .await?)

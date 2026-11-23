@@ -6,20 +6,20 @@ use sea_orm::{
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 
-use crate::entity::space_proposal::{ActiveModel, Column, Entity, Model};
+use crate::entity::space_person_request::{ActiveModel, Column, Entity, Model};
 use crate::entity::{space_knowledge as entry, space_task as task};
 
 use super::knowledge::keyword_condition;
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
-pub(crate) struct ProposalRepository<'a, C> {
+pub(crate) struct PersonRequestRepository<'a, C> {
     pub connection: &'a C,
 }
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
-pub(crate) struct ProposalRow {
+pub(crate) struct PersonRequestRow {
     pub model: Model,
     pub target_name: Option<String>,
     pub target_number: Option<i64>,
@@ -29,22 +29,22 @@ pub(crate) struct ProposalRow {
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
-pub(crate) struct ProposalListRequest<'a> {
+pub(crate) struct PersonRequestListRequest<'a> {
     pub space: &'a str,
     pub status: Option<&'a str>,
     pub keyword: Option<&'a str>,
-    pub after: Option<ProposalAfter>,
+    pub after: Option<PersonRequestAfter>,
     pub limit: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
-pub(crate) struct ProposalAfter {
+pub(crate) struct PersonRequestAfter {
     pub created_at: i64,
     pub number: i64,
 }
 
-impl<C: ConnectionTrait> ProposalRepository<'_, C> {
+impl<C: ConnectionTrait> PersonRequestRepository<'_, C> {
     pub async fn insert(&self, model: ActiveModel) -> Result<Model, DbErr> {
         model.insert(self.connection).await
     }
@@ -65,7 +65,7 @@ impl<C: ConnectionTrait> ProposalRepository<'_, C> {
         query.one(self.connection).await
     }
 
-    pub async fn read(&self, space: &str, number: i64) -> Result<Option<ProposalRow>, DbErr> {
+    pub async fn read(&self, space: &str, number: i64) -> Result<Option<PersonRequestRow>, DbErr> {
         let mut query = rows(space, true);
         query.and_where(Expr::col((Entity, Column::Number)).eq(number));
         self.connection
@@ -76,7 +76,10 @@ impl<C: ConnectionTrait> ProposalRepository<'_, C> {
             .transpose()
     }
 
-    pub async fn list(&self, request: ProposalListRequest<'_>) -> Result<Vec<ProposalRow>, DbErr> {
+    pub async fn list(
+        &self,
+        request: PersonRequestListRequest<'_>,
+    ) -> Result<Vec<PersonRequestRow>, DbErr> {
         let mut query = rows(request.space, false);
         if let Some(status) = request.status {
             query.and_where(Expr::col((Entity, Column::Status)).eq(status));
@@ -166,8 +169,8 @@ fn rows(space: &str, content: bool) -> SelectStatement {
     query
 }
 
-fn row(row: &QueryResult) -> Result<ProposalRow, DbErr> {
-    Ok(ProposalRow {
+fn row(row: &QueryResult) -> Result<PersonRequestRow, DbErr> {
+    Ok(PersonRequestRow {
         model: Model::from_query_result(row, "")?,
         target_name: row.try_get("", "target_name")?,
         target_number: row.try_get("", "target_number")?,

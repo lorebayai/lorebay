@@ -361,7 +361,7 @@ async fn roll_back_knowledge_entry_adds_version_copying_old_content() {
             .collect::<Vec<_>>(),
         vec![4, 3, 2, 1]
     );
-    assert!(history[0]["proposal_key"].is_null());
+    assert!(history[0]["request_key"].is_null());
     assert_eq!(
         roll_back(&server, &owner, &by_key("KN-1"), 4).await["version"],
         5

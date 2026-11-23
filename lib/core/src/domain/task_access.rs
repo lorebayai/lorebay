@@ -46,7 +46,7 @@ pub(super) enum TaskAction {
     DeleteAgentFile,
     DeleteCheckpoint,
     RegisterAgentFile,
-    SubmitProposal,
+    SubmitPersonRequest,
 }
 
 #[derive(Clone, Copy, Debug, typed_builder::TypedBuilder)]

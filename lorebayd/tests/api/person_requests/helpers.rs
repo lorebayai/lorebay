@@ -3,7 +3,7 @@ use serde_json::{Value, json};
 
 use crate::helpers::{Server, create_space, list_page, request, two_people};
 
-pub const PATH: &str = "/api/v1/spaces/SPACE-1/proposals";
+pub const PATH: &str = "/api/v1/spaces/SPACE-1/requests";
 pub const KNOWLEDGE: &str = "/api/v1/spaces/SPACE-1/knowledge";
 pub const BODY_LIMIT: usize = 6 * 1024 * 1024 + 12 * (200 + 500 + 200) + 6 + 1024;
 
@@ -22,7 +22,7 @@ pub async fn data(response: Response, status: StatusCode) -> Value {
 }
 
 pub fn creation(name: &str) -> Value {
-    json!({"kind":"create", "name":name, "summary":"Summary", "content":"Content"})
+    json!({"action":"create", "name":name, "summary":"Summary", "content":"Content"})
 }
 
 pub fn by_key(key: &str) -> String {
@@ -73,7 +73,7 @@ pub async fn reject(server: &Server, caller: &Value, key: &str) -> Value {
 
 pub async fn seed(server: &Server, owner: &Value, name: &str) -> Value {
     let mut body = creation(name);
-    body.as_object_mut().unwrap().remove("kind");
+    body.as_object_mut().unwrap().remove("action");
     data(
         request(server, owner, Method::POST, KNOWLEDGE, body).await,
         StatusCode::CREATED,
@@ -87,7 +87,7 @@ pub async fn entry(server: &Server, caller: &Value, key: &str) -> Value {
 
 pub fn task_path(task: &Value) -> String {
     format!(
-        "/api/v1/spaces/SPACE-1/tasks/{}/proposals",
+        "/api/v1/spaces/SPACE-1/tasks/{}/requests",
         task["task_id"].as_str().unwrap()
     )
 }
@@ -139,7 +139,7 @@ pub async fn submit_deleted_targets(server: &Server, owner: &Value, agent: &Valu
             agent,
             Method::POST,
             &task_path(task),
-            json!({"kind":"change","target_name":"deleted GUIDE","summary":"Restore summary"}),
+            json!({"action":"change","target_name":"deleted GUIDE","summary":"Restore summary"}),
         )
         .await,
         StatusCode::CREATED,
@@ -152,11 +152,16 @@ pub async fn submit_deleted_targets(server: &Server, owner: &Value, agent: &Valu
     );
     assert_eq!(result["task_title"], "Improve guide");
     assert_eq!(
-        read(server, owner, "PP-2").await["new_summary"],
+        read(server, owner, "RQ-2").await["new_summary"],
         "Restore summary"
     );
     assert_eq!(
-        submit(server, owner, json!({"kind":"delete","target_key":"KN-1"})).await["base_version"],
+        submit(
+            server,
+            owner,
+            json!({"action":"delete","target_key":"KN-1"})
+        )
+        .await["base_version"],
         2
     );
 }
@@ -218,11 +223,11 @@ pub fn assert_version(
     number: i64,
     kind: &str,
     person: &str,
-    proposal: Option<&str>,
+    person_request: Option<&str>,
 ) {
     assert_eq!(version["version"], number);
     assert_eq!(version["kind"], kind);
     assert_eq!(version["applied_by"], person);
     assert!(version["applied_at"].as_i64().unwrap() > 0);
-    assert_eq!(version["proposal_key"], json!(proposal));
+    assert_eq!(version["request_key"], json!(person_request));
 }

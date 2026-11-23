@@ -69,10 +69,11 @@ pub(crate) enum Command {
         #[command(subcommand)]
         command: MemberCommand,
     },
-    /// Submit, read and decide Knowledge proposals.
-    Proposal {
+    /// Submit, read and decide Knowledge requests.
+    #[command(name = "request")]
+    PersonRequest {
         #[command(subcommand)]
-        command: ProposalCommand,
+        command: PersonRequestCommand,
     },
     /// Manage your spaces.
     Space {
@@ -212,9 +213,13 @@ pub(crate) enum AddedRole {
 }
 
 #[derive(Clone, Debug, Subcommand)]
-pub(crate) enum ProposalCommand {
-    /// Approve a proposal and apply its Knowledge change.
-    Approve { space: String, proposal: String },
+pub(crate) enum PersonRequestCommand {
+    /// Approve a request and apply its Knowledge change.
+    Approve {
+        space: String,
+        #[arg(value_name = "request")]
+        person_request: String,
+    },
     /// Propose changes to an entry's name, summary or content.
     #[command(group(ArgGroup::new("changes").required(true).multiple(true)
         .args(["name", "summary", "content", "content_file"])))]
@@ -237,29 +242,34 @@ pub(crate) enum ProposalCommand {
     },
     /// Propose deletion without confirmation; approval deletes the entry.
     Delete { space: String, entry: String },
-    /// List one page of proposals, optionally by status and keyword.
+    /// List one page of requests, optionally by status and keyword.
     List {
         space: String,
         #[arg(long, value_enum)]
-        status: Option<ProposalStatus>,
+        status: Option<PersonRequestStatus>,
         #[arg(long)]
         keyword: Option<String>,
         #[command(flatten)]
         page: Page,
     },
-    /// Reject a proposal, or withdraw your own party's proposal.
+    /// Reject a request, or withdraw your own party's request.
     Reject {
         space: String,
-        proposal: String,
+        #[arg(value_name = "request")]
+        person_request: String,
         #[arg(long)]
         reason: String,
     },
-    /// Show a proposal's fields, content and decision.
-    Show { space: String, proposal: String },
+    /// Show a request's fields, content and decision.
+    Show {
+        space: String,
+        #[arg(value_name = "request")]
+        person_request: String,
+    },
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
-pub(crate) enum ProposalStatus {
+pub(crate) enum PersonRequestStatus {
     Approved,
     Pending,
     Rejected,
@@ -422,7 +432,7 @@ impl Role {
     }
 }
 
-impl ProposalStatus {
+impl PersonRequestStatus {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Approved => "approved",
