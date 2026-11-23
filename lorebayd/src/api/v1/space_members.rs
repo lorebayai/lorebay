@@ -154,7 +154,7 @@ fn invalid_role() -> ApiError {
         FieldError::builder()
             .field("role")
             .code("invalid")
-            .message("Expected an allowed space member role.")
+            .message("Expected an allowed space role.")
             .build(),
     ])
 }

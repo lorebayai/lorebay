@@ -213,6 +213,7 @@ It does not cover:
 
 ```mermaid
 sequenceDiagram
+    actor Person
     Harness->>lorebayd: Call without a token
     lorebayd-->>Harness: 401, where to authorize
     Harness->>lorebayd: Register as a client
