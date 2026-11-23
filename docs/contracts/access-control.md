@@ -23,7 +23,7 @@ with the space's data.
 
 This doc covers space members, how they are managed, and the permissions of
 Lorebay's own operations: sign-in, agent sign-in, device sign-in,
-people, creating spaces and managing space members. The space roles, the
+users, creating spaces and managing space members. The space roles, the
 permission of every library operation and the space and task checks are in
 [Library access control](../../lib/docs/contracts/access-control.md).
 Credentials are in [Identity](../architecture/identity.md).
