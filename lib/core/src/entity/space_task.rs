@@ -41,8 +41,8 @@ pub enum Relation {
     SpaceAgentFile,
     #[sea_orm(has_many = "super::space_checkpoint::Entity")]
     SpaceCheckpoint,
-    #[sea_orm(has_many = "super::space_proposal::Entity")]
-    SpaceProposal,
+    #[sea_orm(has_many = "super::space_person_request::Entity")]
+    SpacePersonRequest,
 }
 
 impl Related<super::space::Entity> for Entity {
@@ -63,9 +63,9 @@ impl Related<super::space_checkpoint::Entity> for Entity {
     }
 }
 
-impl Related<super::space_proposal::Entity> for Entity {
+impl Related<super::space_person_request::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::SpaceProposal.def()
+        Relation::SpacePersonRequest.def()
     }
 }
 

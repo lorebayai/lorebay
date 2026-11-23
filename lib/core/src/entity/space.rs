@@ -18,7 +18,7 @@ pub struct Model {
     pub next_task_number: i64,
     pub next_knowledge_number: i64,
     pub next_agent_file_number: i64,
-    pub next_proposal_number: i64,
+    pub next_person_request_number: i64,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -29,8 +29,8 @@ pub enum Relation {
     SpaceAgentFile,
     #[sea_orm(has_many = "super::space_knowledge::Entity")]
     SpaceKnowledge,
-    #[sea_orm(has_many = "super::space_proposal::Entity")]
-    SpaceProposal,
+    #[sea_orm(has_many = "super::space_person_request::Entity")]
+    SpacePersonRequest,
     #[sea_orm(has_many = "super::space_task::Entity")]
     SpaceTask,
 }
@@ -47,9 +47,9 @@ impl Related<super::space_knowledge::Entity> for Entity {
     }
 }
 
-impl Related<super::space_proposal::Entity> for Entity {
+impl Related<super::space_person_request::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::SpaceProposal.def()
+        Relation::SpacePersonRequest.def()
     }
 }
 
