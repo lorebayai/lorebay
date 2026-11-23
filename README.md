@@ -61,7 +61,7 @@ whose certificate comes from a private authority needs `SSL_CERT_FILE`, as
 
 ```bash
 install -m 0755 lorebay /usr/local/bin/
-cargo install --locked --git https://github.com/lorebayai/lorebay --tag v0.1.0 lorebay-cli
+cargo install --locked --git https://github.com/lorebayai/lorebay --tag v0.1.1 lorebay-cli
 lorebay login https://lorebay.example.com
 lorebay space create --name Team --summary 'Team work'
 ```
