@@ -1,4 +1,4 @@
-use std::fs::{self, File};
+use std::fs::{self, File, Permissions};
 use std::io::{ErrorKind, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
@@ -115,6 +115,9 @@ fn create_key(path: &Path) -> Result<()> {
     let mut temporary = Builder::new()
         .prefix(".signing-key-")
         .tempfile_in(directory)?;
+    temporary
+        .as_file()
+        .set_permissions(Permissions::from_mode(0o600))?;
     let mut key = [0; SIGNING_KEY_BYTES];
     getrandom::fill(&mut key)?;
     temporary.write_all(&key)?;
