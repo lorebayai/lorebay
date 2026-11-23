@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use lorebay_lib_core::{
     AgentFileError, AgentFileTextError, KnowledgeError, KnowledgeInputError, PageSizeError,
-    ProposalError, SpaceError, TaskChangeError, TaskError, TaskTextError,
+    PersonRequestError, SpaceError, TaskChangeError, TaskError, TaskTextError,
 };
 use rmcp::model::CallToolResult;
 use serde_json::{Value, json};
@@ -113,14 +113,14 @@ impl From<KnowledgeError> for ToolError {
     }
 }
 
-impl From<ProposalError> for ToolError {
-    fn from(error: ProposalError) -> Self {
+impl From<PersonRequestError> for ToolError {
+    fn from(error: PersonRequestError) -> Self {
         match error {
-            ProposalError::Input(error) => error.into(),
-            ProposalError::Knowledge(error) => error.into(),
-            ProposalError::InvalidCursor => invalid_query("cursor"),
-            ProposalError::InvalidFilter => invalid_query("keyword"),
-            ProposalError::InvalidPageSize(_) => invalid_query(PageSizeError::FIELD),
+            PersonRequestError::Input(error) => error.into(),
+            PersonRequestError::Knowledge(error) => error.into(),
+            PersonRequestError::InvalidCursor => invalid_query("cursor"),
+            PersonRequestError::InvalidFilter => invalid_query("keyword"),
+            PersonRequestError::InvalidPageSize(_) => invalid_query(PageSizeError::FIELD),
             error => Self::from_operation(error.code(), error),
         }
     }

@@ -19,7 +19,7 @@ use crate::server::ServerState;
 
 use super::person_sign_in::invalid_json;
 
-// Proposals also name a target entry; the envelope allowance covers field names and metadata.
+// Requests also name a target entry; the envelope allowance covers field names and metadata.
 pub(crate) const KNOWLEDGE_BODY_MAX_BYTES: usize =
     KNOWLEDGE_FIELDS_MAX_JSON_BYTES + KNOWLEDGE_NAME_MAX_CHARACTERS * 12 + 1024;
 

@@ -62,8 +62,8 @@ It does not cover:
 
 In the table, `<space>` is a space key, `<task>` a task key, `<task-id>` a
 task ID, `<entry>` a knowledge entry's name or key, `<version>` an integer
-version returned by its history, `<file>` a file key, `<proposal>` a
-proposal key, and `<checkpoint>` the checkpoint's time as the Scratchpad
+version returned by its history, `<file>` a file key, `<request>` a
+request key, and `<checkpoint>` the checkpoint's time as the Scratchpad
 shows it, which names one checkpoint; see
 [Tasks](../../lib/docs/contracts/tasks.md#4-scratchpad).
 An `<entry>` in the exact key form `KN-<n>` is sent as a key, and any other
@@ -104,22 +104,22 @@ contains spaces. Optional arguments appear in brackets. List rows follow
 | `knowledge change <space> <entry> [--name <name>] [--summary <summary>] [--content <content> \| --content-file <path\|->]` | Change a knowledge entry directly | Updated entry |
 | `knowledge delete <space> <entry>` | Delete a knowledge entry directly | Deletion result |
 | `knowledge rollback <space> <entry> <version>` | Roll back a knowledge entry directly | Entry with the new version |
-| `proposal list <space> [--status <status>] [--keyword <text>]` | List proposals | Proposal keys, kinds, statuses, target entries and proposed summaries |
-| `proposal show <space> <proposal>` | Read a proposal | Its fields, content, status and rejection reason, when present |
-| `proposal create <space> <name> --summary <summary> (--content <content> \| --content-file <path\|->)` | Submit a create proposal | Submitted proposal |
-| `proposal change <space> <entry> [--name <name>] [--summary <summary>] [--content <content> \| --content-file <path\|->]` | Submit a change proposal | Submitted proposal |
-| `proposal delete <space> <entry>` | Submit a delete proposal | Submitted proposal |
-| `proposal approve <space> <proposal>` | Approve a proposal | Decided proposal |
-| `proposal reject <space> <proposal> --reason <reason>` | Reject a proposal, including withdrawing one's own party's | Decided proposal |
+| `request list <space> [--status <status>] [--keyword <text>]` | List requests | Request keys, actions, statuses, target entries and proposed summaries |
+| `request show <space> <request>` | Read a request | Its fields, content, status and rejection reason, when present |
+| `request create <space> <name> --summary <summary> (--content <content> \| --content-file <path\|->)` | Submit a create request | Submitted request |
+| `request change <space> <entry> [--name <name>] [--summary <summary>] [--content <content> \| --content-file <path\|->]` | Submit a change request | Submitted request |
+| `request delete <space> <entry>` | Submit a delete request | Submitted request |
+| `request approve <space> <request>` | Approve a request | Decided request |
+| `request reject <space> <request> --reason <reason>` | Reject a request, including withdrawing one's own party's | Decided request |
 
 - **An update requires a field to change.** `space change`, `knowledge
-  change` and `proposal change` require at least one of their optional
-  fields; omitted fields are unchanged. Proposal inputs and version behavior
+  change` and `request change` require at least one of their optional
+  fields; omitted fields are unchanged. Request inputs and version behavior
   follow [Knowledge](../../lib/docs/contracts/knowledge.md#3-knowledge-entries).
 - **Roles and statuses are checked before making a call.** Space member
   addition accepts `contributor` or `viewer`; setting a role accepts `admin`,
   `contributor` or `viewer`. Ownership is not assigned by these commands.
-  Task statuses are `in progress` and `ended`; proposal statuses are
+  Task statuses are `in progress` and `ended`; request statuses are
   `pending`, `approved` and `rejected`. Another value is a usage error.
 - **File lists come from `task show`.** `file url` returns the Web
   API's URL; the person can transfer the file's content with it over HTTP as
@@ -127,10 +127,10 @@ contains spaces. Optional arguments appear in brackets. List rows follow
 - **`--own-open` lists only the person's own tasks that are not `ended`**,
   as `list_tasks` does for an agent's party; see
   [MCP tools](../../lib/docs/contracts/mcp-tools.md#6-wrong-task-ids).
-- **A contributor proposes a rollback with `proposal change`.** They read
+- **A contributor proposes a rollback with `request change`.** They read
   the chosen old version and supply its content and summary, following
   [Knowledge](../../lib/docs/contracts/knowledge.md#3-knowledge-entries).
-  The CLI never silently changes a direct operation into a proposal.
+  The CLI never silently changes a direct operation into a request.
 
 ## 4. Sign-in and credentials
 
@@ -260,5 +260,5 @@ Exit codes:
 - **`--yes` skips the question.** It is accepted on these deleting commands
   in both output modes. `member remove` runs without a confirmation
   prompt. Logout is an explicit sign-out and needs no further confirmation.
-  `proposal delete` submits a proposal rather than deleting
-  an entry; it follows [Knowledge](../../lib/docs/contracts/knowledge.md#4-proposals).
+  `request delete` submits a request rather than deleting
+  an entry; it follows [Knowledge](../../lib/docs/contracts/knowledge.md#4-requests).

@@ -24,8 +24,8 @@ It does not cover showing an object which other objects reference it.
 
 ## 3. Keys
 
-- **Tasks, knowledge entries, files and proposals have keys**: a prefix
-  and a number that counts up, such as `TK-1`, `KN-1`, `FL-1` and `PP-1`.
+- **Tasks, knowledge entries, files and requests have keys**: a prefix
+  and a number that counts up, such as `TK-1`, `KN-1`, `FL-1` and `RQ-1`.
   Each space counts from 1, and a deleted key is never reused. Products
   show keys.
 - **A space's key**, such as `SPACE-1`, carries the number the product
@@ -53,7 +53,7 @@ It does not cover showing an object which other objects reference it.
 - **A reference is `#` followed by a key**, such as `#KN-1`. A product shows
   it as a link that reads `#KN-1`.
 - **Where references work:** task titles and results, checkpoints, Knowledge and
-  proposals. References are optional.
+  requests. References are optional.
 - **Checkpoints have no references of their own.** Refer to the checkpoint's
   task.
 - **Unresolvable references show as plain text**, with no error: a key that

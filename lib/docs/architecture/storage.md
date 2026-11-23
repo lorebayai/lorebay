@@ -67,7 +67,7 @@ It does not cover:
   SQLite and Postgres, which share one schema built only from what both
   support; see [Data model](data-model.md#3-conventions).
 - **Each write runs in one transaction the product opens.** An operation
-  that spans several tables, such as approving a proposal, deleting a task,
+  that spans several tables, such as approving a request, deleting a task,
   or taking the next key for a new record, writes inside it; see
   [Library architecture](library.md#7-writes-and-transactions).
 - **Task and file deletion remove content after commit.** Content left

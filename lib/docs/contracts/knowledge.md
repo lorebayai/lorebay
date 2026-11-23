@@ -7,7 +7,7 @@
   [Data model](../architecture/data-model.md)
 
 > Only owners and admins change Knowledge directly. Every other change is a
-> proposal that takes effect only when a person approves it.
+> request that takes effect only when a person approves it.
 >
 > Agents read only the latest version of a knowledge entry.
 
@@ -19,11 +19,11 @@ under people's control and every version is kept.
 
 ## 2. Scope
 
-This doc covers knowledge entries, their versions, and proposals. When agents
+This doc covers knowledge entries, their versions, and requests. When agents
 read Knowledge, what belongs in it, and when agents propose changes are in
 [Agent rules](agent-rules.md).
 
-It does not cover proposals for anything other than Knowledge, such as
+It does not cover requests for anything other than Knowledge, such as
 decisions an agent needs from a person in the middle of its work.
 
 ## 3. Knowledge entries
@@ -52,30 +52,30 @@ decisions an agent needs from a person in the middle of its work.
 - **Rolling back creates a new version** whose content and summary equal the
   chosen old version; the versions in between stay. Rolling back is a change:
   owners and admins roll back directly, and a contributor's rollback is a
-  proposal whose content is the old version.
-- **Creating, changing and deleting an entry go through a proposal**, except
-  for owners and admins; see [section 4](#4-proposals).
+  request whose content is the old version.
+- **Creating, changing and deleting an entry go through a request**, except
+  for owners and admins; see [section 4](#4-requests).
 - **Deleting.** A deletion is recorded as a version, with who deleted the
   entry and when. The content stays in earlier versions, and rolling back
   restores it. Deleted entries are listed separately for people, who can roll
   them back; agents don't see them when listing or searching.
 - **Renaming** is a change: owners and admins rename directly, and anyone else
-  includes the new name in a change proposal. A name must be unique within
+  includes the new name in a change request. A name must be unique within
   the space, deleted entries included: a direct rename to another entry's
-  name is rejected, and a proposal that would rename to another entry's name
+  name is rejected, and a request that would rename to another entry's name
   cannot be approved. A rename may change only the case. Renaming keeps the
   key and the history, so references by key still resolve. Renaming an entry
   that is not deleted creates no version, and rolling back never restores an
   old name.
 
-## 4. Proposals
+## 4. Requests
 
 ```mermaid
 flowchart TD
     agent["Agent"]
     contributor["Contributor"]
     admin["Owner or admin"]
-    pending["Pending proposal"]
+    pending["Pending request"]
     approved["Approved"]
     rejected["Rejected"]
     applied["Change takes effect"]
@@ -87,39 +87,39 @@ flowchart TD
     admin -- "changes directly" --> applied
 ```
 
-- **A proposal** asks to create, change or delete one knowledge entry, and
+- **A request** asks to create, change or delete one knowledge entry, and
   takes effect only when approved. Its status is `pending`, `approved` or
   `rejected`.
-- **Three kinds.** A create carries a name, a summary and content. A change
+- **Three actions.** A create carries a name, a summary and content. A change
   carries only the fields it changes, at least one of content, summary and
   name; the rest keep their current values. A delete carries no content.
-- **A submitted proposal cannot be edited.** To revise it, a person of the
+- **A submitted request cannot be edited.** To revise it, a person of the
   proposing party rejects it, which withdraws it, and submits a new one.
 - **Who must propose.** Everyone except owners and admins, people and agents
-  alike, creates, changes and deletes entries through proposals. Changes by
+  alike, creates, changes and deletes entries through requests. Changes by
   owners and admins take effect directly.
 - **Who decides.** Owners, admins and contributors may approve and reject.
   Only people decide; agents can neither approve nor reject. Approval records
   who approved and when.
 - **Approving one's own.** For approval, a person and that person's agents
-  are one party. Owners and admins may approve their own party's proposals. A
+  are one party. Owners and admins may approve their own party's requests. A
   contributor may not, whether the contributor or one of their agents
   proposed it; another person must approve it. Rejecting is not limited: a
-  person may reject their own party's proposal, which withdraws it, and must
+  person may reject their own party's request, which withdraws it, and must
   give a reason.
-- **Changed since proposed.** If someone changes the entry's content or
-  summary after the proposal was made, the proposal can still be approved.
-  The proposal is marked "changed since proposed", so a product shows the
-  difference from the current content, and the approver decides. On approval the proposal's
+- **Changed since requested.** If someone changes the entry's content or
+  summary after the request was made, the request can still be approved.
+  The request is marked "changed since requested", so a product shows the
+  difference from the current content, and the approver decides. On approval the request's
   content wins; the change in between stays in the history and can be rolled
   back to. A rename in between is not marked, because renaming creates no
-  version; if the proposal also renames the entry, its name replaces the
+  version; if the request also renames the entry, its name replaces the
   newer one.
-- **The same applies** when a create proposal's name already belongs to an
+- **The same applies** when a create request's name already belongs to an
   entry, which approval then gives a new version, and when the target entry
-  was deleted, which approval restores with the proposal's content as its new
-  version. A content or summary that a change proposal leaves out then comes
+  was deleted, which approval restores with the request's content as its new
+  version. A content or summary that a change request leaves out then comes
   from the last version before the deletion.
-- **Rejecting.** The person who rejects writes a reason. Rejected proposals
-  are kept, with the content, the proposer, who rejected them and the reason,
+- **Rejecting.** The person who rejects writes a reason. Rejected requests
+  are kept, with the content, the requester, who rejected them and the reason,
   visible to everyone.

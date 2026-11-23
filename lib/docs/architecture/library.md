@@ -80,7 +80,7 @@ flowchart TD
 ### 3.1 What the library holds
 
 - **Data:** spaces, tasks, checkpoints, the Scratchpad, files, Knowledge and
-  proposals, and the keys of each.
+  requests, and the keys of each.
 - **Rules:** the four roles, owner, admin, contributor and viewer; what each
   may do; the agent's cap at contributor; and the space and task checks
   every operation runs.
@@ -281,7 +281,7 @@ operations; only the MCP layer asks this interface.
 
 **Names for a batch of person IDs, and the ID for a name.** The library
 stores people only as IDs and asks for names when it shows a task or a
-proposal, and for an ID when a caller filters by a person's name. When it
+request, and for an ID when a caller filters by a person's name. When it
 returns spaces, it also asks once for the name of the caller's person.
 
 Every implementation:
@@ -359,10 +359,10 @@ methods:
 - **The product opens, commits and rolls back.** The library writes inside
   the transaction it is handed and never commits or rolls back that
   transaction. It may commit or roll back a savepoint it opens inside it,
-  as approving a proposal that creates an entry does when the name is taken.
+  as approving a request that creates an entry does when the name is taken.
 - **On SQLite the product enables foreign key checks** on every
   connection it hands to the library. Task deletion relies on the cascade
-  to its checkpoints and on clearing the source task from proposals.
+  to its checkpoints and on clearing the source task from requests.
 - **The operation supplies the write label, its caller and its space.** The
   write entry passes the record to the commit hook; only the
   abandoned-registration round's record has no caller. A repeated report of
@@ -624,11 +624,11 @@ state:
 
 The library has seven tables: `space`, `space_task`, `space_checkpoint`,
 `space_agent_file`, `space_knowledge`, `space_knowledge_version` and
-`space_proposal`. No library table refers to a product's table.
+`space_person_request`. No library table refers to a product's table.
 
 - **People are IDs.** The library has no table of people. It stores a
   person only as the product's ID, in four columns with no foreign key: a
-  task's person, a proposal's proposer and decider, and the person who
+  task's person, a request's requester and decider, and the person who
   applied a Knowledge version. Removing or deleting a person writes nothing
   in the library.
 - **The tenant ID** of a space is text with no foreign key.
@@ -661,14 +661,14 @@ each row it reads and then writes, in the read. Code that runs on both does
 both.
 
 - **Locks are taken in one order:** a product's locks, through the roles
-  interface, then a task, a proposal, a knowledge entry, a space, and a
+  interface, then a task, a request, a knowledge entry, a space, and a
   file. No write locks an earlier kind after a later one, so two writes
   never wait on each other in a cycle.
 - **A counter is taken in one statement** that adds one to the space's
   counter and returns the value, so concurrent takers queue on the space
   row and none reuses a number.
 - **A state check follows the lock.** A write that needs a task to be
-  `in progress` or a proposal to be `pending` checks after it holds that
+  `in progress` or a request to be `pending` checks after it holds that
   row.
 
 | Write | Locks, in order | Stays correct because |
@@ -686,8 +686,8 @@ both.
 | Remove abandoned registrations | Each deleted row | One statement deletes only rows neither completed nor refused when it deletes them and returns their locations; only their content is deleted |
 | Remove orphaned files | None | A record commits before any URL for its location exists, and locations are never reused, so a file old enough with no record never gets one; a refused registration never completes, so its content is never needed |
 | Change Knowledge directly | Entry, then space counter for a new entry | The next version is computed from the locked entry; the unique name refuses a second entry of one name |
-| Submit a proposal | Task, when it names one; then space counter | The task cannot be deleted before the proposal refers to it; the base version is a snapshot by design |
-| Approve or reject a proposal | Proposal, then entry, then space counter for a new entry | The status is checked under the lock, so a proposal is decided once |
+| Submit a request | Task, when it names one; then space counter | The task cannot be deleted before the request refers to it; the base version is a snapshot by design |
+| Approve or reject a request | Request, then entry, then space counter for a new entry | The status is checked under the lock, so a request is decided once |
 
 The oversize refusal uses the size read before taking the locks, and is
 final once it commits. A deletion delayed after that commit can remove only
@@ -696,7 +696,7 @@ report can complete. A replacement is a new registration at a new
 location, so the delayed deletion never reaches a completed file's
 content.
 
-The Knowledge and proposal writes follow the same rules.
+The Knowledge and request writes follow the same rules.
 
 ## 14. Rules for library code
 

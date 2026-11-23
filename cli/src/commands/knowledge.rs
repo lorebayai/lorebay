@@ -159,14 +159,14 @@ async fn history(
                 "Kind",
                 "Applied by",
                 "Applied at",
-                "Proposal",
+                "Request",
             ])
             .fields(vec![
                 "version",
                 "kind",
                 "applied_by",
                 "applied_at",
-                "proposal_key",
+                "request_key",
             ])
             .build(),
     )

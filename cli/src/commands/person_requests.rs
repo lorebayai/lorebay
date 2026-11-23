@@ -1,7 +1,7 @@
 use reqwest::Method;
 use serde_json::{Value, json};
 
-use crate::args::{KnowledgeChanges, OutputMode, Page, ProposalCommand};
+use crate::args::{ContentOptions, KnowledgeChanges, OutputMode, Page, PersonRequestCommand};
 use crate::constants::DATA;
 use crate::credentials::Store;
 use crate::error::Result;
@@ -12,35 +12,30 @@ use super::knowledge::is_entry_key;
 use super::{Listing, api_path, content, display_value, list_page};
 
 pub(super) async fn run(
-    command: ProposalCommand,
+    command: PersonRequestCommand,
     store: &Store,
     mode: OutputMode,
 ) -> Result<Outcome> {
     match command {
-        ProposalCommand::Approve { space, proposal } => {
-            decide(store, &space, &proposal, "approve", None).await
-        }
-        ProposalCommand::Change {
+        PersonRequestCommand::Approve {
+            space,
+            person_request,
+        } => decide(store, &space, &person_request, "approve", None).await,
+        PersonRequestCommand::Change {
             space,
             entry,
             changes,
         } => change(store, &space, &entry, changes).await,
-        ProposalCommand::Create {
+        PersonRequestCommand::Create {
             space,
             name,
             summary,
             content: source,
-        } => {
-            let body = json!({
-                "kind": "create", "name": name, "summary": summary,
-                "content": content::read(source)?,
-            });
-            submit(store, &space, &body).await
-        }
-        ProposalCommand::Delete { space, entry } => {
+        } => create(store, &space, &name, &summary, source).await,
+        PersonRequestCommand::Delete { space, entry } => {
             submit(store, &space, &target("delete", &entry)).await
         }
-        ProposalCommand::List {
+        PersonRequestCommand::List {
             space,
             status,
             keyword,
@@ -58,25 +53,28 @@ pub(super) async fn run(
             )
             .await
         }
-        ProposalCommand::Reject {
+        PersonRequestCommand::Reject {
             space,
-            proposal,
+            person_request,
             reason,
         } => {
             decide(
                 store,
                 &space,
-                &proposal,
+                &person_request,
                 "reject",
                 Some(&json!({"reason": reason})),
             )
             .await
         }
-        ProposalCommand::Show { space, proposal } => show(store, &space, &proposal).await,
+        PersonRequestCommand::Show {
+            space,
+            person_request,
+        } => show(store, &space, &person_request).await,
     }
 }
 
-const PROPOSALS: &str = "proposals";
+const PERSON_REQUESTS: &str = "requests";
 const SPACES: &str = "spaces";
 
 async fn change(
@@ -98,17 +96,31 @@ async fn change(
     submit(store, space, &body).await
 }
 
+async fn create(
+    store: &Store,
+    space: &str,
+    name: &str,
+    summary: &str,
+    source: ContentOptions,
+) -> Result<Outcome> {
+    let body = json!({
+        "action": "create", "name": name, "summary": summary,
+        "content": content::read(source)?,
+    });
+    submit(store, space, &body).await
+}
+
 async fn decide(
     store: &Store,
     space: &str,
-    proposal: &str,
+    person_request: &str,
     action: &str,
     body: Option<&Value>,
 ) -> Result<Outcome> {
     request(
         store,
         Method::POST,
-        &api_path(&[SPACES, space, PROPOSALS, proposal, action])?,
+        &api_path(&[SPACES, space, PERSON_REQUESTS, person_request, action])?,
         body,
     )
     .await
@@ -125,7 +137,7 @@ async fn list(
         .into_iter()
         .filter_map(|(field, value)| value.map(|value| (field, value)))
         .collect();
-    let mut command = format!("proposal list {}", output::shell_word(space));
+    let mut command = format!("request list {}", output::shell_word(space));
     for (name, value) in &query {
         command.push_str(&format!(" --{name} {}", output::shell_word(value)));
     }
@@ -134,22 +146,28 @@ async fn list(
         page,
         mode,
         Listing::builder()
-            .path(api_path(&[SPACES, space, PROPOSALS])?)
+            .path(api_path(&[SPACES, space, PERSON_REQUESTS])?)
             .command(command)
             .query(query)
-            .columns(vec!["Key", "Kind", "Status", "Target", "Proposed summary"])
-            .fields(vec!["key", "kind", "status", "target", "new_summary"])
-            .display_field(proposal_field as fn(&Value, &str) -> String)
+            .columns(vec![
+                "Key",
+                "Action",
+                "Status",
+                "Target",
+                "Proposed summary",
+            ])
+            .fields(vec!["key", "action", "status", "target", "new_summary"])
+            .display_field(person_request_field as fn(&Value, &str) -> String)
             .build(),
     )
     .await
 }
 
-fn proposal_field(proposal: &Value, field: &str) -> String {
+fn person_request_field(person_request: &Value, field: &str) -> String {
     if field != "target" {
-        return display_value(&proposal[field]);
+        return display_value(&person_request[field]);
     }
-    let target = &proposal["target"];
+    let target = &person_request["target"];
     if target.is_object() {
         format!(
             "{} {}",
@@ -157,7 +175,7 @@ fn proposal_field(proposal: &Value, field: &str) -> String {
             display_value(&target["name"])
         )
     } else {
-        display_value(&proposal["new_name"])
+        display_value(&person_request["new_name"])
     }
 }
 
@@ -170,25 +188,25 @@ async fn request(
     let body = Http::new()?.authorized(store, method, path, body).await?;
     let values = [
         ("Key", "key"),
-        ("Kind", "kind"),
+        ("Action", "action"),
         ("Status", "status"),
         ("Target", "target"),
         ("Proposed name", "new_name"),
         ("Proposed summary", "new_summary"),
         ("Content", "new_content"),
-        ("Proposed by", "proposed_by"),
-        ("Agent name", "proposer_agent_name"),
+        ("Requested by", "requested_by"),
+        ("Agent name", "requester_agent_name"),
         ("Source task", "from_task_key"),
         ("Created at", "created_at"),
         ("Base version", "base_version"),
-        ("Changed since proposed", "changed_since_proposed"),
+        ("Changed since requested", "changed_since_requested"),
         ("Decided by", "decided_by"),
         ("Decided at", "decided_at"),
         ("Rejection reason", "reject_reason"),
     ]
     .into_iter()
     .map(|(label, field)| {
-        let value = proposal_field(&body[DATA], field);
+        let value = person_request_field(&body[DATA], field);
         if field == "new_content" {
             Field::Multiline(label, value)
         } else {
@@ -199,11 +217,11 @@ async fn request(
     Ok(Outcome::new(body, Fields::builder().values(values).build()))
 }
 
-async fn show(store: &Store, space: &str, proposal: &str) -> Result<Outcome> {
+async fn show(store: &Store, space: &str, person_request: &str) -> Result<Outcome> {
     request(
         store,
         Method::GET,
-        &api_path(&[SPACES, space, PROPOSALS, proposal])?,
+        &api_path(&[SPACES, space, PERSON_REQUESTS, person_request])?,
         None,
     )
     .await
@@ -213,17 +231,17 @@ async fn submit(store: &Store, space: &str, body: &Value) -> Result<Outcome> {
     request(
         store,
         Method::POST,
-        &api_path(&[SPACES, space, PROPOSALS])?,
+        &api_path(&[SPACES, space, PERSON_REQUESTS])?,
         Some(body),
     )
     .await
 }
 
-fn target(kind: &str, entry: &str) -> Value {
+fn target(action: &str, entry: &str) -> Value {
     let field = if is_entry_key(entry) {
         "target_key"
     } else {
         "target_name"
     };
-    json!({"kind": kind, (field): entry})
+    json!({"action": action, (field): entry})
 }

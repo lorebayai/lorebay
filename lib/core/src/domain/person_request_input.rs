@@ -7,11 +7,11 @@ use super::{
     NewKnowledgeEntry, PageSizeError, SpaceAccessError, TaskAccessError, TaskKeyword, TaskTarget,
 };
 
-pub const PROPOSAL_REASON_MAX_CHARACTERS: usize = 2000;
+pub const PERSON_REQUEST_REASON_MAX_CHARACTERS: usize = 2000;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
-pub enum ProposalKind {
+pub enum PersonRequestAction {
     Change,
     Create,
     Delete,
@@ -19,13 +19,13 @@ pub enum ProposalKind {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
-pub enum ProposalStatus {
+pub enum PersonRequestStatus {
     Approved,
     Pending,
     Rejected,
 }
 
-impl ProposalStatus {
+impl PersonRequestStatus {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Approved => "approved",
@@ -35,59 +35,62 @@ impl ProposalStatus {
     }
 }
 
-impl TryFrom<&str> for ProposalStatus {
-    type Error = ProposalError;
+impl TryFrom<&str> for PersonRequestStatus {
+    type Error = PersonRequestError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         match value {
             "approved" => Ok(Self::Approved),
             "pending" => Ok(Self::Pending),
             "rejected" => Ok(Self::Rejected),
-            _ => Err(ProposalError::InvalidFilter),
+            _ => Err(PersonRequestError::InvalidFilter),
         }
     }
 }
 
 #[derive(Clone, Debug)]
-pub enum ProposalContent {
+pub enum PersonRequestContent {
     Change(KnowledgeTarget, KnowledgeChanges),
     Create(NewKnowledgeEntry),
     Delete(KnowledgeTarget),
 }
 
 #[derive(Clone, Copy, Debug)]
-pub enum ProposalSource<'a> {
+pub enum PersonRequestSource<'a> {
     Space(&'a str),
     Task(TaskTarget<'a>),
 }
 
 #[derive(Clone, Debug)]
-pub struct ProposalFilters {
-    pub(super) status: Option<ProposalStatus>,
+pub struct PersonRequestFilters {
+    pub(super) status: Option<PersonRequestStatus>,
     pub(super) keyword: Option<TaskKeyword>,
 }
 
-impl ProposalFilters {
+impl PersonRequestFilters {
     pub fn new(
-        status: Option<ProposalStatus>,
+        status: Option<PersonRequestStatus>,
         keyword: Option<String>,
-    ) -> Result<Self, ProposalError> {
+    ) -> Result<Self, PersonRequestError> {
         let keyword = keyword
-            .map(|value| TaskKeyword::try_from(value).map_err(|_| ProposalError::InvalidFilter))
+            .map(|value| {
+                TaskKeyword::try_from(value).map_err(|_| PersonRequestError::InvalidFilter)
+            })
             .transpose()?;
         Ok(Self { status, keyword })
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct ProposalRejection {
+pub struct PersonRequestRejection {
     pub(super) reason: String,
 }
 
-impl ProposalRejection {
-    pub fn new(reason: String) -> Result<Self, ProposalError> {
-        if reason.trim().is_empty() || reason.chars().count() > PROPOSAL_REASON_MAX_CHARACTERS {
-            return Err(ProposalError::InvalidReason);
+impl PersonRequestRejection {
+    pub fn new(reason: String) -> Result<Self, PersonRequestError> {
+        if reason.trim().is_empty() || reason.chars().count() > PERSON_REQUEST_REASON_MAX_CHARACTERS
+        {
+            return Err(PersonRequestError::InvalidReason);
         }
         Ok(Self { reason })
     }
@@ -95,14 +98,14 @@ impl ProposalRejection {
 
 #[derive(Debug, Error)]
 #[non_exhaustive]
-pub enum ProposalError {
+pub enum PersonRequestError {
     #[error(transparent)]
     Access(#[from] SpaceAccessError),
     #[error(transparent)]
     Caller(#[from] CallerError),
     #[error(transparent)]
     Database(#[from] DbErr),
-    #[error("Proposal is already decided")]
+    #[error("Request is already decided")]
     Decided,
     #[error(transparent)]
     Input(#[from] KnowledgeInputError),
@@ -120,35 +123,35 @@ pub enum ProposalError {
     Knowledge(KnowledgeError),
     #[error("Knowledge name is already in use")]
     NameTaken,
-    #[error("Proposal not found")]
+    #[error("Request not found")]
     NotFound,
-    #[error("A contributor cannot approve their own party's proposal")]
+    #[error("A contributor cannot approve their own party's request")]
     OwnParty,
     #[error(transparent)]
     Task(#[from] TaskAccessError),
 }
 
-impl ProposalError {
+impl PersonRequestError {
     pub const fn code(&self) -> &'static str {
         match self {
             Self::Access(error) => error.code(),
             Self::Caller(error) => error.code(),
             Self::Database(_) | Self::Internal(_) => "server.internal",
-            Self::Decided => "proposal.decided",
+            Self::Decided => "person_request.decided",
             Self::Input(_) | Self::InvalidReason => "request.invalid_body",
             Self::InvalidCursor | Self::InvalidFilter | Self::InvalidPageSize(_) => {
                 "request.invalid_query"
             }
             Self::Knowledge(error) => error.code(),
             Self::NameTaken => "knowledge.name_taken",
-            Self::NotFound => "proposal.not_found",
-            Self::OwnParty => "proposal.own_party",
+            Self::NotFound => "person_request.not_found",
+            Self::OwnParty => "person_request.own_party",
             Self::Task(error) => error.code(),
         }
     }
 }
 
-impl From<KnowledgeError> for ProposalError {
+impl From<KnowledgeError> for PersonRequestError {
     fn from(error: KnowledgeError) -> Self {
         match error {
             KnowledgeError::NameTaken { .. } => Self::NameTaken,

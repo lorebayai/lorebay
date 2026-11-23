@@ -14,7 +14,7 @@ impl MigrationTrait for Migration {
             checkpoint(),
             agent_file(),
             knowledge(manager.get_database_backend()),
-            proposal(),
+            person_request(),
             knowledge_version(),
         ] {
             manager.create_table(table).await?;
@@ -28,7 +28,7 @@ impl MigrationTrait for Migration {
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         for table in [
             SpaceKnowledgeVersion::Table.into_iden(),
-            SpaceProposal::Table.into_iden(),
+            SpacePersonRequest::Table.into_iden(),
             SpaceKnowledge::Table.into_iden(),
             SpaceAgentFile::Table.into_iden(),
             SpaceCheckpoint::Table.into_iden(),
@@ -54,7 +54,7 @@ fn space() -> TableCreateStatement {
         .col(big_integer(Space::NextTaskNumber).default(1))
         .col(big_integer(Space::NextKnowledgeNumber).default(1))
         .col(big_integer(Space::NextAgentFileNumber).default(1))
-        .col(big_integer(Space::NextProposalNumber).default(1))
+        .col(big_integer(Space::NextPersonRequestNumber).default(1))
         .col(big_integer(Space::CreatedAt))
         .col(big_integer(Space::UpdatedAt))
         .to_owned()
@@ -200,115 +200,115 @@ fn knowledge(backend: DbBackend) -> TableCreateStatement {
         .to_owned()
 }
 
-fn proposal() -> TableCreateStatement {
+fn person_request() -> TableCreateStatement {
     let mut table = Table::create()
-        .table(SpaceProposal::Table)
-        .col(text(SpaceProposal::Id).primary_key())
-        .col(text(SpaceProposal::SpaceId))
-        .col(big_integer(SpaceProposal::Number))
-        .col(text(SpaceProposal::Kind))
-        .col(text_null(SpaceProposal::KnowledgeId))
-        .col(big_integer_null(SpaceProposal::BaseVersion))
-        .col(text_null(SpaceProposal::NewName))
-        .col(text_null(SpaceProposal::NewSummary))
-        .col(text_null(SpaceProposal::NewContent))
-        .col(text(SpaceProposal::ProposedBy))
-        .col(text_null(SpaceProposal::ProposerAgentName))
-        .col(text_null(SpaceProposal::FromTaskId))
-        .col(text(SpaceProposal::Status))
-        .col(text_null(SpaceProposal::DecidedBy))
-        .col(big_integer_null(SpaceProposal::DecidedAt))
-        .col(text_null(SpaceProposal::RejectReason))
-        .col(big_integer(SpaceProposal::CreatedAt))
+        .table(SpacePersonRequest::Table)
+        .col(text(SpacePersonRequest::Id).primary_key())
+        .col(text(SpacePersonRequest::SpaceId))
+        .col(big_integer(SpacePersonRequest::Number))
+        .col(text(SpacePersonRequest::Action))
+        .col(text_null(SpacePersonRequest::KnowledgeId))
+        .col(big_integer_null(SpacePersonRequest::BaseVersion))
+        .col(text_null(SpacePersonRequest::NewName))
+        .col(text_null(SpacePersonRequest::NewSummary))
+        .col(text_null(SpacePersonRequest::NewContent))
+        .col(text(SpacePersonRequest::RequestedBy))
+        .col(text_null(SpacePersonRequest::RequesterAgentName))
+        .col(text_null(SpacePersonRequest::FromTaskId))
+        .col(text(SpacePersonRequest::Status))
+        .col(text_null(SpacePersonRequest::DecidedBy))
+        .col(big_integer_null(SpacePersonRequest::DecidedAt))
+        .col(text_null(SpacePersonRequest::RejectReason))
+        .col(big_integer(SpacePersonRequest::CreatedAt))
         .index(
             Index::create()
                 .unique()
-                .col(SpaceProposal::SpaceId)
-                .col(SpaceProposal::Number),
+                .col(SpacePersonRequest::SpaceId)
+                .col(SpacePersonRequest::Number),
         )
         .to_owned();
-    proposal_checks(&mut table);
-    proposal_foreign_keys(&mut table);
+    person_request_checks(&mut table);
+    person_request_foreign_keys(&mut table);
     table
 }
 
-fn proposal_checks(table: &mut TableCreateStatement) {
+fn person_request_checks(table: &mut TableCreateStatement) {
     table
-        .check(Expr::col(SpaceProposal::Kind).is_in(["create", "change", "delete"]))
-        .check(Expr::col(SpaceProposal::Status).is_in(["pending", "approved", "rejected"]))
-        .check(proposal_kind())
+        .check(Expr::col(SpacePersonRequest::Action).is_in(["create", "change", "delete"]))
+        .check(Expr::col(SpacePersonRequest::Status).is_in(["pending", "approved", "rejected"]))
+        .check(person_request_action())
         .check(
             Cond::any()
                 .add(
                     Cond::all()
-                        .add(Expr::col(SpaceProposal::Status).eq("pending"))
-                        .add(Expr::col(SpaceProposal::DecidedBy).is_null())
-                        .add(Expr::col(SpaceProposal::DecidedAt).is_null()),
+                        .add(Expr::col(SpacePersonRequest::Status).eq("pending"))
+                        .add(Expr::col(SpacePersonRequest::DecidedBy).is_null())
+                        .add(Expr::col(SpacePersonRequest::DecidedAt).is_null()),
                 )
                 .add(
                     Cond::all()
-                        .add(Expr::col(SpaceProposal::Status).ne("pending"))
-                        .add(Expr::col(SpaceProposal::DecidedBy).is_not_null())
-                        .add(Expr::col(SpaceProposal::DecidedAt).is_not_null()),
+                        .add(Expr::col(SpacePersonRequest::Status).ne("pending"))
+                        .add(Expr::col(SpacePersonRequest::DecidedBy).is_not_null())
+                        .add(Expr::col(SpacePersonRequest::DecidedAt).is_not_null()),
                 ),
         )
         .check(
             Cond::any()
-                .add(Expr::col(SpaceProposal::Status).ne("rejected"))
-                .add(Expr::col(SpaceProposal::RejectReason).is_not_null()),
+                .add(Expr::col(SpacePersonRequest::Status).ne("rejected"))
+                .add(Expr::col(SpacePersonRequest::RejectReason).is_not_null()),
         );
 }
 
-fn proposal_foreign_keys(table: &mut TableCreateStatement) {
+fn person_request_foreign_keys(table: &mut TableCreateStatement) {
     table
         .foreign_key(
             ForeignKey::create()
-                .from(SpaceProposal::Table, SpaceProposal::SpaceId)
+                .from(SpacePersonRequest::Table, SpacePersonRequest::SpaceId)
                 .to(Space::Table, Space::Id),
         )
         .foreign_key(
             ForeignKey::create()
-                .from(SpaceProposal::Table, SpaceProposal::KnowledgeId)
+                .from(SpacePersonRequest::Table, SpacePersonRequest::KnowledgeId)
                 .to(SpaceKnowledge::Table, SpaceKnowledge::Id),
         )
         .foreign_key(
             ForeignKey::create()
-                .from(SpaceProposal::Table, SpaceProposal::FromTaskId)
+                .from(SpacePersonRequest::Table, SpacePersonRequest::FromTaskId)
                 .to(SpaceTask::Table, SpaceTask::Id)
                 .on_delete(ForeignKeyAction::SetNull),
         );
 }
 
-fn proposal_kind() -> Condition {
+fn person_request_action() -> Condition {
     Cond::any()
         .add(
             Cond::all()
-                .add(Expr::col(SpaceProposal::Kind).eq("create"))
-                .add(Expr::col(SpaceProposal::BaseVersion).is_null())
-                .add(Expr::col(SpaceProposal::NewName).is_not_null())
-                .add(Expr::col(SpaceProposal::NewSummary).is_not_null())
-                .add(Expr::col(SpaceProposal::NewContent).is_not_null()),
+                .add(Expr::col(SpacePersonRequest::Action).eq("create"))
+                .add(Expr::col(SpacePersonRequest::BaseVersion).is_null())
+                .add(Expr::col(SpacePersonRequest::NewName).is_not_null())
+                .add(Expr::col(SpacePersonRequest::NewSummary).is_not_null())
+                .add(Expr::col(SpacePersonRequest::NewContent).is_not_null()),
         )
         .add(
             Cond::all()
-                .add(Expr::col(SpaceProposal::Kind).eq("change"))
-                .add(Expr::col(SpaceProposal::KnowledgeId).is_not_null())
-                .add(Expr::col(SpaceProposal::BaseVersion).is_not_null())
+                .add(Expr::col(SpacePersonRequest::Action).eq("change"))
+                .add(Expr::col(SpacePersonRequest::KnowledgeId).is_not_null())
+                .add(Expr::col(SpacePersonRequest::BaseVersion).is_not_null())
                 .add(
                     Cond::any()
-                        .add(Expr::col(SpaceProposal::NewName).is_not_null())
-                        .add(Expr::col(SpaceProposal::NewSummary).is_not_null())
-                        .add(Expr::col(SpaceProposal::NewContent).is_not_null()),
+                        .add(Expr::col(SpacePersonRequest::NewName).is_not_null())
+                        .add(Expr::col(SpacePersonRequest::NewSummary).is_not_null())
+                        .add(Expr::col(SpacePersonRequest::NewContent).is_not_null()),
                 ),
         )
         .add(
             Cond::all()
-                .add(Expr::col(SpaceProposal::Kind).eq("delete"))
-                .add(Expr::col(SpaceProposal::KnowledgeId).is_not_null())
-                .add(Expr::col(SpaceProposal::BaseVersion).is_not_null())
-                .add(Expr::col(SpaceProposal::NewName).is_null())
-                .add(Expr::col(SpaceProposal::NewSummary).is_null())
-                .add(Expr::col(SpaceProposal::NewContent).is_null()),
+                .add(Expr::col(SpacePersonRequest::Action).eq("delete"))
+                .add(Expr::col(SpacePersonRequest::KnowledgeId).is_not_null())
+                .add(Expr::col(SpacePersonRequest::BaseVersion).is_not_null())
+                .add(Expr::col(SpacePersonRequest::NewName).is_null())
+                .add(Expr::col(SpacePersonRequest::NewSummary).is_null())
+                .add(Expr::col(SpacePersonRequest::NewContent).is_null()),
         )
 }
 
@@ -322,7 +322,7 @@ fn knowledge_version() -> TableCreateStatement {
         .col(text_null(SpaceKnowledgeVersion::Content))
         .col(text_null(SpaceKnowledgeVersion::Summary))
         .col(text(SpaceKnowledgeVersion::AppliedBy))
-        .col(text_null(SpaceKnowledgeVersion::ProposalId))
+        .col(text_null(SpaceKnowledgeVersion::PersonRequestId))
         .col(big_integer(SpaceKnowledgeVersion::CreatedAt))
         .index(
             Index::create()
@@ -358,9 +358,9 @@ fn knowledge_version() -> TableCreateStatement {
             ForeignKey::create()
                 .from(
                     SpaceKnowledgeVersion::Table,
-                    SpaceKnowledgeVersion::ProposalId,
+                    SpaceKnowledgeVersion::PersonRequestId,
                 )
-                .to(SpaceProposal::Table, SpaceProposal::Id),
+                .to(SpacePersonRequest::Table, SpacePersonRequest::Id),
         )
         .to_owned()
 }
@@ -388,18 +388,18 @@ fn indexes() -> [IndexCreateStatement; 6] {
             [SpaceAgentFile::TaskId],
         ),
         index(
-            "space_proposal_space_status",
-            SpaceProposal::Table,
+            "space_person_request_space_status",
+            SpacePersonRequest::Table,
             [
-                SpaceProposal::SpaceId,
-                SpaceProposal::Status,
-                SpaceProposal::CreatedAt,
+                SpacePersonRequest::SpaceId,
+                SpacePersonRequest::Status,
+                SpacePersonRequest::CreatedAt,
             ],
         ),
         index(
-            "space_proposal_knowledge",
-            SpaceProposal::Table,
-            [SpaceProposal::KnowledgeId],
+            "space_person_request_knowledge",
+            SpacePersonRequest::Table,
+            [SpacePersonRequest::KnowledgeId],
         ),
     ]
 }
@@ -455,7 +455,7 @@ enum SpaceKnowledgeVersion {
     Id,
     Kind,
     KnowledgeId,
-    ProposalId,
+    PersonRequestId,
     Summary,
     Table,
     Version,
@@ -471,22 +471,22 @@ enum SpaceCheckpoint {
 }
 
 #[derive(DeriveIden)]
-enum SpaceProposal {
+enum SpacePersonRequest {
+    Action,
     BaseVersion,
     CreatedAt,
     DecidedAt,
     DecidedBy,
     FromTaskId,
     Id,
-    Kind,
     KnowledgeId,
     NewContent,
     NewName,
     NewSummary,
     Number,
-    ProposedBy,
-    ProposerAgentName,
     RejectReason,
+    RequestedBy,
+    RequesterAgentName,
     SpaceId,
     Status,
     Table,
@@ -499,7 +499,7 @@ enum Space {
     Name,
     NextAgentFileNumber,
     NextKnowledgeNumber,
-    NextProposalNumber,
+    NextPersonRequestNumber,
     NextTaskNumber,
     Number,
     Summary,

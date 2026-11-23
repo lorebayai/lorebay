@@ -181,7 +181,7 @@ pub async fn create_space(
             next_task_number: Set(1),
             next_knowledge_number: Set(1),
             next_agent_file_number: Set(1),
-            next_proposal_number: Set(1),
+            next_person_request_number: Set(1),
             created_at: Set(now),
             updated_at: Set(now),
         })

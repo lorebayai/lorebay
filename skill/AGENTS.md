@@ -33,7 +33,7 @@ Folder orientation:
 - The skill's own words are only its `name` and `description`. The
   description says the skill applies to every session in which Lorebay's MCP
   server is registered in the harness, as `lorebay`, reachable or not and
-  whatever the first request, so a harness loads it without the person naming
+  whatever the first ask, so a harness loads it without the person naming
   Lorebay.
 - `SKILL.md` states the content rule first, in its own sentence, then the 13
   rules in session order, each with Lorebay's part beside the library's, so

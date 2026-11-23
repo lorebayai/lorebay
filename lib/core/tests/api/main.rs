@@ -28,7 +28,7 @@ use helpers::{
 )]
 mod helpers;
 mod knowledge;
-mod proposals;
+mod person_requests;
 
 #[tokio::test]
 async fn complete_agent_file_refuses_registration_after_oversize_report() {

@@ -6,7 +6,7 @@ use crate::helpers::{
     Server, TEST_PASSWORD, authorize_for, create_space, list_page, login, request,
 };
 use crate::knowledge::helpers::{self as knowledge, PATH};
-use crate::proposals::helpers as proposals;
+use crate::person_requests::helpers as person_requests;
 use crate::tasks::helpers::{self as tasks, SPACE};
 
 use super::{call, call_error};
@@ -110,7 +110,7 @@ async fn call_list_knowledge_searches_space_when_keyword_is_given() {
 async fn call_read_knowledge_returns_latest_version_by_name_or_key() {
     let (server, person, agent) = tasks::setup().await;
     knowledge::create(&server, &person, "Old", "Original", "Version one").await;
-    let latest = proposals::change_entry(
+    let latest = person_requests::change_entry(
         &server,
         &person,
         "KN-1",
@@ -147,7 +147,7 @@ async fn call_read_knowledge_returns_latest_version_by_name_or_key() {
 async fn call_read_knowledge_fails_when_entry_is_deleted() {
     let (server, person, agent) = tasks::setup().await;
     knowledge::create(&server, &person, "Guide", "Summary", "Content").await;
-    proposals::delete_entry(&server, &person, "KN-1").await;
+    person_requests::delete_entry(&server, &person, "KN-1").await;
     for target in [json!({"name":"Guide"}), json!({"key":"KN-1"})] {
         let mut arguments = target;
         arguments["space"] = json!(SPACE);
@@ -175,10 +175,10 @@ async fn call_read_knowledge_returns_approved_content_to_another_agent() {
         json!({"space":SPACE, "title":"Share team convention"}),
     )
     .await;
-    let mut arguments = proposals::creation("Team/Convention");
+    let mut arguments = person_requests::creation("Team/Convention");
     arguments["task_id"] = task["task_id"].clone();
-    let proposal = call(&server, &writer, "create_proposal", arguments).await;
-    assert_eq!(proposal["status"], "pending");
+    let person_request = call(&server, &writer, "create_request", arguments).await;
+    assert_eq!(person_request["status"], "pending");
     assert_eq!(
         call_error(
             &server,
@@ -189,7 +189,7 @@ async fn call_read_knowledge_returns_approved_content_to_another_agent() {
         .await["code"],
         "knowledge.not_found"
     );
-    let approved = proposals::approve(&server, &bob, "PP-1").await;
+    let approved = person_requests::approve(&server, &bob, "RQ-1").await;
     assert_eq!(approved["status"], "approved");
     let entry = call(
         &server,
@@ -198,12 +198,15 @@ async fn call_read_knowledge_returns_approved_content_to_another_agent() {
         json!({"space":SPACE, "name":"Team/Convention"}),
     )
     .await;
-    assert_eq!(entry, proposals::entry(&server, &charlie, "KN-1").await);
+    assert_eq!(
+        entry,
+        person_requests::entry(&server, &charlie, "KN-1").await
+    );
     assert_eq!(entry["content"], "Content");
     assert_eq!(entry["applied_by"], "bob");
     assert_eq!(
-        proposals::versions(&server, &charlie, "KN-1").await[0]["proposal_key"],
-        "PP-1"
+        person_requests::versions(&server, &charlie, "KN-1").await[0]["request_key"],
+        "RQ-1"
     );
     server.stop().await;
 }
@@ -221,7 +224,7 @@ async fn three_people_with_space() -> (Server, Value, Value, Value) {
     let owner = server.tokens().await;
     create_space(&server, &owner, "Team", "Shared").await;
     for person in ["bob", "charlie"] {
-        proposals::data(
+        person_requests::data(
             request(
                 &server,
                 &owner,

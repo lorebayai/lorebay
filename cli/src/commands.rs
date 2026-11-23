@@ -20,7 +20,7 @@ mod content;
 mod deletion;
 mod knowledge;
 mod pages;
-mod proposals;
+mod person_requests;
 mod space_members;
 mod spaces;
 mod tasks;
@@ -47,7 +47,7 @@ pub(crate) async fn run(command: Command, mode: OutputMode) -> Result<Outcome> {
             Ok(Outcome::completion("Signed in."))
         }
         Command::Member { command } => space_members::run(command, &store, mode).await,
-        Command::Proposal { command } => proposals::run(command, &store, mode).await,
+        Command::PersonRequest { command } => person_requests::run(command, &store, mode).await,
         Command::Checkpoint { command } => checkpoints::run(command, &store).await,
         Command::Space { command } => spaces::run(command, &store, mode).await,
         Command::Task { command } => tasks::run(command, &store, mode).await,

@@ -70,7 +70,7 @@ pub fn version_metadata(entry: &Value) -> Value {
     json!({
         "version": entry["version"], "kind": entry["kind"],
         "applied_by": entry["applied_by"], "applied_at": entry["applied_at"],
-        "proposal_key": null,
+        "request_key": null,
     })
 }
 

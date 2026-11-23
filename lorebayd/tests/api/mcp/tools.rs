@@ -11,7 +11,7 @@ use super::{
 mod agent_files;
 mod filters;
 mod knowledge;
-mod proposals;
+mod person_requests;
 mod update;
 
 #[tokio::test]

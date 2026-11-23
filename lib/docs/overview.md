@@ -1,7 +1,7 @@
 # Library Docs Overview
 
 Designs for the library that holds the features every product shares:
-spaces, tasks, checkpoints, files, Knowledge, proposals and the MCP tools.
+spaces, tasks, checkpoints, files, Knowledge, requests and the MCP tools.
 Lorebay is the first product built on it. Terms follow the
 [glossary](../CONTEXT.md).
 
@@ -29,7 +29,7 @@ Lorebay is the first product built on it. Terms follow the
   every library operation, and the space and task checks.
 - [Tasks](contracts/tasks.md): tasks, Scratchpads, checkpoints and files.
 - [Knowledge](contracts/knowledge.md): knowledge entries, versions and
-  proposals.
+  requests.
 - [Keys and references](contracts/keys-and-references.md): keys, task IDs
   and `#` references.
 - [MCP tools](contracts/mcp-tools.md): the protocol versions and the 14 tools

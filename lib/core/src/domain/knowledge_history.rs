@@ -24,7 +24,7 @@ pub struct KnowledgeVersion {
     pub kind: KnowledgeVersionKind,
     pub applied_by: String,
     pub applied_at: i64,
-    pub proposal_key: Option<String>,
+    pub request_key: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, TypedBuilder)]
@@ -201,7 +201,9 @@ fn named_version(
         kind: KnowledgeVersionKind::try_from(row.kind.as_str())?,
         applied_by: person_name(names, &row.applied_by)?,
         applied_at: row.created_at,
-        proposal_key: row.proposal_number.map(|number| format_key("PP", number)),
+        request_key: row
+            .person_request_number
+            .map(|number| format_key("RQ", number)),
     })
 }
 

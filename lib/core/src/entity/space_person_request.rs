@@ -3,7 +3,7 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel)]
-#[sea_orm(table_name = "space_proposal")]
+#[sea_orm(table_name = "space_person_request")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false, column_type = "Text")]
     pub id: String,
@@ -11,7 +11,7 @@ pub struct Model {
     pub space_id: String,
     pub number: i64,
     #[sea_orm(column_type = "Text")]
-    pub kind: String,
+    pub action: String,
     #[sea_orm(column_type = "Text", nullable)]
     pub knowledge_id: Option<String>,
     pub base_version: Option<i64>,
@@ -22,9 +22,9 @@ pub struct Model {
     #[sea_orm(column_type = "Text", nullable)]
     pub new_content: Option<String>,
     #[sea_orm(column_type = "Text")]
-    pub proposed_by: String,
+    pub requested_by: String,
     #[sea_orm(column_type = "Text", nullable)]
-    pub proposer_agent_name: Option<String>,
+    pub requester_agent_name: Option<String>,
     #[sea_orm(column_type = "Text", nullable)]
     pub from_task_id: Option<String>,
     #[sea_orm(column_type = "Text")]

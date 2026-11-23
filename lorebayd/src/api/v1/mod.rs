@@ -11,7 +11,7 @@ pub(crate) fn router() -> Router<ServerState> {
         .route("/spaces", get(spaces::list).post(spaces::create))
         .route("/spaces/{space}", get(spaces::read).patch(spaces::change))
         .merge(knowledge_router())
-        .merge(proposals_router())
+        .merge(person_requests_router())
         .route(
             "/spaces/{space}/files/{key}/url",
             get(agent_files::download_url),
@@ -72,35 +72,35 @@ mod agents;
 mod authorization;
 mod device_sign_in;
 mod knowledge;
+mod person_requests;
 mod person_sign_in;
-mod proposals;
 mod space_members;
 mod spaces;
 mod tasks;
 mod users;
 
-fn proposals_router() -> Router<ServerState> {
+fn person_requests_router() -> Router<ServerState> {
     Router::new()
         .route(
-            "/spaces/{space}/proposals",
-            get(proposals::list).merge(
-                post(proposals::submit_person)
+            "/spaces/{space}/requests",
+            get(person_requests::list).merge(
+                post(person_requests::submit_person)
                     .layer(DefaultBodyLimit::max(knowledge::KNOWLEDGE_BODY_MAX_BYTES)),
             ),
         )
         .route(
-            "/spaces/{space}/tasks/{task}/proposals",
-            post(proposals::submit_agent)
+            "/spaces/{space}/tasks/{task}/requests",
+            post(person_requests::submit_agent)
                 .layer(DefaultBodyLimit::max(knowledge::KNOWLEDGE_BODY_MAX_BYTES)),
         )
-        .route("/spaces/{space}/proposals/{key}", get(proposals::read))
+        .route("/spaces/{space}/requests/{key}", get(person_requests::read))
         .route(
-            "/spaces/{space}/proposals/{key}/approve",
-            post(proposals::approve),
+            "/spaces/{space}/requests/{key}/approve",
+            post(person_requests::approve),
         )
         .route(
-            "/spaces/{space}/proposals/{key}/reject",
-            post(proposals::reject),
+            "/spaces/{space}/requests/{key}/reject",
+            post(person_requests::reject),
         )
 }
 

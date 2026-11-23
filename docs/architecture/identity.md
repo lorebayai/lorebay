@@ -48,7 +48,7 @@ It does not cover:
   happens to their work is in the library's
   [roles](../../lib/docs/contracts/access-control.md#3-roles).
 - **A username added back is the same person.** Their earlier tasks and
-  proposals are theirs again, but they are in no space until an owner or
+  requests are theirs again, but they are in no space until an owner or
   admin adds them, and their agents must authorize again. Never give a
   username to a different person: they would take over the earlier person's
   tasks.
@@ -73,7 +73,7 @@ It does not cover:
   hides a space from a Lorebay caller; see
   [Library architecture](../../lib/docs/architecture/library.md#8-tenant-and-space-numbers).
 - **Operations only people perform accept only a sign-in**, such as
-  approving and rejecting proposals, deleting tasks, checkpoints and files,
+  approving and rejecting requests, deleting tasks, checkpoints and files,
   changing Knowledge directly, rolling back, and managing space members. The
   full list is in the library's
   [permission matrix](../../lib/docs/contracts/access-control.md#4-permissions)

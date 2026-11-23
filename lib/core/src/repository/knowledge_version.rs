@@ -5,7 +5,7 @@ use sea_orm::{
 use typed_builder::TypedBuilder;
 
 use crate::entity::space_knowledge_version::{ActiveModel, Column, Entity, Model, Relation};
-use crate::entity::space_proposal::Column as ProposalColumn;
+use crate::entity::space_person_request::Column as PersonRequestColumn;
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
@@ -20,7 +20,7 @@ pub(crate) struct KnowledgeVersionRow {
     pub kind: String,
     pub applied_by: String,
     pub created_at: i64,
-    pub proposal_number: Option<i64>,
+    pub person_request_number: Option<i64>,
 }
 
 impl<C: ConnectionTrait> KnowledgeVersionRepository<'_, C> {
@@ -66,8 +66,8 @@ impl<C: ConnectionTrait> KnowledgeVersionRepository<'_, C> {
                 Column::AppliedBy,
                 Column::CreatedAt,
             ])
-            .column_as(ProposalColumn::Number, "proposal_number")
-            .join(JoinType::LeftJoin, Relation::SpaceProposal.def())
+            .column_as(PersonRequestColumn::Number, "person_request_number")
+            .join(JoinType::LeftJoin, Relation::SpacePersonRequest.def())
             .filter(Column::KnowledgeId.eq(entry));
         if let Some(before) = before {
             query = query.filter(Column::Version.lt(before));

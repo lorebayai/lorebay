@@ -3,10 +3,11 @@ use axum::extract::rejection::{JsonRejection, PathRejection, QueryRejection};
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use lorebay_lib_core::{
-    KnowledgeChanges, KnowledgeTarget, NewKnowledgeEntry, PageOptions, Proposal, ProposalContent,
-    ProposalFilters, ProposalListItem, ProposalRejection, ProposalSource, ProposalStatus,
-    SubmittedProposal, TaskTarget, approve_proposal, list_proposals, read_proposal,
-    reject_proposal, submit_proposal,
+    KnowledgeChanges, KnowledgeTarget, NewKnowledgeEntry, PageOptions, PersonRequest,
+    PersonRequestContent, PersonRequestFilters, PersonRequestListItem, PersonRequestRejection,
+    PersonRequestSource, PersonRequestStatus, SubmittedPersonRequest, TaskTarget,
+    approve_person_request, list_person_requests, read_person_request, reject_person_request,
+    submit_person_request,
 };
 use lorebay_lib_types::Secret;
 use serde::Deserialize;
@@ -20,7 +21,7 @@ use super::knowledge::present_string;
 use super::person_sign_in::invalid_json;
 
 #[derive(Clone, Debug, Deserialize)]
-#[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
+#[serde(tag = "action", rename_all = "lowercase", deny_unknown_fields)]
 pub(crate) enum SubmitRequest {
     Change {
         target_name: Option<String>,
@@ -45,7 +46,7 @@ pub(crate) enum SubmitRequest {
 
 #[derive(Clone, Debug, Deserialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
-pub(crate) struct ProposalPath {
+pub(crate) struct PersonRequestPath {
     space: String,
     key: String,
 }
@@ -75,7 +76,7 @@ pub(crate) struct RejectRequest {
     reason: String,
 }
 
-impl TryFrom<SubmitRequest> for ProposalContent {
+impl TryFrom<SubmitRequest> for PersonRequestContent {
     type Error = ApiError;
 
     fn try_from(value: SubmitRequest) -> Result<Self, Self::Error> {
@@ -108,7 +109,7 @@ pub(crate) async fn submit_person(
     caller: VerifiedCaller,
     path: Result<Path<String>, PathRejection>,
     request: Result<Json<SubmitRequest>, JsonRejection>,
-) -> Result<(StatusCode, Envelope<SubmittedProposal>), ApiError> {
+) -> Result<(StatusCode, Envelope<SubmittedPersonRequest>), ApiError> {
     let Path(space) = path.map_err(|_| invalid_query("space"))?;
     let Json(request) = request.map_err(invalid_json)?;
     let content = request.try_into()?;
@@ -116,7 +117,7 @@ pub(crate) async fn submit_person(
     let result = state
         .library
         .run_write(async |write| {
-            submit_proposal(write, &caller, ProposalSource::Space(&space), content).await
+            submit_person_request(write, &caller, PersonRequestSource::Space(&space), content).await
         })
         .await?;
     Ok((
@@ -130,18 +131,18 @@ pub(crate) async fn submit_agent(
     caller: VerifiedCaller,
     path: Result<Path<TaskPath>, PathRejection>,
     request: Result<Json<SubmitRequest>, JsonRejection>,
-) -> Result<(StatusCode, Envelope<SubmittedProposal>), ApiError> {
+) -> Result<(StatusCode, Envelope<SubmittedPersonRequest>), ApiError> {
     let Path(path) = path.map_err(|_| invalid_query("path"))?;
     let Json(request) = request.map_err(invalid_json)?;
     let content = request.try_into()?;
-    let source = ProposalSource::Task(TaskTarget {
+    let source = PersonRequestSource::Task(TaskTarget {
         path_space: Some(&path.space),
         task_id: path.task_id.expose(),
     });
     let caller = caller.library_caller();
     let result = state
         .library
-        .run_write(async |write| submit_proposal(write, &caller, source, content).await)
+        .run_write(async |write| submit_person_request(write, &caller, source, content).await)
         .await?;
     Ok((
         StatusCode::CREATED,
@@ -154,7 +155,7 @@ pub(crate) async fn list(
     caller: VerifiedCaller,
     path: Result<Path<String>, PathRejection>,
     query: Result<Query<ListQuery>, QueryRejection>,
-) -> Result<Envelope<Vec<ProposalListItem>>, ApiError> {
+) -> Result<Envelope<Vec<PersonRequestListItem>>, ApiError> {
     let Path(space) = path.map_err(|_| invalid_query("space"))?;
     let Query(query) = query.map_err(|_| invalid_query("query"))?;
     let options = PageOptions::from_text(query.page_size.as_deref(), query.cursor)
@@ -162,11 +163,11 @@ pub(crate) async fn list(
     let status = query
         .status
         .as_deref()
-        .map(ProposalStatus::try_from)
+        .map(PersonRequestStatus::try_from)
         .transpose()
         .map_err(|_| invalid_query("status"))?;
-    let filters = ProposalFilters::new(status, query.keyword)?;
-    let page = list_proposals(
+    let filters = PersonRequestFilters::new(status, query.keyword)?;
+    let page = list_person_requests(
         &state.library,
         &caller.library_caller(),
         &space,
@@ -183,10 +184,10 @@ pub(crate) async fn list(
 pub(crate) async fn read(
     State(state): State<ServerState>,
     caller: VerifiedCaller,
-    path: Result<Path<ProposalPath>, PathRejection>,
-) -> Result<Envelope<Proposal>, ApiError> {
+    path: Result<Path<PersonRequestPath>, PathRejection>,
+) -> Result<Envelope<PersonRequest>, ApiError> {
     let Path(path) = path.map_err(|_| invalid_query("path"))?;
-    let result = read_proposal(
+    let result = read_person_request(
         &state.library,
         &caller.library_caller(),
         &path.space,
@@ -199,13 +200,15 @@ pub(crate) async fn read(
 pub(crate) async fn approve(
     State(state): State<ServerState>,
     caller: VerifiedCaller,
-    path: Result<Path<ProposalPath>, PathRejection>,
-) -> Result<Envelope<Proposal>, ApiError> {
+    path: Result<Path<PersonRequestPath>, PathRejection>,
+) -> Result<Envelope<PersonRequest>, ApiError> {
     let Path(path) = path.map_err(|_| invalid_query("path"))?;
     let caller = caller.library_caller();
     let result = state
         .library
-        .run_write(async |write| approve_proposal(write, &caller, &path.space, &path.key).await)
+        .run_write(async |write| {
+            approve_person_request(write, &caller, &path.space, &path.key).await
+        })
         .await?;
     Ok(Envelope::builder().data(result).build())
 }
@@ -213,17 +216,17 @@ pub(crate) async fn approve(
 pub(crate) async fn reject(
     State(state): State<ServerState>,
     caller: VerifiedCaller,
-    path: Result<Path<ProposalPath>, PathRejection>,
+    path: Result<Path<PersonRequestPath>, PathRejection>,
     request: Result<Json<RejectRequest>, JsonRejection>,
-) -> Result<Envelope<Proposal>, ApiError> {
+) -> Result<Envelope<PersonRequest>, ApiError> {
     let Path(path) = path.map_err(|_| invalid_query("path"))?;
     let Json(request) = request.map_err(invalid_json)?;
-    let rejection = ProposalRejection::new(request.reason)?;
+    let rejection = PersonRequestRejection::new(request.reason)?;
     let caller = caller.library_caller();
     let result = state
         .library
         .run_write(async |write| {
-            reject_proposal(write, &caller, &path.space, &path.key, rejection).await
+            reject_person_request(write, &caller, &path.space, &path.key, rejection).await
         })
         .await?;
     Ok(Envelope::builder().data(result).build())

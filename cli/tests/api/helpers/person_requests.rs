@@ -26,8 +26,8 @@ pub async fn contributor(server: &Server, space: &str) {
     );
 }
 
-pub async fn proposal_json(server: &Server, arguments: &[&str]) -> Value {
-    let mut command = vec!["proposal"];
+pub async fn person_request_json(server: &Server, arguments: &[&str]) -> Value {
+    let mut command = vec!["request"];
     command.extend_from_slice(arguments);
     command.extend(["--output", "json"]);
     let output = server.run(&command).await;
@@ -37,14 +37,14 @@ pub async fn proposal_json(server: &Server, arguments: &[&str]) -> Value {
     body(&output)["data"].clone()
 }
 
-pub async fn create_proposal(
+pub async fn create_person_request(
     server: &Server,
     space: &str,
     name: &str,
     summary: &str,
     content: &str,
 ) -> Value {
-    proposal_json(
+    person_request_json(
         server,
         &[
             "create",
@@ -59,21 +59,21 @@ pub async fn create_proposal(
     .await
 }
 
-pub async fn show_proposal(server: &Server, space: &str, key: &str) -> Value {
-    let proposal = proposal_json(server, &["show", space, key]).await;
+pub async fn show_person_request(server: &Server, space: &str, key: &str) -> Value {
+    let person_request = person_request_json(server, &["show", space, key]).await;
     let api = server
         .json(
             Method::GET,
-            &format!("/api/v1/spaces/{space}/proposals/{key}"),
+            &format!("/api/v1/spaces/{space}/requests/{key}"),
             Value::Null,
             server.credentials()["access_token"].as_str(),
         )
         .await;
-    assert_eq!(api, json!({"data": proposal, "meta": {}}));
-    proposal
+    assert_eq!(api, json!({"data": person_request, "meta": {}}));
+    person_request
 }
 
-pub async fn submit_agent_proposal(
+pub async fn submit_agent_person_request(
     server: &Server,
     space: &str,
     agent: &Value,
@@ -83,9 +83,9 @@ pub async fn submit_agent_proposal(
     server
         .json(
             Method::POST,
-            &format!("/api/v1/spaces/{space}/tasks/{task_id}/proposals"),
+            &format!("/api/v1/spaces/{space}/tasks/{task_id}/requests"),
             json!({
-                "kind": "create", "name": "agent.md", "summary": "Agent guide",
+                "action": "create", "name": "agent.md", "summary": "Agent guide",
                 "content": "# Shared\n\tcontent",
             }),
             agent["access_token"].as_str(),
@@ -94,29 +94,29 @@ pub async fn submit_agent_proposal(
         .clone()
 }
 
-pub fn assert_proposal_fields(output: &Output, proposal: &Value, target: &str) {
+pub fn assert_person_request_fields(output: &Output, person_request: &Value, target: &str) {
     assert_success(output);
     assert!(output.stderr.is_empty());
     let mut expected = String::new();
     for (label, field) in [
         ("Key", "key"),
-        ("Kind", "kind"),
+        ("Action", "action"),
         ("Status", "status"),
         ("Target", "target"),
         ("Proposed name", "new_name"),
         ("Proposed summary", "new_summary"),
         ("Content", "new_content"),
-        ("Proposed by", "proposed_by"),
-        ("Agent name", "proposer_agent_name"),
+        ("Requested by", "requested_by"),
+        ("Agent name", "requester_agent_name"),
         ("Source task", "from_task_key"),
         ("Created at", "created_at"),
         ("Base version", "base_version"),
-        ("Changed since proposed", "changed_since_proposed"),
+        ("Changed since requested", "changed_since_requested"),
         ("Decided by", "decided_by"),
         ("Decided at", "decided_at"),
         ("Rejection reason", "reject_reason"),
     ] {
-        let value = match (field, &proposal[field]) {
+        let value = match (field, &person_request[field]) {
             ("target", _) => target.to_owned(),
             (_, Value::Null) => String::new(),
             (_, Value::String(text)) => text.clone(),
@@ -139,34 +139,38 @@ pub fn assert_proposal_fields(output: &Output, proposal: &Value, target: &str) {
     assert_eq!(String::from_utf8_lossy(&output.stdout), expected);
 }
 
-pub async fn assert_proposal_pages(server: &Server, command: &[&str], expected: &[(&str, &str)]) {
+pub async fn assert_person_request_pages(
+    server: &Server,
+    command: &[&str],
+    expected: &[(&str, &str)],
+) {
     for mode in ["human", "json"] {
         let mut arguments = command.to_vec();
         arguments.extend(["--page-size", "1", "--output", mode]);
         let mut output = server.run(&arguments).await;
         for (index, (key, target)) in expected.iter().enumerate() {
             assert_success(&output);
-            let proposal = show_proposal(server, command[2], key).await;
+            let person_request = show_person_request(server, command[2], key).await;
             if mode == "json" {
                 let row = &body(&output)["data"][0];
                 for field in [
                     "key",
-                    "kind",
+                    "action",
                     "status",
-                    "proposed_by",
-                    "proposer_agent_name",
+                    "requested_by",
+                    "requester_agent_name",
                     "target",
                     "new_name",
                     "new_summary",
                     "created_at",
                 ] {
-                    assert_eq!(row[field], proposal[field]);
+                    assert_eq!(row[field], person_request[field]);
                 }
                 assert_eq!(body(&output)["data"].as_array().unwrap().len(), 1);
             } else {
                 let text = String::from_utf8_lossy(&output.stdout);
                 assert_eq!(text.lines().count(), 2);
-                assert!(text.starts_with("Key\tKind\tStatus\tTarget\tProposed summary\n"));
+                assert!(text.starts_with("Key\tAction\tStatus\tTarget\tProposed summary\n"));
                 assert_eq!(text.lines().nth(1).unwrap().split('\t').next(), Some(*key));
                 assert_eq!(
                     text.lines().nth(1).unwrap().split('\t').nth(3),
@@ -181,10 +185,7 @@ pub async fn assert_proposal_pages(server: &Server, command: &[&str], expected: 
                 }
                 break;
             }
-            assert!(hint.starts_with(&format!(
-                "Next page: lorebay proposal list '{}'",
-                command[2]
-            )));
+            assert!(hint.starts_with(&format!("Next page: lorebay request list '{}'", command[2])));
             assert!(hint.contains(" --page-size 1 --cursor '"));
             assert!(hint.ends_with(&format!(" --output {mode}\n")));
             for pair in command[3..].as_chunks::<2>().0 {
@@ -199,7 +200,7 @@ pub async fn assert_proposal_pages(server: &Server, command: &[&str], expected: 
     }
 }
 
-pub async fn assert_proposal_error(
+pub async fn assert_person_request_error(
     server: &Server,
     output: &Output,
     request: (&str, &str, &str, Value),
@@ -208,7 +209,7 @@ pub async fn assert_proposal_error(
     assert_eq!(output.status.code(), Some(1));
     assert!(output.stdout.is_empty());
     assert_eq!(String::from_utf8_lossy(&output.stderr).lines().count(), 1);
-    let problem = proposal_problem(server, request).await;
+    let problem = person_request_problem(server, request).await;
     if mode == "json" {
         assert_eq!(
             serde_json::from_slice::<Value>(&output.stderr).unwrap(),
@@ -228,7 +229,7 @@ pub async fn assert_proposal_error(
     }
 }
 
-pub async fn assert_proposal_usage(server: &mut Server, space: &str) {
+pub async fn assert_person_request_usage(server: &mut Server, space: &str) {
     server.stop();
     for mut command in [
         vec!["list", space, "--status", "decided"],
@@ -254,18 +255,18 @@ pub async fn assert_proposal_usage(server: &mut Server, space: &str) {
             "--content-file",
             "-",
         ],
-        vec!["reject", space, "PP-1"],
+        vec!["reject", space, "RQ-1"],
     ] {
-        command.insert(0, "proposal");
+        command.insert(0, "request");
         command.extend(["--output", "json"]);
         assert_usage(&server.run(&command).await);
     }
 }
 
-pub async fn assert_proposal_sources(server: &Server, space: &str, path: &Path) {
+pub async fn assert_person_request_sources(server: &Server, space: &str, path: &Path) {
     create_entry(server, space, "guide.md", "Keep summary", "Original").await;
     fs::write(path, b"File change\r\n\tcontent\n").unwrap();
-    let changed = proposal_json(
+    let changed = person_request_json(
         server,
         &[
             "change",
@@ -280,7 +281,7 @@ pub async fn assert_proposal_sources(server: &Server, space: &str, path: &Path) 
     assert_eq!(changed["new_summary"], Value::Null);
     for arguments in [
         vec![
-            "proposal",
+            "request",
             "create",
             space,
             "stdin.md",
@@ -292,7 +293,7 @@ pub async fn assert_proposal_sources(server: &Server, space: &str, path: &Path) 
             "json",
         ],
         vec![
-            "proposal",
+            "request",
             "change",
             space,
             "guide.md",
@@ -305,27 +306,27 @@ pub async fn assert_proposal_sources(server: &Server, space: &str, path: &Path) 
         let output = content_input(server, &arguments, b"stdin\r\n\tcontent\n").await;
         assert_success(&output);
         assert!(output.stderr.is_empty());
-        let proposal = body(&output)["data"].clone();
-        assert_eq!(proposal["new_content"], "stdin\r\n\tcontent\n");
+        let person_request = body(&output)["data"].clone();
+        assert_eq!(person_request["new_content"], "stdin\r\n\tcontent\n");
         assert_eq!(
-            show_proposal(server, space, proposal["key"].as_str().unwrap()).await,
-            proposal
+            show_person_request(server, space, person_request["key"].as_str().unwrap()).await,
+            person_request
         );
         assert_usage(&content_input(server, &arguments, &[0xff]).await);
     }
-    assert_proposal_file_limits(server, space, path).await;
-    assert_invalid_proposal_files(server, space, path).await;
+    assert_person_request_file_limits(server, space, path).await;
+    assert_invalid_person_request_files(server, space, path).await;
     assert_eq!(
         knowledge_json(server, &["show", space, "KN-1"]).await["content"],
         "Original"
     );
 }
 
-pub async fn assert_empty_proposal_search(server: &Server, space: &str) {
+pub async fn assert_empty_person_request_search(server: &Server, space: &str) {
     for mode in ["human", "json"] {
         let empty = server
             .run(&[
-                "proposal",
+                "request",
                 "list",
                 space,
                 "--keyword",
@@ -341,7 +342,7 @@ pub async fn assert_empty_proposal_search(server: &Server, space: &str) {
         } else {
             assert_eq!(
                 empty.stdout,
-                b"Key\tKind\tStatus\tTarget\tProposed summary\n"
+                b"Key\tAction\tStatus\tTarget\tProposed summary\n"
             );
         }
     }
@@ -369,7 +370,7 @@ pub async fn propose_rollback(server: &Server, space: &str) -> (Value, Value) {
         .run_as(
             SECOND_USERNAME,
             &[
-                "proposal",
+                "request",
                 "change",
                 space,
                 "KN-1",
@@ -384,12 +385,15 @@ pub async fn propose_rollback(server: &Server, space: &str) -> (Value, Value) {
         .await;
     assert_success(&output);
     assert!(output.stderr.is_empty());
-    let proposal = body(&output)["data"].clone();
-    assert_eq!(show_proposal(server, space, "PP-1").await, proposal);
-    (old, proposal)
+    let person_request = body(&output)["data"].clone();
+    assert_eq!(
+        show_person_request(server, space, "RQ-1").await,
+        person_request
+    );
+    (old, person_request)
 }
 
-async fn assert_proposal_file_limits(server: &Server, space: &str, path: &Path) {
+async fn assert_person_request_file_limits(server: &Server, space: &str, path: &Path) {
     for bytes in [
         vec![0; 1024 * 1024],
         vec![b'x'; 1024 * 1024 + 1],
@@ -400,16 +404,20 @@ async fn assert_proposal_file_limits(server: &Server, space: &str, path: &Path) 
             vec!["create", space, "limit.md", "--summary", "Limit"],
             vec!["change", space, "KN-1"],
         ] {
-            arguments.insert(0, "proposal");
+            arguments.insert(0, "request");
             arguments.extend(["--content-file", path.to_str().unwrap(), "--output", "json"]);
             let output = server.run(&arguments).await;
             if bytes.len() == 1024 * 1024 {
                 assert_success(&output);
-                let proposal = body(&output)["data"].clone();
-                assert_eq!(proposal["new_content"].as_str().unwrap().as_bytes(), bytes);
+                let person_request = body(&output)["data"].clone();
                 assert_eq!(
-                    show_proposal(server, space, proposal["key"].as_str().unwrap()).await,
-                    proposal
+                    person_request["new_content"].as_str().unwrap().as_bytes(),
+                    bytes
+                );
+                assert_eq!(
+                    show_person_request(server, space, person_request["key"].as_str().unwrap())
+                        .await,
+                    person_request
                 );
             } else {
                 assert_eq!(output.status.code(), Some(1));
@@ -421,7 +429,7 @@ async fn assert_proposal_file_limits(server: &Server, space: &str, path: &Path) 
     }
 }
 
-async fn proposal_problem(server: &Server, request: (&str, &str, &str, Value)) -> Value {
+async fn person_request_problem(server: &Server, request: (&str, &str, &str, Value)) -> Value {
     let (space, key, action, input) = request;
     let credentials = if action == "approve" {
         serde_json::from_slice::<Value>(
@@ -441,7 +449,7 @@ async fn proposal_problem(server: &Server, request: (&str, &str, &str, Value)) -
     let response = server
         .client
         .post(format!(
-            "{}/api/v1/spaces/{space}/proposals/{key}/{action}",
+            "{}/api/v1/spaces/{space}/requests/{key}/{action}",
             server.url
         ))
         .bearer_auth(credentials["access_token"].as_str().unwrap())
@@ -461,7 +469,7 @@ async fn proposal_problem(server: &Server, request: (&str, &str, &str, Value)) -
     assert_eq!(
         problem["code"],
         if action == "approve" {
-            "proposal.own_party"
+            "person_request.own_party"
         } else {
             "request.invalid_body"
         }
@@ -469,7 +477,7 @@ async fn proposal_problem(server: &Server, request: (&str, &str, &str, Value)) -
     problem
 }
 
-async fn assert_invalid_proposal_files(server: &Server, space: &str, path: &Path) {
+async fn assert_invalid_person_request_files(server: &Server, space: &str, path: &Path) {
     fs::write(path, [0xff, 0xfe]).unwrap();
     for source in [
         path.to_path_buf(),
@@ -480,7 +488,7 @@ async fn assert_invalid_proposal_files(server: &Server, space: &str, path: &Path
             vec!["create", space, "invalid.md", "--summary", "Summary"],
             vec!["change", space, "KN-1"],
         ] {
-            arguments.insert(0, "proposal");
+            arguments.insert(0, "request");
             arguments.extend([
                 "--content-file",
                 source.to_str().unwrap(),

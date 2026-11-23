@@ -19,7 +19,7 @@ pub struct Model {
     #[sea_orm(column_type = "Text")]
     pub applied_by: String,
     #[sea_orm(column_type = "Text", nullable)]
-    pub proposal_id: Option<String>,
+    pub person_request_id: Option<String>,
     pub created_at: i64,
 }
 
@@ -34,13 +34,13 @@ pub enum Relation {
     )]
     SpaceKnowledge,
     #[sea_orm(
-        belongs_to = "super::space_proposal::Entity",
-        from = "Column::ProposalId",
-        to = "super::space_proposal::Column::Id",
+        belongs_to = "super::space_person_request::Entity",
+        from = "Column::PersonRequestId",
+        to = "super::space_person_request::Column::Id",
         on_update = "NoAction",
         on_delete = "NoAction"
     )]
-    SpaceProposal,
+    SpacePersonRequest,
 }
 
 impl Related<super::space_knowledge::Entity> for Entity {
@@ -49,9 +49,9 @@ impl Related<super::space_knowledge::Entity> for Entity {
     }
 }
 
-impl Related<super::space_proposal::Entity> for Entity {
+impl Related<super::space_person_request::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::SpaceProposal.def()
+        Relation::SpacePersonRequest.def()
     }
 }
 

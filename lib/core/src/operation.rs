@@ -316,7 +316,7 @@ impl Write<'_> {
 #[non_exhaustive]
 pub enum WriteOperation {
     AddCheckpoint,
-    ApproveProposal,
+    ApprovePersonRequest,
     ChangeKnowledgeEntry,
     ChangeSpace,
     ChangeTask,
@@ -330,10 +330,10 @@ pub enum WriteOperation {
     DeleteTask,
     RefuseAgentFile,
     RegisterAgentFile,
-    RejectProposal,
+    RejectPersonRequest,
     RemoveAbandonedAgentFiles,
     RollBackKnowledgeEntry,
-    SubmitProposal,
+    SubmitPersonRequest,
 }
 
 #[derive(Clone, Debug, TypedBuilder)]

@@ -26,7 +26,7 @@ pub async fn read_entry_version(server: &Server, space: &str, entry: &str, versi
 pub async fn assert_history_pages(server: &Server, space: &str, entry: &str, versions: &[Value]) {
     let expected: Vec<_> = versions.iter().rev().map(|version| json!({
         "version": version["version"], "kind": version["kind"],
-        "applied_by": version["applied_by"], "applied_at": version["applied_at"], "proposal_key": null,
+        "applied_by": version["applied_by"], "applied_at": version["applied_at"], "request_key": null,
     })).collect();
     for mode in ["human", "json"] {
         let mut hint = String::new();
@@ -51,7 +51,7 @@ pub async fn assert_history_pages(server: &Server, space: &str, entry: &str, ver
             if mode == "json" {
                 assert_eq!(body(&output)["data"], json!(chunk));
             } else {
-                let mut text = "Version\tKind\tApplied by\tApplied at\tProposal\n".to_owned();
+                let mut text = "Version\tKind\tApplied by\tApplied at\tRequest\n".to_owned();
                 for row in chunk {
                     text.push_str(&format!(
                         "{}\t{}\t{}\t{}\t\n",

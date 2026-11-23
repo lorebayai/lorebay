@@ -32,8 +32,8 @@ pub enum Relation {
     Space,
     #[sea_orm(has_many = "super::space_knowledge_version::Entity")]
     SpaceKnowledgeVersion,
-    #[sea_orm(has_many = "super::space_proposal::Entity")]
-    SpaceProposal,
+    #[sea_orm(has_many = "super::space_person_request::Entity")]
+    SpacePersonRequest,
 }
 
 impl Related<super::space::Entity> for Entity {
@@ -48,9 +48,9 @@ impl Related<super::space_knowledge_version::Entity> for Entity {
     }
 }
 
-impl Related<super::space_proposal::Entity> for Entity {
+impl Related<super::space_person_request::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::SpaceProposal.def()
+        Relation::SpacePersonRequest.def()
     }
 }
 

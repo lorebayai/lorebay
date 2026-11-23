@@ -11,7 +11,7 @@ use super::invalid_query;
 use crate::domain::access::AccessError;
 use crate::domain::caller::PersonCallerError;
 use crate::domain::person_sign_in::LoginError;
-use lorebay_lib_core::ProposalError;
+use lorebay_lib_core::PersonRequestError;
 use lorebay_lib_core::{
     AgentFileError, CallerError as LibraryCallerError, SpaceAccessError, SpaceError,
     SpaceInputError, TaskAccessError, TaskError,
@@ -279,28 +279,28 @@ impl From<KnowledgeError> for ApiError {
     }
 }
 
-impl From<ProposalError> for ApiError {
-    fn from(error: ProposalError) -> Self {
+impl From<PersonRequestError> for ApiError {
+    fn from(error: PersonRequestError) -> Self {
         let status = match error {
-            ProposalError::Access(error) => return error.into(),
-            ProposalError::Caller(error) => return error.into(),
-            ProposalError::Input(error) => return error.into(),
-            ProposalError::Knowledge(error) => return error.into(),
-            ProposalError::Task(error) => return error.into(),
-            ProposalError::InvalidCursor => return invalid_query("cursor"),
-            ProposalError::InvalidFilter => return invalid_query("keyword"),
-            ProposalError::InvalidPageSize(_) => return invalid_query("page_size"),
-            ProposalError::InvalidReason => {
+            PersonRequestError::Access(error) => return error.into(),
+            PersonRequestError::Caller(error) => return error.into(),
+            PersonRequestError::Input(error) => return error.into(),
+            PersonRequestError::Knowledge(error) => return error.into(),
+            PersonRequestError::Task(error) => return error.into(),
+            PersonRequestError::InvalidCursor => return invalid_query("cursor"),
+            PersonRequestError::InvalidFilter => return invalid_query("keyword"),
+            PersonRequestError::InvalidPageSize(_) => return invalid_query("page_size"),
+            PersonRequestError::InvalidReason => {
                 return Self::InvalidBody(vec![FieldError {
                     field: "reason".to_owned(),
                     code: "invalid".to_owned(),
                     message: error.to_string(),
                 }]);
             }
-            ProposalError::Decided => StatusCode::CONFLICT,
-            ProposalError::NameTaken => StatusCode::CONFLICT,
-            ProposalError::NotFound => StatusCode::NOT_FOUND,
-            ProposalError::OwnParty => StatusCode::FORBIDDEN,
+            PersonRequestError::Decided => StatusCode::CONFLICT,
+            PersonRequestError::NameTaken => StatusCode::CONFLICT,
+            PersonRequestError::NotFound => StatusCode::NOT_FOUND,
+            PersonRequestError::OwnParty => StatusCode::FORBIDDEN,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
         Self::library(status, error.code(), error)

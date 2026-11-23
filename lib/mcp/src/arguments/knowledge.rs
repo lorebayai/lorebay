@@ -1,6 +1,6 @@
 use lorebay_lib_core::{
-    KnowledgeChanges, KnowledgeFilters, KnowledgeTarget, NewKnowledgeEntry, ProposalContent,
-    ProposalFilters, ProposalStatus,
+    KnowledgeChanges, KnowledgeFilters, KnowledgeTarget, NewKnowledgeEntry, PersonRequestContent,
+    PersonRequestFilters, PersonRequestStatus,
 };
 
 use super::Arguments;
@@ -20,28 +20,28 @@ impl Arguments {
             .map_err(Into::into)
     }
 
-    pub fn proposal_filters(&self) -> Result<ProposalFilters, ToolError> {
+    pub fn person_request_filters(&self) -> Result<PersonRequestFilters, ToolError> {
         let status = self
             .optional_string("status")
             .as_deref()
-            .map(ProposalStatus::try_from)
+            .map(PersonRequestStatus::try_from)
             .transpose()
             .map_err(|_| invalid_query("status"))?;
-        ProposalFilters::new(status, self.optional_string("keyword")).map_err(Into::into)
+        PersonRequestFilters::new(status, self.optional_string("keyword")).map_err(Into::into)
     }
 
-    pub fn proposal(&self) -> Result<ProposalContent, ToolError> {
-        match self.string("kind")?.as_str() {
+    pub fn person_request(&self) -> Result<PersonRequestContent, ToolError> {
+        match self.string("action")?.as_str() {
             "create" => {
                 self.refuse_fields(&["target_name", "target_key"])?;
-                Ok(ProposalContent::Create(NewKnowledgeEntry::new(
+                Ok(PersonRequestContent::Create(NewKnowledgeEntry::new(
                     self.string("name")?,
                     self.string("summary")?,
                     self.string("content")?,
                 )?))
             }
-            "change" => Ok(ProposalContent::Change(
-                self.proposal_target()?,
+            "change" => Ok(PersonRequestContent::Change(
+                self.person_request_target()?,
                 KnowledgeChanges::new(
                     self.optional_string("name"),
                     self.optional_string("summary"),
@@ -50,13 +50,13 @@ impl Arguments {
             )),
             "delete" => {
                 self.refuse_fields(&["name", "summary", "content"])?;
-                Ok(ProposalContent::Delete(self.proposal_target()?))
+                Ok(PersonRequestContent::Delete(self.person_request_target()?))
             }
             _ => Err(ToolError::invalid_body()),
         }
     }
 
-    fn proposal_target(&self) -> Result<KnowledgeTarget, ToolError> {
+    fn person_request_target(&self) -> Result<KnowledgeTarget, ToolError> {
         KnowledgeTarget::new(
             self.optional_string("target_name"),
             self.optional_string("target_key"),

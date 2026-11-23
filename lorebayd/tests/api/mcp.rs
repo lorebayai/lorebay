@@ -402,9 +402,9 @@ async fn assert_tools(version: &str, response: Response) {
         ("get_file_url", true),
         ("list_knowledge", true),
         ("read_knowledge", true),
-        ("create_proposal", false),
-        ("list_proposals", true),
-        ("get_proposal", true),
+        ("create_request", false),
+        ("list_requests", true),
+        ("get_request", true),
     ];
     assert_eq!(tools.len(), expected.len());
     for (tool, (name, read_only)) in tools.iter().zip(expected) {

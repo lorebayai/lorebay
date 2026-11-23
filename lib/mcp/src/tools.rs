@@ -52,9 +52,9 @@ pub(super) async fn call(
         ),
         ToolName::ListKnowledge => knowledge::list(state, caller, &arguments).await,
         ToolName::ReadKnowledge => knowledge::read(state, caller, &arguments).await,
-        ToolName::CreateProposal => knowledge::propose(state, caller, &arguments).await,
-        ToolName::ListProposals => knowledge::proposals(state, caller, &arguments).await,
-        ToolName::GetProposal => knowledge::proposal(state, caller, &arguments).await,
+        ToolName::CreatePersonRequest => knowledge::propose(state, caller, &arguments).await,
+        ToolName::ListPersonRequests => knowledge::person_requests(state, caller, &arguments).await,
+        ToolName::GetPersonRequest => knowledge::person_request(state, caller, &arguments).await,
     }
 }
 
