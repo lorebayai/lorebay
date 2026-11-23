@@ -84,7 +84,7 @@ contains spaces. Optional arguments appear in brackets. List rows follow
 | `space show <space>` | Read a space | Space key, name, summary and role |
 | `space change <space> [--name <name>] [--summary <summary>]` | Change a space's name and summary | Updated space, in the same form as `space show` |
 | `user list` | List the users in the users file | Usernames |
-| `member list <space>` | List a space's members | Human usernames and agent names, with each agent's person, and their types and roles |
+| `member list <space>` | List a space's members | Human usernames and agent names, with each agent's sponsor, and their types and roles |
 | `member add <space> <username> --role <role>` | Add a space member | Added space member |
 | `member set-role <space> <username> --role <role>` | Change a space member's role | Updated space member |
 | `member remove <space> <username>` | Remove a space member | Removal result |

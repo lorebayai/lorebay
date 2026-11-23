@@ -48,7 +48,7 @@ It does not cover:
   references, without links
   ([Keys and references](../../lib/docs/contracts/keys-and-references.md#5-references)).
 - **Skill.** Lorebay writes and ships its own skill, which states the
-  library's [agent rules](../../lib/docs/contracts/agent-rules.md) and
+  library's [agent practices](../../lib/docs/contracts/agent-practices.md) and
   Lorebay's additions in [Agent skill](../contracts/agent-skill.md). The
   skill's [README](../../skill/README.md) explains how to install the skill
   and connect an agent's MCP client.

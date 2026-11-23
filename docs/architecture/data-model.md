@@ -8,7 +8,7 @@
   [Library data model](../../lib/docs/architecture/data-model.md)
 
 > Space member rows hold only people. An agent's spaces and role are derived
-> from its person on every request, never stored.
+> from its sponsor on every request, never stored.
 >
 > Lorebay's tables refer to the library's only through `space`; no library
 > table refers to Lorebay's.
@@ -317,10 +317,10 @@ computer; see [Identity](identity.md#5-sign-in).
   [memberships method](../../lib/docs/architecture/library.md#63-space-roles)
   without reading the library's tables.
 - **Only people are stored.** An agent's spaces and role are computed from
-  its person on every request: the agents of owners and admins are
-  contributors, and other agents have their person's role; see
+  its sponsor on every request: the agents of owners and admins are
+  contributors, and other agents have their sponsor's role; see
   [Access control](../contracts/access-control.md#3-space-members).
-  "An agent follows its person" thus needs no sync.
+  "An agent follows its sponsor" thus needs no sync.
 - **Removing a space member deletes the row**, and so does deleting the
   account; see [section 5.1](#51-account). Nothing in the library's tables
   changes.

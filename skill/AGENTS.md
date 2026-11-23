@@ -23,10 +23,10 @@ Folder orientation:
   or a skill mention, so one copy serves every harness. It names the tools by
   their bare names, as [MCP tools](../lib/docs/contracts/mcp-tools.md#4-tools)
   lists them.
-- `SKILL.md` states the rules of the library's
-  [agent rules](../lib/docs/contracts/agent-rules.md) and Lorebay's
+- `SKILL.md` states the practices of the library's
+  [agent practices](../lib/docs/contracts/agent-practices.md) and Lorebay's
   [agent skill](../docs/contracts/agent-skill.md), and adds none. A change to
-  a rule goes first into the contract that owns it, then into `SKILL.md`.
+  a practice goes first into the contract that owns it, then into `SKILL.md`.
 - `SKILL.md` is a shipped file that restates the two contracts on purpose,
   the one exception to "each fact has one home" of
   [documentation.md](../playbook/core/documentation.md#homes).
@@ -35,10 +35,11 @@ Folder orientation:
   server is registered in the harness, as `lorebay`, reachable or not and
   whatever the first ask, so a harness loads it without the person naming
   Lorebay.
-- `SKILL.md` states the content rule first, in its own sentence, then the 13
-  rules in session order, each with Lorebay's part beside the library's, so
-  the split between the contracts does not show. It states every requirement
-  of a rule without a backstop, since only the skill enforces those rules.
+- `SKILL.md` states the content practice first, in its own sentence, then
+  the 13 practices in session order, each with Lorebay's part beside the
+  library's, so the split between the contracts does not show. It states
+  every requirement of a practice without a backstop, since only the skill
+  enforces those practices.
 - `SKILL.md` states each requirement once, in the fewest words that keep it
   exact. It repeats no sentence of its own and no tool description, and
   explains only what an agent needs to act.

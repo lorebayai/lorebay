@@ -88,9 +88,9 @@ flowchart TD
   permission matrix the library owns, and the two cleanup rounds for
   file content.
 - **The MCP layer** and its tools, which call the operations.
-- **Agent rules:** what an agent follows so that the records it writes
-  through the tools make sense, with each rule's backstop, in
-  [Agent rules](../contracts/agent-rules.md).
+- **Agent practices:** what an agent follows so that the records it writes
+  through the tools make sense, with each practice's backstop, in
+  [Agent practices](../contracts/agent-practices.md).
 - **Seven tables**, listed in [section 12](#12-data).
 
 ### 3.2 What a product holds
@@ -103,8 +103,8 @@ flowchart TD
   its pages and its command-line tools;
 - the file storage backend, and the file URLs it serves;
 - its agent skill: each product writes and ships its own skill, which
-  states the library's [agent rules](../contracts/agent-rules.md) and the
-  product's own, against the tools' contract in
+  states the library's [agent practices](../contracts/agent-practices.md) and
+  the product's own, against the tools' contract in
   [MCP tools](../contracts/mcp-tools.md) and the tool descriptions; the
   library ships no skill;
 - the process, the scheduling of background jobs, and the deployment.
@@ -353,7 +353,7 @@ methods:
 | Begin read | Opens a transaction for one read |
 | End read | Receives the transaction of a read and ends it |
 | Begin write | Opens a transaction for one write |
-| Commit write | Receives the transaction and the record of the write, or none when the write changed nothing; may add rows of its own, and commits |
+| Commit write | Receives the transaction and the write record, or none when the write changed nothing; may add rows of its own, and commits |
 | Abandon write | Receives the transaction of a failed write and rolls it back |
 
 - **The product opens, commits and rolls back.** The library writes inside
@@ -364,11 +364,12 @@ methods:
   connection it hands to the library. Task deletion relies on the cascade
   to its checkpoints and on clearing the source task from requests.
 - **The operation supplies the write label, its caller and its space.** The
-  write entry passes the record to the commit hook; only the
-  abandoned-registration round's record has no caller. A repeated report of
-  a completed upload changes nothing and passes no record, so a product
-  never records it as a second change. A product can use the record to add
-  its own rows, such as an audit record, for writes from either entry point.
+  write entry passes the write record to the commit hook; only the
+  abandoned-registration round's write record has no caller. A repeated
+  report of a completed upload changes nothing and passes no write record,
+  so a product never records it as a second change. A product can use the
+  write record to add its own rows, such as an audit record, for writes
+  from either entry point.
 - **A write transaction serializes with every write it could conflict
   with.** On SQLite it takes the write lock before its first statement, the
   immediate mode of the
@@ -433,9 +434,9 @@ sequenceDiagram
     WriteEntry->>Database: Begin write
     Database-->>WriteEntry: Transaction
     WriteEntry->>Operation: Inside: permission check, then writes
-    Operation-->>WriteEntry: Result, record, files to delete
+    Operation-->>WriteEntry: Result, write record, files to delete
     alt Write succeeds
-        WriteEntry->>Database: Commit write, with the record
+        WriteEntry->>Database: Commit write, with the write record
         Database->>Database: Product rows, then commit
         WriteEntry->>Storage: After commit: delete files
     else Write fails
@@ -446,9 +447,9 @@ sequenceDiagram
 ```
 
 - **Every write operation has one shape.** It takes the write the entry
-  hands it, names its own caller and space for the record, and returns its
-  result. The entry takes no caller of its own, and one write runs exactly
-  one library operation, so a product can compose any of them, file
+  hands it, names its own caller and space for the write record, and
+  returns its result. The entry takes no caller of its own, and one write
+  runs exactly one library operation, so a product can compose any of them, file
   registration, completion and the abandoned-registration round included,
   with its own rows.
 - **Inside, the permission check comes first.** The first statement of

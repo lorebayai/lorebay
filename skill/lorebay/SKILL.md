@@ -1,6 +1,6 @@
 ---
 name: lorebay
-description: Rules for recording your work for the person in Lorebay. Use in every session in which the MCP server `lorebay` is registered in the harness, reachable or not, whatever the first ask, even when the person never names Lorebay.
+description: How to record your work for the person in Lorebay. Use in every session in which the MCP server `lorebay` is registered in the harness, reachable or not, whatever the first ask, even when the person never names Lorebay.
 ---
 
 # Lorebay
@@ -37,14 +37,14 @@ files, and in the file the harness loads when the project has neither.
 ### 2. Create the task
 
 After the person's first ask, check whether it continues earlier work
-(rule 3), and create a task with `create_task` only if it doesn't. The title
+(practice 3), and create a task with `create_task` only if it doesn't. The title
 is one sentence naming what the person wants done, not how; change it with
 `update_task` when the scope changes. A subagent is not a separate session: it
 creates no task, and you write its work into checkpoints.
 
 Every session has a task, even one that only answers questions, except when:
 
-- rule 1 left you without a space;
+- practice 1 left you without a space;
 - you are a viewer's agent: the role `list_spaces` returns for the space
   shows it, and so does `create_task` refused for missing permission, when the
   role changed during the session;
@@ -67,7 +67,7 @@ read its result and its checkpoints with `get_task`.
 - **Your own party's task:** keep writing to it instead of creating a task; if
   it is `ended`, set it back to `in progress` first.
 - **Someone else's `ended` task:** never reopen it; continue it in a new task
-  (rule 10).
+  (practice 10).
 - **Someone else's `in progress` task:** don't continue it; tell the person it
   is still in progress, and whose it is.
 
@@ -82,8 +82,8 @@ went to the right task. When a write is refused:
 - **A task you wrote to before is not found:** a person deleted it. Tell the
   person once that the rest of this session goes unrecorded, and don't look
   for another task.
-- **The task is `ended`:** set it back only where this rule, rule 12 or
-  rule 13 lets you reopen it; if the person or another of their agents ended
+- **The task is `ended`:** set it back only where this practice, practice 12 or
+  practice 13 lets you reopen it; if the person or another of their agents ended
   it while you worked, ask the person first.
 - **Missing permission:** the task is another party's, or the person is now a
   viewer in that space. A viewer's agent records nothing more and tells the
@@ -105,14 +105,14 @@ harness lets you before relying on the entry.
 
 Record in this order: the task; the plan, before the work it describes; each
 step, then its checkpoint; then, once every edit and check is done, the uploads
-(rule 6), the result (rule 10) and the end (rule 12), with a request (rule
-11) after the result, before or after the end.
+(practice 6), the result (practice 10) and the end (practice 12), with a
+request (practice 11) after the result, before or after the end.
 
 Write checkpoints with `add_checkpoint`:
 
 - **The plan,** at the start of each session's work on the task and of each
   reopening of an `ended` task: what was missed, when you reopen to fix it
-  (rule 13); what the person wants this time; then the steps you intend to
+  (practice 13); what the person wants this time; then the steps you intend to
   take.
 - **After each step:** what you did, and why. The steps are each thing the
   person asks for this time, including a check they ask for, and each further
@@ -138,7 +138,7 @@ one in the result.
 Don't upload a change to a repository's own content, a file tracked there or
 meant to be committed, such as source code, tests or docs, even when the person
 calls it the deliverable: commits and pull requests deliver it. Never commit or
-push only for this rule; commit and push as the person asks and the
+push only for this practice; commit and push as the person asks and the
 repository's own rules say. Until the change is in a pushed commit or a pull
 request, the result names the repository, the branch and the changed files,
 and says whether the change is committed; once it is there, link the commit or
@@ -161,8 +161,8 @@ cannot be edited, so append a checkpoint that corrects it.
 Content about one repository, such as how to build it or its code conventions,
 stays in that repository's files, such as its agent instructions files, and
 is never proposed as Knowledge. Content that spans repositories, concerns the
-team, or is unrelated to code goes into Knowledge through a request (rule
-11).
+team, or is unrelated to code goes into Knowledge through a request
+(practice 11).
 
 ### 9. Keep working when the MCP server is unreachable
 
@@ -202,7 +202,7 @@ needs only the latest task.
 ### 11. Propose Knowledge
 
 When you have learned something later sessions can use that belongs in
-Knowledge (rule 8), propose it after the result is written. Before you say
+Knowledge (practice 8), propose it after the result is written. Before you say
 anything to the person about a request, or submit one they asked for by name,
 look for a `pending` or `rejected` request about the same thing with
 `list_requests` by keyword, and read a likely match with `get_request`. For a
@@ -243,7 +243,7 @@ shows in Open.
 ### 13. Fix missed work in the original task
 
 When something turns out missing after a task ended, continue in that task
-instead of creating one. In a new session, find it by rule 3.
+instead of creating one. In a new session, find it by practice 3.
 
 - **The person points it out:** set the task back to `in progress`.
 - **You notice it yourself:** tell the person, and reopen it only after they
@@ -252,5 +252,5 @@ instead of creating one. In a new session, find it by rule 3.
 If you are working on another task at the time, end it first, with its
 unfinished work in Open, so only one task is `in progress` at a time.
 
-After reopening, record the fix by rule 5, from the plan to the result, then
+After reopening, record the fix by practice 5, from the plan to the result, then
 end the task.

@@ -29,7 +29,7 @@ tools, inside the product's process.
 **Caller**: Who calls an operation: the actor and its tenant.
 
 **Actor**: The identity that performs an operation: a person, or an agent
-acting for a person.
+acting for its sponsor.
 
 **Tenant**: The unit that owns data. The product passes its tenant on every
 call, and an operation answers a space of another tenant, and anything in
@@ -57,11 +57,13 @@ to space.
 **Person**: Someone a product signs in, known to the library only by the
 product's ID.
 
-**Agent**: A program that acts for one person, such as a harness, with a
-name unique among that person's agents. Its role is its person's, capped
-at contributor.
+**Agent**: A program that acts for its sponsor, such as a harness, with a
+name unique among its sponsor's agents; a sponsor can have several. Its
+space role is its sponsor's, capped at contributor.
 
-**Party**: A person together with all of that person's agents.
+**Sponsor**: The person an agent acts for.
+
+**Party**: A person together with all of the agents they sponsor.
 
 **Harness**: The program that runs a model and connects it to the MCP
 tools, such as Claude Code.
@@ -69,21 +71,26 @@ tools, such as Claude Code.
 **Session**: One agent conversation: one cloud run, or one conversation of a
 local agent. A subagent's work belongs to its parent's session.
 
-**Skill**: The agent skill a product ships. It states the agent rules, and
-tells agents when and how to call the MCP tools.
+**Skill**: The agent skill a product ships. It states the agent practices.
 
-**Agent rules**: The rules an agent follows so that the records it writes
-through the MCP tools make sense, each with its backstop.
+**Agent practices**: The practices an agent follows so that the records it
+writes through the MCP tools make sense, each with its backstop.
 
 **Backstop**: What the library blocks or detects when an agent breaks an
-agent rule.
+agent practice.
 
 ## Data
 
 **Task**: The record of one piece of work an agent does for a person in a
 space: its title, status, result, Scratchpad and files.
 
-**Result**: A task's Markdown summary of the work so far.
+**Result**: A task's Markdown summary of the work so far: the task result.
+
+**Ended**: The task status that means nobody is working on the task now.
+It does not mean the work is done; the result says that.
+
+**Write record**: What the library hands the product's commit hook for one
+committed write: the operation, its caller and its space.
 
 **Checkpoint**: A short, timestamped Markdown entry an agent appends to a task
 while it works.

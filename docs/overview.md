@@ -1,7 +1,7 @@
 # Docs Overview
 
 Lorebay's designs: what one deployment carries, how `lorebayd` is built,
-and the contracts its users and programs rely on. Terms follow the
+and the contracts its people and programs rely on. Terms follow the
 [glossary](../CONTEXT.md). The library Lorebay builds on, with its spaces,
 tasks, Knowledge and MCP tools, has its own design, from the
 [library overview](../lib/docs/overview.md).
@@ -31,4 +31,4 @@ tasks, Knowledge and MCP tools, has its own design, from the
 - [CLI](contracts/cli.md): the `lorebay` commands, browser and device sign-in,
   credentials, output and exit codes.
 - [Agent skill](contracts/agent-skill.md): Lorebay's part of the agent
-  rules its skill states, beside the library's agent rules.
+  practices its skill states, beside the library's agent practices.
