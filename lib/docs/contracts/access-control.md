@@ -88,7 +88,7 @@ except where the table says otherwise.
   [Knowledge](knowledge.md).
 - **Creating a space is the product's rule.** The library inserts the space
   inside the product's write; see
-  [Library architecture](../architecture/library.md#8-scope-and-space-numbers).
+  [Library architecture](../architecture/library.md#8-tenant-and-space-numbers).
 
 ## 5. Space selection
 
@@ -105,10 +105,10 @@ Every operation runs these checks, whichever entry point calls it.
 
 A call that carries a task ID is checked in this order:
 
-1. Take the caller: the person, the agent and the scope.
+1. Take the caller: the actor and its tenant.
 2. Load the task by ID, giving its space and its person.
-3. Reject the call as not found if the space belongs to another owner than
-   the caller's scope.
+3. Reject the call as not found if the space belongs to a tenant other
+   than the caller's.
 4. Ask for the person's space role in that space. Reject the call as not
    found if the person has none, a removed person included, so a caller
    outside a space cannot tell which tasks it holds.
@@ -121,9 +121,9 @@ A call that carries a task ID is checked in this order:
 
 A call that carries a space is checked in this order:
 
-1. Take the caller: the person, the agent and the scope.
-2. Load the space. Reject the call as not found if it belongs to another
-   owner than the caller's scope.
+1. Take the caller: the actor and its tenant.
+2. Load the space. Reject the call as not found if it belongs to a tenant
+   other than the caller's.
 3. Ask for the person's space role in that space. Reject the call if the
    person has none, or if the call writes and the person is a space viewer.
 4. Reject the call if the object it reads or writes is not in that space.

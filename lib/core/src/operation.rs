@@ -17,7 +17,7 @@ use crate::{CallerError, FileStorage, SpaceRole};
 pub struct Caller {
     pub person_id: String,
     pub agent_name: Option<String>,
-    pub owner_id: String,
+    pub tenant_id: String,
 }
 
 impl Caller {
@@ -264,7 +264,7 @@ pub struct Membership {
 #[builder(field_defaults(setter(into)))]
 pub struct MembershipPage<'a> {
     pub person_id: &'a str,
-    pub owner_id: &'a str,
+    pub tenant_id: &'a str,
     pub after_number: i64,
     pub limit: u64,
 }

@@ -5,7 +5,7 @@ use crate::entity::space_task::Model;
 use crate::repository::{SpaceRepository, TaskRepository};
 use crate::{Caller, LibraryState, OperationHandle};
 
-use super::space_access::{SpaceAccessError, SpaceRole, role_in_space, scoped_space};
+use super::space_access::{SpaceAccessError, SpaceRole, role_in_space, tenant_space};
 
 #[derive(Debug, Error)]
 #[non_exhaustive]
@@ -66,7 +66,7 @@ pub(super) async fn check_task(
     let connection = handle.transaction();
     let tasks = TaskRepository::builder().connection(connection).build();
     let path = match check.path_space {
-        Some(key) => Some(scoped_space(connection, caller, key).await?),
+        Some(key) => Some(tenant_space(connection, caller, key).await?),
         None => None,
     };
     let task = tasks.by_random_id(check.task_id).await?;
@@ -76,7 +76,7 @@ pub(super) async fn check_task(
             .build()
             .by_id(&task.space_id)
             .await?;
-        if space.is_none_or(|space| space.owner_id != caller.owner_id) {
+        if space.is_none_or(|space| space.tenant_id != caller.tenant_id) {
             return Err(TaskAccessError::NotFound);
         }
     }

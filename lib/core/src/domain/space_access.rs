@@ -98,7 +98,7 @@ pub async fn resolve_space(
     caller: &Caller,
     key: &str,
 ) -> Result<SpaceReference, SpaceAccessError> {
-    let space = scoped_space(transaction, caller, key).await?;
+    let space = tenant_space(transaction, caller, key).await?;
     Ok(SpaceReference {
         id: space.id,
         number: space.number,
@@ -121,7 +121,7 @@ pub(super) struct AuthorizedSpace {
     pub role: SpaceRole,
 }
 
-pub(super) async fn scoped_space(
+pub(super) async fn tenant_space(
     transaction: &DatabaseTransaction,
     caller: &Caller,
     key: &str,
@@ -132,7 +132,7 @@ pub(super) async fn scoped_space(
         .build()
         .by_number(number)
         .await?
-        .filter(|space| space.owner_id == caller.owner_id)
+        .filter(|space| space.tenant_id == caller.tenant_id)
         .ok_or(SpaceAccessError::NotFound)
 }
 
@@ -143,7 +143,7 @@ pub(super) async fn check_space(
     key: &str,
     allowed_roles: &[SpaceRole],
 ) -> Result<AuthorizedSpace, SpaceAccessError> {
-    let space = scoped_space(handle.transaction(), caller, key).await?;
+    let space = tenant_space(handle.transaction(), caller, key).await?;
     let role = role_in_space(state, handle, caller, &space.id)
         .await?
         .ok_or(SpaceAccessError::NotFound)?;

@@ -175,7 +175,7 @@ pub async fn create_space(
         .insert(space::ActiveModel {
             id: Set(primary_key()),
             number: Set(number),
-            owner_id: Set(caller.owner_id.clone()),
+            tenant_id: Set(caller.tenant_id.clone()),
             name: Set(input.name),
             summary: Set(input.summary),
             next_task_number: Set(1),
@@ -227,7 +227,7 @@ pub async fn list_spaces(
             let caller_person = name_for(state, handle, caller).await?;
             let request = MembershipPage {
                 person_id: caller.person_id(),
-                owner_id: &caller.owner_id,
+                tenant_id: &caller.tenant_id,
                 after_number,
                 limit: options.page_size + 1,
             };
@@ -258,7 +258,7 @@ pub async fn list_spaces(
                 .filter_map(|membership| {
                     let space = spaces
                         .remove(&membership.space_id)
-                        .filter(|space| space.owner_id == caller.owner_id)?;
+                        .filter(|space| space.tenant_id == caller.tenant_id)?;
                     Some(
                         (
                             AuthorizedSpace {

@@ -59,7 +59,7 @@ calls the database layer.
 - Domain functions must not use axum, HTTP, MCP, or transport request and
   response types. They take typed inputs and verified callers and must
   never receive raw tokens. Web API handlers convert verified callers to
-  the library's person ID, optional agent name and owner scope before
+  the library's person ID, optional agent name and tenant ID before
   calling core.
 - Domain functions check permissions for the operations they own, using
   the library's [permission matrix](../lib/docs/contracts/access-control.md#4-permissions)

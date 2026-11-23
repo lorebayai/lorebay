@@ -26,19 +26,22 @@ MCP layer or a product's own Web API.
 **MCP layer**: The library's entry point that serves its operations as MCP
 tools, inside the product's process.
 
-**Caller**: Who calls an operation: a person, the agent when an agent calls,
-and the scope.
+**Caller**: Who calls an operation: the actor and its tenant.
 
-**Scope**: The owner ID a caller carries. An operation answers a space of
-another owner, and anything in it, as not found.
+**Actor**: The identity that performs an operation: a person, or an agent
+acting for a person.
 
-**Owner ID**: The product's ID of whom a space belongs to, stored on the
-space. It is the scope, not a role.
+**Tenant**: The unit that owns data. The product passes its tenant on every
+call, and an operation answers a space of another tenant, and anything in
+it, as not found.
+
+**Tenant ID**: The product's ID of the tenant a space belongs to, stored on
+the space. It is the tenant, not a role.
 
 ## Spaces and roles
 
 **Space**: An isolated workspace for one team, with its own tasks,
-Knowledge and proposals. A product holds many spaces.
+Knowledge and proposals. A tenant holds many spaces.
 
 **Space membership**: A person's space role in one space, which the product
 records and the library reads.

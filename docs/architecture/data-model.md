@@ -293,12 +293,12 @@ computer; see [Identity](identity.md#5-sign-in).
 - **`(space_id, account_id)` is unique.** A partial unique index on the rows
   whose role is `owner` allows at most one owner per space. Creating a space
   adds the owner's row in the same write that creates the space; see
-  [Library architecture](../../lib/docs/architecture/library.md#8-scope-and-space-numbers).
+  [Library architecture](../../lib/docs/architecture/library.md#8-tenant-and-space-numbers).
 - **The owner is stored only as a role.** The space member row whose role is
   `owner` is the one record of who owns a space, and showing the owner is
   one lookup in the `member_one_owner` index. The library's
-  `space.owner_id` is the scope, which Lorebay sets to one fixed value for
-  every space.
+  `space.tenant_id` identifies the tenant; Lorebay sets it to one fixed value
+  for every space.
 - **`space_number` is set when the row is inserted** and never changes,
   because a space's number never does. Creating a space sets it to the
   number Lorebay gives the space; adding a space member sets it to the number
@@ -306,7 +306,7 @@ computer; see [Identity](identity.md#5-sign-in).
   it to `space.number`: both insert paths take the number from the library.
 - **Lorebay numbers its spaces by the highest number plus one,** read
   through the library inside the write that creates the space; see
-  [Library architecture](../../lib/docs/architecture/library.md#8-scope-and-space-numbers).
+  [Library architecture](../../lib/docs/architecture/library.md#8-tenant-and-space-numbers).
   Lorebay's write transaction holds the database's write lock, so two
   creations cannot take one number. Highest-plus-one would reuse the number
   of a deleted space; no space can be deleted, so a counter, which would

@@ -10,7 +10,7 @@ pub struct Model {
     #[sea_orm(unique)]
     pub number: i64,
     #[sea_orm(column_type = "Text")]
-    pub owner_id: String,
+    pub tenant_id: String,
     #[sea_orm(column_type = "Text")]
     pub name: String,
     #[sea_orm(column_type = "Text")]

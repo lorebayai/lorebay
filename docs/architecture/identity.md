@@ -68,10 +68,10 @@ It does not cover:
 - **External programs are agents.** A program that calls the Web API
   authorizes through OAuth like an agent, is recorded as one of a person's
   agents, and gets an agent's permissions. There is no third credential.
-- **Every caller carries Lorebay's one owner ID as its scope.** Lorebay
-  gives every space the same owner ID, so the library's scope check never
+- **Every caller carries Lorebay's one tenant ID.** Lorebay
+  gives every space the same tenant ID, so the library's tenant check never
   hides a space from a Lorebay caller; see
-  [Library architecture](../../lib/docs/architecture/library.md#8-scope-and-space-numbers).
+  [Library architecture](../../lib/docs/architecture/library.md#8-tenant-and-space-numbers).
 - **Operations only people perform accept only a sign-in**, such as
   approving and rejecting proposals, deleting tasks, checkpoints and files,
   changing Knowledge directly, rolling back, and managing space members. The

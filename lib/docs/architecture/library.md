@@ -201,10 +201,10 @@ and its implementations, and nothing more:
   - the two cleanup rounds, and the read that checks a download against its
     record;
   - the read of the highest space number
-    ([section 8](#8-scope-and-space-numbers));
+    ([section 8](#8-tenant-and-space-numbers));
   - the read that resolves a space key for a caller, inside the transaction
-    it is handed: it checks the scope, answers a missing space or one of
-    another owner as not found, and returns the space's ID and number
+    it is handed: it checks the tenant, answers a missing space or one of
+    another tenant as not found, and returns the space's ID and number
     ([section 7.1](#71-run-one-write)).
 - `lorebay-lib-migration`: the library's `Migrator`, which products import
   directly to apply the library schema, and `open_entity_database` with the
@@ -263,7 +263,7 @@ A **caller** names:
 - the person, by the product's ID;
 - the agent, when an agent calls: its name, which is unique among the
   person's agents;
-- the scope of the call: an owner ID ([section 8](#8-scope-and-space-numbers)).
+- the tenant of the call: a tenant ID ([section 8](#8-tenant-and-space-numbers)).
 
 Every implementation:
 
@@ -293,7 +293,7 @@ Every implementation:
 
 ### 6.3 Space roles
 
-**A person's role in a space, and the person's memberships in a scope.**
+**A person's role in a space, and the person's memberships in a tenant.**
 The product keeps memberships wherever it likes: in the library's database,
 in its own, or in a directory it asks. The library sees them only through
 two methods; no query or table crosses the interface, and the only
@@ -302,7 +302,7 @@ database type is the transaction the operation handle carries.
 | Method | Takes | Answers |
 | --- | --- | --- |
 | Role | The operation handle, the person, the space | One of the four roles, or none |
-| Memberships | The operation handle, the person, the scope, the last space number already listed, a limit | Up to the limit of the person's memberships in the scope with a higher space number, in increasing space number: each a space ID, its number and the role |
+| Memberships | The operation handle, the person, the tenant, the last space number already listed, a limit | Up to the limit of the person's memberships in the tenant with a higher space number, in increasing space number: each a space ID, its number and the role |
 
 - **The operation handle** is the library's own type. It says whether the
   call belongs to a read or a write, and carries the operation's write or
@@ -317,17 +317,17 @@ database type is the transaction the operation handle carries.
   ([section 13](#13-concurrent-writers)), so the product's locks always come
   first.
 - **Memberships come in space-number order.** The product gives every space
-  its number ([section 8](#8-scope-and-space-numbers)) and a number never
+  its number ([section 8](#8-tenant-and-space-numbers)) and a number never
   changes, so the product can keep it with each membership and answer in
   that order. Listing one page of spaces takes two steps: the library asks
   for one more membership than the page size, after the cursor's number,
   then loads those spaces in one statement and drops any that is missing or
-  belongs to another owner. One more membership than the page tells whether
+  belongs to another tenant. One more membership than the page tells whether
   another page follows; the next cursor is the number of the last membership
   on the page. A page therefore reads at most one page of memberships and
   one page of spaces, however many spaces the person is in. A dropped
   membership makes a page short, never wrong.
-- **Every implementation** answers memberships only inside the scope, in
+- **Every implementation** answers memberships only inside the tenant, in
   strictly increasing space number, and never more than the limit. It
   answers a role and the memberships from the same record, so a space
   listed with a role gives the same role when the person opens it.
@@ -452,7 +452,7 @@ sequenceDiagram
   registration, completion and the abandoned-registration round included,
   with its own rows.
 - **Inside, the permission check comes first.** The first statement of
-  every write is the check of [section 8](#8-scope-and-space-numbers) and
+  every write is the check of [section 8](#8-tenant-and-space-numbers) and
   the role. Only the abandoned-registration round, which has no caller, and
   creating a space, whose rule is the product's, start otherwise.
 - **After-commit work is handed back.** The inside part returns its result
@@ -479,7 +479,7 @@ sequenceDiagram
 
 - **A product may compose its own write** through the same entry, adding
   its rows inside, as it does when it creates a space with its owner's
-  membership ([section 8](#8-scope-and-space-numbers)).
+  membership ([section 8](#8-tenant-and-space-numbers)).
 - **A product's writes that write no library table** run in transactions
   it opens itself. Lorebay's sign-in, agent sign-in and membership
   writes keep theirs. Routing them through the entry was rejected: the entry
@@ -488,7 +488,7 @@ sequenceDiagram
 - **A product's own write in a space resolves the space through the
   library.** Inside its own transaction it calls the library's read that
   resolves a space key for the caller ([section 5](#5-public-api)), which
-  checks the scope and answers not found as every library operation does,
+  checks the tenant and answers not found as every library operation does,
   then checks the caller's role itself and uses the returned space ID for
   its own rows, such as a new membership.
 
@@ -528,24 +528,25 @@ the commit and the after-commit work:
 
 Both rounds are safe to run again.
 
-## 8. Scope and space numbers
+## 8. Tenant and space numbers
 
-- **A space carries an owner ID** from the product, with no foreign key.
-  Creating a space takes it from the scope of the caller the product
+- **A space carries a tenant ID** from the product, with no foreign key.
+  Creating a space takes it from the tenant of the caller the product
   passes. Lorebay gives every caller one fixed value.
-- **The caller carries its scope**, an owner ID, from the caller
+- **The caller carries its tenant**, a tenant ID, from the caller
   interface or from the product's own entry point. Every operation loads
-  the space, directly or through the task, compares the space's owner with
-  the scope, and answers a space of another owner, and anything in it, as
-  not found, before it asks for the role. Listing spaces passes the scope
-  to the memberships method and returns only spaces of that owner.
+  the space, directly or through the task, compares the space's tenant ID
+  with the caller's tenant ID, and answers a space of another tenant, and
+  anything in it, as not found, before it asks for the role. Listing spaces
+  passes the tenant to the memberships method and returns only spaces of
+  that tenant.
 - **A product gives each new space its number.** The library refuses a
   number that is not positive as invalid input (`request.invalid_body`,
   field `number`) and a number already used with `space.number_taken`, and
   derives the key in the fixed format, such as `SPACE-1`. The product
   keeps numbers unique and never reuses one.
 - **Creating a space is a step a product composes.** It runs inside a write
-  the product runs through the entry, because its number, its owner and the
+  the product runs through the entry, because its number, its tenant and the
   owner's membership are the product's. The product authorizes creation,
   supplies the creator's role for the result and adds the membership in
   the same transaction. Lorebay uses the owner role for both the result
@@ -611,7 +612,7 @@ state:
 | The age after which a file without a record is orphaned | The orphaned-file round |
 
 - **Two values come with the call instead:** the number of each new space,
-  and its owner ID, from the caller's scope.
+  and its tenant ID, from the caller's tenant.
 - **The library checks its settings** when the state is built: both
   cleanup ages must exceed the upload URL lifetime, or a round could remove
   an upload still in flight.
@@ -630,7 +631,7 @@ The library has seven tables: `space`, `space_task`, `space_checkpoint`,
   task's person, a proposal's proposer and decider, and the person who
   applied a Knowledge version. Removing or deleting a person writes nothing
   in the library.
-- **The owner ID** of a space is text with no foreign key.
+- **The tenant ID** of a space is text with no foreign key.
 - **Two groups of migrations share one database.** The library's migrator
   records its history in its own table, `space_migration`, and a product's
   migrator keeps SeaORM's default table. At startup Lorebay imports the
@@ -717,7 +718,7 @@ The Knowledge and proposal writes follow the same rules.
 
 What only Postgres can show, such as two writers racing, and what no
 Lorebay entry point can reach (a write the product abandons, another
-owner's space, a space number that is not positive) is tested against
+tenant's space, a space number that is not positive) is tested against
 Postgres through the public API of `lorebay-lib-core`, with test
 implementations of the interfaces the tested operations call. The tests
 keep the [testing rules](../../../playbook/topics/testing.md#black-box) as

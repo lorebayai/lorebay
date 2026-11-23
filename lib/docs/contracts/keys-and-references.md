@@ -31,7 +31,7 @@ It does not cover showing an object which other objects reference it.
 - **A space's key**, such as `SPACE-1`, carries the number the product
   supplies when it creates the space. The library refuses a number already
   taken and derives the key from it; the product never reuses a number. See
-  [Library architecture](../architecture/library.md#8-scope-and-space-numbers).
+  [Library architecture](../architecture/library.md#8-tenant-and-space-numbers).
   The number is separate from the internal primary key. The key never
   changes or gets reused, even when the space is renamed.
 - **Objects to read may be named by key**, such as `TK-12` in `get_task` or
