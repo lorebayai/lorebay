@@ -4,6 +4,24 @@ Lorebay's releases: the `lorebayd` server, the `lorebay` CLI and the agent
 skill, tagged `v<version>`. The library's changes are in
 [lib/CHANGELOG.md](lib/CHANGELOG.md).
 
+## 0.1.2
+
+### Added
+
+- Native deployment on x86_64 Debian 12 and Ubuntu 24.04 with systemd and
+  nginx, plus Docker Compose deployment with a non-root `lorebayd` image.
+- Shared nginx HTTPS policy, per-caller rate limits, streamed uploads and
+  downloads, and validated certificate replacement for both methods.
+- `lorebayd readiness`, an HTTP probe used by the image's health check.
+- Native x86_64 and aarch64 image smokes in pull request and release CI.
+  Releases push both smoked images by digest before tagging their combined
+  manifest, and attest the manifest, archives and deployment bundle.
+
+### Fixed
+
+- New data directories and SQLite database files are private to the server
+  user, with modes `0700` and `0600` respectively.
+
 ## 0.1.1
 
 The vocabulary release: task uploads are files, task entries are

@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
+import json
 import tempfile
 from pathlib import Path
 
 from helpers import HERE, render, run
 
-IMAGE = "nginx:1.28-alpine@sha256:a8b39bd9cf0f83869a2162827a0caf6137ddf759d50a171451b335cecc87d236"
+compose = run(
+    "docker", "compose", "--env-file", HERE.parent / "docker/example.env",
+    "-f", HERE.parent / "docker/compose.yml", "config", "--format", "json",
+    capture_output=True,
+)
+IMAGE = json.loads(compose.stdout)["services"]["nginx"]["image"]
 
 
 for source in HERE.parent.rglob("*.py"):
@@ -53,4 +59,5 @@ with tempfile.TemporaryDirectory(prefix="lorebay-nginx-") as temporary:
         "-c",
         "/check/nginx.conf",
     )
+run("sh", "-n", HERE.parent / "docker/start-nginx.sh")
 print("Deployment Python syntax and pinned nginx configuration checks passed")

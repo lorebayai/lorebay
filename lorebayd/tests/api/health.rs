@@ -18,6 +18,54 @@ use crate::helpers::{
 };
 
 #[tokio::test]
+async fn readiness_command_reports_ready_and_unreachable_servers() {
+    let server = Server::start().await;
+    let config = server.directory.path().join("probe.json");
+    let dotenv = server.directory.path().join("probe.env");
+    fs::write(
+        &config,
+        json!({"users_file": "/unused/users", "listen_address": "127.0.0.1:0"}).to_string(),
+    )
+    .unwrap();
+    fs::write(
+        &dotenv,
+        format!(
+            "LOREBAYD__LISTEN_ADDRESS=0.0.0.0:{}\n",
+            server.address.port()
+        ),
+    )
+    .unwrap();
+    let probe = || {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_lorebayd"));
+        command
+            .args(["readiness", "--config"])
+            .arg(&config)
+            .arg("--dotenv")
+            .arg(&dotenv)
+            .env_clear()
+            .env("TOKIO_WORKER_THREADS", "2");
+        command
+    };
+    let ready = timeout(TEST_TIMEOUT, probe().output())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        ready.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&ready.stderr)
+    );
+    let _directory = server.stop().await;
+    let unreachable = timeout(TEST_TIMEOUT, probe().output())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(unreachable.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&unreachable.stderr).contains("could not request /readyz"));
+}
+
+#[tokio::test]
 async fn check_health_succeeds_when_server_is_running() {
     let server = Server::start().await;
     for path in ["/healthz", "/readyz"] {

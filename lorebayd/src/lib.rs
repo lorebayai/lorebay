@@ -2,6 +2,7 @@
 
 pub use config::Config;
 pub use domain::password::hash_password;
+pub use readiness::readiness;
 pub use server::run;
 
 mod api;
@@ -20,6 +21,7 @@ mod files;
 mod library;
 mod oauth;
 mod pages;
+mod readiness;
 mod repository;
 mod server;
 mod storage;

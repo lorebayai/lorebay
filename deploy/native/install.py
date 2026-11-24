@@ -459,7 +459,7 @@ def main():
     )
     commands = parser.add_subparsers(dest="action", required=True)
     add = commands.add_parser("install")
-    add.add_argument("--version", default="v0.1.1")
+    add.add_argument("--version", default="v0.1.2")
     add.add_argument("--domain", type=domain_name, required=True)
     add.add_argument("--users", type=input_path, required=True)
     add.add_argument("--certificate", type=input_path, required=True)
@@ -477,7 +477,7 @@ def main():
     if args.action == "install" and not re.fullmatch(
         r"v[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?", args.version
     ):
-        fail("Supply a release tag such as v0.1.1")
+        fail("Supply a release tag such as v0.1.2")
     with lock(Path("/run/lock/lorebay-install.lock")):
         install(args) if args.action == "install" else uninstall()
 

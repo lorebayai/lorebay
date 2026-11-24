@@ -26,6 +26,7 @@ lorebay-lib-mcp = { workspace = true, features = ["sqlite"] }
 lorebay-lib-migration = { workspace = true, features = ["sqlite"] }
 lorebay-lib-types.workspace = true
 lorebayd-migration.workspace = true
+reqwest.workspace = true
 sea-orm-migration.workspace = true
 sea-orm = { workspace = true, features = ["sqlx-sqlite"] }
 serde.workspace = true
@@ -42,7 +43,6 @@ url.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
-reqwest.workspace = true
 tokio = { workspace = true, features = ["process"] }
 
 [[test]]

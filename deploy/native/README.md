@@ -13,17 +13,16 @@ As root, use Python 3.11+ and supply `/srv/inputs/password.txt` with mode `0600`
 apt-get update
 apt-get install -y python3 curl openssl ca-certificates tar gzip coreutils
 VERSION=v0.1.2
-curl -fL --proto '=https' --proto-redir '=https' -o source.tar.gz \
-  "https://github.com/lorebayai/lorebay/archive/refs/tags/$VERSION.tar.gz"
-tar -xzf source.tar.gz
-cd "lorebay-${VERSION#v}"
 RELEASE="https://github.com/lorebayai/lorebay/releases/download/$VERSION"
+curl -fLO "$RELEASE/lorebay-deploy.tar.gz"
+curl -fLO "$RELEASE/SHA256SUMS"
+grep '  lorebay-deploy.tar.gz$' SHA256SUMS | sha256sum -c -
+gh attestation verify lorebay-deploy.tar.gz --repo lorebayai/lorebay
+tar -xzf lorebay-deploy.tar.gz
 ARCHIVE=lorebayd-x86_64-unknown-linux-musl.tar.gz
 curl -fL --proto '=https' --proto-redir '=https' -O "$RELEASE/$ARCHIVE"
-curl -fL --proto '=https' --proto-redir '=https' -O "$RELEASE/SHA256SUMS"
 grep -E "^[a-fA-F0-9]{64} [ *]$ARCHIVE$" SHA256SUMS | sha256sum -c -
-mkdir release
-tar -xzf "$ARCHIVE" -C release lorebayd
+mkdir release && tar -xzf "$ARCHIVE" -C release lorebayd
 ./release/lorebayd hash-password < /srv/inputs/password.txt
 ```
 
@@ -41,7 +40,8 @@ journalctl -u lorebay
 curl https://lorebay.example.com/readyz
 ```
 
-HTTPS downloads are checked against `SHA256SUMS`. `--archives "$PWD"` reuses
+HTTPS downloads are checked against `SHA256SUMS`; the optional attestation check
+needs GitHub CLI. `--archives "$PWD"` reuses
 root-owned regular archives/sums files without group/other write access; the
 directory and ancestors must also be root-owned without group/other write.
 `--release-url` selects an HTTPS mirror. Identical repeats do nothing; changed

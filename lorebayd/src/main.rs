@@ -8,7 +8,7 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use lorebay_base::{ConfigError, init_logging};
 use lorebay_lib_types::Secret;
-use lorebayd::{Config, hash_password, run};
+use lorebayd::{Config, hash_password, readiness, run};
 use tokio::net::TcpListener;
 use tokio::signal::unix::{SignalKind, signal as unix_signal};
 use typed_builder::TypedBuilder;
@@ -22,10 +22,10 @@ struct Args {
     #[command(subcommand)]
     command: Option<Command>,
     /// JSON configuration file.
-    #[arg(long)]
+    #[arg(long, global = true)]
     config: Option<PathBuf>,
     /// Env file loaded before process environment overrides.
-    #[arg(long)]
+    #[arg(long, global = true)]
     dotenv: Option<PathBuf>,
 }
 
@@ -33,6 +33,8 @@ struct Args {
 enum Command {
     /// Read a password from standard input and print its Argon2id hash.
     HashPassword,
+    /// Check the configured server's HTTP readiness without starting it.
+    Readiness,
 }
 
 #[tokio::main]
@@ -42,6 +44,9 @@ async fn main() -> Result<()> {
         return print_password_hash();
     }
     let config = Config::load(args.config, args.dotenv, configuration_environment()?)?;
+    if let Some(Command::Readiness) = args.command {
+        return readiness(&config).await;
+    }
     init_logging(&config.logging)?;
     let shutdown = shutdown_signal()?;
     let listener = TcpListener::bind(config.listen_address)

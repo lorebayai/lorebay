@@ -7,8 +7,7 @@ library owns space content and serves the MCP tools.
 ## Usage
 
 Run moon and Cargo from the repo root. Cargo needs the web files that
-`moon run web:build` builds; the moon tasks run it first. A release's
-executable takes the same arguments, as the last two lines show:
+`moon run web:build` builds; the moon tasks run it first. Release usage:
 
 ```bash
 moon run lorebayd:format lorebayd:lint lorebayd:build lorebayd:test lorebayd:integration
@@ -17,6 +16,7 @@ cargo run -p lorebayd -- hash-password < /path/to/password.txt
 cargo run -p lorebayd -- --config /path/to/lorebayd.json --dotenv /path/to/lorebayd.env
 lorebayd hash-password < /path/to/password.txt
 lorebayd --config /path/to/lorebayd.json --dotenv /path/to/lorebayd.env
+lorebayd readiness --config /path/to/lorebayd.json --dotenv /path/to/lorebayd.env
 ```
 
 The second command regenerates Lorebay's entities. Startup applies the
@@ -27,15 +27,16 @@ metadata's `/oauth/authorize` endpoint with the client's authorization
 parameters to sign in and consent. The CLI's client ID is `lorebay-cli`; it
 accepts loopback redirects on any port and takes no agent name.
 
+`readiness` uses both flags and probes HTTP `/readyz` on the configured port
+(loopback for wildcard addresses), exiting 0 if ready, 1 otherwise; it starts nothing.
 `hash-password` reads a password from standard input, removes one final line
 ending and prints an Argon2id PHC hash; it starts no server and accepts no
-password argument. Set `users_file` before starting the server without a
-subcommand. Both flags are optional. The users file is a YAML list or a JSON
-array with the fields below, each hash the command's complete output. Usernames
-must be unique, nonempty and have no leading or trailing whitespace. All hashes
-in one file must use the same Argon2 parameters. Restart the server after
-editing the file. Changing a hash does not end existing sign-ins or agent
-sign-ins; to end them, remove the username, restart, add it back and restart.
+password argument. Both flags are optional; `users_file` is required in configuration.
+The users file is a YAML list or JSON array; each hash is the command's complete
+output. Usernames must be unique, nonempty, with no leading or trailing whitespace.
+All hashes in a file must share Argon2 parameters. Restart after editing the file.
+Changing a hash does not end existing sign-ins or agent sign-ins; to end them,
+remove the username, restart, add it back and restart.
 
 ```yaml
 - username: alice

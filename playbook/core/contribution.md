@@ -141,10 +141,10 @@ git push origin --delete "$BRANCH" || true
 
 ## Releases
 
-- One PR sets `version` in the root `Cargo.toml` and the tag the READMEs'
-  commands name, adds the release's `CHANGELOG.md` section and merges last.
-- A maintainer runs `moon run lorebayd:deny cli:deny` on its merge commit,
-  the head of `main`, tags it `v<version>` and pushes the tag. The release
-  workflow repeats the check and leaves a draft release to check and publish.
-- A tag is never moved or reused. `lib-v` tags belong to the library
-  ([lib/README.md](../../lib/README.md#usage)).
+- The release PR sets the workspace version, README and skill tags, every
+  version-bound deployment reference and `CHANGELOG.md`; it merges last.
+- A maintainer runs `moon run lorebayd:deny cli:deny` on `main`'s head, then tags
+  and pushes `v<version>`. The workflow checks dependencies, smokes both images before
+  any push, attests downloads and the manifest, and drafts a release. Each pre-release
+  image push needs the user's word; a failure after any image push burns the version.
+  The user names the next version; never move or reuse tags. `lib-v` tags belong to the [library](../../lib/README.md#usage).
