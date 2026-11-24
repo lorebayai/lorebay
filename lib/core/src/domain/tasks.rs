@@ -70,6 +70,7 @@ pub struct CreatedTask {
 #[builder(field_defaults(setter(into)))]
 pub struct Checkpoint {
     pub time: i64,
+    pub agent_name: String,
     pub content: String,
 }
 
@@ -91,6 +92,9 @@ pub struct Task {
     pub agent_name: Option<String>,
     pub holder: Option<String>,
     pub state_reason: Option<String>,
+    pub state_changed_by: String,
+    pub state_changed_agent_name: Option<String>,
+    pub state_changed_at: i64,
     pub planner: Option<String>,
     pub planner_agent_name: Option<String>,
     pub result: String,
@@ -152,6 +156,9 @@ impl TryFrom<(task::Model, String)> for Task {
             .agent_name(task.agent_name)
             .holder(task.holder)
             .state_reason(task.state_reason)
+            .state_changed_by(task.state_changed_by)
+            .state_changed_agent_name(task.state_changed_agent_name)
+            .state_changed_at(task.state_changed_at)
             .planner(task.planner_person_id)
             .planner_agent_name(task.planner_agent_name)
             .created_at(task.created_at)
@@ -167,6 +174,7 @@ impl From<checkpoint::Model> for Checkpoint {
     fn from(checkpoint: checkpoint::Model) -> Self {
         Self::builder()
             .time(checkpoint.created_at)
+            .agent_name(checkpoint.agent_name)
             .content(checkpoint.content)
             .build()
     }
@@ -281,6 +289,7 @@ pub async fn add_checkpoint(
         .insert(checkpoint::ActiveModel {
             id: Set(primary_key()),
             task_id: Set(task.id.clone()),
+            agent_name: Set(caller.agent()?.to_owned()),
             content: Set(content.into()),
             created_at: Set(time),
         })
@@ -544,6 +553,9 @@ async fn create_new_task(
             planner_person_id: Set(planned.then(|| caller.person_id.clone())),
             planner_agent_name: Set(planned.then(|| caller.agent_name.clone()).flatten()),
             state_reason: Set(None),
+            state_changed_by: Set(caller.person_id.clone()),
+            state_changed_agent_name: Set(caller.agent_name.clone()),
+            state_changed_at: Set(now),
             waiting_request_id: Set(None),
             work_recorded: Set(0),
             created_at: Set(now),
@@ -609,7 +621,13 @@ async fn names_for(
 ) -> anyhow::Result<HashMap<String, String>> {
     let mut ids: Vec<String> = tasks
         .iter()
-        .flat_map(|task| [Some(task.person_id.clone()), task.planner_person_id.clone()])
+        .flat_map(|task| {
+            [
+                Some(task.person_id.clone()),
+                task.planner_person_id.clone(),
+                Some(task.state_changed_by.clone()),
+            ]
+        })
         .flatten()
         .collect();
     ids.sort_unstable();
@@ -636,6 +654,10 @@ fn named_task(task: task::Model, names: &HashMap<String, String>) -> Result<Task
         })
         .transpose()?;
     let mut result = Task::try_from((task, name))?;
+    result.state_changed_by = names
+        .get(&result.state_changed_by)
+        .cloned()
+        .ok_or_else(|| DbErr::Type("Missing state changer person name".into()))?;
     result.planner = planner;
     Ok(result)
 }

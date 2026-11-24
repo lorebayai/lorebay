@@ -2,8 +2,8 @@ use serde_json::json;
 
 use crate::helpers::{
     SECOND_USERNAME, Server, append_checkpoint, assert_success, assert_task_error, assert_usage,
-    assert_waiting_task_listed, body, create, create_task, read_task, task_context,
-    task_id_from_show, task_pages, task_with_agent_files,
+    assert_waiting_task_listed, body, create, create_task, read_task, take_over_task,
+    task_after_takeover, task_context, task_id_from_show, task_pages, task_with_agent_files,
 };
 
 #[tokio::test]
@@ -48,14 +48,14 @@ async fn task_show_prints_result_task_id_and_agent_files() {
     let (server, space, agent) = task_context().await;
     let title = "# Work\nState: canceled\n- source\ttext\u{1b}[0m\r\u{7}\u{2066}";
     let result = "# Findings\nTask ID: another-task\n\n- **Done**\tcode\u{1b}[0m\r\u{7}\u{202e}\n";
-    let expected = task_with_agent_files(&server, &space, &agent, title, result).await;
+    let expected = task_after_takeover(&server, &space, &agent, title, result).await;
     let shown = server
         .run(&["task", "show", &space, "TK-1", "--output", "json"])
         .await;
     assert_success(&shown);
     assert!(shown.stderr.is_empty());
     assert_eq!(body(&shown), json!({"data": expected, "meta": {}}));
-    assert_eq!(body(&shown)["data"]["files"].as_array().unwrap().len(), 2);
+    assert_eq!(body(&shown)["data"]["files"].as_array().unwrap().len(), 3);
     let human = server.run(&["task", "show", &space, "TK-1"]).await;
     assert_success(&human);
     assert!(human.stderr.is_empty());
@@ -63,11 +63,15 @@ async fn task_show_prints_result_task_id_and_agent_files() {
     let started = expected["started_at"].as_i64().unwrap();
     let last_activity = expected["last_activity_at"].as_i64().unwrap();
     let agent_files = &expected["files"];
+    assert_eq!(agent_files[0]["agent_name"], "Task agent");
+    assert_eq!(agent_files[1]["agent_name"], "Task agent");
+    assert_eq!(agent_files[2]["agent_name"], "Continuing agent");
+    let changed_at = expected["state_changed_at"].as_i64().unwrap();
     assert_eq!(
         String::from_utf8(human.stdout).unwrap(),
         format!(
-            "Key: TK-1\nTask ID: {id}\nTitle: # Work\n  State: canceled\n  - source\ttext\\u{{1b}}[0m\\r\\u{{7}}\\u{{2066}}\nState: working\nPerson: {}\nAgent name: Task agent\nHolder: Task agent\nReason: \nPlanner: \nPlanner agent: \nCreated at: {started}\nStarted at: {started}\nEnded at: \nLast activity at: {last_activity}\nResult: # Findings\n  Task ID: another-task\n  \n  - **Done**\tcode\\u{{1b}}[0m\\r\\u{{7}}\\u{{202e}}\n  \nFiles: {agent_files}\n",
-            server.username
+            "Key: TK-1\nTask ID: {id}\nTitle: # Work\n  State: canceled\n  - source\ttext\\u{{1b}}[0m\\r\\u{{7}}\\u{{2066}}\nState: waiting\nPerson: {}\nAgent name: Continuing agent\nHolder: Continuing agent\nReason: Awaiting review\nState changed by: {}\nState changed agent: Continuing agent\nState changed at: {changed_at}\nPlanner: \nPlanner agent: \nCreated at: {started}\nStarted at: {started}\nEnded at: \nLast activity at: {last_activity}\nResult: # Findings\n  Task ID: another-task\n  \n  - **Done**\tcode\\u{{1b}}[0m\\r\\u{{7}}\\u{{202e}}\n  \nFiles: {agent_files}\n",
+            server.username, server.username
         )
     );
 }
@@ -101,6 +105,9 @@ async fn task_cancel_cancels_task_named_by_task_id() {
         expected["state_reason"] = json!("Stopped");
         expected["holder"] = serde_json::Value::Null;
         expected["ended_at"] = json!(ended);
+        expected["state_changed_by"] = json!(server.username);
+        expected["state_changed_agent_name"] = serde_json::Value::Null;
+        expected["state_changed_at"] = json!(ended);
         assert_eq!(after, expected);
         if mode == "json" {
             assert_eq!(body(&closed), json!({"data": expected, "meta": {}}));
@@ -148,8 +155,11 @@ async fn task_scratchpad_prints_checkpoints_in_time_order() {
         "Third",
     ];
     let mut times = Vec::new();
-    for content in contents {
-        times.push(append_checkpoint(&server, &space, &task, &agent, content).await);
+    times.push(append_checkpoint(&server, &space, &task, &agent, contents[0]).await);
+    let peer = server.agent("Continuing agent").await;
+    take_over_task(&server, &task, &peer).await;
+    for content in &contents[1..] {
+        times.push(append_checkpoint(&server, &space, &task, &peer, content).await);
     }
     assert!(times.windows(2).all(|pair| pair[0] < pair[1]));
     for mode in ["human", "json"] {
@@ -159,26 +169,29 @@ async fn task_scratchpad_prints_checkpoints_in_time_order() {
             assert_eq!(
                 body(&first)["data"],
                 json!([
-                    {"time": times[0], "content": contents[0]},
-                    {"time": times[1], "content": contents[1]}
+                    {"time": times[0], "agent_name":"Task agent", "content": contents[0]},
+                    {"time": times[1], "agent_name":"Continuing agent", "content": contents[1]}
                 ])
             );
             assert_eq!(body(&first)["meta"]["next_cursor"], cursor);
             assert_eq!(
                 body(&last),
-                json!({"data": [{"time": times[2], "content": contents[2]}], "meta": {}})
+                json!({"data": [{"time": times[2], "agent_name":"Continuing agent", "content": contents[2]}], "meta": {}})
             );
         } else {
             assert_eq!(
                 String::from_utf8(first.stdout).unwrap(),
                 format!(
-                    "Time\tContent\n{}\t**First**\n- detail\tcode\\u{{1b}}[31m\\r\\u{{7}}\\u{{202e}}\n{}\tSecond\n",
+                    "Time\tAgent name\tContent\n{}\tTask agent\t**First**\n- detail\tcode\\u{{1b}}[31m\\r\\u{{7}}\\u{{202e}}\n{}\tContinuing agent\tSecond\n",
                     times[0], times[1]
                 )
             );
             assert_eq!(
                 String::from_utf8(last.stdout).unwrap(),
-                format!("Time\tContent\n{}\tThird\n", times[2])
+                format!(
+                    "Time\tAgent name\tContent\n{}\tContinuing agent\tThird\n",
+                    times[2]
+                )
             );
         }
     }

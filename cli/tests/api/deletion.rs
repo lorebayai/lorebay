@@ -59,7 +59,7 @@ async fn checkpoint_delete_removes_checkpoint_named_by_printed_time() {
         "Keep checkpoint",
     ] {
         let time = append_checkpoint(&server, &space, &task, &agent, content).await;
-        checkpoints.push(json!({"time": time, "content": content}));
+        checkpoints.push(json!({"time": time, "agent_name":"Task agent", "content": content}));
     }
     for (index, mode) in ["human", "json"].into_iter().enumerate() {
         let printed = checkpoints_output(&server, &space, key, mode).await;

@@ -163,7 +163,7 @@ async fn call_add_checkpoint_returns_task_title() {
         let key = created["key"].as_str().unwrap();
         assert_eq!(
             tasks::scratchpad(&server, &person, key).await,
-            json!([{"time":result["time"], "content":"Work recorded"}])
+            json!([{"time":result["time"], "agent_name":"Other agent in same party", "content":"Work recorded"}])
         );
         assert_eq!(
             tasks::read(&server, &person, key).await["last_activity_at"],
@@ -331,7 +331,8 @@ async fn call_get_task_returns_scratchpad_page_when_requested() {
     let mut expected = Vec::new();
     for content in ["First", "Second", "Third", "Fourth", "Fifth"] {
         let added = tasks::append(&server, &agent, &task, content).await;
-        expected.push(json!({"time":added["time"], "content":content}));
+        expected
+            .push(json!({"time":added["time"], "agent_name":"Research agent", "content":content}));
     }
     let mut arguments =
         json!({"space":SPACE, "key":"TK-1", "include_scratchpad":true, "page_size":2});

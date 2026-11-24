@@ -341,14 +341,14 @@ pub(crate) enum TaskCommand {
         #[arg(long, help = "One sentence naming the work to plan")]
         title: String,
     },
-    /// Read one page of a task's checkpoints in time order.
+    /// Read one page of checkpoints with their writing agents in time order.
     Scratchpad {
         space: String,
         task: String,
         #[command(flatten)]
         page: Page,
     },
-    /// Show a task's fields and task ID.
+    /// Show task fields, state attribution and files with their registering agents.
     Show { space: String, task: String },
 }
 

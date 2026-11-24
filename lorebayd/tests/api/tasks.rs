@@ -14,6 +14,7 @@ use helpers::*;
 
 pub(crate) mod helpers;
 
+mod attribution;
 mod change;
 mod deletion;
 mod filters;
@@ -238,7 +239,7 @@ async fn add_checkpoint_appends_to_scratchpad_and_updates_last_activity() {
     assert_eq!(read(&server, &person, "TK-1").await, expected);
     assert_eq!(
         scratchpad(&server, &person, "TK-1").await,
-        json!([{"time":checkpoint["time"], "content":"Found #KN-999\nDetails"}])
+        json!([{"time":checkpoint["time"], "agent_name":"Research agent", "content":"Found #KN-999\nDetails"}])
     );
     server.stop().await;
 }
@@ -268,7 +269,7 @@ async fn add_checkpoint_gives_each_checkpoint_a_distinct_increasing_time() {
             assert_eq!(response.status(), StatusCode::CREATED);
             let checkpoint = response.json::<Value>().await.unwrap()["data"].clone();
             assert_eq!(checkpoint["task_title"], "Concurrent checkpoints");
-            json!({"time":checkpoint["time"], "content":content})
+            json!({"time":checkpoint["time"], "agent_name":"Research agent", "content":content})
         });
     }
     let mut expected = Vec::new();
@@ -386,7 +387,7 @@ async fn add_checkpoint_succeeds_when_task_was_created_by_another_agent_of_same_
     );
     assert_eq!(
         scratchpad(&server, &second, "TK-1").await,
-        json!([{"time":checkpoint["time"],"content":"Continuing"}])
+        json!([{"time":checkpoint["time"], "agent_name":"Other agent","content":"Continuing"}])
     );
     server.stop().await;
 }
@@ -480,7 +481,9 @@ async fn read_task_returns_scratchpad_page_when_requested() {
     for number in 0..5 {
         let content = format!("Checkpoint {number}");
         let checkpoint = append(&server, &agent, &task, &content).await;
-        expected.push(json!({"time":checkpoint["time"], "content":content}));
+        expected.push(
+            json!({"time":checkpoint["time"], "agent_name":"Research agent", "content":content}),
+        );
     }
     for tokens in [&bob, &other] {
         read_checkpoint_pages(&server, tokens, "TK-1", &expected).await;

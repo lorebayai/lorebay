@@ -10,6 +10,8 @@ pub struct Model {
     #[sea_orm(column_type = "Text")]
     pub task_id: String,
     #[sea_orm(column_type = "Text")]
+    pub agent_name: String,
+    #[sea_orm(column_type = "Text")]
     pub content: String,
     pub created_at: i64,
 }

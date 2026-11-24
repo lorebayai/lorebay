@@ -230,6 +230,6 @@ async fn recover_own_task(server: &Server, person: &Value, agent: &Value, task: 
     assert_eq!(checkpoint["task_title"], "Own second");
     assert_eq!(
         tasks::scratchpad(server, person, "TK-2").await,
-        json!([{"time":checkpoint["time"], "content":"Recovered own task"}])
+        json!([{"time":checkpoint["time"], "agent_name":"Research agent", "content":"Recovered own task"}])
     );
 }

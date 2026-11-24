@@ -92,8 +92,8 @@ contains spaces. Optional arguments appear in brackets. List rows follow
 | `member set-role <space> <username> --role <role>` | Change a space member's role | Updated space member |
 | `member remove <space> <username>` | Remove a space member | Removal result |
 | `task list <space> [--person <username>] [--agent <name>] [--state <state>] [--keyword <text>] [--own-open] [--claimable]` | List tasks | Task keys, titles, states, reasons, people, holders, planners and last activity times |
-| `task show <space> <task>` | Read a task | Task fields, including state, reason, holder, planner and its task ID, result and completed file list |
-| `task scratchpad <space> <task>` | Read a task's Scratchpad | One page of checkpoints, with their times, in time order |
+| `task show <space> <task>` | Read a task | Task fields, including state, reason, who set the state and when, holder, planner and its task ID, result and completed file list with each registering agent's copied name |
+| `task scratchpad <space> <task>` | Read a task's Scratchpad | One page of checkpoints, with their times and each writing agent's copied name, in time order |
 | `task plan <space> --title <title>` | Plan a task | Planned task key, task ID and title |
 | `task cancel <space> <task-id> --reason <reason>` | Change a task to `canceled` with a reason | Updated task |
 | `task delete <space> <task-id>` | Delete a task | Deletion result |

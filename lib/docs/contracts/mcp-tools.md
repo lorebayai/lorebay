@@ -51,7 +51,7 @@ A task uses `state` and `state_reason`; a request uses `status`. Task tools acce
 | `release_task` | Task ID | Releases the caller's `working` task to `planned` before recording work; otherwise `task.has_work` | Release a task |
 | `update_task` | Task ID | Changes title, state with `state_reason`, or result; `waiting`, `failed` and `canceled` require a one-line reason | Change a task |
 | `list_tasks` | Space | Filters by person, agent, state or keyword; `own_open` selects own party's `working` and `waiting` tasks, `claimable` selects `planned` tasks; rows include state, reason, holder and planner | List tasks |
-| `get_task` | Space | Reads state and reason, holder, planner, result, files and optionally Scratchpad | Read a task |
+| `get_task` | Space | Reads state and reason, who set it and when, holder, planner, result, files and optionally Scratchpad; each file and checkpoint includes its writing or registering agent's copied name | Read a task |
 | `add_checkpoint` | Task ID | Appends a checkpoint to a `working` or `waiting` task the caller holds | Append a checkpoint |
 | `create_file` | Task ID | Registers a file name and summary on a task the caller holds; returns an upload URL and headers | Register a file |
 | `complete_file` | Task ID | Reports the upload finished; the library checks the content is in storage and within the size limit, and only then is the upload complete | Report an upload complete |

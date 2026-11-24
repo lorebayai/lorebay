@@ -48,16 +48,16 @@ async fn change_task_clears_end_time_when_state_returns_to_working() {
     expected["state"] = json!("working");
     expected["ended_at"] = Value::Null;
     expected["holder"] = json!("Research agent");
-    assert_eq!(
-        change(&server, &agent, &created, json!({"state":"working"})).await,
-        expected
-    );
+    let reopened = change(&server, &agent, &created, json!({"state":"working"})).await;
+    expected["state_changed_at"] = reopened["state_changed_at"].clone();
+    assert_eq!(reopened, expected);
     sleep(Duration::from_millis(2)).await;
     let ended_again = change(&server, &agent, &created, json!({"state":"done"})).await;
     assert!(ended_again["ended_at"].as_i64().unwrap() > ended["ended_at"].as_i64().unwrap());
     expected["state"] = json!("done");
     expected["holder"] = Value::Null;
     expected["ended_at"] = ended_again["ended_at"].clone();
+    expected["state_changed_at"] = ended_again["ended_at"].clone();
     assert_eq!(ended_again, expected);
     server.stop().await;
 }
@@ -108,6 +108,7 @@ async fn change_task_replaces_result_and_updates_last_activity() {
     expected["ended_at"] = Value::Null;
     expected["result"] = json!("Replacement Markdown **result**");
     expected["last_activity_at"] = replaced["last_activity_at"].clone();
+    expected["state_changed_at"] = replaced["state_changed_at"].clone();
     assert_eq!(replaced, expected);
     assert!(replaced["last_activity_at"].as_i64() > changed["last_activity_at"].as_i64());
     let cleared = change(&server, &agent, &first, json!({"result":""})).await;
@@ -151,7 +152,7 @@ async fn add_checkpoint_fails_with_reopen_hint_when_task_is_done() {
     assert_eq!(checkpoints.as_array().unwrap().len(), 2);
     assert_eq!(
         checkpoints[1],
-        json!({"time":added["time"],"content":"After reopening"})
+        json!({"time":added["time"], "agent_name":"Research agent","content":"After reopening"})
     );
     let reopened = read(&server, &person, "TK-1").await;
     assert_eq!(reopened["last_activity_at"], added["time"]);
@@ -250,6 +251,9 @@ async fn change_task_cancels_another_persons_task_when_caller_is_admin() {
     expected["state"] = json!("canceled");
     expected["holder"] = Value::Null;
     expected["ended_at"] = ended["ended_at"].clone();
+    expected["state_changed_by"] = json!("bob");
+    expected["state_changed_agent_name"] = Value::Null;
+    expected["state_changed_at"] = ended["ended_at"].clone();
     assert!(ended["ended_at"].is_i64());
     assert_eq!(ended, expected);
     space_member(&server, &person, Method::DELETE, "").await;
@@ -265,6 +269,9 @@ async fn change_task_cancels_another_persons_task_when_caller_is_admin() {
     expected["state"] = json!("canceled");
     expected["holder"] = Value::Null;
     expected["ended_at"] = ended["ended_at"].clone();
+    expected["state_changed_by"] = json!("alice");
+    expected["state_changed_agent_name"] = Value::Null;
+    expected["state_changed_at"] = ended["ended_at"].clone();
     assert!(ended["ended_at"].is_i64());
     assert_eq!(ended, expected);
     server.stop().await;

@@ -24,6 +24,11 @@ pub struct Model {
     pub planner_agent_name: Option<String>,
     #[sea_orm(column_type = "Text", nullable)]
     pub state_reason: Option<String>,
+    #[sea_orm(column_type = "Text")]
+    pub state_changed_by: String,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub state_changed_agent_name: Option<String>,
+    pub state_changed_at: i64,
     #[sea_orm(column_type = "Text", nullable)]
     pub waiting_request_id: Option<String>,
     pub work_recorded: i64,

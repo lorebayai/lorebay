@@ -88,6 +88,9 @@ pub(crate) struct CreatedTaskResponse {
 pub(crate) struct TaskResponse {
     #[serde(flatten)]
     summary: TaskSummary,
+    state_changed_by: String,
+    state_changed_agent_name: Option<String>,
+    state_changed_at: i64,
     result: String,
     created_at: i64,
     started_at: Option<i64>,
@@ -211,6 +214,9 @@ impl From<CreatedTask> for CreatedTaskResponse {
 impl From<TaskRead> for TaskResponse {
     fn from(read: TaskRead) -> Self {
         Self::builder()
+            .state_changed_by(read.task.state_changed_by.clone())
+            .state_changed_agent_name(read.task.state_changed_agent_name.clone())
+            .state_changed_at(read.task.state_changed_at)
             .result(read.task.result.clone())
             .created_at(read.task.created_at)
             .started_at(read.task.started_at)

@@ -7,6 +7,12 @@ crates `lorebay-lib-types`, `lorebay-lib-core`, `lorebay-lib-migration` and
 
 ## Unreleased
 
+- **Breaking:** Checkpoints and files expose the writing or registering
+  agent's copied `agent_name`. Tasks expose `state_changed_by`,
+  `state_changed_agent_name` and `state_changed_at` for the current state,
+  including creation and request-driven transitions. The created migration
+  adds these columns in place; databases must be recreated.
+
 - **Breaking:** Tasks have six states, `planned`, `working`, `waiting`, `done`,
   `failed` and `canceled`, with reasons and one holder. Claims, same-party
   takeovers and releases enforce exclusive writes; Requests may wait for a
