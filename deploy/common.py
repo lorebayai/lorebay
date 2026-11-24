@@ -53,9 +53,15 @@ def domain_name(value):
 
 def input_path(value):
     path = Path(value)
-    if not path.is_absolute() or not re.fullmatch(r"/[A-Za-z0-9_./-]+", value):
-        fail("Paths must be absolute and contain only letters, digits, /, ., _, -")
-    return path.resolve()
+    resolved = path.resolve()
+    if not path.is_absolute() or any(
+        not re.fullmatch(r"/[A-Za-z0-9_./-]+", candidate)
+        for candidate in (value, str(resolved))
+    ):
+        fail(
+            "Input and resolved paths must be absolute and contain only letters, digits, /, ., _, -"
+        )
+    return resolved
 
 
 @contextlib.contextmanager

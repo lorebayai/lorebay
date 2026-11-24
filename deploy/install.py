@@ -66,6 +66,12 @@ def inputs(args):
     for path in (args.users, args.certificate, args.key):
         if not path.is_file():
             fail(f"Required input file is missing: {path}")
+    for path in (args.users, *args.users.parents):
+        metadata = path.stat()
+        if metadata.st_uid != 0 or metadata.st_mode & 0o022:
+            fail(
+                f"Users file and its ancestors must be owned by root and not writable by group or others: {path}"
+            )
     certificate(args.certificate, args.key, args.domain)
     return {
         "version": args.version,

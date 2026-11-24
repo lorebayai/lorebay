@@ -5,8 +5,7 @@ PID 1. nginx serves HTTPS and caller limits; `lorebayd` listens on loopback.
 
 ## Usage
 
-As root, install prerequisites (distribution Python 3.11 or later), fetch the
-named release's source and executable over HTTPS, and verify the executable.
+As root, use distribution Python 3.11+ and fetch the named release over HTTPS.
 Supply a root-only `/srv/inputs/password.txt` before hashing.
 
 ```bash
@@ -52,8 +51,9 @@ filesystem outside `/tmp` and `/var/tmp`. Every existing ancestor must be
 root-owned, traversable by the service user, and not group- or other-writable.
 Missing ancestors become root-owned `0755`; data becomes `lorebay`-owned `0700`,
 with database `0600`. Existing databases are refused; stop other writers first.
-The users file passes through systemd `LoadCredential=`. Supplied files keep
-contents, owner and mode. Only nginx's root master reads the copied key under
+The users file and all its ancestors must be root-owned and not writable by
+group or others; it passes through systemd `LoadCredential=`. Supplied files
+keep contents, owner and mode. Only nginx's root master reads the copied key under
 `/etc/nginx/lorebay-tls` (directory `0700`, key `0600`). nginx must include
 `/etc/nginx/conf.d/*.conf`; address-specific 443 listeners need manual setup.
 Other sites keep their files. Without an explicit 443 `default_server`, the
