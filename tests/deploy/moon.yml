@@ -14,3 +14,9 @@ tasks:
       cache: false
       runInCI: false
       runFromWorkspaceRoot: true
+  local-files:
+    command: 'python3 -B tests/deploy/local_files.py'
+    options:
+      cache: false
+      runInCI: false
+      runFromWorkspaceRoot: true

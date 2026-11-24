@@ -37,14 +37,8 @@ and deployment syntax checks. Deployment checks cover every `deploy/` subfolder
 and need OpenSSL and Docker;
 they run `nginx -t` in a pinned nginx image with a throwaway certificate.
 
-The optional [deployment suite](tests/deploy/README.md) needs an x86_64 Linux
-host, Python 3.12+, Docker Engine with Compose and buildx, GitHub CLI with
-`gh attestation`, OpenSSL, curl and passwordless sudo, plus
-Skopeo for local image archives. Docker must support privileged systemd
-containers. Chromium and pinned Playwright
-run inside the disposable client image. Supply a test domain, certificate,
-key and authority, two test usernames and an existing GitHub sign-in with
-release and package access in the suite's one configuration file.
+For release qualification, see the [deployment suite](tests/deploy/README.md)
+for its required tools and local usage.
 
 Install moon, then add `~/.moon/bin` to `PATH`:
 

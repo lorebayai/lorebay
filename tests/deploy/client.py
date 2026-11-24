@@ -33,9 +33,7 @@ def require(condition, message):
 
 
 def run(*args, expected=0, **kwargs):
-    result = subprocess.run(
-        [str(arg) for arg in args], capture_output=True, text=True, timeout=180, **kwargs
-    )
+    result = subprocess.run([str(arg) for arg in args], capture_output=True, text=True, timeout=180, **kwargs)
     require(result.returncode == expected, f"{args[0]} failed: {result.stderr}")
     return result.stdout
 
@@ -44,9 +42,7 @@ def api(method, path, body=None, token=None, expected=200, form=False):
     headers = {"Content-Type": "application/x-www-form-urlencoded" if form else "application/json"}
     if token:
         headers["Authorization"] = "Bearer " + token
-    data = None if body is None else (
-        urllib.parse.urlencode(body) if form else json.dumps(body)
-    ).encode()
+    data = None if body is None else (urllib.parse.urlencode(body) if form else json.dumps(body)).encode()
     request = urllib.request.Request(ORIGIN + path, data, headers, method=method)
     try:
         response = urllib.request.urlopen(request, context=CONTEXT, timeout=120)
@@ -64,8 +60,11 @@ def cli(*args, person=0, home=None, failure=None):
         "SSL_CERT_FILE": CA,
     }
     child = subprocess.run(
-        ["lorebay", *map(str, args), "--output", "json"], env=environment,
-        capture_output=True, text=True, timeout=60,
+        ["lorebay", *map(str, args), "--output", "json"],
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=60,
     )
     if failure is not None:
         require(child.returncode != 0, f"CLI {args[:2]} unexpectedly succeeded")
@@ -90,21 +89,26 @@ def browser_sign_in(page, person, wrong=False):
 def login(person, device=False, wrong=False, origin=None, home=None, refused=False):
     origin = origin or ORIGIN
     environment = os.environ | {
-        "LOREBAY_HOME": home or f"/work/person-{person}", "SSL_CERT_FILE": CA,
+        "LOREBAY_HOME": home or f"/work/person-{person}",
+        "SSL_CERT_FILE": CA,
     }
     args = ["lorebay", "login", origin, "--output", "json"]
     args += ["--device"] if device else ["--no-browser"]
-    print("BEGIN cli_sign_in " + ("device" if device else "authorization") + (" refusal" if refused else ""), flush=True)
+    print(
+        "BEGIN cli_sign_in " + ("device" if device else "authorization") + (" refusal" if refused else ""), flush=True
+    )
     child = subprocess.Popen(args, env=environment, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     reader = None
     try:
         lines = []
         link = code = None
         pending = queue.Queue()
+
         def read_lines():
             for line in child.stderr:
                 pending.put(line)
             pending.put(None)
+
         reader = threading.Thread(target=read_lines, daemon=True)
         reader.start()
         deadline = time.monotonic() + 45
@@ -131,7 +135,10 @@ def login(person, device=False, wrong=False, origin=None, home=None, refused=Fal
                 line = pending.get()
                 if line:
                     lines.append(line)
-            require(child.returncode != 0 and "endpoint on another server" in "".join(lines).lower(), "Wrong-origin sign-in was not refused")
+            require(
+                child.returncode != 0 and "endpoint on another server" in "".join(lines).lower(),
+                "Wrong-origin sign-in was not refused",
+            )
             return
         require(link is not None and (not device or code), "CLI did not supply its sign-in page: " + "".join(lines))
         with sync_playwright() as driver:
@@ -146,7 +153,9 @@ def login(person, device=False, wrong=False, origin=None, home=None, refused=Fal
                 page.get_by_role("button", name="Review code", exact=True).click()
             page.get_by_role("button", name="Approve", exact=True).click()
             if device:
-                expect(page.locator("#message")).to_have_text("Sign-in approved. Return to your terminal. This page is signed out. You may close it.")
+                expect(page.locator("#message")).to_have_text(
+                    "Sign-in approved. Return to your terminal. This page is signed out. You may close it."
+                )
             child.wait(timeout=30)
             reader.join(timeout=5)
             require(child.returncode == 0, "CLI sign-in did not complete")
@@ -186,13 +195,22 @@ def agent_sign_in():
     thread.start()
     try:
         redirect = f"http://127.0.0.1:{callback.server_port}/callback"
-        registered = api("POST", "/oauth/register", {
-            "client_name": "Deployment probe", "redirect_uris": [redirect],
-            "token_endpoint_auth_method": "none",
-        }, expected=201)
+        registered = api(
+            "POST",
+            "/oauth/register",
+            {
+                "client_name": "Deployment probe",
+                "redirect_uris": [redirect],
+                "token_endpoint_auth_method": "none",
+            },
+            expected=201,
+        )
         parameters = {
-            "client_id": registered["client_id"], "redirect_uri": redirect,
-            "response_type": "code", "code_challenge": challenge, "code_challenge_method": "S256",
+            "client_id": registered["client_id"],
+            "redirect_uri": redirect,
+            "response_type": "code",
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
         }
         with sync_playwright() as driver:
             browser = driver.chromium.launch(executable_path="/usr/bin/chromium", args=["--no-sandbox"])
@@ -205,10 +223,18 @@ def agent_sign_in():
             expect(page.get_by_text("Authorization received", exact=True)).to_be_visible()
             browser.close()
         require(len(codes) == 1 and "code" in codes[0], "Agent callback did not receive a code")
-        return api("POST", "/oauth/token", {
-            "grant_type": "authorization_code", "client_id": registered["client_id"],
-            "redirect_uri": redirect, "code": codes[0]["code"][0], "code_verifier": verifier,
-        }, form=True)["access_token"]
+        return api(
+            "POST",
+            "/oauth/token",
+            {
+                "grant_type": "authorization_code",
+                "client_id": registered["client_id"],
+                "redirect_uri": redirect,
+                "code": codes[0]["code"][0],
+                "code_verifier": verifier,
+            },
+            form=True,
+        )["access_token"]
     finally:
         callback.shutdown()
         callback.server_close()
@@ -221,8 +247,9 @@ def upload(space, task, agent, name, payload):
     url = urllib.parse.urlsplit(registered["upload_url"])
     connection = http.client.HTTPSConnection(url.hostname, url.port, context=CONTEXT, timeout=180)
     try:
-        connection.request(registered["method"], url.path + "?" + url.query, payload,
-                           registered["headers"], encode_chunked=True)
+        connection.request(
+            registered["method"], url.path + "?" + url.query, payload, registered["headers"], encode_chunked=True
+        )
         response = connection.getresponse()
         response.read()
         require(response.status == 201, f"File upload: HTTP {response.status}")
@@ -246,7 +273,9 @@ def product():
     login(0, wrong=True)
     login(1, device=True)
     cli("logout")
-    result = subprocess.run(["lorebay", "space", "list"], env=os.environ | {"LOREBAY_HOME": "/work/person-0"}, capture_output=True)
+    result = subprocess.run(
+        ["lorebay", "space", "list"], env=os.environ | {"LOREBAY_HOME": "/work/person-0"}, capture_output=True
+    )
     require(result.returncode == 4, "Logged-out CLI retained access")
     login(0)
     print("PASS sign_in_accepts_authorization_and_device_and_refuses_wrong_password_and_logout", flush=True)
@@ -254,7 +283,9 @@ def product():
     require(cli("space", "show", space)["name"] == "Deployment", "Space was not created")
     cli("space", "change", space, "--name", "Deployment checked", "--summary", "Changed summary")
     shown = cli("space", "show", space)
-    require(shown["name"] == "Deployment checked" and shown["summary"] == "Changed summary", "Space changes did not persist")
+    require(
+        shown["name"] == "Deployment checked" and shown["summary"] == "Changed summary", "Space changes did not persist"
+    )
     require(PEOPLE[1]["username"] in json.dumps(cli("user", "list")), "Second person is missing")
     second = PEOPLE[1]["username"]
     for role in ("viewer", "contributor", "admin"):
@@ -277,15 +308,39 @@ def product():
     cli("member", "remove", space, second)
     require(not any(m["username"] == second for m in cli("member", "list", space)), "Removed person remains a member")
     cli("space", "show", space, person=1, failure={403, 404})
-    cli("request", "create", space, "removed.md", "--summary", "Removed", "--content", "Removed", person=1, failure={403, 404})
-    cli("knowledge", "create", space, "removed.md", "--summary", "Removed", "--content", "Removed", person=1, failure={403, 404})
+    cli(
+        "request",
+        "create",
+        space,
+        "removed.md",
+        "--summary",
+        "Removed",
+        "--content",
+        "Removed",
+        person=1,
+        failure={403, 404},
+    )
+    cli(
+        "knowledge",
+        "create",
+        space,
+        "removed.md",
+        "--summary",
+        "Removed",
+        "--content",
+        "Removed",
+        person=1,
+        failure={403, 404},
+    )
     cli("logout", person=1)
     print("PASS spaces_preserve_changes_and_members_follow_each_role", flush=True)
     agent = agent_sign_in()
     prefix = f"/api/v1/spaces/{space}/tasks"
     task = api("POST", prefix, {"title": "Deployment work"}, agent, expected=201)["data"]
     path = prefix + "/" + task["task_id"]
-    checkpoint = api("POST", path + "/checkpoints", {"content": "Plan: verify deployment, then record results"}, agent, expected=201)["data"]
+    checkpoint = api(
+        "POST", path + "/checkpoints", {"content": "Plan: verify deployment, then record results"}, agent, expected=201
+    )["data"]
     content = b"name,result\nrelease,passed\n\x00\xff"
     small = upload(space, task["task_id"], agent, "report.csv", content)
     require(download(space, small["key"]) == (len(content), hashlib.sha256(content).hexdigest()), "File bytes changed")
@@ -293,33 +348,57 @@ def product():
     cli("knowledge", "change", space, entry["key"], "--content", "Second revision")
     history = cli("knowledge", "history", space, entry["key"])
     require(len(history) == 2, "Knowledge history is incomplete")
-    require(cli("knowledge", "show", space, entry["key"], "--version", 1)["content"] == "First revision", "Old Knowledge version changed")
+    require(
+        cli("knowledge", "show", space, entry["key"], "--version", 1)["content"] == "First revision",
+        "Old Knowledge version changed",
+    )
     cli("knowledge", "rollback", space, entry["key"], 1)
     require(cli("knowledge", "show", space, entry["key"])["content"] == "First revision", "Knowledge rollback failed")
     cli("knowledge", "delete", space, entry["key"], "--yes")
     require(any(e["key"] == entry["key"] for e in cli("knowledge", "deleted", space)), "Deleted Knowledge is missing")
     require(len(cli("knowledge", "history", space, entry["key"])) == 4, "Rollback or deletion history is missing")
     for decision in ("approve", "reject"):
-        request = api("POST", path + "/requests", {
-            "action": "create", "name": f"ops/{decision}.md", "summary": decision, "content": decision,
-        }, agent, expected=201)["data"]
+        request = api(
+            "POST",
+            path + "/requests",
+            {
+                "action": "create",
+                "name": f"ops/{decision}.md",
+                "summary": decision,
+                "content": decision,
+            },
+            agent,
+            expected=201,
+        )["data"]
         require(any(r["key"] == request["key"] for r in cli("request", "list", space)), "Request is absent from list")
         require(cli("request", "show", space, request["key"])["status"] == "pending", "Request is not pending")
         before = cli("knowledge", "list", space)
         extra = ["--reason", "Deployment rejection"] if decision == "reject" else []
         cli("request", decision, space, request["key"], *extra)
         shown = cli("request", "show", space, request["key"])
-        require(shown["status"] == ("approved" if decision == "approve" else "rejected"), "Request decision did not persist")
+        require(
+            shown["status"] == ("approved" if decision == "approve" else "rejected"), "Request decision did not persist"
+        )
         if decision == "approve":
-            require(cli("knowledge", "show", space, "ops/approve.md")["content"] == "approve", "Approved request did not change Knowledge")
+            require(
+                cli("knowledge", "show", space, "ops/approve.md")["content"] == "approve",
+                "Approved request did not change Knowledge",
+            )
         else:
-            require(shown["reject_reason"] == "Deployment rejection" and cli("knowledge", "list", space) == before, "Rejected request changed Knowledge or lost its reason")
+            require(
+                shown["reject_reason"] == "Deployment rejection" and cli("knowledge", "list", space) == before,
+                "Rejected request changed Knowledge or lost its reason",
+            )
     print("PASS knowledge_preserves_history_and_rollback_and_request_decisions", flush=True)
     api("PATCH", path, {"status": "ended", "result": "Deployment checked"}, agent)
     require(any(t["task_id"] == task["task_id"] for t in cli("task", "list", space)), "Task list is missing the task")
     shown = cli("task", "show", space, task["key"])
     require(shown["status"] == "ended" and shown["result"] == "Deployment checked", "Task result is missing")
-    require(cli("task", "scratchpad", space, task["key"]) == [{"time": checkpoint["time"], "content": "Plan: verify deployment, then record results"}], "Scratchpad differs from checkpoint")
+    require(
+        cli("task", "scratchpad", space, task["key"])
+        == [{"time": checkpoint["time"], "content": "Plan: verify deployment, then record results"}],
+        "Scratchpad differs from checkpoint",
+    )
     cli("checkpoint", "delete", space, task["task_id"], checkpoint["time"], "--yes")
     require(cli("task", "scratchpad", space, task["key"]) == [], "Deleted checkpoint remains")
     cli("file", "delete", space, task["task_id"], small["key"], "--yes")
@@ -336,7 +415,9 @@ def product():
 def large():
     state = json.loads(STATE.read_text())
     space, agent = state["space"], state["agent"]
-    task = api("POST", f"/api/v1/spaces/{space}/tasks", {"title": "Large file persistence"}, agent, expected=201)["data"]
+    task = api("POST", f"/api/v1/spaces/{space}/tasks", {"title": "Large file persistence"}, agent, expected=201)[
+        "data"
+    ]
     size = 1073741825
     payload = Path("/work/large.bin")
     try:
@@ -358,7 +439,9 @@ def large():
 def persist():
     state = json.loads(STATE.read_text())
     require(cli("space", "show", state["space"])["key"] == state["space"], "Space did not persist")
-    require(download(state["space"], state["file"]) == (state["size"], state["sha256"]), "Persistent file bytes changed")
+    require(
+        download(state["space"], state["file"]) == (state["size"], state["sha256"]), "Persistent file bytes changed"
+    )
     print("PASS restart_preserves_sign_in_space_and_file_bytes", flush=True)
 
 
@@ -375,10 +458,16 @@ def revoke():
 def rate():
     codes = []
     for _ in range(SETTINGS["attempts"]):
-        request = urllib.request.Request(ORIGIN + "/api/v1/sign-in", json.dumps({
-            "username": PEOPLE[0]["username"],
-            "password": PEOPLE[0]["password"] if SETTINGS["valid"] else "wrong-password",
-        }).encode(), {"Content-Type": "application/json"})
+        request = urllib.request.Request(
+            ORIGIN + "/api/v1/sign-in",
+            json.dumps(
+                {
+                    "username": PEOPLE[0]["username"],
+                    "password": PEOPLE[0]["password"] if SETTINGS["valid"] else "wrong-password",
+                }
+            ).encode(),
+            {"Content-Type": "application/json"},
+        )
         try:
             response = urllib.request.urlopen(request, context=CONTEXT, timeout=20)
         except urllib.error.HTTPError as error:
@@ -395,13 +484,17 @@ def trust():
     with sync_playwright() as driver:
         for trusted in (False, True):
             environment = os.environ | {"HOME": "/root" if trusted else "/untrusted"}
-            browser = driver.chromium.launch(executable_path="/usr/bin/chromium", args=["--no-sandbox"], env=environment)
+            browser = driver.chromium.launch(
+                executable_path="/usr/bin/chromium", args=["--no-sandbox"], env=environment
+            )
             try:
                 page = browser.new_page()
                 try:
                     response = page.goto(ORIGIN + "/readyz")
                 except Exception as error:
-                    require(not trusted and "ERR_CERT_AUTHORITY_INVALID" in str(error), "Unexpected browser TLS failure")
+                    require(
+                        not trusted and "ERR_CERT_AUTHORITY_INVALID" in str(error), "Unexpected browser TLS failure"
+                    )
                 else:
                     require(trusted and response.status == 200, "Browser accepted an untrusted authority")
             finally:
@@ -410,11 +503,23 @@ def trust():
 
 
 def loopback():
-    process = subprocess.Popen([
-        "ssh", "-i", "/work/ssh-key", "-o", "StrictHostKeyChecking=accept-new",
-        "-o", "ExitOnForwardFailure=yes", "-N", "-L", "8080:127.0.0.1:8080",
-        "root@" + SETTINGS["server"],
-    ], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    process = subprocess.Popen(
+        [
+            "ssh",
+            "-i",
+            "/work/ssh-key",
+            "-o",
+            "StrictHostKeyChecking=accept-new",
+            "-o",
+            "ExitOnForwardFailure=yes",
+            "-N",
+            "-L",
+            "8080:127.0.0.1:8080",
+            "root@" + SETTINGS["server"],
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
     try:
         for _ in range(30):
             try:
