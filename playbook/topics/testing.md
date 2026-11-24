@@ -1,15 +1,16 @@
 # Testing
 
 How `lorebayd` and the product are tested: the three test levels, what each
-one verifies, and where its tests live. Imported by the `AGENTS.md` of every
-Rust crate and test suite.
+one verifies, where its tests live, and how milestone acceptance checks are
+kept. Imported by the `AGENTS.md` of every Rust crate and test suite, and of
+`deploy/`.
 
 ## Levels
 
 | Level | Verifies | Lives in | Runs |
 | --- | --- | --- | --- |
 | Integration | `lorebayd`'s contract through the Web API, MCP and file URLs, or one crate's contract through its public API | The crate's `tests/` folder | Pull request CI, when the crate is affected |
-| Deployment | A release's native installation and Compose deployment, operation, removal and product workflows through HTTPS, the browser and CLI | `tests/deploy/` | By hand, with `runInCI: false`, and before a pull request that changes `deploy/` or `tests/deploy/` lands |
+| Deployment | A release's native installation and Compose deployment, operation, removal and product workflows through HTTPS, the browser and CLI | `tests/deploy/` | By hand, outside pull request CI; see [Deployment tests](#deployment-tests) |
 | Unit | One intricate pure function | A `#[cfg(test)] mod tests`, see [Unit tests](#unit-tests) | Pull request CI, when affected |
 
 - Integration tests are the level for backend behavior. Unit tests are a rare
@@ -103,25 +104,13 @@ and must not import a crate or substitute source builds for release files.
   It must not change unrelated host resources or existing credentials.
 - Check file integrity, install refusals, HTTPS, caller limits, large-file
   streaming, certificate replacement, persistence, removal and the product
-  workflows for both deployment methods. Harness sessions remain manual.
+  workflows for both deployment methods.
 - Never print or log credentials or passwords. Clients and browsers must
   trust the supplied authority without disabling certificate verification.
 - The deployment task sets `runInCI: false`. Run it with
   `moon run tests/deploy:deploy -- /absolute/path/to/config.json`.
 - A pull request that changes `deploy/` or `tests/deploy/` must run the
-  suite before it lands, and the pull request's evidence must name the
-  run's result.
-
-## Milestone acceptance
-
-A milestone's acceptance checks stay in the repository, so later changes
-and releases can rerun them.
-
-- Each deterministic acceptance check must become an automated check before
-  the milestone closes: an integration scenario for a contract, or a
-  deployment check for a release's installation and operation.
-- A check that depends on a real agent harness and model stays by hand, with
-  its evidence on the acceptance issue.
+  suite, and the run must pass before the pull request lands.
 
 ## Unit tests
 
@@ -143,3 +132,14 @@ A unit test is allowed only for a function that meets all three conditions:
   row, in a `#[cfg(test)] mod tests` at the bottom of the file it tests.
 
 Run them with `moon run <project>:test`.
+
+## Milestone acceptance
+
+A milestone's acceptance checks stay in the repository, so later changes
+and releases can rerun them.
+
+- Each deterministic acceptance check must become an automated check before
+  the milestone closes: an integration scenario for a contract, or a
+  deployment check for a release's installation and operation.
+- A check that depends on a real agent harness and model stays by hand, with
+  its evidence on the acceptance issue.
