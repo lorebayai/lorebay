@@ -1,11 +1,13 @@
 import contextlib
 import fcntl
 import fnmatch
+import os
 import re
 import shutil
 import socket
 import ssl
 import subprocess
+import tempfile
 import time
 from pathlib import Path
 
@@ -24,6 +26,19 @@ def output(*args):
 
 def fail(message):
     raise SystemExit(message)
+
+
+def atomic_write(path, content, mode=0o644):
+    with tempfile.NamedTemporaryFile(
+        mode="w", dir=path.parent, prefix=f".{path.name}-", delete=False
+    ) as handle:
+        try:
+            handle.write(content)
+            handle.flush()
+            os.fchmod(handle.fileno(), mode)
+            os.replace(handle.name, path)
+        finally:
+            Path(handle.name).unlink(missing_ok=True)
 
 
 def domain_name(value):

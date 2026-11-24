@@ -16,6 +16,7 @@ from pathlib import Path
 from common import (
     HERE,
     TLS,
+    atomic_write,
     certificate,
     copy_pair,
     domain_name,
@@ -310,18 +311,18 @@ def install(args):
                 "device_verification_rate_limit": 1000,
             }
             # The TCP peer is nginx, so application budgets cover the whole team.
-            (CONFIG / "lorebayd.json").write_text(json.dumps(config, indent=2) + "\n")
+            atomic_write(CONFIG / "lorebayd.json", json.dumps(config, indent=2) + "\n")
             CONFIG.chmod(0o755)
-            (CONFIG / "lorebayd.json").chmod(0o644)
             service = (HERE / "lorebay.service").read_text()
-            UNIT.write_text(
+            atomic_write(
+                UNIT,
                 service.replace("@USERS@", str(args.users)).replace(
                     "@DATA@", str(args.data)
-                )
+                ),
             )
-            SITE.write_text(render(args.domain))
+            atomic_write(SITE, render(args.domain))
             if reject:
-                REJECT.write_text(reject)
+                atomic_write(REJECT, reject)
             run("nginx", "-t")
             run("systemctl", "daemon-reload")
             run("systemctl", "enable", "--now", "lorebay.service", "nginx.service")
@@ -339,8 +340,7 @@ def install(args):
                 "1",
                 "http://127.0.0.1:8080/readyz",
             )
-            state.write_text(json.dumps(wanted, indent=2) + "\n")
-            state.chmod(0o600)
+            atomic_write(state, json.dumps(wanted, indent=2) + "\n", mode=0o600)
             activated = True
             print(
                 "Lorebay installed; use systemctl status lorebay and journalctl -u lorebay"
@@ -380,7 +380,7 @@ def install(args):
 def uninstall():
     if not (CONFIG / "install.json").exists():
         fail("No managed installation exists")
-    saved = {path: path.read_bytes() for path in (SITE, REJECT) if path.exists()}
+    saved = {path: path.read_text() for path in (SITE, REJECT) if path.exists()}
     try:
         for path in saved:
             path.unlink()
@@ -392,7 +392,7 @@ def uninstall():
             run("systemctl", "reload", "nginx")
     except BaseException:
         for path, content in saved.items():
-            path.write_bytes(content)
+            atomic_write(path, content)
         raise
     run("systemctl", "disable", "--now", "lorebay.service")
     installed = json.loads((CONFIG / "install.json").read_text())
