@@ -5,6 +5,7 @@ use crate::repository::TaskRepository;
 use crate::{Caller, Write, WriteOperation};
 
 use super::task_access::{TaskAccessError, TaskAction, check_task};
+use super::task_state::record_state_change;
 use super::tasks::{TaskError, TaskRead, TaskTarget, full_task};
 use super::time::now_millis;
 
@@ -25,9 +26,11 @@ pub async fn claim_task(
     let mut task = task;
     match task.state.as_str() {
         "planned" => {
+            let time = now_millis()?;
+            record_state_change(&mut task, caller, time);
             task.state = "working".to_owned();
             task.person_id = caller.person_id.clone();
-            task.started_at = task.started_at.or(Some(now_millis()?));
+            task.started_at = task.started_at.or(Some(time));
         }
         "working" | "waiting" => {}
         _ => return Err(TaskAccessError::StateInvalid(task.state).into()),
@@ -59,6 +62,7 @@ pub async fn release_task(
         task.planner_agent_name = caller.agent_name.clone();
     }
     task.state = "planned".to_owned();
+    record_state_change(&mut task, caller, now_millis()?);
     task.holder = None;
     task.agent_name = None;
     task.state_reason = None;

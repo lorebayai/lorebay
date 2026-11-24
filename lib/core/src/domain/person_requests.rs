@@ -58,7 +58,7 @@ pub async fn submit_person_request(
         .await?;
     let number = model.number;
     if wait && let Some((id, _)) = &task {
-        wait_for_request(write, id, &model.id, number).await?;
+        wait_for_request(write, caller, id, &model.id, number).await?;
     }
     PersonRequestRepository::builder()
         .connection(write.transaction())
@@ -252,6 +252,7 @@ async fn changed_since_requested(
 
 async fn wait_for_request(
     write: &Write<'_>,
+    caller: &Caller,
     task_id: &str,
     request_id: &str,
     number: i64,
@@ -267,6 +268,7 @@ async fn wait_for_request(
         return Err(super::TaskAccessError::StateInvalid(task.state).into());
     }
     task.state = "waiting".to_owned();
+    super::task_state::record_state_change(&mut task, caller, now_millis()?);
     task.state_reason = Some(format!("Waiting on request RQ-{number}"));
     task.waiting_request_id = Some(request_id.to_owned());
     repository

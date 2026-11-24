@@ -61,7 +61,7 @@ fn space() -> TableCreateStatement {
 }
 
 fn task() -> TableCreateStatement {
-    Table::create()
+    let mut table = Table::create()
         .table(SpaceTask::Table)
         .col(text(SpaceTask::Id).primary_key())
         .col(text(SpaceTask::SpaceId))
@@ -73,6 +73,9 @@ fn task() -> TableCreateStatement {
         .col(text_null(SpaceTask::PlannerPersonId))
         .col(text_null(SpaceTask::PlannerAgentName))
         .col(text_null(SpaceTask::StateReason))
+        .col(text(SpaceTask::StateChangedBy))
+        .col(text_null(SpaceTask::StateChangedAgentName))
+        .col(big_integer(SpaceTask::StateChangedAt))
         .col(text_null(SpaceTask::WaitingRequestId))
         .col(big_integer(SpaceTask::WorkRecorded).default(0))
         .col(big_integer(SpaceTask::CreatedAt))
@@ -94,6 +97,18 @@ fn task() -> TableCreateStatement {
                 .col(SpaceTask::Id)
                 .col(SpaceTask::SpaceId),
         )
+        .foreign_key(
+            ForeignKey::create()
+                .from(SpaceTask::Table, SpaceTask::SpaceId)
+                .to(Space::Table, Space::Id),
+        )
+        .to_owned();
+    task_checks(&mut table);
+    table
+}
+
+fn task_checks(table: &mut TableCreateStatement) {
+    table
         .check(Expr::col(SpaceTask::State).is_in([
             "planned", "working", "waiting", "done", "failed", "canceled",
         ]))
@@ -112,13 +127,7 @@ fn task() -> TableCreateStatement {
                 .is_in(["waiting", "failed", "canceled"])
                 .eq(Expr::col(SpaceTask::StateReason).is_not_null()),
         )
-        .check(Expr::col(SpaceTask::WorkRecorded).is_in([0, 1]))
-        .foreign_key(
-            ForeignKey::create()
-                .from(SpaceTask::Table, SpaceTask::SpaceId)
-                .to(Space::Table, Space::Id),
-        )
-        .to_owned()
+        .check(Expr::col(SpaceTask::WorkRecorded).is_in([0, 1]));
 }
 
 fn checkpoint() -> TableCreateStatement {
@@ -126,6 +135,7 @@ fn checkpoint() -> TableCreateStatement {
         .table(SpaceCheckpoint::Table)
         .col(text(SpaceCheckpoint::Id).primary_key())
         .col(text(SpaceCheckpoint::TaskId))
+        .col(text(SpaceCheckpoint::AgentName))
         .col(text(SpaceCheckpoint::Content))
         .col(big_integer(SpaceCheckpoint::CreatedAt))
         .foreign_key(
@@ -143,6 +153,7 @@ fn agent_file() -> TableCreateStatement {
         .col(text(SpaceAgentFile::Id).primary_key())
         .col(text(SpaceAgentFile::SpaceId))
         .col(text(SpaceAgentFile::TaskId))
+        .col(text(SpaceAgentFile::AgentName))
         .col(big_integer(SpaceAgentFile::Number))
         .col(text(SpaceAgentFile::FileName))
         .col(text(SpaceAgentFile::Summary))
@@ -439,6 +450,7 @@ fn index<T: IntoIden>(
 
 #[derive(DeriveIden)]
 enum SpaceAgentFile {
+    AgentName,
     CompletedAt,
     CreatedAt,
     FileName,
@@ -483,6 +495,7 @@ enum SpaceKnowledgeVersion {
 
 #[derive(DeriveIden)]
 enum SpaceCheckpoint {
+    AgentName,
     Content,
     CreatedAt,
     Id,
@@ -545,6 +558,9 @@ enum SpaceTask {
     SpaceId,
     StartedAt,
     State,
+    StateChangedAgentName,
+    StateChangedAt,
+    StateChangedBy,
     StateReason,
     Table,
     Title,

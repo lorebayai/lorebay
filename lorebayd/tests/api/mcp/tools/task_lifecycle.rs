@@ -139,11 +139,15 @@ async fn claim_task_moves_planned_task_and_release_restores_planner() {
     assert_eq!(response.status(), StatusCode::CREATED);
     let task = response.json::<Value>().await.unwrap()["data"].clone();
     let before = tasks::read(&server, &person, "TK-1").await;
+    assert_attribution(&before, "alice", None);
+    assert_eq!(before["state_changed_at"], before["created_at"]);
     assert_eq!(before["state"], "planned");
     assert_eq!(before["planner"], "alice");
     assert!(before["holder"].is_null());
     assert!(before["started_at"].is_null());
     let claimed = hold(&server, &other, &task, "claim_task").await;
+    assert_attribution(&claimed, "bob", Some("Bob worker"));
+    assert_eq!(claimed["state_changed_at"], claimed["started_at"]);
     assert_eq!(claimed["person"], "bob");
     assert_eq!(claimed["holder"], "Bob worker");
     assert_eq!(claimed["planner"], "alice");
@@ -151,6 +155,7 @@ async fn claim_task_moves_planned_task_and_release_restores_planner() {
     assert_eq!(refused["code"], "task.held");
     assert!(refused["message"].as_str().unwrap().contains("Bob worker"));
     let released = hold(&server, &other, &task, "release_task").await;
+    assert_attribution(&released, "bob", Some("Bob worker"));
     assert_eq!(released["state"], "planned");
     assert_eq!(released["person"], "alice");
     assert!(released["holder"].is_null());
@@ -227,11 +232,14 @@ async fn claim_task_takes_over_and_old_holder_completes_upload() {
 #[tokio::test]
 async fn create_request_waits_until_approved_or_withdrawn() {
     let (server, person, agent) = tasks::setup().await;
+    let bob = login(&server, "bob").await;
+    tasks::space_member(&server, &person, Method::POST, "contributor").await;
     for (index, decision) in ["approve", "reject", "reject"].into_iter().enumerate() {
         let task = tasks::create(&server, &agent, SPACE, "Wait for Knowledge decision").await;
         let proposed = call(&server, &agent, "create_request", json!({"task_id":task["task_id"],"wait":true,"action":"create","name":format!("guide-{index}"),"summary":"Guide","content":"Guide body"})).await;
         let waiting = tasks::read(&server, &person, task["key"].as_str().unwrap()).await;
         assert_eq!(waiting["state"], "waiting");
+        assert_attribution(&waiting, "alice", Some("Research agent"));
         assert!(
             waiting["state_reason"]
                 .as_str()
@@ -250,10 +258,17 @@ async fn create_request_waits_until_approved_or_withdrawn() {
         } else {
             Value::Null
         };
-        let response = request(&server, &person, Method::POST, &path, body).await;
+        let decider = if index == 0 { &bob } else { &person };
+        let response = request(&server, decider, Method::POST, &path, body).await;
         assert_eq!(response.status(), StatusCode::OK);
         let after = tasks::read(&server, &person, task["key"].as_str().unwrap()).await;
         assert_eq!(after["state"], if index == 2 { "done" } else { "working" });
+        assert_attribution(
+            &after,
+            if index == 0 { "bob" } else { "alice" },
+            (index == 2).then_some("Research agent"),
+        );
+        assert!(after["state_changed_at"].as_i64() >= waiting["state_changed_at"].as_i64());
         assert!(after["state_reason"].is_null());
     }
     server.stop().await;
@@ -352,4 +367,10 @@ async fn assert_result_prevents_release(server: &Server, peer: &Value, task: &Va
         refused_hold(server, peer, task, "release_task").await["code"],
         "task.has_work"
     );
+}
+
+fn assert_attribution(task: &Value, person: &str, agent: Option<&str>) {
+    assert_eq!(task["state_changed_by"], person);
+    assert_eq!(task["state_changed_agent_name"], json!(agent));
+    assert!(task["state_changed_at"].as_i64().unwrap() > 0);
 }

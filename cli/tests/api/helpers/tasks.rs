@@ -130,6 +130,62 @@ pub async fn task_with_agent_files(
     read
 }
 
+pub async fn task_after_takeover(
+    server: &Server,
+    space: &str,
+    agent: &Value,
+    title: &str,
+    result: &str,
+) -> Value {
+    let task = task_with_agent_files(server, space, agent, title, result).await;
+    let peer = server.agent("Continuing agent").await;
+    take_over_task(server, &task, &peer).await;
+    upload_task_agent_file(server, space, &task, &peer, "continued.txt").await;
+    server
+        .json(
+            Method::PATCH,
+            &format!(
+                "/api/v1/spaces/{space}/tasks/{}",
+                task["task_id"].as_str().unwrap()
+            ),
+            json!({"state":"waiting","state_reason":"Awaiting review"}),
+            peer["access_token"].as_str(),
+        )
+        .await["data"]
+        .clone()
+}
+
+pub async fn take_over_task(server: &Server, task: &Value, agent: &Value) {
+    let response = server
+        .client
+        .post(format!("{}/mcp", server.url))
+        .bearer_auth(agent["access_token"].as_str().unwrap())
+        .header("accept", "application/json, text/event-stream")
+        .header("mcp-protocol-version", "2026-07-28")
+        .header("mcp-method", "tools/call")
+        .header("mcp-name", "claim_task")
+        .json(
+            &json!({"jsonrpc":"2.0","id":1,"method":"tools/call","params":{
+                "_meta": {
+                    "io.modelcontextprotocol/protocolVersion":"2026-07-28",
+                    "io.modelcontextprotocol/clientInfo":{"name":"integration","version":"1"},
+                    "io.modelcontextprotocol/clientCapabilities":{}
+                },
+                "name":"claim_task","arguments":{"task_id":task["task_id"]}
+            }}),
+        )
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body: Value = response.json().await.unwrap();
+    assert_eq!(body["result"]["isError"], false, "{body}");
+    assert_eq!(
+        body["result"]["structuredContent"]["task_id"],
+        task["task_id"]
+    );
+}
+
 pub async fn task_id_from_show(server: &Server, space: &str, key: &str, mode: &str) -> String {
     let output = server
         .run(&["task", "show", space, key, "--output", mode])

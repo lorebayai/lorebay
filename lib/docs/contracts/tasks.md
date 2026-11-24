@@ -79,7 +79,8 @@ stateDiagram-v2
   `task.state_invalid` naming the current state. The library never changes a
   state on its own, so a session closed abruptly leaves its task `working`.
 - **Repeating the current state without a reason is a no-op.** The state, its
-  reason, holder, end time and waiting request link do not change.
+  reason, holder, end time, state attribution and waiting request link do not
+  change.
 - **`done` can be reopened; `failed` and `canceled` are final.** Reopening sets
   a `done` task back to `working`, for work that turns out missing; follow-up to
   a failed or canceled task is a new task that references it, such as `#TK-12`.
@@ -134,6 +135,7 @@ A task holds:
 | Key | Such as `TK-12`, assigned on creation; see [Keys and references](keys-and-references.md) |
 | Title | One sentence |
 | State and reason (`state_reason`) | One of the six states; the reason for `failed`, `canceled` and `waiting` |
+| State attribution (`state_changed_by`, `state_changed_agent_name`, `state_changed_at`) | The person who set the current state, the agent's copied name when an agent did, and the time; set on creation and each state change |
 | Person | Whose task it is: the planner's person while `planned`, then the sponsor of the agent that claimed or created it |
 | Agent | The holder, or for a finished task the last holder, by the name copied from the caller |
 | Planner | Who planned the task, a person or an agent with its person; empty for a task created started until its first release |
@@ -141,6 +143,12 @@ A task holds:
 | Last activity time | Set by the library whenever the task receives a checkpoint, a file or a new result |
 | Result | Markdown text, rendered as Markdown |
 
+- **State attribution describes the current state.** Claiming a planned task,
+  releasing it, reopening it and waiting on a request record the caller. A
+  request decision that resumes the task records the person who decided it,
+  with no agent. A takeover or a title or result update keeps the attribution
+  of the current state. Person names are resolved when read; agent names are
+  copied when written.
 - **The result is one field.** Each update replaces it whole; the Scratchpad
   holds the work history. An agent of the task's party may update a `done`
   task's title or result without reopening it.
@@ -158,6 +166,9 @@ The Scratchpad records how the agent did the work. It holds checkpoints only.
 - **A checkpoint** is a short Markdown entry with a time, rendered as Markdown.
   Times strictly increase within a task, so a checkpoint's time names it. A
   task's Scratchpad is its checkpoints in time order.
+- **Each checkpoint records its writing agent by name**, copied at the time
+  of the write. A takeover does not change earlier checkpoints' attribution;
+  the task identifies their person.
 - **The Scratchpad is append-only.** A checkpoint cannot be edited. Only the
   holder appends one. A person may delete single checkpoints in their own tasks;
   agents cannot delete checkpoints.
@@ -172,6 +183,9 @@ Files hold immutable content, often large, such as reports, images,
 exported documents or data.
 
 - **Only the holder registers a file**, on a `working` or `waiting` task.
+- **Each file records the registering agent by name**, copied at registration.
+  Reporting it complete does not change that name; the task identifies its
+  person.
 - **Any agent of the task's party may report an upload complete**, including
   after a takeover or after work finishes.
 - **Uploads take two steps.** The agent gets a short-lived upload URL and

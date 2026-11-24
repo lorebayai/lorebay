@@ -88,6 +88,8 @@ pub(super) fn change_state(
         return Err(TaskAccessError::StateInvalid(task.state.clone()).into());
     }
     validate_reason(next, reason.as_deref())?;
+    let time = now_millis()?;
+    record_state_change(task, caller, time);
     task.state = next.as_str().to_owned();
     task.state_reason = reason;
     task.waiting_request_id = None;
@@ -95,7 +97,7 @@ pub(super) fn change_state(
         next,
         TaskState::Done | TaskState::Failed | TaskState::Canceled
     )
-    .then_some(now_millis()?);
+    .then_some(time);
     task.holder = if matches!(next, TaskState::Working | TaskState::Waiting) {
         Some(caller.agent()?.to_owned())
     } else {
@@ -105,6 +107,12 @@ pub(super) fn change_state(
         task.agent_name = task.holder.clone();
     }
     Ok(())
+}
+
+pub(super) fn record_state_change(task: &mut Model, caller: &Caller, time: i64) {
+    task.state_changed_by = caller.person_id.clone();
+    task.state_changed_agent_name = caller.agent_name.clone();
+    task.state_changed_at = time;
 }
 
 fn validate_reason(state: TaskState, reason: Option<&str>) -> Result<(), TaskError> {

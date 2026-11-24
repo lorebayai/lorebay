@@ -142,9 +142,9 @@ async fn scratchpad(
                 output::shell_word(space),
                 output::shell_word(task)
             ))
-            .columns(vec!["Time", "Content"])
-            .fields(vec!["time", "content"])
-            .multiline_columns(vec![1])
+            .columns(vec!["Time", "Agent name", "Content"])
+            .fields(vec!["time", "agent_name", "content"])
+            .multiline_columns(vec![2])
             .build(),
     )
     .await
@@ -186,6 +186,9 @@ fn task_output(body: Value) -> Outcome {
                 ("Agent name", "agent_name"),
                 ("Holder", "holder"),
                 ("Reason", "state_reason"),
+                ("State changed by", "state_changed_by"),
+                ("State changed agent", "state_changed_agent_name"),
+                ("State changed at", "state_changed_at"),
                 ("Planner", "planner"),
                 ("Planner agent", "planner_agent_name"),
                 ("Created at", "created_at"),

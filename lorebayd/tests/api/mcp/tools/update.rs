@@ -192,7 +192,7 @@ async fn update_and_reopen(
     let key = task["key"].as_str().unwrap();
     assert_eq!(
         tasks::scratchpad(server, person, key).await,
-        json!([{"time":checkpoint["time"], "content":"After reopening"}])
+        json!([{"time":checkpoint["time"], "agent_name":"Continuing agent", "content":"After reopening"}])
     );
 }
 

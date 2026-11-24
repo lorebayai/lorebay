@@ -75,7 +75,7 @@ fn build_catalog() -> Vec<(ToolName, Tool)> {
         list_tasks(),
         tool(
             ToolName::GetTask,
-            "Read a task by space and key such as TK-1, including its result and files. Set include_scratchpad to true to read checkpoints; page_size and cursor then page the Scratchpad.",
+            "Read a task by space and key such as TK-1, including who set its state and when, its result and files with each registering agent. Set include_scratchpad to true to read checkpoints with each writing agent; page_size and cursor then page the Scratchpad.",
             paged(
                 json!({"space":space(), "key":{"type":"string"}, "include_scratchpad":{"type":"boolean", "default":false}}),
             ),

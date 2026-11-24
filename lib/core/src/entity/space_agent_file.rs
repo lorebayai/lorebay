@@ -11,6 +11,8 @@ pub struct Model {
     pub space_id: String,
     #[sea_orm(column_type = "Text")]
     pub task_id: String,
+    #[sea_orm(column_type = "Text")]
+    pub agent_name: String,
     pub number: i64,
     #[sea_orm(column_type = "Text")]
     pub file_name: String,

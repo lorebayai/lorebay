@@ -28,7 +28,7 @@ pub async fn approve_person_request(
         return Err(PersonRequestError::OwnParty);
     }
     let entry = apply_person_request(write.transaction(), caller, &model).await?;
-    resume_waiting_task(write.transaction(), &model).await?;
+    resume_waiting_task(write.transaction(), caller, &model).await?;
     let number = model.number;
     let space_id = model.space_id.clone();
     let mut model = model.into_active_model();
@@ -55,7 +55,7 @@ pub async fn reject_person_request(
 ) -> Result<PersonRequest, PersonRequestError> {
     write.begin_operation(Some(caller))?;
     let (model, _) = decision_person_request(write, caller, space, key).await?;
-    resume_waiting_task(write.transaction(), &model).await?;
+    resume_waiting_task(write.transaction(), caller, &model).await?;
     let number = model.number;
     let space_id = model.space_id.clone();
     let mut model = model.into_active_model();
@@ -237,6 +237,7 @@ async fn apply_delete(
 
 async fn resume_waiting_task(
     transaction: &DatabaseTransaction,
+    caller: &Caller,
     request: &person_request::Model,
 ) -> Result<(), PersonRequestError> {
     let Some(id) = &request.from_task_id else {
@@ -248,6 +249,7 @@ async fn resume_waiting_task(
     };
     if task.state == "waiting" && task.waiting_request_id.as_deref() == Some(request.id.as_str()) {
         task.state = "working".to_owned();
+        super::task_state::record_state_change(&mut task, caller, now_millis()?);
         task.state_reason = None;
         task.waiting_request_id = None;
         repository

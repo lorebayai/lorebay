@@ -49,6 +49,7 @@ pub enum AgentFileCompletion {
 #[builder(field_defaults(setter(into)))]
 pub struct AgentFile {
     pub key: String,
+    pub agent_name: String,
     pub file_name: String,
     pub summary: String,
     pub size: i64,
@@ -127,6 +128,7 @@ impl TryFrom<agent_file::Model> for AgentFile {
     fn try_from(model: agent_file::Model) -> Result<Self, Self::Error> {
         Ok(Self::builder()
             .key(format_key("FL", model.number))
+            .agent_name(model.agent_name)
             .file_name(model.file_name)
             .summary(model.summary)
             .size(
@@ -376,6 +378,7 @@ async fn insert_registration(
             id: Set(primary_key()),
             space_id: Set(space_id.clone()),
             task_id: Set(task_id),
+            agent_name: Set(caller.agent()?.to_owned()),
             number: Set(number),
             file_name: Set(input.file_name.into()),
             summary: Set(input.summary.into()),
