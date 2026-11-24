@@ -19,9 +19,11 @@ use url::Url;
 
 use server::ServerTask;
 
+pub use fixtures::write_users;
 pub use oauth::*;
 
 pub const TEST_TIMEOUT: Duration = Duration::from_secs(15);
+pub const STARTUP_TIMEOUT: Duration = Duration::from_secs(120);
 pub const TEST_USERNAME: &str = "alice";
 pub const TEST_PASSWORD: &str = "correct horse battery staple";
 
@@ -435,7 +437,6 @@ pub async fn walk(
     rows
 }
 
-const STARTUP_TIMEOUT: Duration = Duration::from_secs(120);
 const PROBE_TIMEOUT: Duration = Duration::from_millis(250);
 const POLL_INTERVAL: Duration = Duration::from_millis(10);
 mod fixtures;

@@ -150,6 +150,7 @@ fn create_data_directory(directory: &Path) -> IoResult<()> {
         .mode(DATA_DIRECTORY_MODE)
         .create(directory)
     {
+        // The umask can clear owner bits, so set the exact mode after creation.
         Ok(()) => set_permissions(directory, Permissions::from_mode(DATA_DIRECTORY_MODE)),
         Err(error) if error.kind() == ErrorKind::NotFound => {
             let parent = directory

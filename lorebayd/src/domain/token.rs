@@ -92,6 +92,7 @@ impl TokenSigner {
 
 const SIGNING_KEY_FILE: &str = "signing.key";
 const SIGNING_KEY_BYTES: usize = 32;
+const SIGNING_KEY_MODE: u32 = 0o600;
 const TOKEN_AUDIENCE: &str = "lorebay-web-api";
 
 fn load_key(path: &Path) -> Result<Secret<Vec<u8>>> {
@@ -117,7 +118,7 @@ fn create_key(path: &Path) -> Result<()> {
         .tempfile_in(directory)?;
     temporary
         .as_file()
-        .set_permissions(Permissions::from_mode(0o600))?;
+        .set_permissions(Permissions::from_mode(SIGNING_KEY_MODE))?;
     let mut key = [0; SIGNING_KEY_BYTES];
     getrandom::fill(&mut key)?;
     temporary.write_all(&key)?;

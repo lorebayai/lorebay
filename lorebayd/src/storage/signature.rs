@@ -21,7 +21,7 @@ pub(super) fn load_key(directory: &Path) -> Result<Secret<Vec<u8>>> {
             .tempfile_in(directory)?;
         temporary
             .as_file()
-            .set_permissions(Permissions::from_mode(0o600))?;
+            .set_permissions(Permissions::from_mode(KEY_MODE))?;
         let mut bytes = [0; KEY_BYTES];
         getrandom::fill(&mut bytes)?;
         temporary.write_all(&bytes)?;
@@ -70,6 +70,7 @@ pub(super) fn verify(
 }
 
 const KEY_BYTES: usize = 32;
+const KEY_MODE: u32 = 0o600;
 
 fn tag(
     key: &[u8],

@@ -1,5 +1,7 @@
-use std::fs;
+use std::fs::{self, Permissions};
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+use std::process::Stdio;
 use std::time::{Duration, Instant};
 
 use reqwest::{Client, StatusCode};
@@ -7,10 +9,13 @@ use sea_orm::sea_query::{Alias, ColumnDef, Query, Table};
 use sea_orm::{ConnectOptions, ConnectionTrait, Database, DatabaseConnection};
 use serde_json::{Value, json};
 use tempfile::TempDir;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+use tokio::process::{Child, Command};
 use tokio::time::timeout;
 
-use crate::helpers::{Server, TEST_TIMEOUT};
+use crate::helpers::{
+    STARTUP_TIMEOUT, Server, TEST_PASSWORD, TEST_TIMEOUT, TEST_USERNAME, write_users,
+};
 
 #[tokio::test]
 async fn check_health_succeeds_when_server_is_running() {
@@ -122,6 +127,45 @@ async fn shut_down_finishes_when_client_stalls() {
 }
 
 #[tokio::test]
+async fn startup_creates_data_directory_private_to_its_user() {
+    let directory = TempDir::new().unwrap();
+    let users = directory.path().join("users.json");
+    write_users(&users, &[(TEST_USERNAME, TEST_PASSWORD)]).await;
+    let data = directory.path().join("missing-parent/data");
+    let database = data.join("lorebay.sqlite3");
+    let config = directory.path().join("server.json");
+    fs::write(
+        &config,
+        json!({
+            "listen_address": "127.0.0.1:0",
+            "public_url": "http://127.0.0.1:8080",
+            "users_file": users,
+            "data_directory": data,
+        })
+        .to_string(),
+    )
+    .unwrap();
+    assert!(!data.exists());
+    for (directory_mode, database_mode) in [(0o700, 0o600), (0o755, 0o644)] {
+        if data.exists() {
+            fs::set_permissions(&data, Permissions::from_mode(directory_mode)).unwrap();
+            fs::set_permissions(&database, Permissions::from_mode(database_mode)).unwrap();
+        }
+        let mut child = start_executable(&config).await;
+        for (path, expected) in [
+            (data.clone(), directory_mode),
+            (database.clone(), database_mode),
+            (data.join("signing.key"), 0o600),
+            (data.join("file-url-signing.key"), 0o600),
+        ] {
+            let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode, expected, "{}", path.display());
+        }
+        stop_executable(&mut child).await;
+    }
+}
+
+#[tokio::test]
 async fn startup_refuses_earlier_data_directory_without_changing_database() {
     let directory = TempDir::new().unwrap();
     let data = directory.path().join("data");
@@ -193,6 +237,65 @@ async fn startup_refuses_data_directory_from_earlier_release() {
         "{error}"
     );
     assert_eq!(fs::read(path).unwrap(), bytes);
+}
+
+async fn start_executable(config: &Path) -> Child {
+    let mut child = Command::new("/bin/sh")
+        .args(["-c", "umask 022; exec \"$0\" --config \"$1\""])
+        .arg(env!("CARGO_BIN_EXE_lorebayd"))
+        .arg(config)
+        .env_clear()
+        .env("TOKIO_WORKER_THREADS", "2")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .unwrap();
+    let address = timeout(STARTUP_TIMEOUT, async {
+        let mut lines = BufReader::new(child.stderr.as_mut().unwrap()).lines();
+        loop {
+            let line = lines
+                .next_line()
+                .await
+                .unwrap()
+                .expect("server stopped before listening");
+            let entry: Value = serde_json::from_str(&line).unwrap();
+            if let Some(address) = entry["fields"]["listen_address"].as_str() {
+                break address.to_owned();
+            }
+        }
+    })
+    .await
+    .unwrap();
+    let response = Client::builder()
+        .no_proxy()
+        .timeout(TEST_TIMEOUT)
+        .build()
+        .unwrap()
+        .get(format!("http://{address}/readyz"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    child
+}
+
+async fn stop_executable(child: &mut Child) {
+    let status = Command::new("/bin/kill")
+        .arg("-TERM")
+        .arg(child.id().unwrap().to_string())
+        .status()
+        .await
+        .unwrap();
+    assert!(status.success());
+    assert!(
+        timeout(TEST_TIMEOUT, child.wait())
+            .await
+            .unwrap()
+            .unwrap()
+            .success()
+    );
 }
 
 async fn connect_without_foreign_keys(path: &Path) -> DatabaseConnection {

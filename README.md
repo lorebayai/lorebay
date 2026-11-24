@@ -48,9 +48,9 @@ terminates HTTPS at `public_url` and forwards to `listen_address`,
 loopback. Uploads pass through the proxy, so let it accept request bodies up to
 `upload_size_limit_bytes`, 5 GB by default. Set limits per caller on the proxy,
 and give it `/healthz` and `/readyz` as health checks. Keep the data directory
-on a local file system; `lorebayd` creates it with mode `0700` and the database
-with mode `0600`. The directory also holds the signing keys. Back it up only
-while `lorebayd` is stopped ([Storage](docs/architecture/storage.md#3-layers)).
+on a local file system, readable only by the user that runs `lorebayd`. It creates
+a missing directory `0700` and the database `0600`. Back up the data directory
+only while stopped ([Storage](docs/architecture/storage.md#3-layers)).
 
 On each person's machine, get `lorebay` from the same release on Linux, as
 above with `lorebay-$(uname -m)-unknown-linux-musl.tar.gz`, and install it with
