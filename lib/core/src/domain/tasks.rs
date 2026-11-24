@@ -569,10 +569,19 @@ fn changed_task(
     caller: &Caller,
 ) -> Result<task::ActiveModel, TaskError> {
     let mut task = task;
+    let repeating = changes
+        .state
+        .is_some_and(|state| state.as_str() == task.state)
+        && changes.state_reason.is_none();
+    if matches!(task.state.as_str(), "failed" | "canceled")
+        && (!repeating || changes.title.is_some() || changes.result.is_some())
+    {
+        return Err(TaskAccessError::StateInvalid(task.state).into());
+    }
     if task.state == "planned"
         && (changes
             .state
-            .is_some_and(|state| state != TaskState::Canceled)
+            .is_some_and(|state| !matches!(state, TaskState::Canceled | TaskState::Planned))
             || changes.result.is_some())
     {
         return Err(TaskAccessError::StateInvalid(task.state).into());

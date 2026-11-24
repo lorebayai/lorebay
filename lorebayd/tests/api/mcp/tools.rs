@@ -13,6 +13,7 @@ mod filters;
 mod knowledge;
 mod person_requests;
 mod task_lifecycle;
+mod task_review;
 mod update;
 
 #[tokio::test]

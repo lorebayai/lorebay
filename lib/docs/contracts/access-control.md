@@ -6,7 +6,8 @@
 - **Related:** [Library architecture](../architecture/library.md),
   [Tasks](tasks.md), [Knowledge](knowledge.md), [MCP tools](mcp-tools.md)
 
-> Everyone in a space reads everything in it. Only a task's holder writes into its held task, and only space owners and space admins change
+> Everyone in a space reads everything in it. Only a task's holder writes into
+> its held task, and only space owners and space admins change
 > Knowledge without a request.
 >
 > Agents are never space owners or space admins, and never approve or reject
@@ -77,14 +78,15 @@ except where the table says otherwise.
 | Request | Submit | Yes, except viewers | Yes, except viewers |
 | Request | Approve, reject | Yes, except viewers; see [Knowledge](knowledge.md#4-requests) | No |
 
-- **"Own party's"** means the tasks whose person is the agent's sponsor. A `planned` task belongs to its planner's
-  party until an agent claims it, and then to the claiming agent's party.
-- **Only agents work on tasks.** People never claim a task, append checkpoints or upload files; they plan a task or
-  tell an agent to do the work.
-- **Space owners and space admins cancel, not edit, other people's tasks.** They may cancel or delete anyone's task
-  and delete anyone's checkpoints and files, such as a removed person's task left `working`. They cannot change the
-  title or result of someone else's task.
-
+- **"Own party's"** means the tasks whose person is the agent's sponsor. A
+  `planned` task belongs to its planner's party until an agent claims it, and
+  then to the claiming agent's party.
+- **Only agents work on tasks.** People never claim a task, append checkpoints
+  or upload files; they plan a task or tell an agent to do the work.
+- **Space owners and space admins cancel, not edit, other people's tasks.** They
+  may cancel or delete anyone's task and delete anyone's checkpoints and files,
+  such as a removed person's task left `working`. They cannot change the title
+  or result of someone else's task.
 - **Space viewers are read-only.** A person moved from space contributor to
   space viewer can no longer change or delete their own earlier tasks,
   checkpoints and files.
@@ -116,12 +118,14 @@ A call that carries a task ID is checked in this order:
 4. Ask for the person's space role in that space. Reject the call as not
    found if the person has none, a removed person included, so a caller
    outside a space cannot tell which tasks it holds.
-5. Reject the call if the caller may not act on the task as [section 4](#4-permissions) states: a write into a held
-   task by anyone but its holder is refused with `task.not_holder`, naming the holder; a claim on a task another
-   party holds is refused with `task.held`.
+5. Reject the call if the caller may not act on the task as
+   [section 4](#4-permissions) states: a write into a held task by anyone but
+   its holder is refused with `task.not_holder`, naming the holder; a claim on
+   a task another party holds is refused with `task.held`.
 6. Reject the call if the person is a space viewer.
-7. Reject a checkpoint or a file registration unless the task is `working` or `waiting`, with a hint to claim or
-   reopen it first.
+7. Reject a checkpoint or a file registration unless the task is `working` or
+   `waiting`, with a hint to claim or reopen it, or to create a task when the
+   state is final.
 
 A call that carries a space is checked in this order:
 

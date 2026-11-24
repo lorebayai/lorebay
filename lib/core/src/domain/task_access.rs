@@ -12,8 +12,10 @@ use super::space_access::{SpaceAccessError, SpaceRole, role_in_space, tenant_spa
 pub enum TaskAccessError {
     #[error(transparent)]
     Database(#[from] DbErr),
-    #[error("Task is held by {0}; claim the task before writing")]
+    #[error("Task is already held by {0}")]
     Held(String),
+    #[error("Task is held by {0} in another party")]
+    HeldByAnotherParty(String),
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
     #[error("Task not found")]
@@ -24,7 +26,7 @@ pub enum TaskAccessError {
     PermissionRequired,
     #[error(transparent)]
     Space(#[from] SpaceAccessError),
-    #[error("Operation is not allowed while the task is {0}; claim or reopen it first")]
+    #[error("Operation is not allowed while the task is {0}; {hint}", hint = invalid_state_hint(.0))]
     StateInvalid(String),
 }
 
@@ -32,7 +34,7 @@ impl TaskAccessError {
     pub const fn code(&self) -> &'static str {
         match self {
             Self::Database(_) | Self::Internal(_) => "server.internal",
-            Self::Held(_) => "task.held",
+            Self::Held(_) | Self::HeldByAnotherParty(_) => "task.held",
             Self::NotHolder(_) => "task.not_holder",
             Self::StateInvalid(_) => "task.state_invalid",
             Self::NotFound => "task.not_found",
@@ -115,12 +117,12 @@ pub(super) async fn check_task(
             .await?
             .ok_or(TaskAccessError::NotFound)?,
     };
+    check_party(&task, caller, role, check.action)?;
     if check.action == TaskAction::Claim && observed_state == "planned" && task.state != "planned" {
         return Err(TaskAccessError::Held(
             task.holder.clone().unwrap_or_default(),
         ));
     }
-    check_party(&task, caller, role, check.action)?;
     if check.action == TaskAction::Change && caller.agent_name.is_none() {
         return Err(TaskAccessError::PermissionRequired);
     }
@@ -144,7 +146,7 @@ fn check_party(
         if task.state == "planned" || task.person_id == caller.person_id() {
             return Ok(());
         }
-        return Err(TaskAccessError::Held(
+        return Err(TaskAccessError::HeldByAnotherParty(
             task.holder.clone().unwrap_or_default(),
         ));
     }
@@ -182,7 +184,6 @@ fn check_task_state(
     }
     let valid = match action {
         TaskAction::AppendCheckpoint | TaskAction::RegisterAgentFile => held,
-        TaskAction::Change => held || matches!(task.state.as_str(), "done" | "planned"),
         TaskAction::Release => task.state == "working",
         TaskAction::Claim => held || task.state == "planned",
         _ => true,
@@ -191,5 +192,13 @@ fn check_task_state(
         Ok(())
     } else {
         Err(TaskAccessError::StateInvalid(task.state.clone()))
+    }
+}
+
+fn invalid_state_hint(state: &str) -> &'static str {
+    if matches!(state, "failed" | "canceled") {
+        "create a new task"
+    } else {
+        "claim or reopen it first"
     }
 }

@@ -68,6 +68,9 @@ pub(super) fn change_state(
 ) -> Result<(), TaskError> {
     let current = TaskState::try_from(task.state.as_str())
         .map_err(|_| DbErr::Type("Invalid task state".into()))?;
+    if current == next && reason.is_none() {
+        return Ok(());
+    }
     let allowed = matches!(
         (current, next),
         (TaskState::Planned, TaskState::Canceled)

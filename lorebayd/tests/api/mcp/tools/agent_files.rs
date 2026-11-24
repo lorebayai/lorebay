@@ -271,7 +271,7 @@ async fn call_create_agent_file_fails_when_task_is_outside_writable_party() {
 }
 
 #[tokio::test]
-async fn call_create_agent_file_fails_with_reopen_hint_when_task_is_ended() {
+async fn call_create_agent_file_fails_with_reopen_hint_when_task_is_done() {
     let (server, person, agent) = tasks::setup().await;
     let task = tasks::create(&server, &agent, SPACE, "Before ending").await;
     let registered = register(&server, &agent, &task).await;

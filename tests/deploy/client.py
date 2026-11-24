@@ -390,10 +390,10 @@ def product():
                 "Rejected request changed Knowledge or lost its reason",
             )
     print("PASS knowledge_preserves_history_and_rollback_and_request_decisions", flush=True)
-    api("PATCH", path, {"status": "ended", "result": "Deployment checked"}, agent)
+    api("PATCH", path, {"state": "done", "result": "Deployment checked"}, agent)
     require(any(t["task_id"] == task["task_id"] for t in cli("task", "list", space)), "Task list is missing the task")
     shown = cli("task", "show", space, task["key"])
-    require(shown["status"] == "ended" and shown["result"] == "Deployment checked", "Task result is missing")
+    require(shown["state"] == "done" and shown["result"] == "Deployment checked", "Task result is missing")
     require(
         cli("task", "scratchpad", space, task["key"])
         == [{"time": checkpoint["time"], "content": "Plan: verify deployment, then record results"}],

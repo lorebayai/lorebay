@@ -5,7 +5,8 @@ use serde_json::{Value, json};
 
 use lorebay_lib_core::{
     AGENT_FILE_NAME_MAX_BYTES, AGENT_FILE_SUMMARY_MAX_CHARACTERS, CHECKPOINT_MAX_CHARACTERS,
-    KEYWORD_MAX_CHARACTERS, RESULT_MAX_CHARACTERS, TITLE_MAX_CHARACTERS,
+    KEYWORD_MAX_CHARACTERS, RESULT_MAX_CHARACTERS, TASK_REASON_MAX_CHARACTERS,
+    TITLE_MAX_CHARACTERS,
 };
 use lorebay_lib_core::{DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};
 
@@ -210,8 +211,8 @@ fn update_task() -> (ToolName, Tool) {
         json!({
             "task_id":{"type":"string"},
             "title":{"type":"string", "minLength":1, "maxLength":TITLE_MAX_CHARACTERS},
-            "state":{"type":"string", "enum":["planned", "working", "waiting", "done", "failed", "canceled"]},
-            "state_reason":{"type":"string", "minLength":1, "maxLength":2000},
+            "state":{"type":"string", "enum":["working", "waiting", "done", "failed", "canceled"]},
+            "state_reason":{"type":"string", "minLength":1, "maxLength":TASK_REASON_MAX_CHARACTERS},
             "result":{"type":"string", "maxLength":RESULT_MAX_CHARACTERS}
         }),
         &["task_id"],

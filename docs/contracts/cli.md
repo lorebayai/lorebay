@@ -44,17 +44,18 @@ It does not cover:
 
 ## 3. Commands
 
-Task commands use `--state` and print State; Request commands keep `--status`. `--claimable` lists planned tasks a non-viewer agent in the space may claim. `task cancel` requires a one-line reason.
+Task commands use `--state` and print State; Request commands use `--status`.
+`--claimable` lists planned tasks a non-viewer agent in the space may claim.
+`task cancel` requires a one-line reason.
 
 - **Commands use `lorebay <resource> <verb>`, except `login` and `logout`.**
   Every command accepts `--output human|json`; `human` is the default.
   `lorebay` with no command, and `--help` on any command, print usage and exit
   0 without a server call. Invalid arguments print a usage error and exit 2.
-- **A space is named by key and a person by username.** Examples are
-  `SPACE-1` and `alice`. Objects to read can be named by key. A command that
-  writes into a task takes its task ID, including canceling or deleting it,
-  as
-  [Keys and references](../../lib/docs/contracts/keys-and-references.md#4-task-ids)
+- **A space is named by key and a person by username.** Examples are `SPACE-1`
+  and `alice`. Objects to read can be named by key. A command that writes into a
+  task takes its task ID, including canceling or deleting it, as [Keys and
+  references](../../lib/docs/contracts/keys-and-references.md#4-task-ids)
   requires. It never treats a task key as a task ID.
 - **Commands send the operation's inputs and show its result.** They neither
   bypass checks nor choose a different operation based on the person's
@@ -121,15 +122,16 @@ contains spaces. Optional arguments appear in brackets. List rows follow
   follow [Knowledge](../../lib/docs/contracts/knowledge.md#3-knowledge-entries).
 - **Roles, states and statuses are checked before making a call.** Space member
   addition accepts `contributor` or `viewer`; setting a role accepts `admin`,
-  `contributor` or `viewer`. Ownership is not assigned by these commands.
-  Task states are `planned`, `working`, `waiting`, `done`, `failed` and `canceled`; request statuses are
-  `pending`, `approved` and `rejected`. Another value is a usage error.
+  `contributor` or `viewer`. Ownership is not assigned by these commands. Task
+  states are `planned`, `working`, `waiting`, `done`, `failed` and `canceled`;
+  request statuses are `pending`, `approved` and `rejected`. Another value is a
+  usage error.
 - **File lists come from `task show`.** `file url` returns the Web
   API's URL; the person can transfer the file's content with it over HTTP as
   [Tasks](../../lib/docs/contracts/tasks.md#5-files) describes.
-- **`--own-open` lists only the person's own tasks that are `working` or `waiting`**,
-  as `list_tasks` does for an agent's party; see
-  [MCP tools](../../lib/docs/contracts/mcp-tools.md#6-wrong-task-ids).
+- **`--own-open` lists only the person's own tasks that are `working` or
+  `waiting`**, as `list_tasks` does for an agent's party; see [MCP
+  tools](../../lib/docs/contracts/mcp-tools.md#6-wrong-task-ids).
 - **A contributor proposes a rollback with `request change`.** They read
   the chosen old version and supply its content and summary, following
   [Knowledge](../../lib/docs/contracts/knowledge.md#3-knowledge-entries).

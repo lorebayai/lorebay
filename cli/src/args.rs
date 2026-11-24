@@ -313,10 +313,11 @@ pub(crate) enum UserCommand {
 
 #[derive(Clone, Debug, Subcommand)]
 pub(crate) enum TaskCommand {
+    /// Cancel a task named by its task ID, with a one-line reason.
     Cancel {
         space: String,
         task_id: String,
-        #[arg(long)]
+        #[arg(long, help = "One-line reason for canceling the task")]
         reason: String,
     },
     /// Delete a task, its checkpoints, files and their content.
@@ -334,9 +335,10 @@ pub(crate) enum TaskCommand {
         #[command(flatten)]
         filters: TaskFilters,
     },
+    /// Plan a task for an agent to claim later.
     Plan {
         space: String,
-        #[arg(long)]
+        #[arg(long, help = "One sentence naming the work to plan")]
         title: String,
     },
     /// Read one page of a task's checkpoints in time order.

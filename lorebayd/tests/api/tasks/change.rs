@@ -119,7 +119,7 @@ async fn change_task_replaces_result_and_updates_last_activity() {
 }
 
 #[tokio::test]
-async fn add_checkpoint_fails_with_reopen_hint_when_task_is_ended() {
+async fn add_checkpoint_fails_with_reopen_hint_when_task_is_done() {
     let (server, person, agent) = setup().await;
     let task = create(&server, &agent, SPACE, "Paused work").await;
     append(&server, &agent, &task, "Before ending").await;
@@ -228,7 +228,7 @@ async fn change_task_fails_when_path_names_task_by_key() {
 }
 
 #[tokio::test]
-async fn change_task_closes_another_persons_task_when_caller_is_admin() {
+async fn change_task_cancels_another_persons_task_when_caller_is_admin() {
     let (server, person, agent) = setup().await;
     let bob = login(&server, "bob").await;
     let bob_agent = authorize_for(&server, &bob, "Bob agent").await;

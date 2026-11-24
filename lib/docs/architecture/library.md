@@ -668,8 +668,13 @@ both.
 - **A counter is taken in one statement** that adds one to the space's
   counter and returns the value, so concurrent takers queue on the space
   row and none reuses a number.
-- **A state and holder check follows the lock.** A write that needs a task in a given state or held by its caller, or a request to be `pending`, checks after locking that row.
-- **A request decision locks its source task first.** It reads the source task ID without a lock, locks that task, then locks and rechecks the request. Submission also takes the task first; a decision resumes the task only when its waiting request ID still matches.
+- **A state and holder check follows the lock.** A write that needs a task in a
+  given state or held by its caller, or a request to be `pending`, checks after
+  locking that row.
+- **A request decision locks its source task first.** It reads the source task
+  ID without a lock, locks that task, then locks and rechecks the request.
+  Submission also takes the task first; a decision resumes the task only when
+  its waiting request ID still matches.
 
 | Write | Locks, in order | Stays correct because |
 | --- | --- | --- |
@@ -718,15 +723,19 @@ The Knowledge and request writes follow the same rules.
 
 ## 15. Tests on Postgres
 
-**Concurrent claims of one planned task** is a named library scenario: two agents claim the same `planned` task at once; exactly one wins, and the other gets `task.held` naming the winner. All other new task lifecycle scenarios drive the product through HTTP and MCP.
-
 What only Postgres can show, such as two writers racing, and what no
 Lorebay entry point can reach (a write the product abandons, another
 tenant's space, a space number that is not positive) is tested against
 Postgres through the public API of `lorebay-lib-core`, with test
-implementations of the interfaces the tested operations call. The tests
-keep the [testing rules](../../../playbook/topics/testing.md#black-box) as
-they stand:
+implementations of the interfaces the tested operations call.
+
+**Concurrent claims of one planned task** is a named library scenario: two
+agents claim the same `planned` task at once; exactly one wins, and the other
+gets `task.held` naming the winner. Other task lifecycle scenarios drive the
+product through HTTP and MCP.
+
+The tests follow the
+[testing rules](../../../playbook/topics/testing.md#black-box) as they stand:
 
 - **One fixed loopback address.** Postgres listens on a loopback address
   and port that the test helper names in code. It is not Postgres's default

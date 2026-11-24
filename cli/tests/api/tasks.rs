@@ -73,7 +73,7 @@ async fn task_show_prints_result_task_id_and_agent_files() {
 }
 
 #[tokio::test]
-async fn task_close_ends_task_named_by_task_id() {
+async fn task_cancel_cancels_task_named_by_task_id() {
     let (server, space, agent) = task_context().await;
     for mode in ["human", "json"] {
         let mut expected = task_with_agent_files(
@@ -116,7 +116,7 @@ async fn task_close_ends_task_named_by_task_id() {
 }
 
 #[tokio::test]
-async fn task_close_fails_with_server_error_when_given_task_key() {
+async fn task_cancel_fails_with_server_error_when_given_task_key() {
     let (server, space, agent) = task_context().await;
     let task = create_task(&server, &space, &agent, "Keep task").await;
     let key = task["key"].as_str().unwrap();

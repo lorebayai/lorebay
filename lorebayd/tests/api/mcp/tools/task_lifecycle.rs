@@ -225,7 +225,7 @@ async fn claim_task_takes_over_and_old_holder_completes_upload() {
 }
 
 #[tokio::test]
-async fn create_request_waits_until_approved_rejected_or_withdrawn() {
+async fn create_request_waits_until_approved_or_withdrawn() {
     let (server, person, agent) = tasks::setup().await;
     for (index, decision) in ["approve", "reject", "reject"].into_iter().enumerate() {
         let task = tasks::create(&server, &agent, SPACE, "Wait for Knowledge decision").await;

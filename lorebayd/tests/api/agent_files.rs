@@ -404,7 +404,7 @@ async fn complete_agent_file_fails_when_file_was_not_uploaded() {
 }
 
 #[tokio::test]
-async fn register_agent_file_fails_with_reopen_hint_when_task_is_ended() {
+async fn register_agent_file_fails_with_reopen_hint_when_task_is_done() {
     let (server, person, agent) = setup().await;
     let task = create(&server, &agent, SPACE, "Paused file work").await;
     let registered = register(&server, &agent, &task).await;

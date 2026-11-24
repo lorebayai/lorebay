@@ -189,6 +189,7 @@ impl From<TaskAccessError> for ApiError {
     fn from(error: TaskAccessError) -> Self {
         let status = match error {
             TaskAccessError::Held(_)
+            | TaskAccessError::HeldByAnotherParty(_)
             | TaskAccessError::NotHolder(_)
             | TaskAccessError::StateInvalid(_) => StatusCode::CONFLICT,
             TaskAccessError::NotFound => StatusCode::NOT_FOUND,

@@ -42,7 +42,9 @@ is one sentence naming what the person wants done, not how; change it with
 `update_task` when the scope changes. A subagent is not a separate session: it
 creates no task, and you write its work into checkpoints.
 
-Create the task started, as `working`, so you hold it. Use `planned=true` only when the person asks to queue work for later or another agent. A planned task is not yours until you claim it. You may `release_task` back to planned only before recording work.
+Create the task started, as `working`, so you hold it. Use `planned=true` only
+when the person asks to queue work for later or another agent. A planned task is
+not yours until you claim it.
 
 Every session has a task, even one that only answers questions, except when:
 
@@ -59,25 +61,37 @@ not its key such as `TK-12`.
 
 ### 3. Continue a task
 
-Look for an earlier task only when the person says to continue, or names a planned task to take up.
-List your own party's tasks, which include those created by the person's other agents: call `list_tasks` with
-`person` set to the `caller_person` that `list_spaces` returns. To take up a planned task, list the planned tasks you
-may claim and claim the one the person means with `claim_task`. If you find your party's task, claim it to hold it
-before writing: a `working` or `waiting` task held by another of the person's agents moves to you; a `done` one is
-reopened with `update_task` setting `working`, which practices 12 and 13 limit. A `failed` or `canceled` task is
-final: continue in a new task whose result references it, such as `#TK-12`. Before continuing any task, your own or
-someone else's, read its result and its checkpoints. If none matches, or several look alike, ask the person; don't
-guess. Someone else's `done` task may be continued by creating a new task whose result references it. Someone else's
-`working` or `waiting` task may not be continued: tell the person it is still held, and by whom. A lost task ID, such
-as after the conversation is compacted, is found the same way: list your own party's `working` and `waiting` tasks,
-and also `done` ones when you finished the task in this session, and pick by title and last activity time, asking the
-person if unsure. After every write, check the task title in the response to confirm the write went to the right
-task. If a write is refused because another agent holds the task, another of the person's agents took it over: tell
-the person, and don't write to it again unless they ask you to take it back. If a task you wrote to before is
-suddenly not found, a person deleted it: tell the person once that the rest of this session goes unrecorded, and
-don't look for another task. If a write is refused for missing permission, the person may not write there: the task
-is another party's, or the person is now a viewer in that space; a viewer's agent records nothing more (practice 2)
-and tells the person once.
+Look for an earlier task only when the person says to continue or names a
+planned task. List your own party's tasks, including those created by the
+person's other agents: call `list_tasks` with `person` set to the
+`caller_person` that `list_spaces` returns. For a named planned task, list
+claimable tasks and claim the one the person means with `claim_task`.
+If none matches, or several look alike, ask the person; don't guess. Before
+continuing any task, read its result and checkpoints with `get_task`.
+
+- **Your own party's task:** claim a `working` or `waiting` task before
+  writing, taking it over when another of the person's agents holds it.
+  Reopen a `done` task with `update_task` setting `working`, only where
+  practice 12 or 13 permits.
+- **Someone else's `done` task:** continue in a separate task (practice 10).
+- **Someone else's `working` or `waiting` task:** don't continue it; tell the
+  person it is held, and by whom.
+
+Find a lost task ID, such as after compaction, the same way: list your own
+party's `working` and `waiting` tasks, and `done` ones you finished in this
+session. Pick by title and last activity time, asking the person if unsure.
+
+After every write, check the task title in the response to confirm the write
+went to the right task. When a write is refused:
+
+- **Another agent holds the task:** another of the person's agents took it
+  over. Tell the person, and write to it again only if they ask you to take
+  it back.
+- **A task you wrote to before is not found:** a person deleted it. Tell the
+  person once that the rest of this session goes unrecorded, and don't look
+  for another task.
+- **Missing permission:** the task is another party's, or the person is now
+  a viewer. A viewer's agent records nothing more and tells the person once.
 
 ### 4. Read Knowledge
 
@@ -223,18 +237,23 @@ End the task with `update_task` in three cases:
 
 When the person asks for more on the same work after you finished its task in
 this session, set the task back to `working` and continue in it instead of
-creating one; if another task is `working` or `waiting`, end it first, as on a switch.
-Work is the same unless it is unrelated to what the task's title names; if
-unsure, treat it as the same work.
+creating one; if another task is `working` or `waiting`, end it first, as on a
+switch. Work is the same unless it is unrelated to what the task's title names;
+if unsure, treat it as the same work.
 
-Set `done` when work is done, `failed` with a one-line `state_reason` when it could not be done, or `canceled` with a reason when the person drops it. `done` reports the agent's outcome; it is not acceptance.
+Set `done` when work is done, `failed` with a one-line `state_reason` when it
+could not be done, or `canceled` with a reason when the person drops it. `done`
+means you report the work done; it is not accepted.
 
-When work cannot continue without a person, set `waiting` with a one-line `state_reason` naming whom and what it waits on, or submit a blocking request with `wait=true`. Return to `working` when the person answers; the request's decision resumes its task if it still waits on it.
+When work cannot continue without a person, set `waiting` with a one-line
+`state_reason` naming whom and what it waits on. Return to `working` when the
+person answers.
 
 ### 13. Fix missed work in the original task
 
 When something turns out missing after a task is `done`, continue in that task
-instead of creating one. A `failed` or `canceled` task is final: create a new task referencing it. In a new session, find it by practice 3.
+instead of creating one. A `failed` or `canceled` task is final: create a new
+task referencing it. In a new session, find it by practice 3.
 
 - **The person points it out:** set the task back to `working`.
 - **You notice it yourself:** tell the person, and reopen it only after they

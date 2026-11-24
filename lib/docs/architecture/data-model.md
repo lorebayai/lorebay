@@ -65,9 +65,9 @@ It does not cover:
   `space_task`, `KN` for `space_knowledge`, `FL` for `space_agent_file` and
   `RQ` for `space_person_request`. Numbers come from counters on `space`; see
   [section 5.1](#51-space).
-- **States, statuses, kinds and actions** are stored as lowercase English values, as the
-  contracts write them, with a CHECK constraint, such as `planned` or
-  `waiting` for a task's `state`.
+- **States, statuses, kinds and actions** are stored as lowercase English
+  values, as the contracts write them, with a CHECK constraint, such as
+  `planned` or `waiting` for a task's `state`.
 - **Case-insensitive uniqueness** uses a second column, `name_key`, holding
   the name in lowercase, with the unique constraint on it. The library
   lowercases in code, not through a database collation, so both backends
@@ -76,12 +76,15 @@ It does not cover:
   using SQLite enables checks on every connection it supplies, as required
   by the [database interface](library.md#64-database). Each table's section
   says what a delete cascades to or clears.
-- **Person IDs and the tenant ID have no foreign key.** The columns that
-  hold a person, `space_task.person_id`, `space_task.planner_person_id`, `space_person_request.requested_by` and
-  `decided_by`, and `space_knowledge_version.applied_by`, and
-  `space.tenant_id` hold the product's IDs as text. They are the one
-  exception to declared foreign keys: the library has no table of people or
-  tenants, and removing or deleting a person writes nothing here.
+- **Person IDs and the tenant ID have no foreign key.** The columns that hold a
+  person, `space_task.person_id`, `space_task.planner_person_id`,
+  `space_person_request.requested_by` and `decided_by`, and
+  `space_knowledge_version.applied_by`, and `space.tenant_id` hold the product's
+  IDs as text. The library has no table of people or tenants, and removing or
+  deleting a person writes nothing here.
+- **The waiting request reference is logical.** `space_task.waiting_request_id`
+  has no foreign key because the task and request tables reference each other.
+  Submission and decisions check the link under the task lock.
 - **Keyword search uses `LIKE ? ESCAPE '\'`**, not a full-text index; how
   it matches is in [Storage](storage.md#4-database). Listing Knowledge by
   prefix does not use `LIKE`; see [section 6.1](#61-space_knowledge).
@@ -98,7 +101,7 @@ erDiagram
     space_task ||--o{ space_checkpoint : "has"
     space_task ||--o{ space_agent_file : "has"
     space_task |o--o{ space_person_request : "is the source of"
-    space_person_request |o--o{ space_task : "holds waiting"
+    space_person_request |o--o{ space_task : "holds waiting (logical)"
     space_knowledge ||--|{ space_knowledge_version : "has"
     space_knowledge |o--o{ space_person_request : "is the target of"
 ```
@@ -151,12 +154,12 @@ the library reads it through the
 | `id` | TEXT | Primary key, not null | |
 | `space_id` | TEXT | Not null, foreign key to `space` | |
 | `number` | INTEGER | Not null | The `TK` number; `(space_id, number)` is unique |
-| `random_id` | TEXT | Not null, unique | The task ID |
+| `random_id` | TEXT | Not null, unique | The task ID: 128 random bits, encoded as a string |
 | `person_id` | TEXT | Not null | Planner's person while planned, then the claiming agent's sponsor |
 | `agent_name` | TEXT | Nullable | Holder's copied name, or last holder after work finishes; empty while planned |
 | `holder` | TEXT | Nullable | The one agent holding a `working` or `waiting` task, copied by name |
-| `planner_person_id` | TEXT | Nullable | Who planned it; empty when created started |
-| `planner_agent_name` | TEXT | Nullable | Planning agent's copied name; empty when a person planned it |
+| `planner_person_id` | TEXT | Nullable | Who planned it; set on first release when created started |
+| `planner_agent_name` | TEXT | Nullable | Planning agent's copied name, or releasing holder on first release; empty when a person planned it |
 | `state_reason` | TEXT | Nullable | One-line reason for `waiting`, `failed` and `canceled` |
 | `waiting_request_id` | TEXT | Nullable | Request ID checked under the task lock; empty unless waiting on that request |
 | `work_recorded` | INTEGER | Not null, default 0; 0 or 1 | Sticky marker set by a checkpoint, file registration or result write; clearing or deleting content does not clear it |
@@ -168,12 +171,39 @@ the library reads it through the
 | `ended_at` | INTEGER | Nullable | Set for `done`, `failed` and `canceled`; cleared on reopen |
 | `last_activity_at` | INTEGER | Not null | Creation time initially, then checkpoint, completed file or result time; never moves backward |
 
-- **The holder exists exactly while `working` or `waiting`.** Claims, takeovers, releases and state changes update the locked task row. A release clears its agent name and restores the planner's party when there is one.
-- **CHECKs bind state, holder, reason and end time.** Only the six states are stored; `holder` is set exactly while working or waiting; `state_reason` is set exactly for waiting, failed and canceled; `ended_at` is set exactly for done, failed and canceled.
-- **A waiting request is a logical link.** Submission checks its source task under the lock and stores its ID; decisions lock that task before the request and clear the link only if it still matches. Requests are retained, and task deletion clears their `from_task_id`.
-- **A person stays a product ID.** The person names interface resolves the current person and planner together. Agent filters match the copied `agent_name`, within a person when specified.
-- **Deletion is real.** Task deletion cascades to checkpoints and files and clears its requests' source task. File content is removed after commit; see [Storage](storage.md#4-database).
-- **Indexes:** `space_task_space_activity` on `(space_id, last_activity_at)` and `space_task_space_person` on `(space_id, person_id, state)` support listing and own-open filters.
+- **The holder exists exactly while `working` or `waiting`.** Claims, takeovers,
+  releases and state changes update the locked task row. A release clears its
+  agent name and restores the planner's party. A started task's first release
+  records its current person and the releasing agent as planner.
+- **CHECKs bind state, holder, reason and end time.** Only the six states are
+  stored; `holder` is set exactly while working or waiting; `state_reason` is
+  set exactly for waiting, failed and canceled; `ended_at` is set exactly for
+  done, failed and canceled.
+- **A waiting request is a logical link.** Submission checks its source task
+  under the lock and stores its ID; decisions lock that task before the request
+  and clear the link only if it still matches. Requests persist, and task
+  deletion clears their `from_task_id`.
+- **A task names its agent by the copied name**, not by a reference to the
+  product's record of the agent. Filtering by agent matches
+  `(person_id, agent_name)` with a person filter, or `agent_name` across
+  every person without one. Agent names are unique per person, so the
+  filter still works after the agent's authorization ends, and an agent
+  authorized again under the same name is filtered together with its
+  earlier tasks.
+- **A person stays an ID.** Showing a task asks the
+  [person names interface](library.md#62-person-names) for the name, and a
+  person filter asks it for the ID, so a removed or deleted person's tasks
+  still show their name and are still found by it.
+- **Planner names use the same person names interface**, resolved with the
+  task's current person.
+- **`(id, space_id)` is unique** so that `space_agent_file` can reference a
+  task together with its space; see [section 5.4](#54-space_agent_file).
+- **Deletion is real.** Task deletion cascades to checkpoints and files and
+  clears its requests' source task. File content is removed after commit; see
+  [Storage](storage.md#4-database).
+- **Indexes:** `space_task_space_activity` on `(space_id, last_activity_at)` and
+  `space_task_space_person` on `(space_id, person_id, state)` support listing
+  and own-open filters.
 - **Keyword search** covers `title` and `result`.
 
 ### 5.3 `space_checkpoint`

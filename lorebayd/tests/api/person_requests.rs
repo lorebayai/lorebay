@@ -90,7 +90,7 @@ async fn submit_person_request_records_source_task_when_agent_submits() {
 }
 
 #[tokio::test]
-async fn submit_person_request_succeeds_when_task_is_ended() {
+async fn submit_person_request_succeeds_when_task_is_done() {
     let (server, owner) = setup().await;
     let agent = authorize_for(&server, &owner, "Writer").await;
     let task = create_task(&server, &agent, "SPACE-1", "Finished work").await;

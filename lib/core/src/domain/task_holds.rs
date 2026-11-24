@@ -54,6 +54,10 @@ pub async fn release_task(
     if task.work_recorded != 0 {
         return Err(TaskError::HasWork);
     }
+    if task.planner_person_id.is_none() {
+        task.planner_person_id = Some(task.person_id.clone());
+        task.planner_agent_name = caller.agent_name.clone();
+    }
     task.state = "planned".to_owned();
     task.holder = None;
     task.agent_name = None;
