@@ -2,6 +2,8 @@
 
 Install one Lorebay server on x86_64 Debian 12 or Ubuntu 24.04 with systemd as
 PID 1. nginx serves HTTPS and caller limits; `lorebayd` listens on loopback.
+A native install requires a dedicated host whose local users are trusted: any
+local process can reach `lorebayd` on loopback without nginx's per-caller limits.
 
 ## Usage
 
@@ -25,10 +27,9 @@ tar -xzf "$ARCHIVE" -C release lorebayd
 ./release/lorebayd hash-password < /srv/inputs/password.txt
 ```
 
-Create `/srv/inputs/users.yaml` using that hash and the users-file format in
-[lorebayd/README.md](../lorebayd/README.md#usage). `hash-password` needs no users
-file and starts no server. Protect and remove the password input when done.
-Obtain a certificate and its unencrypted private key for the domain, then run:
+Create `/srv/inputs/users.yaml` with that hash using the
+[users-file format](../lorebayd/README.md#usage); hashing needs no users file or server.
+Remove the password input. Obtain the domain's certificate and unencrypted key:
 
 ```bash
 python3 -B deploy/install.py install --version "$VERSION" \
@@ -91,9 +92,8 @@ Paths must be absolute, using letters, digits, `/`, `.`, `_` and `-`. Required:
 `--domain` (lowercase DNS name), `--users`, `--certificate`, `--key` and `--data`.
 Select the release explicitly with `--version`. Service keys are in
 `/etc/lorebay/lorebayd.json`; see [the reference](../lorebayd/README.md#configuration).
-The four application rate limits are team budgets of 1000; per-caller policy is
-in [nginx.conf.in](nginx.conf.in). Match `client_max_body_size` to
-`upload_size_limit_bytes`; run `nginx -t` before reloading.
+The four application budgets are 1000; per-caller policy is in [nginx.conf.in](nginx.conf.in).
+Match `client_max_body_size` to `upload_size_limit_bytes`; run `nginx -t` before reload.
 
 ## Docs
 
