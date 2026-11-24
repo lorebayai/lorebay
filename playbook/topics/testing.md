@@ -1,6 +1,6 @@
 # Testing
 
-How `lorebayd` and the product are tested: the four test levels, what each
+How `lorebayd` and the product are tested: the three test levels, what each
 one verifies, and where its tests live. Imported by the `AGENTS.md` of every
 Rust crate and test suite.
 
@@ -9,8 +9,7 @@ Rust crate and test suite.
 | Level | Verifies | Lives in | Runs |
 | --- | --- | --- | --- |
 | Integration | `lorebayd`'s contract through the Web API, MCP and file URLs, or one crate's contract through its public API | The crate's `tests/` folder | Pull request CI, when the crate is affected |
-| E2E | Product features, through the browser | `tests/e2e/` | Nightly |
-| Deployment | A release's native installation and Compose deployment, operation, removal and product workflows through HTTPS, the browser and CLI | `tests/deploy/` | Locally or by hand, with `runInCI: false` |
+| Deployment | A release's native installation and Compose deployment, operation, removal and product workflows through HTTPS, the browser and CLI | `tests/deploy/` | By hand, with `runInCI: false`, and before a pull request that changes `deploy/` or `tests/deploy/` lands |
 | Unit | One intricate pure function | A `#[cfg(test)] mod tests`, see [Unit tests](#unit-tests) | Pull request CI, when affected |
 
 - Integration tests are the level for backend behavior. Unit tests are a rare
@@ -24,7 +23,6 @@ Rust crate and test suite.
   The operation is the API call, crate item or user goal under test; the
   outcome is a present-tense verb phrase; `_when_` adds the condition only
   when one matters: `add_checkpoint_fails_when_task_is_ended`.
-  TypeScript titles use the same words separated by spaces.
 
 ## Integration tests
 
@@ -92,30 +90,6 @@ The CLI's scenarios instead run the compiled `lorebay` against a compiled
 
 Run them with `moon run <project>:integration`.
 
-## E2E tests
-
-An E2E test verifies a **product feature** through the browser, against a
-running `lorebayd`.
-
-- All E2E tests live in one test suite, `tests/e2e/`, written in TypeScript
-  with Playwright.
-- Each test is one **journey**: a person's goal from start to finish, such
-  as approving a request an agent submitted.
-- A journey asserts what the person sees, with role, label and text locators
-  and Playwright's auto-waiting assertions (`await expect(...)`).
-- Contract details, such as error responses and edge cases, belong to
-  integration tests. A journey verifies that the feature works for the
-  person.
-- Each journey signs in as its own user from the suite's users file, creates
-  its own space and data, and depends on no other journey. It creates agent
-  data through MCP with an access token, as an agent would.
-- The suite runs against a `lorebayd` built from the latest `main`, with a
-  fresh data directory. No other service runs.
-- The suite runs nightly. Its moon task sets `runInCI: false`, which keeps it
-  out of pull request CI. Run it locally with `moon run tests/e2e:e2e`.
-- CI retries a failed journey once and records a trace of the retry. A
-  journey that passes only on retry is flaky; fix it.
-
 ## Deployment tests
 
 A deployment test qualifies release files and complete installations as a
@@ -134,6 +108,20 @@ and must not import a crate or substitute source builds for release files.
   trust the supplied authority without disabling certificate verification.
 - The deployment task sets `runInCI: false`. Run it with
   `moon run tests/deploy:deploy -- /absolute/path/to/config.json`.
+- A pull request that changes `deploy/` or `tests/deploy/` must run the
+  suite before it lands, and the pull request's evidence must name the
+  run's result.
+
+## Milestone acceptance
+
+A milestone's acceptance checks stay in the repository, so later changes
+and releases can rerun them.
+
+- Each deterministic acceptance check must become an automated check before
+  the milestone closes: an integration scenario for a contract, or a
+  deployment check for a release's installation and operation.
+- A check that depends on a real agent harness and model stays by hand, with
+  its evidence on the acceptance issue.
 
 ## Unit tests
 
