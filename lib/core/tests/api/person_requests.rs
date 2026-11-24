@@ -76,7 +76,7 @@ async fn approve_person_request_decides_once_when_approved_concurrently() {
 }
 
 #[tokio::test]
-async fn approve_person_request_keeps_versions_consecutive_when_entry_changes_concurrently() {
+async fn approve_person_request_refuses_outdated_request_when_entry_changes_concurrently() {
     with_postgres(async |fixture| {
         fixture.space().await;
         prepare_change(&fixture.state, &fixture.person)
@@ -109,14 +109,14 @@ async fn approve_person_request_keeps_versions_consecutive_when_entry_changes_co
         held.release();
         assert_eq!(changing.await.unwrap().unwrap().version, 2);
         assert_eq!(
-            approval.await.unwrap().unwrap().details.status.as_str(),
-            "approved"
+            approval.await.unwrap().unwrap_err().code(),
+            "person_request.outdated"
         );
         let entry = read_knowledge_entry(&fixture.state, &fixture.person, SPACE, target().unwrap())
             .await
             .unwrap();
-        assert_eq!(entry.version, 3);
-        assert_eq!(entry.content.as_deref(), Some("Proposed"));
+        assert_eq!(entry.version, 2);
+        assert_eq!(entry.content.as_deref(), Some("Intervening"));
         assert_eq!(entry.summary.as_deref(), Some("Concurrent"));
         assert_eq!(
             records.lock().unwrap()[0].as_ref().unwrap().operation,
