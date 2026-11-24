@@ -59,6 +59,7 @@ pub enum PersonRequestContent {
 pub enum PersonRequestSource<'a> {
     Space(&'a str),
     Task(TaskTarget<'a>),
+    WaitingTask(TaskTarget<'a>),
 }
 
 #[derive(Clone, Debug)]

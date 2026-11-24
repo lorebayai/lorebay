@@ -13,64 +13,50 @@ use super::helpers::{
 };
 
 #[tokio::test]
-async fn change_task_sets_end_time_when_status_becomes_ended() {
+async fn change_task_sets_end_time_and_persists_done() {
     let (server, person, agent) = setup().await;
     let created = create(&server, &agent, SPACE, "Original").await;
-    let other = authorize_for(&server, &person, "Continuing agent").await;
     let original = read(&server, &person, "TK-1").await;
-    let mut expected = original.clone();
-    expected["title"] = json!("Revised #KN-999");
-    assert_eq!(
-        change(
-            &server,
-            &other,
-            &created,
-            json!({"title":"Revised #KN-999"})
-        )
-        .await,
-        expected
-    );
-    let ended = change(&server, &person, &created, json!({"status":"ended"})).await;
-    assert!(ended["ended_at"].as_i64().unwrap() >= original["started_at"].as_i64().unwrap());
-    expected["status"] = json!("ended");
-    expected["ended_at"] = ended["ended_at"].clone();
-    assert_eq!(ended, expected);
-    sleep(Duration::from_millis(2)).await;
-    assert_eq!(
-        change(&server, &agent, &created, json!({"status":"ended"})).await,
-        ended
-    );
-    expected["title"] = json!("Final title");
-    assert_eq!(
-        change(&server, &other, &created, json!({"title":"Final title"})).await,
-        expected
-    );
+    change(
+        &server,
+        &agent,
+        &created,
+        json!({"title":"Revised #KN-999"}),
+    )
+    .await;
+    let done = change(&server, &agent, &created, json!({"state":"done"})).await;
+    assert!(done["ended_at"].as_i64().unwrap() >= original["started_at"].as_i64().unwrap());
+    assert_eq!(done["state"], "done");
+    assert_eq!(done["title"], "Revised #KN-999");
+    assert!(done["holder"].is_null());
     let directory = server.stop().await;
     let server = Server::restart_with_users(
         directory,
         &[("alice", TEST_PASSWORD), ("bob", TEST_PASSWORD)],
     )
     .await;
-    assert_eq!(read(&server, &person, "TK-1").await, expected);
+    assert_eq!(read(&server, &person, "TK-1").await, done);
     server.stop().await;
 }
 
 #[tokio::test]
-async fn change_task_clears_end_time_when_status_returns_to_in_progress() {
-    let (server, person, agent) = setup().await;
+async fn change_task_clears_end_time_when_state_returns_to_working() {
+    let (server, _person, agent) = setup().await;
     let created = create(&server, &agent, SPACE, "Resumable").await;
-    let ended = change(&server, &agent, &created, json!({"status":"ended"})).await;
+    let ended = change(&server, &agent, &created, json!({"state":"done"})).await;
     let mut expected = ended.clone();
-    expected["status"] = json!("in progress");
+    expected["state"] = json!("working");
     expected["ended_at"] = Value::Null;
+    expected["holder"] = json!("Research agent");
     assert_eq!(
-        change(&server, &person, &created, json!({"status":"in progress"})).await,
+        change(&server, &agent, &created, json!({"state":"working"})).await,
         expected
     );
     sleep(Duration::from_millis(2)).await;
-    let ended_again = change(&server, &agent, &created, json!({"status":"ended"})).await;
+    let ended_again = change(&server, &agent, &created, json!({"state":"done"})).await;
     assert!(ended_again["ended_at"].as_i64().unwrap() > ended["ended_at"].as_i64().unwrap());
-    expected["status"] = json!("ended");
+    expected["state"] = json!("done");
+    expected["holder"] = Value::Null;
     expected["ended_at"] = ended_again["ended_at"].clone();
     assert_eq!(ended_again, expected);
     server.stop().await;
@@ -108,17 +94,18 @@ async fn change_task_replaces_result_and_updates_last_activity() {
     let tail = list_page(&server, &person, TASKS, &[("cursor", cursor)]).await;
     assert_eq!(tail["data"][0]["key"], second["key"]);
     assert!(tail["meta"]["next_cursor"].is_null());
-    let ended = change(&server, &person, &first, json!({"status":"ended"})).await;
+    change(&server, &agent, &first, json!({"state":"done"})).await;
     sleep(Duration::from_millis(2)).await;
     let replaced = change(
         &server,
-        &person,
+        &agent,
         &first,
-        json!({"result":"Replacement Markdown **result**"}),
+        json!({"state":"working", "result":"Replacement Markdown **result**"}),
     )
     .await;
-    expected["status"] = json!("ended");
-    expected["ended_at"] = ended["ended_at"].clone();
+    expected["state"] = json!("working");
+    expected["holder"] = json!("Research agent");
+    expected["ended_at"] = Value::Null;
     expected["result"] = json!("Replacement Markdown **result**");
     expected["last_activity_at"] = replaced["last_activity_at"].clone();
     assert_eq!(replaced, expected);
@@ -137,7 +124,7 @@ async fn add_checkpoint_fails_with_reopen_hint_when_task_is_ended() {
     let task = create(&server, &agent, SPACE, "Paused work").await;
     append(&server, &agent, &task, "Before ending").await;
     let checkpoints = scratchpad(&server, &person, "TK-1").await;
-    let ended = change(&server, &agent, &task, json!({"status":"ended"})).await;
+    let ended = change(&server, &agent, &task, json!({"state":"done"})).await;
     let refusal = assert_problem(
         checkpoint_request(
             &server,
@@ -148,16 +135,16 @@ async fn add_checkpoint_fails_with_reopen_hint_when_task_is_ended() {
         )
         .await,
         StatusCode::CONFLICT,
-        "task.ended",
+        "task.state_invalid",
     )
     .await;
     assert_eq!(
         refusal["title"],
-        "Set the task back to in progress before appending a checkpoint"
+        "Operation is not allowed while the task is done; claim or reopen it first"
     );
     assert_eq!(scratchpad(&server, &person, "TK-1").await, checkpoints);
     assert_eq!(read(&server, &person, "TK-1").await, ended);
-    change(&server, &person, &task, json!({"status":"in progress"})).await;
+    change(&server, &agent, &task, json!({"state":"working"})).await;
     let added = append(&server, &agent, &task, "After reopening").await;
     assert_eq!(added["task_title"], "Paused work");
     let checkpoints = scratchpad(&server, &person, "TK-1").await;
@@ -168,7 +155,7 @@ async fn add_checkpoint_fails_with_reopen_hint_when_task_is_ended() {
     );
     let reopened = read(&server, &person, "TK-1").await;
     assert_eq!(reopened["last_activity_at"], added["time"]);
-    assert_eq!(reopened["status"], "in progress");
+    assert_eq!(reopened["state"], "working");
     assert!(reopened["ended_at"].is_null());
     server.stop().await;
 }
@@ -184,7 +171,7 @@ async fn change_task_fails_when_task_belongs_to_another_party() {
     for tokens in [&bob, &bob_agent] {
         for changes in [
             json!({"title":"Forbidden"}),
-            json!({"status":"ended"}),
+            json!({"state":"done"}),
             json!({"result":"Forbidden"}),
         ] {
             assert_change_denied(&server, tokens, &alice_task, changes).await;
@@ -192,9 +179,9 @@ async fn change_task_fails_when_task_belongs_to_another_party() {
     }
     for role in ["contributor", "admin"] {
         space_member(&server, &person, Method::PATCH, role).await;
-        assert_change_denied(&server, &bob_agent, &alice_task, json!({"status":"ended"})).await;
+        assert_change_denied(&server, &bob_agent, &alice_task, json!({"state":"done"})).await;
     }
-    assert_change_denied(&server, &owner_agent, &bob_task, json!({"status":"ended"})).await;
+    assert_change_denied(&server, &owner_agent, &bob_task, json!({"state":"done"})).await;
     space_member(&server, &person, Method::DELETE, "").await;
     create_space(&server, &bob, "Bob only", "Bob work").await;
     for tokens in [&bob, &bob_agent] {
@@ -202,14 +189,8 @@ async fn change_task_fails_when_task_belongs_to_another_party() {
             assert_task_hidden(&server, tokens, task).await;
         }
     }
-    assert_eq!(
-        read(&server, &person, "TK-1").await["status"],
-        "in progress"
-    );
-    assert_eq!(
-        read(&server, &person, "TK-2").await["status"],
-        "in progress"
-    );
+    assert_eq!(read(&server, &person, "TK-1").await["state"], "working");
+    assert_eq!(read(&server, &person, "TK-2").await["state"], "working");
     server.stop().await;
 }
 
@@ -230,7 +211,7 @@ async fn change_task_fails_when_path_names_task_by_key() {
             ("SPACE-2", id),
         ] {
             let error = assert_problem(
-                change_request(&server, tokens, space, id, json!({"status":"ended"})).await,
+                change_request(&server, tokens, space, id, json!({"state":"done"})).await,
                 StatusCode::NOT_FOUND,
                 "task.not_found",
             )
@@ -257,16 +238,32 @@ async fn change_task_closes_another_persons_task_when_caller_is_admin() {
     let bob_task = create(&server, &bob_agent, SPACE, "Bob task").await;
     let alice_original = read(&server, &person, "TK-1").await;
     let bob_original = read(&server, &person, "TK-2").await;
-    let ended = change(&server, &bob, &alice_task, json!({"status":"ended"})).await;
+    let ended = change(
+        &server,
+        &bob,
+        &alice_task,
+        json!({"state":"canceled", "state_reason":"Stopped by admin"}),
+    )
+    .await;
     let mut expected = alice_original;
-    expected["status"] = json!("ended");
+    expected["state_reason"] = json!("Stopped by admin");
+    expected["state"] = json!("canceled");
+    expected["holder"] = Value::Null;
     expected["ended_at"] = ended["ended_at"].clone();
     assert!(ended["ended_at"].is_i64());
     assert_eq!(ended, expected);
     space_member(&server, &person, Method::DELETE, "").await;
-    let ended = change(&server, &person, &bob_task, json!({"status":"ended"})).await;
+    let ended = change(
+        &server,
+        &person,
+        &bob_task,
+        json!({"state":"canceled", "state_reason":"Stopped by owner"}),
+    )
+    .await;
     let mut expected = bob_original;
-    expected["status"] = json!("ended");
+    expected["state_reason"] = json!("Stopped by owner");
+    expected["state"] = json!("canceled");
+    expected["holder"] = Value::Null;
     expected["ended_at"] = ended["ended_at"].clone();
     assert!(ended["ended_at"].is_i64());
     assert_eq!(ended, expected);
@@ -286,16 +283,22 @@ async fn change_task_fails_when_admin_edits_another_persons_title() {
         for changes in [
             json!({"title":"Forbidden"}),
             json!({"result":"Forbidden"}),
-            json!({"status":"in progress"}),
-            json!({"status":"ended","title":"Original"}),
-            json!({"status":"ended","result":""}),
-            json!({"status":"ended","title":"Forbidden","result":"Forbidden"}),
+            json!({"state":"working"}),
+            json!({"state":"done","title":"Original"}),
+            json!({"state":"done","result":""}),
+            json!({"state":"done","title":"Forbidden","result":"Forbidden"}),
         ] {
             assert_change_denied(&server, tokens, task, changes).await;
         }
-        change(&server, tokens, task, json!({"status":"ended"})).await;
+        change(
+            &server,
+            tokens,
+            task,
+            json!({"state":"canceled", "state_reason":"Stopped"}),
+        )
+        .await;
         for changes in [
-            json!({"status":"in progress"}),
+            json!({"state":"working"}),
             json!({"title":"Forbidden"}),
             json!({"result":"Forbidden"}),
         ] {
@@ -312,12 +315,12 @@ async fn change_task_fails_when_person_became_viewer() {
     let agent = authorize_for(&server, &bob, "Bob agent").await;
     space_member(&server, &person, Method::POST, "contributor").await;
     let task = create(&server, &agent, SPACE, "Bob task").await;
-    change(&server, &bob, &task, json!({"result":"Existing result"})).await;
+    change(&server, &agent, &task, json!({"result":"Existing result"})).await;
     space_member(&server, &person, Method::PATCH, "viewer").await;
     for tokens in [&bob, &agent] {
         for changes in [
             json!({"title":"Forbidden"}),
-            json!({"status":"ended"}),
+            json!({"state":"done"}),
             json!({"result":""}),
         ] {
             assert_change_denied(&server, tokens, &task, changes).await;
@@ -333,19 +336,19 @@ async fn change_task_fails_when_no_field_is_given() {
     let original = read(&server, &person, "TK-1").await;
     for (body, field, code) in [
         (json!({}), "body", "required"),
-        (json!({"status":"unknown"}), "status", "invalid"),
+        (json!({"state":"unknown"}), "state", "invalid"),
         (json!({"title":""}), "title", "required"),
         (json!({"title":"  "}), "title", "required"),
         (json!({"title":"x".repeat(201)}), "title", "too_long"),
         (json!({"title":"\u{4e2d}".repeat(201)}), "title", "too_long"),
         (json!({"result":"x".repeat(100_001)}), "result", "too_long"),
         (
-            json!({"title":"Uncommitted","status":"ended","result":"\u{4e2d}".repeat(100_001)}),
+            json!({"title":"Uncommitted","state":"done","result":"\u{4e2d}".repeat(100_001)}),
             "result",
             "too_long",
         ),
         (json!({"title":null}), "body", "invalid"),
-        (json!({"status":null}), "body", "invalid"),
+        (json!({"state":null}), "body", "invalid"),
         (json!({"result":null}), "body", "invalid"),
     ] {
         let error = assert_problem(
@@ -365,27 +368,7 @@ async fn change_task_fails_when_no_field_is_given() {
         assert_eq!(error["errors"][0]["code"], code);
         assert_eq!(read(&server, &person, "TK-1").await, original);
     }
-    let title = "\u{4e2d}".repeat(200);
-    let result = "\u{4e2d}".repeat(100_000);
-    let changed = change(
-        &server,
-        &agent,
-        &task,
-        json!({"title":title,"result":result,"status":"ended"}),
-    )
-    .await;
-    assert_eq!(changed["title"], title);
-    assert_eq!(changed["result"], result);
-    assert_eq!(changed["status"], "ended");
-    assert!(changed["ended_at"].is_i64());
-    assert_eq!(
-        change(&server, &person, &task, json!({"result":"  "})).await["result"],
-        "  "
-    );
-    assert_eq!(
-        change(&server, &person, &task, json!({"result":""})).await["result"],
-        ""
-    );
+    assert_task_text_limits(&server, &agent, &task).await;
     server.stop().await;
 }
 
@@ -458,7 +441,7 @@ async fn assert_task_hidden(server: &Server, tokens: &Value, task: &Value) {
                 tokens,
                 missing_space,
                 "unknown",
-                json!({"status":"ended"}),
+                json!({"state":"done"}),
             )
             .await,
             StatusCode::NOT_FOUND,
@@ -472,7 +455,7 @@ async fn assert_task_hidden(server: &Server, tokens: &Value, task: &Value) {
                     tokens,
                     path_space,
                     task["task_id"].as_str().unwrap(),
-                    json!({"status":"ended"})
+                    json!({"state":"done"})
                 )
                 .await,
                 StatusCode::NOT_FOUND,
@@ -482,4 +465,34 @@ async fn assert_task_hidden(server: &Server, tokens: &Value, task: &Value) {
             missing
         );
     }
+}
+
+async fn assert_task_text_limits(server: &Server, agent: &Value, task: &Value) {
+    let title = "\u{4e2d}".repeat(200);
+    let result = "\u{4e2d}".repeat(100_000);
+    let changed = change(
+        server,
+        agent,
+        task,
+        json!({"title":title,"result":result,"state":"done"}),
+    )
+    .await;
+    assert_eq!(changed["title"], title);
+    assert_eq!(changed["result"], result);
+    assert_eq!(changed["state"], "done");
+    assert!(changed["ended_at"].is_i64());
+    assert_eq!(
+        change(
+            server,
+            agent,
+            task,
+            json!({"state":"working", "result":"  "})
+        )
+        .await["result"],
+        "  "
+    );
+    assert_eq!(
+        change(server, agent, task, json!({"result":""})).await["result"],
+        ""
+    );
 }

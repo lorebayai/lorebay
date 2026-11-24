@@ -4,6 +4,7 @@ use serde_json::{Value, json};
 use crate::helpers::{
     Server, assert_problem, authorize_for, create_space, list_page, list_response, login, request,
 };
+use crate::mcp::tools::call as call_tool;
 
 use super::helpers::{SPACE, TASKS, append, create, read, setup, space_member};
 
@@ -39,11 +40,11 @@ async fn list_tasks_returns_only_matching_tasks_when_filtered_by_person_agent_an
                 vec![
                     ("person", "alice"),
                     ("agent", "Shared"),
-                    ("status", "in progress"),
+                    ("state", "working"),
                 ],
                 vec!["TK-2"],
             ),
-            (vec![("status", "ended")], vec!["TK-5"]),
+            (vec![("state", "canceled")], vec!["TK-5"]),
             (vec![("person", "missing")], vec![]),
             (vec![("agent", "missing")], vec![]),
         ] {
@@ -118,6 +119,13 @@ async fn list_tasks_returns_own_party_tasks_not_ended_when_asked() {
     for tokens in [&bob, &other] {
         assert_keys(&server, tokens, &[("own_open", "true")], &["TK-4"]).await;
     }
+    call_tool(
+        &server,
+        &agent,
+        "claim_task",
+        json!({"task_id":task["task_id"]}),
+    )
+    .await;
     append(&server, &agent, &task, "Found and continued").await;
     append(&server, &agent, &task, "Still working").await;
     space_member(&server, &person, Method::PATCH, "viewer").await;
@@ -209,7 +217,7 @@ async fn list_tasks_matches_keyword_in_result() {
         &[
             ("person", "alice"),
             ("agent", "Research agent"),
-            ("status", "in progress"),
+            ("state", "working"),
             ("keyword", "50%"),
         ],
         &["TK-2"],
@@ -266,7 +274,7 @@ async fn list_tasks_fails_when_cursor_came_from_other_filters() {
     let filters = [
         ("person", "alice"),
         ("agent", "Research agent"),
-        ("status", "in progress"),
+        ("state", "working"),
         ("keyword", "Matching"),
     ];
     let mut query = filters.to_vec();
@@ -276,7 +284,7 @@ async fn list_tasks_fails_when_cursor_came_from_other_filters() {
     for (field, value) in [
         ("person", "bob"),
         ("agent", "Other"),
-        ("status", "ended"),
+        ("state", "canceled"),
         ("keyword", "task"),
     ] {
         for replacement in [None, Some(value)] {
@@ -310,7 +318,7 @@ async fn list_tasks_omits_deleted_tasks_when_reusing_filtered_cursor() {
     let filters = [
         ("person", "alice"),
         ("agent", "Research agent"),
-        ("status", "in progress"),
+        ("state", "working"),
         ("keyword", "Matching"),
     ];
     let mut query = filters.to_vec();
@@ -375,15 +383,12 @@ async fn list_tasks_fails_when_status_is_unknown() {
     let (server, person, agent) = setup().await;
     create(&server, &agent, SPACE, "Unchanged").await;
     for (query, field) in [
-        (vec![("status", "unknown")], "status"),
+        (vec![("state", "unknown")], "state"),
         (vec![("keyword", "")], "keyword"),
         (vec![("keyword", "  ")], "keyword"),
         (vec![("own_open", "true"), ("person", "alice")], "person"),
-        (vec![("own_open", "true"), ("status", "ended")], "status"),
-        (
-            vec![("own_open", "true"), ("status", "in progress")],
-            "status",
-        ),
+        (vec![("own_open", "true"), ("state", "canceled")], "state"),
+        (vec![("own_open", "true"), ("state", "working")], "state"),
     ] {
         assert_query_error(&server, &person, &query, field).await;
     }
@@ -432,8 +437,14 @@ async fn change(server: &Server, tokens: &Value, task: &Value, changes: Value) -
 
 async fn end_task(server: &Server, tokens: &Value, number: i64) {
     let task = read(server, tokens, &format!("TK-{number}")).await;
-    let ended = change(server, tokens, &task, json!({"status":"ended"})).await;
-    assert_eq!(ended["status"], "ended");
+    let ended = change(
+        server,
+        tokens,
+        &task,
+        json!({"state":"canceled", "state_reason":"Fixture complete"}),
+    )
+    .await;
+    assert_eq!(ended["state"], "canceled");
     assert!(ended["ended_at"].is_i64());
 }
 

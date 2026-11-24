@@ -326,6 +326,7 @@ pub async fn complete_agent_file(
         .await?;
     let title = task.title.clone();
     let mut task = task.into_active_model();
+    task.work_recorded = Set(1);
     task.last_activity_at = Set(time);
     TaskRepository::builder()
         .connection(transaction)
@@ -352,7 +353,16 @@ async fn insert_registration(
     )
     .await?;
     let transaction = write.transaction();
-    let space_id = task.space_id;
+    let title = task.title.clone();
+    let space_id = task.space_id.clone();
+    let task_id = task.id.clone();
+    let mut model = task.into_active_model();
+    model.work_recorded = Set(1);
+    TaskRepository::builder()
+        .connection(transaction)
+        .build()
+        .update(model)
+        .await?;
     let number = SpaceRepository::builder()
         .connection(transaction)
         .build()
@@ -365,7 +375,7 @@ async fn insert_registration(
         .insert(agent_file::ActiveModel {
             id: Set(primary_key()),
             space_id: Set(space_id.clone()),
-            task_id: Set(task.id),
+            task_id: Set(task_id),
             number: Set(number),
             file_name: Set(input.file_name.into()),
             summary: Set(input.summary.into()),
@@ -377,7 +387,7 @@ async fn insert_registration(
         })
         .await?;
     write.record(WriteOperation::RegisterAgentFile, Some(space_id));
-    Ok((number, location, task.title))
+    Ok((number, location, title))
 }
 
 async fn refuse_completion(

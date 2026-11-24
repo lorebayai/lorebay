@@ -668,27 +668,28 @@ both.
 - **A counter is taken in one statement** that adds one to the space's
   counter and returns the value, so concurrent takers queue on the space
   row and none reuses a number.
-- **A state check follows the lock.** A write that needs a task to be
-  `in progress` or a request to be `pending` checks after it holds that
-  row.
+- **A state and holder check follows the lock.** A write that needs a task in a given state or held by its caller, or a request to be `pending`, checks after locking that row.
+- **A request decision locks its source task first.** It reads the source task ID without a lock, locks that task, then locks and rechecks the request. Submission also takes the task first; a decision resumes the task only when its waiting request ID still matches.
 
 | Write | Locks, in order | Stays correct because |
 | --- | --- | --- |
 | Create a space | None | The unique number refuses a second space with the same number |
 | Change a space | Space, by its update | Each change sets only its own fields |
-| Create a task | Space counter | Concurrent creations take distinct, consecutive numbers |
-| Change a task | Task | Status, end time and last activity are computed from the locked row; last activity never moves backward |
-| Append a checkpoint | Task | The state is checked under the lock, and the checkpoint's time exceeds the task's last activity and latest checkpoint, so times within a task strictly increase |
-| Delete a checkpoint | None | It deletes by task and time; a task's person never changes, so the party check needs no lock; a deleted time stays below the task's last activity and is never given again |
+| Create a task, started or planned | Space counter | Concurrent creations take distinct, consecutive numbers |
+| Claim a task | Task | State and holder are checked again under the lock; competing planned claims see the winning holder |
+| Release a task | Task | The work marker is checked under the lock, so deleted or cleared work cannot permit a release |
+| Change a task | Task | Holder, transition, reason and end time are checked or computed from the locked row |
+| Append a checkpoint | Task | Holder and state are checked under the lock; the checkpoint time exceeds both latest checkpoint and last activity |
+| Delete a checkpoint | None | Only held or finished tasks can have recorded work, so their party cannot change through release or cross-party claim; a deleted checkpoint time is never reused |
 | Delete a task | Task | A registration or checkpoint waiting on the task finds it gone; the files deleted are those of the rows deleted |
-| Register a file | Task, then space counter | The state is checked under the lock; numbers are distinct |
+| Register a file | Task, then space counter | Holder and state are checked under the lock; registration sets the work marker |
 | Report an upload complete | Task, then file | A second report of a completed registration returns the existing result and records no change. The first report to refuse an oversized file commits the refusal; a report that read the size before then finds the refusal under the lock and answers `agent_file.refused`, so one deletion is queued. The task's last activity becomes the later of its current value and the completion. |
 | Delete a file | None | One statement deletes the row only if complete and returns its location |
 | Remove abandoned registrations | Each deleted row | One statement deletes only rows neither completed nor refused when it deletes them and returns their locations; only their content is deleted |
 | Remove orphaned files | None | A record commits before any URL for its location exists, and locations are never reused, so a file old enough with no record never gets one; a refused registration never completes, so its content is never needed |
 | Change Knowledge directly | Entry, then space counter for a new entry | The next version is computed from the locked entry; the unique name refuses a second entry of one name |
-| Submit a request | Task, when it names one; then space counter | The task cannot be deleted before the request refers to it; the base version is a snapshot by design |
-| Approve or reject a request | Request, then entry, then space counter for a new entry | The status is checked under the lock, so a request is decided once |
+| Submit a request | Task, when it names one; then space counter | The source cannot disappear; an optional wait is stored under that task lock in the same commit |
+| Approve or reject a request | Source task, when present; then request, then entry, then space counter for a new entry | The request is decided once; only its matching waiting task resumes |
 
 The oversize refusal uses the size read before taking the locks, and is
 final once it commits. A deletion delayed after that commit can remove only
@@ -716,6 +717,8 @@ The Knowledge and request writes follow the same rules.
   without a change to the library.
 
 ## 15. Tests on Postgres
+
+**Concurrent claims of one planned task** is a named library scenario: two agents claim the same `planned` task at once; exactly one wins, and the other gets `task.held` naming the winner. All other new task lifecycle scenarios drive the product through HTTP and MCP.
 
 What only Postgres can show, such as two writers racing, and what no
 Lorebay entry point can reach (a write the product abandons, another

@@ -275,7 +275,7 @@ async fn delete_checkpoint_removes_one_checkpoint_from_scratchpad() {
         .await;
     }
     assert_eq!(scratchpad(&server, &person, "TK-1").await, json!([]));
-    update_result(&server, &person, id).await;
+    update_result(&server, &agent, id).await;
     let next = append(&server, &agent, &task, "After deletion").await;
     assert!(next["time"].as_i64().unwrap() > checkpoints[2]["time"].as_i64().unwrap());
     server.stop().await;

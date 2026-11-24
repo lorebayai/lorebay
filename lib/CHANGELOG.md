@@ -7,6 +7,8 @@ crates `lorebay-lib-types`, `lorebay-lib-core`, `lorebay-lib-migration` and
 
 ## Unreleased
 
+- **Breaking:** Tasks have six states, `planned`, `working`, `waiting`, `done`, `failed` and `canceled`, with reasons and one holder. Claims, same-party takeovers and releases enforce exclusive writes; Requests may wait for a decision. Task fields use `state` and `state_reason`, MCP adds `claim_task` and `release_task`, and people plan or cancel tasks. The created migration changes in place; databases must be recreated.
+
 - The library's recording contract is named agent practices, with 13
   numbered practices. The practices and their backstops keep their content.
 

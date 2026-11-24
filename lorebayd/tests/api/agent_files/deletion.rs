@@ -26,7 +26,7 @@ async fn delete_agent_file_removes_agent_file_from_task_and_its_file() {
         "task.not_found",
     )
     .await;
-    let before = set_status(&server, &person, &task, "ended").await;
+    let before = set_status(&server, &agent, &task, "done").await;
     assert_deleted(remove(&server, &person, SPACE, &task, "FL-1").await).await;
     let mut expected = before;
     expected["files"].as_array_mut().unwrap().remove(0);

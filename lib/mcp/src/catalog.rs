@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 
 use lorebay_lib_core::{
     AGENT_FILE_NAME_MAX_BYTES, AGENT_FILE_SUMMARY_MAX_CHARACTERS, CHECKPOINT_MAX_CHARACTERS,
-    KEYWORD_MAX_CHARACTERS, RESULT_MAX_CHARACTERS, TITLE_MAX_CHARACTERS, TaskStatus,
+    KEYWORD_MAX_CHARACTERS, RESULT_MAX_CHARACTERS, TITLE_MAX_CHARACTERS,
 };
 use lorebay_lib_core::{DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};
 
@@ -14,6 +14,7 @@ mod knowledge;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ToolName {
     AddCheckpoint,
+    ClaimTask,
     CompleteAgentFile,
     CreateAgentFile,
     CreatePersonRequest,
@@ -26,6 +27,7 @@ pub(crate) enum ToolName {
     ListSpaces,
     ListTasks,
     ReadKnowledge,
+    ReleaseTask,
     UpdateTask,
 }
 
@@ -33,6 +35,7 @@ impl ToolName {
     fn as_str(self) -> &'static str {
         match self {
             Self::AddCheckpoint => "add_checkpoint",
+            Self::ClaimTask => "claim_task",
             Self::CompleteAgentFile => "complete_file",
             Self::CreateAgentFile => "create_file",
             Self::CreatePersonRequest => "create_request",
@@ -45,6 +48,7 @@ impl ToolName {
             Self::ListSpaces => "list_spaces",
             Self::ListTasks => "list_tasks",
             Self::ReadKnowledge => "read_knowledge",
+            Self::ReleaseTask => "release_task",
             Self::UpdateTask => "update_task",
         }
     }
@@ -60,37 +64,14 @@ fn build_catalog() -> Vec<(ToolName, Tool)> {
     vec![
         tool(
             ToolName::ListSpaces,
-            "List your spaces with keys, names, summaries, your agent role and caller_person, the name of the person you act for. Pass caller_person as person to list_tasks to find that person's tasks, including ended tasks. Follow next_cursor with cursor to read the next page.",
+            "List your spaces with keys, names, summaries, your agent role and caller_person, the name of the person you act for. Pass caller_person as person to list_tasks to find that person's tasks, including finished tasks. Follow next_cursor with cursor to read the next page.",
             paged(json!({})),
             &[],
             true,
         ),
-        tool(
-            ToolName::CreateTask,
-            "Create a task in a space such as SPACE-1 with a nonempty title. Save the returned task_id for writes; the key is for reads. Returns the task title too.",
-            json!({"space": space(), "title": {"type":"string", "minLength":1, "maxLength":TITLE_MAX_CHARACTERS}}),
-            &["space", "title"],
-            false,
-        ),
-        tool(
-            ToolName::UpdateTask,
-            "Change a task using task_id, not a task key. Provide at least one of title, status or result. Reopen with status in progress; result replaces the whole Markdown result and an empty string clears it. Returns the updated task and its title.",
-            json!({
-                "task_id":{"type":"string"},
-                "title":{"type":"string", "minLength":1, "maxLength":TITLE_MAX_CHARACTERS},
-                "status":{"type":"string", "enum":[TaskStatus::InProgress.as_str(), TaskStatus::Ended.as_str()]},
-                "result":{"type":"string", "maxLength":RESULT_MAX_CHARACTERS}
-            }),
-            &["task_id"],
-            false,
-        ),
-        tool(
-            ToolName::ListTasks,
-            "List a space's tasks, newest activity first. Filter by person, agent, status or keyword in titles/results. own_open selects only your party's tasks that are not ended and cannot combine with person or status. Rows include task_id for writes. Repeat the same filters with cursor to read the next page.",
-            task_list_properties(),
-            &["space"],
-            true,
-        ),
+        create_task(),
+        update_task(),
+        list_tasks(),
         tool(
             ToolName::GetTask,
             "Read a task by space and key such as TK-1, including its result and files. Set include_scratchpad to true to read checkpoints; page_size and cursor then page the Scratchpad.",
@@ -102,9 +83,23 @@ fn build_catalog() -> Vec<(ToolName, Tool)> {
         ),
         tool(
             ToolName::AddCheckpoint,
-            "Append a nonempty Markdown checkpoint using task_id, not a task key. Only your party's tasks accept writes. Ended tasks must be reopened first. Returns the checkpoint time and task title.",
+            "Append a nonempty Markdown checkpoint using task_id, not a task key. Only the holder of a working or waiting task may append; claim or reopen first. Returns the checkpoint time and task title.",
             json!({"task_id":{"type":"string"}, "content":{"type":"string", "minLength":1, "maxLength":CHECKPOINT_MAX_CHARACTERS}}),
             &["task_id", "content"],
+            false,
+        ),
+        tool(
+            ToolName::ClaimTask,
+            "Claim a planned task, moving it to your party, or take over a held task of your party. Returns its state, holder and planner. A task held by another party is refused with task.held naming its holder.",
+            json!({"task_id":{"type":"string"}}),
+            &["task_id"],
+            false,
+        ),
+        tool(
+            ToolName::ReleaseTask,
+            "Release your working task to planned before recording any checkpoint, file or result. Recorded work is refused with task.has_work.",
+            json!({"task_id":{"type":"string"}}),
+            &["task_id"],
             false,
         ),
         create_agent_file(),
@@ -157,8 +152,9 @@ fn paged(properties: Value) -> Value {
 fn task_list_properties() -> Value {
     paged(json!({
         "space":space(), "person":{"type":"string"}, "agent":{"type":"string"},
-        "status":{"type":"string", "enum":[TaskStatus::InProgress.as_str(), TaskStatus::Ended.as_str()]},
+        "state":{"type":"string", "enum":["planned", "working", "waiting", "done", "failed", "canceled"]},
         "own_open":{"type":"boolean", "default":false},
+        "claimable":{"type":"boolean", "default":false},
         "keyword":{"type":"string", "minLength":1, "maxLength":KEYWORD_MAX_CHARACTERS}
     }))
 }
@@ -166,7 +162,7 @@ fn task_list_properties() -> Value {
 fn create_agent_file() -> (ToolName, Tool) {
     tool(
         ToolName::CreateAgentFile,
-        "Register a file using task_id, a file name and a summary. Returns its key, upload_url, method, headers and task title. Upload the file's content with an HTTP PUT to upload_url carrying every returned header; file content never passes through MCP. HTTP 412 means the file's content is already stored: call complete_file with the returned key. Ended tasks must be reopened before registration.",
+        "Register a file using task_id, a file name and a summary. Returns its key, upload_url, method, headers and task title. Upload the file's content with an HTTP PUT to upload_url carrying every returned header; file content never passes through MCP. HTTP 412 means the file's content is already stored: call complete_file with the returned key. Only the holder of a working or waiting task may register; claim or reopen first.",
         json!({
             "task_id":{"type":"string"},
             "file_name":{"type":"string", "minLength":1, "maxLength":AGENT_FILE_NAME_MAX_BYTES, "description":"Nonempty file name, at most 255 UTF-8 bytes."},
@@ -193,6 +189,42 @@ fn get_agent_file_url() -> (ToolName, Tool) {
         "Get a short-lived download URL and its expiry for a completed file in a space, using its key such as FL-1. Everyone in the space can read its files. Download the file's content over HTTP GET using the returned url; file content never passes through MCP.",
         json!({"space":space(), "key":{"type":"string"}}),
         &["space", "key"],
+        true,
+    )
+}
+
+fn create_task() -> (ToolName, Tool) {
+    tool(
+        ToolName::CreateTask,
+        "Create a working task and hold it, or pass planned=true to queue it for a later claim. Use a space such as SPACE-1 and a nonempty title. Save the returned task_id for writes; the key is for reads. Returns the task title too.",
+        json!({"space": space(), "title": {"type":"string", "minLength":1, "maxLength":TITLE_MAX_CHARACTERS}, "planned":{"type":"boolean", "default":false}}),
+        &["space", "title"],
+        false,
+    )
+}
+
+fn update_task() -> (ToolName, Tool) {
+    tool(
+        ToolName::UpdateTask,
+        "Change a task using task_id, not a task key. Provide at least one of title, state or result. Only the holder writes. Reopen done with state working; waiting, failed and canceled require a one-line reason; result replaces the whole Markdown result and an empty string clears it. Returns the updated task and its title.",
+        json!({
+            "task_id":{"type":"string"},
+            "title":{"type":"string", "minLength":1, "maxLength":TITLE_MAX_CHARACTERS},
+            "state":{"type":"string", "enum":["planned", "working", "waiting", "done", "failed", "canceled"]},
+            "state_reason":{"type":"string", "minLength":1, "maxLength":2000},
+            "result":{"type":"string", "maxLength":RESULT_MAX_CHARACTERS}
+        }),
+        &["task_id"],
+        false,
+    )
+}
+
+fn list_tasks() -> (ToolName, Tool) {
+    tool(
+        ToolName::ListTasks,
+        "List a space's tasks, newest activity first. Filter by person, agent, state or keyword in titles/results. own_open selects your party's working and waiting tasks and cannot combine with person or state. claimable selects planned tasks and requires a non-viewer agent. Rows include task_id for writes. Repeat the same filters with cursor to read the next page.",
+        task_list_properties(),
+        &["space"],
         true,
     )
 }

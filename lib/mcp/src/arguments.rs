@@ -4,7 +4,7 @@ use typed_builder::TypedBuilder;
 
 use lorebay_lib_core::{
     AgentFileName, AgentFileSummary, NewAgentFile, PageOptions, PageSizeError, TaskChanges,
-    TaskFilters, TaskKeyword, TaskResult, TaskStatus, TaskStatusError, TaskTitle,
+    TaskFilters, TaskKeyword, TaskResult, TaskState, TaskStateError, TaskTitle,
 };
 
 use crate::catalog::ToolName;
@@ -99,10 +99,10 @@ impl Arguments {
             .map(TaskTitle::try_from)
             .transpose()
             .map_err(|error| ToolError::task_text("title", error))?;
-        let status = self.status().map_err(|error| {
+        let state = self.state().map_err(|error| {
             ToolError::body_field(
-                TaskStatusError::FIELD,
-                TaskStatusError::FIELD_CODE,
+                TaskStateError::FIELD,
+                TaskStateError::FIELD_CODE,
                 &error.to_string(),
             )
         })?;
@@ -113,7 +113,8 @@ impl Arguments {
             .map_err(|error| ToolError::task_text("result", error))?;
         let changes = TaskChanges {
             title,
-            status,
+            state,
+            state_reason: self.optional_string("state_reason"),
             result,
         };
         changes.validate()?;
@@ -129,10 +130,10 @@ impl Arguments {
     }
 
     pub fn tasks(&self) -> Result<(PageOptions, TaskFilters), ToolError> {
-        let status = self.status().map_err(|error| {
+        let state = self.state().map_err(|error| {
             ToolError::query_field(
-                TaskStatusError::FIELD,
-                TaskStatusError::FIELD_CODE,
+                TaskStateError::FIELD,
+                TaskStateError::FIELD_CODE,
                 &error.to_string(),
             )
         })?;
@@ -144,8 +145,9 @@ impl Arguments {
         let filters = TaskFilters {
             person: self.optional_string("person"),
             agent: self.optional_string("agent"),
-            status,
+            state,
             own_open: self.enabled("own_open"),
+            claimable: self.enabled("claimable"),
             keyword,
         };
         filters.validate().map_err(|error| {
@@ -154,18 +156,18 @@ impl Arguments {
         Ok((self.page()?, filters))
     }
 
-    fn enabled(&self, name: &str) -> bool {
+    pub(super) fn enabled(&self, name: &str) -> bool {
         self.values
             .get(name)
             .and_then(Value::as_bool)
             .unwrap_or(false)
     }
 
-    fn status(&self) -> Result<Option<TaskStatus>, TaskStatusError> {
+    fn state(&self) -> Result<Option<TaskState>, TaskStateError> {
         self.values
-            .get(TaskStatusError::FIELD)
+            .get(TaskStateError::FIELD)
             .and_then(Value::as_str)
-            .map(TaskStatus::try_from)
+            .map(TaskState::try_from)
             .transpose()
     }
 

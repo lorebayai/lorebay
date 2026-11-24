@@ -280,7 +280,7 @@ async fn call_create_agent_file_fails_with_reopen_hint_when_task_is_ended() {
         &agent,
         "update_task",
         json!({
-            "task_id":task["task_id"], "title":"Paused upload", "status":"ended"
+            "task_id":task["task_id"], "title":"Paused upload", "state":"done"
         }),
     )
     .await;
@@ -293,10 +293,10 @@ async fn call_create_agent_file_fails_with_reopen_hint_when_task_is_ended() {
         }),
     )
     .await;
-    assert_eq!(error["code"], "task.ended");
+    assert_eq!(error["code"], "task.state_invalid");
     assert_eq!(
         error["message"],
-        "Set the task back to in progress before registering a file"
+        "Operation is not allowed while the task is done; claim or reopen it first"
     );
     assert_eq!(
         upload(&server, &registered, "Pending").await.status(),
@@ -314,14 +314,14 @@ async fn call_create_agent_file_fails_with_reopen_hint_when_task_is_ended() {
     assert_eq!(completed["task_title"], "Paused upload");
     assert_completed(&server, &person, &agent, &task, &completed).await;
     let after = read_task(&server, &agent, &task).await;
-    assert_eq!(after["status"], "ended");
+    assert_eq!(after["state"], "done");
     assert_eq!(after["ended_at"], ended["ended_at"]);
     call(
         &server,
         &agent,
         "update_task",
         json!({
-            "task_id":task["task_id"], "status":"in progress"
+            "task_id":task["task_id"], "state":"working"
         }),
     )
     .await;

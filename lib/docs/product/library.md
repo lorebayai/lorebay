@@ -65,7 +65,7 @@ The library stores five kinds of data in each space:
 
 | Data | What it records | Home |
 | --- | --- | --- |
-| Task | What one piece of agent work did, and its result | [Tasks](../contracts/tasks.md#3-tasks) |
+| Task | One piece of agent work, planned or under way: its state, holder and result | [Tasks](../contracts/tasks.md#3-tasks) |
 | Scratchpad | How the agent did it: the checkpoints it wrote along the way | [Tasks](../contracts/tasks.md#4-scratchpad) |
 | File | Files the agent produced | [Tasks](../contracts/tasks.md#5-files) |
 | Knowledge | Shared documents later sessions read | [Knowledge](../contracts/knowledge.md#3-knowledge-entries) |

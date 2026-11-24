@@ -37,12 +37,14 @@ It does not cover:
 - signing in with a password, reading an authorization request or submitting
   consent, or reading a device sign-in request or submitting its decision:
   these belong to the pages `lorebayd` serves;
-- changing a task's title or result, or setting it back to `in progress`:
-  agents do these; the CLI can close a task;
+- changing a task's title or result, or reopening a `done` task:
+  agents do these; the CLI can plan or cancel a task;
 - rendering Markdown;
 - updating the CLI itself.
 
 ## 3. Commands
+
+Task commands use `--state` and print State; Request commands keep `--status`. `--claimable` lists planned tasks a non-viewer agent in the space may claim. `task cancel` requires a one-line reason.
 
 - **Commands use `lorebay <resource> <verb>`, except `login` and `logout`.**
   Every command accepts `--output human|json`; `human` is the default.
@@ -50,7 +52,7 @@ It does not cover:
   0 without a server call. Invalid arguments print a usage error and exit 2.
 - **A space is named by key and a person by username.** Examples are
   `SPACE-1` and `alice`. Objects to read can be named by key. A command that
-  writes into a task takes its task ID, including closing or deleting it,
+  writes into a task takes its task ID, including canceling or deleting it,
   as
   [Keys and references](../../lib/docs/contracts/keys-and-references.md#4-task-ids)
   requires. It never treats a task key as a task ID.
@@ -88,10 +90,11 @@ contains spaces. Optional arguments appear in brackets. List rows follow
 | `member add <space> <username> --role <role>` | Add a space member | Added space member |
 | `member set-role <space> <username> --role <role>` | Change a space member's role | Updated space member |
 | `member remove <space> <username>` | Remove a space member | Removal result |
-| `task list <space> [--person <username>] [--agent <name>] [--status <status>] [--keyword <text>] [--own-open]` | List tasks | Task keys, titles, statuses, people, agent names and last activity times |
-| `task show <space> <task>` | Read a task | Task fields, including its task ID, result and completed file list |
+| `task list <space> [--person <username>] [--agent <name>] [--state <state>] [--keyword <text>] [--own-open] [--claimable]` | List tasks | Task keys, titles, states, reasons, people, holders, planners and last activity times |
+| `task show <space> <task>` | Read a task | Task fields, including state, reason, holder, planner and its task ID, result and completed file list |
 | `task scratchpad <space> <task>` | Read a task's Scratchpad | One page of checkpoints, with their times, in time order |
-| `task close <space> <task-id>` | Change a task, setting only its status to `ended` | Updated task |
+| `task plan <space> --title <title>` | Plan a task | Planned task key, task ID and title |
+| `task cancel <space> <task-id> --reason <reason>` | Change a task to `canceled` with a reason | Updated task |
 | `task delete <space> <task-id>` | Delete a task | Deletion result |
 | `checkpoint delete <space> <task-id> <checkpoint>` | Delete a checkpoint | Deletion result |
 | `file url <space> <file>` | Get a file download URL | The short-lived download URL |
@@ -116,15 +119,15 @@ contains spaces. Optional arguments appear in brackets. List rows follow
   change` and `request change` require at least one of their optional
   fields; omitted fields are unchanged. Request inputs and version behavior
   follow [Knowledge](../../lib/docs/contracts/knowledge.md#3-knowledge-entries).
-- **Roles and statuses are checked before making a call.** Space member
+- **Roles, states and statuses are checked before making a call.** Space member
   addition accepts `contributor` or `viewer`; setting a role accepts `admin`,
   `contributor` or `viewer`. Ownership is not assigned by these commands.
-  Task statuses are `in progress` and `ended`; request statuses are
+  Task states are `planned`, `working`, `waiting`, `done`, `failed` and `canceled`; request statuses are
   `pending`, `approved` and `rejected`. Another value is a usage error.
 - **File lists come from `task show`.** `file url` returns the Web
   API's URL; the person can transfer the file's content with it over HTTP as
   [Tasks](../../lib/docs/contracts/tasks.md#5-files) describes.
-- **`--own-open` lists only the person's own tasks that are not `ended`**,
+- **`--own-open` lists only the person's own tasks that are `working` or `waiting`**,
   as `list_tasks` does for an agent's party; see
   [MCP tools](../../lib/docs/contracts/mcp-tools.md#6-wrong-task-ids).
 - **A contributor proposes a rollback with `request change`.** They read
@@ -233,7 +236,7 @@ Exit codes:
 | --- | --- |
 | 0 | Success, including help and logout when already signed out |
 | 1 | The server refuses the operation, or another failure occurs, including declined or expired sign-in, a connection failure or cancelled deletion |
-| 2 | Usage error, such as a missing argument, invalid option, role, status or server URL |
+| 2 | Usage error, such as a missing argument, invalid option, role, state, status or server URL |
 | 4 | No saved sign-in, or the sign-in has ended and refresh cannot restore it |
 
 ## 6. Lists

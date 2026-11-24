@@ -571,8 +571,9 @@ pub fn filters(keyword: Option<&str>) -> TaskFilters {
     TaskFilters {
         person: None,
         agent: None,
-        status: None,
+        state: None,
         own_open: false,
+        claimable: false,
         keyword: keyword.map(|value| value.to_owned().try_into().unwrap()),
     }
 }

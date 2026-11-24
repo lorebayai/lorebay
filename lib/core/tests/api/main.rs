@@ -4,7 +4,7 @@ use std::sync::atomic::Ordering;
 use futures_util::future::join_all;
 use lorebay_lib_core::{
     Caller, CheckpointContent, NewSpace, SpaceError, SpaceInputError, SpaceRole, TaskChanges,
-    TaskStatus, WriteOperation, add_checkpoint, change_task,
+    TaskState, WriteOperation, add_checkpoint, change_task,
     complete_agent_file as record_completion, create_space, delete_task,
     get_agent_file_download_url, highest_space_number, list_tasks, prepare_agent_file_completion,
     read_task, register_agent_file, remove_orphaned_files, resolve_space,
@@ -29,6 +29,7 @@ use helpers::{
 mod helpers;
 mod knowledge;
 mod person_requests;
+mod task_claims;
 
 #[tokio::test]
 async fn complete_agent_file_refuses_registration_after_oversize_report() {
@@ -218,7 +219,7 @@ async fn add_checkpoint_fails_when_task_ends_concurrently() {
             },
             false,
         );
-        let issuer = fixture.person.clone();
+        let issuer = fixture.agent.clone();
         let closing = task.clone();
         let close = tokio::spawn(async move {
             closer
@@ -249,9 +250,9 @@ async fn add_checkpoint_fails_when_task_ends_concurrently() {
         });
         fixture.wait_for_lock(next_pid(&mut pid).await).await;
         held.release();
-        assert_eq!(close.await.unwrap().unwrap().task.status, TaskStatus::Ended);
+        assert_eq!(close.await.unwrap().unwrap().task.state, TaskState::Done);
         let error = append.await.unwrap().unwrap_err();
-        assert_eq!(error.code(), "task.ended");
+        assert_eq!(error.code(), "task.state_invalid");
         let read = read_task(
             &fixture.state,
             &fixture.person,
@@ -261,7 +262,7 @@ async fn add_checkpoint_fails_when_task_ends_concurrently() {
         )
         .await
         .unwrap();
-        assert_eq!(read.task.status, TaskStatus::Ended);
+        assert_eq!(read.task.state, TaskState::Done);
         assert!(read.scratchpad.unwrap().items.is_empty());
     })
     .await;
@@ -386,7 +387,8 @@ async fn list_tasks_matches_keyword_when_ascii_case_differs() {
                     target(&result),
                     TaskChanges {
                         title: None,
-                        status: None,
+                        state: None,
+                        state_reason: None,
                         result: Some("BUILD done".to_owned().try_into().unwrap()),
                     },
                 )
@@ -503,7 +505,7 @@ async fn get_task_fails_as_not_found_when_space_has_another_tenant() {
         let read = read_task(&fixture.state, &fixture.person, SPACE, &task.key, None)
             .await
             .unwrap();
-        assert_eq!(read.task.status, TaskStatus::InProgress);
+        assert_eq!(read.task.state, TaskState::Working);
     })
     .await;
 }
@@ -859,7 +861,8 @@ fn assert_consecutive(keys: impl IntoIterator<Item = String>, prefix: &str) {
 fn ended() -> TaskChanges {
     TaskChanges {
         title: None,
-        status: Some(TaskStatus::Ended),
+        state: Some(TaskState::Done),
+        state_reason: None,
         result: None,
     }
 }

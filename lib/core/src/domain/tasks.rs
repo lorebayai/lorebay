@@ -3,7 +3,7 @@ use std::slice::from_ref;
 
 use lorebay_lib_types::Secret;
 use lorebay_lib_types::{decode_cursor, encode_cursor};
-use sea_orm::{DatabaseTransaction, DbErr, IntoActiveModel, Set};
+use sea_orm::{ActiveModelTrait, DatabaseTransaction, DbErr, IntoActiveModel, Set};
 use serde::Serialize;
 use thiserror::Error;
 use typed_builder::TypedBuilder;
@@ -20,9 +20,11 @@ use super::key::{format_key, parse_key};
 use super::pagination::{Page, PageOptions, PageSizeError};
 use super::space_access::{READ_ROLES, SpaceAccessError, WRITE_ROLES, check_space};
 use super::task_access::{TaskAccessError, TaskAction, TaskCheck, check_task};
+use super::task_state::change_state;
 use super::time::now_millis;
 use super::{
-    AgentFile, CallerError, CheckpointContent, TaskFilterError, TaskFilters, TaskResult, TaskTitle,
+    AgentFile, CallerError, CheckpointContent, TaskFilterError, TaskFilters, TaskKeyword,
+    TaskResult, TaskState, TaskTitle,
 };
 
 #[derive(Debug, Error)]
@@ -38,24 +40,22 @@ pub enum TaskError {
     Database(#[from] DbErr),
     #[error(transparent)]
     Filter(#[from] TaskFilterError),
+    #[error("The task has recorded work; finish it instead of releasing it")]
+    HasWork,
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
     #[error("Invalid cursor")]
     InvalidCursor,
     #[error(transparent)]
     InvalidPageSize(#[from] PageSizeError),
+    #[error(
+        "A one-line reason of 1 to 2000 characters is required for waiting, failed and canceled; other states take no reason."
+    )]
+    InvalidReason,
     #[error(transparent)]
     NoChanges(#[from] TaskChangeError),
     #[error("Task not found")]
     NotFound,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
-pub enum TaskStatus {
-    #[serde(rename = "ended")]
-    Ended,
-    #[serde(rename = "in progress")]
-    InProgress,
 }
 
 #[derive(Clone, Debug, Serialize, TypedBuilder)]
@@ -86,11 +86,16 @@ pub struct Task {
     pub key: String,
     pub task_id: Secret<String>,
     pub title: String,
-    pub status: TaskStatus,
+    pub state: TaskState,
     pub person: String,
-    pub agent_name: String,
+    pub agent_name: Option<String>,
+    pub holder: Option<String>,
+    pub state_reason: Option<String>,
+    pub planner: Option<String>,
+    pub planner_agent_name: Option<String>,
     pub result: String,
-    pub started_at: i64,
+    pub created_at: i64,
+    pub started_at: Option<i64>,
     pub ended_at: Option<i64>,
     pub last_activity_at: i64,
 }
@@ -99,7 +104,9 @@ pub struct Task {
 #[builder(field_defaults(setter(into)))]
 pub struct TaskChanges {
     pub title: Option<TaskTitle>,
-    pub status: Option<TaskStatus>,
+    pub state: Option<TaskState>,
+    #[builder(default = None)]
+    pub state_reason: Option<String>,
     pub result: Option<TaskResult>,
 }
 
@@ -112,7 +119,7 @@ pub struct TaskRead {
 }
 
 #[derive(Debug, Error)]
-#[error("Provide a title, status or result.")]
+#[error("Provide a title, state or result.")]
 pub struct TaskChangeError;
 
 impl TaskChangeError {
@@ -120,42 +127,12 @@ impl TaskChangeError {
     pub const FIELD_CODE: &str = "required";
 }
 
-#[derive(Debug, Error)]
-#[error("Expected in progress or ended.")]
-pub struct TaskStatusError;
-
-impl TaskStatusError {
-    pub const FIELD: &str = "status";
-    pub const FIELD_CODE: &str = "invalid";
-}
-
 impl TaskChanges {
     pub fn validate(&self) -> Result<(), TaskChangeError> {
-        if self.title.is_none() && self.status.is_none() && self.result.is_none() {
+        if self.title.is_none() && self.state.is_none() && self.result.is_none() {
             return Err(TaskChangeError);
         }
         Ok(())
-    }
-}
-
-impl TaskStatus {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Ended => "ended",
-            Self::InProgress => "in progress",
-        }
-    }
-}
-
-impl TryFrom<&str> for TaskStatus {
-    type Error = TaskStatusError;
-
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        match value {
-            "ended" => Ok(Self::Ended),
-            "in progress" => Ok(Self::InProgress),
-            _ => Err(TaskStatusError),
-        }
     }
 }
 
@@ -167,12 +144,17 @@ impl TryFrom<(task::Model, String)> for Task {
             .key(format_key("TK", task.number))
             .task_id(Secret::from(task.random_id))
             .title(task.title)
-            .status(
-                TaskStatus::try_from(task.status.as_str())
-                    .map_err(|_| DbErr::Type("Invalid task status".into()))?,
+            .state(
+                TaskState::try_from(task.state.as_str())
+                    .map_err(|_| DbErr::Type("Invalid task state".into()))?,
             )
             .person(person)
             .agent_name(task.agent_name)
+            .holder(task.holder)
+            .state_reason(task.state_reason)
+            .planner(task.planner_person_id)
+            .planner_agent_name(task.planner_agent_name)
+            .created_at(task.created_at)
             .result(task.result)
             .started_at(task.started_at)
             .ended_at(task.ended_at)
@@ -207,6 +189,8 @@ impl TaskError {
             }
             Self::NoChanges(_) => "request.invalid_body",
             Self::NotFound => "task.not_found",
+            Self::InvalidReason => "task.reason_invalid",
+            Self::HasWork => "task.has_work",
             Self::CheckpointNotFound => "checkpoint.not_found",
         }
     }
@@ -218,9 +202,13 @@ pub struct TaskSummary {
     pub key: String,
     pub task_id: Secret<String>,
     pub title: String,
-    pub status: TaskStatus,
+    pub state: TaskState,
     pub person: String,
-    pub agent_name: String,
+    pub agent_name: Option<String>,
+    pub holder: Option<String>,
+    pub state_reason: Option<String>,
+    pub planner: Option<String>,
+    pub planner_agent_name: Option<String>,
     pub last_activity_at: i64,
 }
 
@@ -230,9 +218,13 @@ impl From<Task> for TaskSummary {
             key: task.key,
             task_id: task.task_id,
             title: task.title,
-            status: task.status,
+            state: task.state,
             person: task.person,
             agent_name: task.agent_name,
+            holder: task.holder,
+            state_reason: task.state_reason,
+            planner: task.planner,
+            planner_agent_name: task.planner_agent_name,
             last_activity_at: task.last_activity_at,
         }
     }
@@ -244,42 +236,16 @@ pub async fn create_task(
     space: &str,
     title: TaskTitle,
 ) -> Result<CreatedTask, TaskError> {
-    write.begin_operation(Some(caller))?;
-    let agent = caller.agent()?;
-    let authorized = check_space(write.state(), write.handle(), caller, space, WRITE_ROLES).await?;
-    let transaction = write.transaction();
-    let space_id = authorized.space.id;
-    let number = SpaceRepository::builder()
-        .connection(transaction)
-        .build()
-        .take_number(&space_id, space::Column::NextTaskNumber)
-        .await?;
-    let now = now_millis()?;
-    let task_id = random_task_id().map_err(anyhow::Error::from)?;
-    let task = TaskRepository::builder()
-        .connection(transaction)
-        .build()
-        .insert(task::ActiveModel {
-            id: Set(primary_key()),
-            space_id: Set(space_id.clone()),
-            number: Set(number),
-            random_id: Set(task_id.clone()),
-            person_id: Set(caller.person_id.clone()),
-            agent_name: Set(agent.to_owned()),
-            title: Set(title.into()),
-            status: Set(TaskStatus::InProgress.as_str().to_owned()),
-            result: Set(String::new()),
-            started_at: Set(now),
-            ended_at: Set(None),
-            last_activity_at: Set(now),
-        })
-        .await?;
-    write.record(WriteOperation::CreateTask, Some(space_id));
-    Ok(CreatedTask {
-        task_title: task.title,
-        key: format_key("TK", number),
-        task_id: Secret::from(task_id),
-    })
+    create_new_task(write, caller, space, title, TaskCreation::Started).await
+}
+
+pub async fn plan_task(
+    write: &mut Write<'_>,
+    caller: &Caller,
+    space: &str,
+    title: TaskTitle,
+) -> Result<CreatedTask, TaskError> {
+    create_new_task(write, caller, space, title, TaskCreation::Planned).await
 }
 
 pub async fn add_checkpoint(
@@ -323,6 +289,7 @@ pub async fn add_checkpoint(
     let space_id = task.space_id.clone();
     let mut task = task.into_active_model();
     task.last_activity_at = Set(time);
+    task.work_recorded = Set(1);
     TaskRepository::builder()
         .connection(transaction)
         .build()
@@ -345,15 +312,15 @@ pub async fn change_task(
     changes.validate()?;
     let action = if changes.title.is_none()
         && changes.result.is_none()
-        && changes.status == Some(TaskStatus::Ended)
+        && changes.state == Some(TaskState::Canceled)
     {
-        TaskAction::Close
+        TaskAction::Cancel
     } else {
         TaskAction::Change
     };
     let handle = write.handle();
     let task = check_task(write.state(), handle, caller, target.check(action)).await?;
-    let model = changed_task(task, changes)?;
+    let model = changed_task(task, changes, caller)?;
     let task = TaskRepository::builder()
         .connection(handle.transaction())
         .build()
@@ -433,31 +400,24 @@ pub async fn list_tasks(
     options.validate()?;
     state
         .run_read(async |handle| {
-            let authorized = check_space(state, handle, caller, space, READ_ROLES).await?;
+            let roles = if filters.claimable {
+                WRITE_ROLES
+            } else {
+                READ_ROLES
+            };
+            let authorized = check_space(state, handle, caller, space, roles).await?;
             let version = filters.cursor_version(space).map_err(anyhow::Error::from)?;
             let after = task_position(&options, &version, caller.person_id())?;
             let person_id = match filters.person.as_deref() {
                 Some(name) => match state.names().person_id(handle, name).await? {
                     Some(id) => Some(id),
                     None => {
-                        return Ok(Page {
-                            items: Vec::new(),
-                            next_cursor: None,
-                        });
+                        return Ok(Page::builder().items(Vec::new()).next_cursor(None).build());
                     }
                 },
                 None => filters.own_open.then(|| caller.person_id.clone()),
             };
-            let filter = TaskListFilter {
-                person_id: person_id.as_deref(),
-                agent: filters.agent.as_deref(),
-                status: filters
-                    .own_open
-                    .then_some(TaskStatus::InProgress)
-                    .or(filters.status)
-                    .map(TaskStatus::as_str),
-                keyword: filters.keyword.as_ref().map(|keyword| keyword.as_str()),
-            };
+            let filter = listing_filter(&filters, person_id.as_deref());
             let mut records = TaskRepository::builder()
                 .connection(handle.transaction())
                 .build()
@@ -540,25 +500,97 @@ impl<'a> TaskTarget<'a> {
     }
 }
 
-fn changed_task(task: task::Model, changes: TaskChanges) -> Result<task::ActiveModel, TaskError> {
-    let status = changes
-        .status
-        .filter(|status| status.as_str() != task.status);
-    let last_activity_at = task.last_activity_at;
-    let mut model = task.into_active_model();
-    if let Some(title) = changes.title {
-        model.title = Set(title.into());
-    }
+#[derive(Clone, Copy)]
+enum TaskCreation {
+    Planned,
+    Started,
+}
+
+async fn create_new_task(
+    write: &mut Write<'_>,
+    caller: &Caller,
+    space: &str,
+    title: TaskTitle,
+    creation: TaskCreation,
+) -> Result<CreatedTask, TaskError> {
+    write.begin_operation(Some(caller))?;
+    let planned = matches!(creation, TaskCreation::Planned);
+    let agent = if planned {
+        None
+    } else {
+        Some(caller.agent()?.to_owned())
+    };
+    let authorized = check_space(write.state(), write.handle(), caller, space, WRITE_ROLES).await?;
+    let transaction = write.transaction();
+    let space_id = authorized.space.id;
+    let number = SpaceRepository::builder()
+        .connection(transaction)
+        .build()
+        .take_number(&space_id, space::Column::NextTaskNumber)
+        .await?;
     let now = now_millis()?;
-    if let Some(status) = status {
-        model.status = Set(status.as_str().to_owned());
-        model.ended_at = Set((status == TaskStatus::Ended).then_some(now));
+    let task_id = random_task_id().map_err(anyhow::Error::from)?;
+    let task = TaskRepository::builder()
+        .connection(transaction)
+        .build()
+        .insert(task::ActiveModel {
+            id: Set(primary_key()),
+            space_id: Set(space_id.clone()),
+            number: Set(number),
+            random_id: Set(task_id.clone()),
+            person_id: Set(caller.person_id.clone()),
+            agent_name: Set(agent.clone()),
+            holder: Set(agent),
+            planner_person_id: Set(planned.then(|| caller.person_id.clone())),
+            planner_agent_name: Set(planned.then(|| caller.agent_name.clone()).flatten()),
+            state_reason: Set(None),
+            waiting_request_id: Set(None),
+            work_recorded: Set(0),
+            created_at: Set(now),
+            title: Set(title.into()),
+            state: Set(if planned { "planned" } else { "working" }.to_owned()),
+            result: Set(String::new()),
+            started_at: Set((!planned).then_some(now)),
+            ended_at: Set(None),
+            last_activity_at: Set(now),
+        })
+        .await?;
+    write.record(WriteOperation::CreateTask, Some(space_id));
+    Ok(CreatedTask {
+        task_title: task.title,
+        key: format_key("TK", number),
+        task_id: Secret::from(task_id),
+    })
+}
+
+fn changed_task(
+    task: task::Model,
+    changes: TaskChanges,
+    caller: &Caller,
+) -> Result<task::ActiveModel, TaskError> {
+    let mut task = task;
+    if task.state == "planned"
+        && (changes
+            .state
+            .is_some_and(|state| state != TaskState::Canceled)
+            || changes.result.is_some())
+    {
+        return Err(TaskAccessError::StateInvalid(task.state).into());
+    }
+    if let Some(state) = changes.state {
+        change_state(&mut task, state, changes.state_reason, caller)?;
+    } else if changes.state_reason.is_some() {
+        return Err(TaskError::InvalidReason);
+    }
+    if let Some(title) = changes.title {
+        task.title = title.into();
     }
     if let Some(result) = changes.result {
-        model.result = Set(result.into());
-        model.last_activity_at = Set(now.max(last_activity_at));
+        task.result = result.into();
+        task.work_recorded = 1;
+        task.last_activity_at = now_millis()?.max(task.last_activity_at);
     }
-    Ok(model)
+    Ok(task.into_active_model().reset_all())
 }
 
 async fn names_for(
@@ -566,7 +598,11 @@ async fn names_for(
     handle: OperationHandle<'_>,
     tasks: &[task::Model],
 ) -> anyhow::Result<HashMap<String, String>> {
-    let mut ids: Vec<String> = tasks.iter().map(|task| task.person_id.clone()).collect();
+    let mut ids: Vec<String> = tasks
+        .iter()
+        .flat_map(|task| [Some(task.person_id.clone()), task.planner_person_id.clone()])
+        .flatten()
+        .collect();
     ids.sort_unstable();
     ids.dedup();
     if ids.is_empty() {
@@ -580,10 +616,22 @@ fn named_task(task: task::Model, names: &HashMap<String, String>) -> Result<Task
         .get(&task.person_id)
         .cloned()
         .ok_or_else(|| DbErr::Type("Missing task person name".into()))?;
-    Task::try_from((task, name))
+    let planner = task
+        .planner_person_id
+        .as_ref()
+        .map(|id| {
+            names
+                .get(id)
+                .cloned()
+                .ok_or_else(|| DbErr::Type("Missing planner person name".into()))
+        })
+        .transpose()?;
+    let mut result = Task::try_from((task, name))?;
+    result.planner = planner;
+    Ok(result)
 }
 
-async fn full_task(
+pub(super) async fn full_task(
     state: &LibraryState,
     handle: OperationHandle<'_>,
     task: task::Model,
@@ -697,4 +745,18 @@ fn task_position(
                 .build())
         })
         .transpose()
+}
+
+fn listing_filter<'a>(filters: &'a TaskFilters, person_id: Option<&'a str>) -> TaskListFilter<'a> {
+    TaskListFilter {
+        person_id,
+        agent: filters.agent.as_deref(),
+        state: filters
+            .claimable
+            .then_some(TaskState::Planned)
+            .or(filters.state)
+            .map(TaskState::as_str),
+        own_open: filters.own_open,
+        keyword: filters.keyword.as_ref().map(TaskKeyword::as_str),
+    }
 }

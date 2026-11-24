@@ -7,7 +7,7 @@
   [Keys and references](keys-and-references.md),
   [Library architecture](../architecture/library.md)
 
-> Each of the 14 tools maps to one library operation and adds no logic of
+> Each of the 16 tools maps to one library operation and adds no logic of
 > its own.
 >
 > Calls that write into a task carry `task_id`; other calls carry the space;
@@ -41,20 +41,24 @@ It does not cover:
 
 ## 4. Tools
 
+A task uses `state` and `state_reason`; a request uses `status`. Task tools accept no `status` argument.
+
 | Tool | Carries | Does | Library operation |
 | --- | --- | --- | --- |
 | `list_spaces` | Neither | Lists the person's spaces: key, such as `SPACE-1`; name; summary; role; `caller_person`, the name of the caller's person, accepted as `person` by `list_tasks` | List spaces |
-| `create_task` | Space | Creates a task from a space and a title; returns the task ID and key | Create a task |
-| `update_task` | Task ID | Changes the title, status or result, each optional; the status may go back to `in progress`; the result is replaced whole | Change a task |
-| `list_tasks` | Space | Lists the space's tasks, filtered by person, agent or status, or only the caller's party's tasks that are not `ended`; takes a keyword; each row has the agent name and last activity time; newest activity first | List tasks |
-| `get_task` | Space | Reads one task: its result and file list, and optionally its Scratchpad | Read a task |
-| `add_checkpoint` | Task ID | Appends a checkpoint to the task | Append a checkpoint |
-| `create_file` | Task ID | Registers a file name and summary; returns a short-lived upload URL and the headers the upload must carry | Register a file |
+| `create_task` | Space | Creates a `working` task with the caller as holder, or a `planned` task with `planned=true`; returns task ID, key and title | Create or plan a task |
+| `claim_task` | Task ID | Claims a `planned` task across parties, or takes over a held task of the caller's party; returns state, title, holder and planner | Claim a task |
+| `release_task` | Task ID | Releases the caller's `working` task to `planned` before recording work; otherwise `task.has_work` | Release a task |
+| `update_task` | Task ID | Changes title, state with `state_reason`, or result; `waiting`, `failed` and `canceled` require a one-line reason | Change a task |
+| `list_tasks` | Space | Filters by person, agent, state or keyword; `own_open` selects own party's `working` and `waiting` tasks, `claimable` selects `planned` tasks; rows include state, reason, holder and planner | List tasks |
+| `get_task` | Space | Reads state and reason, holder, planner, result, files and optionally Scratchpad | Read a task |
+| `add_checkpoint` | Task ID | Appends a checkpoint to a `working` or `waiting` task the caller holds | Append a checkpoint |
+| `create_file` | Task ID | Registers a file name and summary on a task the caller holds; returns an upload URL and headers | Register a file |
 | `complete_file` | Task ID | Reports the upload finished; the library checks the content is in storage and within the size limit, and only then is the upload complete | Report an upload complete |
 | `get_file_url` | Space | Returns a short-lived download URL | Get a download URL |
 | `list_knowledge` | Space | Lists one level by name prefix: its entries, with names, keys and summaries, and the next level's prefixes; no prefix lists the top level; a keyword searches names, summaries and content across the space | List Knowledge |
 | `read_knowledge` | Space | Reads one entry by name or key, latest version only | Read a knowledge entry |
-| `create_request` | Task ID | Proposes creating, changing or deleting an entry | Submit a request |
+| `create_request` | Task ID | Proposes a Knowledge change; `wait=true` sets its `working` task to `waiting` until the request is decided | Submit a request |
 | `list_requests` | Space | Lists requests, filtered by status and keyword | List requests |
 | `get_request` | Space | Reads one request: content, status, the 'changed since requested' mark, rejection reason | Read a request |
 
@@ -104,7 +108,7 @@ ID can be wrong:
 | --- | --- | --- |
 | An ID that doesn't exist | Rejects the call | The agent sees the error and fills it in again |
 | Another party's task ID | Rejects the call | The agent sees the error and fills it in again |
-| Another task of the caller's own party | Passes every check | The checkpoint lands in the wrong task; agents cannot delete it, so a person deletes it |
+| Another task of the caller's own party | Rejects a held task's write unless the caller holds it | `task.not_holder` names the holder; claim only to take over deliberately |
 
 Three rules reduce the risk:
 
@@ -112,8 +116,7 @@ Three rules reduce the risk:
   [Keys and references](keys-and-references.md#4-task-ids).
 - **Every write returns the task's title**, so the agent sees which task it
   wrote into.
-- **`list_tasks` can list only the caller's party's tasks that are not
-  `ended`**, so an agent that lost its task ID can find it again.
+- **`list_tasks` can list only the caller's party's `working` and `waiting` tasks**, so an agent that lost its task ID can find it again.
 
 ## 7. References
 

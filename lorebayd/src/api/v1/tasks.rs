@@ -11,11 +11,11 @@ use crate::domain::caller::VerifiedCaller;
 use crate::server::ServerState;
 use lorebay_lib_core::{
     Checkpoint, CheckpointAdded, CheckpointContent, CreatedTask, TaskChanges, TaskError,
-    TaskFilters, TaskKeyword, TaskRead, TaskResult, TaskStatus, TaskTextError, TaskTitle,
+    TaskFilters, TaskKeyword, TaskRead, TaskResult, TaskState, TaskTextError, TaskTitle,
     add_checkpoint, change_task, create_task, delete_checkpoint, delete_task, list_tasks,
-    read_scratchpad, read_task,
+    plan_task, read_scratchpad, read_task,
 };
-use lorebay_lib_core::{Page, PageOptions, TaskStatusError, TaskSummary, TaskTarget};
+use lorebay_lib_core::{Page, PageOptions, TaskStateError, TaskSummary, TaskTarget};
 
 use super::person_sign_in::invalid_json;
 use lorebay_lib_core::AgentFile;
@@ -25,6 +25,8 @@ use lorebay_lib_core::AgentFile;
 #[serde(deny_unknown_fields)]
 pub(crate) struct CreateTaskRequest {
     title: String,
+    #[serde(default)]
+    planned: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, TypedBuilder)]
@@ -41,7 +43,9 @@ pub(crate) struct ChangeTaskRequest {
     #[serde(default, deserialize_with = "present_string")]
     title: Option<String>,
     #[serde(default, deserialize_with = "present_string")]
-    status: Option<String>,
+    state: Option<String>,
+    #[serde(default, deserialize_with = "present_string")]
+    state_reason: Option<String>,
     #[serde(default, deserialize_with = "present_string")]
     result: Option<String>,
 }
@@ -54,9 +58,11 @@ pub(crate) struct ListTasksQuery {
     cursor: Option<String>,
     person: Option<String>,
     agent: Option<String>,
-    status: Option<String>,
+    state: Option<String>,
     #[serde(default)]
     own_open: bool,
+    #[serde(default)]
+    claimable: bool,
     keyword: Option<String>,
 }
 
@@ -83,7 +89,8 @@ pub(crate) struct TaskResponse {
     #[serde(flatten)]
     summary: TaskSummary,
     result: String,
-    started_at: i64,
+    created_at: i64,
+    started_at: Option<i64>,
     ended_at: Option<i64>,
     files: Vec<AgentFile>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -115,15 +122,15 @@ impl TryFrom<ChangeTaskRequest> for TaskChanges {
             .map(TaskTitle::try_from)
             .transpose()
             .map_err(|error| invalid_text("title", error))?;
-        let status = request
-            .status
+        let state = request
+            .state
             .as_deref()
-            .map(TaskStatus::try_from)
+            .map(TaskState::try_from)
             .transpose()
             .map_err(|error| {
                 invalid_field(
-                    TaskStatusError::FIELD,
-                    TaskStatusError::FIELD_CODE,
+                    TaskStateError::FIELD,
+                    TaskStateError::FIELD_CODE,
                     &error.to_string(),
                 )
             })?;
@@ -134,7 +141,8 @@ impl TryFrom<ChangeTaskRequest> for TaskChanges {
             .map_err(|error| invalid_text("result", error))?;
         let changes = Self::builder()
             .title(title)
-            .status(status)
+            .state(state)
+            .state_reason(request.state_reason)
             .result(result)
             .build();
         changes.validate()?;
@@ -146,10 +154,10 @@ impl TryFrom<ListTasksQuery> for (PageOptions, TaskFilters) {
     type Error = ApiError;
 
     fn try_from(query: ListTasksQuery) -> Result<Self, Self::Error> {
-        let status = query
-            .status
+        let state = query
+            .state
             .as_deref()
-            .map(TaskStatus::try_from)
+            .map(TaskState::try_from)
             .transpose()
             .map_err(invalid_filter)?;
         let keyword = query
@@ -160,8 +168,9 @@ impl TryFrom<ListTasksQuery> for (PageOptions, TaskFilters) {
         let filters = TaskFilters::builder()
             .person(query.person)
             .agent(query.agent)
-            .status(status)
+            .state(state)
             .own_open(query.own_open)
+            .claimable(query.claimable)
             .keyword(keyword)
             .build();
         filters.validate().map_err(TaskError::from)?;
@@ -203,6 +212,7 @@ impl From<TaskRead> for TaskResponse {
     fn from(read: TaskRead) -> Self {
         Self::builder()
             .result(read.task.result.clone())
+            .created_at(read.task.created_at)
             .started_at(read.task.started_at)
             .ended_at(read.task.ended_at)
             .summary(TaskSummary::from(read.task))
@@ -221,10 +231,17 @@ pub(crate) async fn create(
     let Path(space) = path.map_err(invalid_path)?;
     let Json(request) = request.map_err(invalid_json)?;
     let caller = caller.library_caller();
+    let planned = request.planned;
     let title = request.try_into()?;
     let task = state
         .library
-        .run_write(async |write| create_task(write, &caller, &space, title).await)
+        .run_write(async |write| {
+            if planned {
+                plan_task(write, &caller, &space, title).await
+            } else {
+                create_task(write, &caller, &space, title).await
+            }
+        })
         .await?;
     Ok((StatusCode::CREATED, Envelope::builder().data(task).build()))
 }
@@ -404,11 +421,11 @@ fn text_error(field: &str, error: TaskTextError) -> FieldError {
         .build()
 }
 
-fn invalid_filter(error: TaskStatusError) -> ApiError {
+fn invalid_filter(error: TaskStateError) -> ApiError {
     ApiError::InvalidQuery(vec![
         FieldError::builder()
-            .field(TaskStatusError::FIELD)
-            .code(TaskStatusError::FIELD_CODE)
+            .field(TaskStateError::FIELD)
+            .code(TaskStateError::FIELD_CODE)
             .message(error.to_string())
             .build(),
     ])

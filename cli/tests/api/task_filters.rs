@@ -17,8 +17,8 @@ async fn task_list_returns_matching_tasks_when_filtered() {
                 &server.username,
                 "--agent",
                 FILTER_AGENT,
-                "--status",
-                "in progress",
+                "--state",
+                "working",
                 "--keyword",
                 FILTER_KEYWORD,
             ],
@@ -41,7 +41,7 @@ async fn task_list_returns_matching_tasks_when_filtered() {
     }
     let ended = server
         .run(&[
-            "task", "list", &space, "--status", "ended", "--output", "json",
+            "task", "list", &space, "--state", "canceled", "--output", "json",
         ])
         .await;
     assert_success(&ended);
