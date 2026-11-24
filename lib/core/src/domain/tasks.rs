@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::iter::{empty, once};
 use std::slice::from_ref;
 
 use lorebay_lib_types::Secret;
@@ -20,11 +21,12 @@ use super::key::{format_key, parse_key};
 use super::pagination::{Page, PageOptions, PageSizeError};
 use super::space_access::{READ_ROLES, SpaceAccessError, WRITE_ROLES, check_space};
 use super::task_access::{TaskAccessError, TaskAction, TaskCheck, check_task};
+use super::task_results::{record_result, result_page};
 use super::task_state::change_state;
 use super::time::now_millis;
 use super::{
     AgentFile, CallerError, CheckpointContent, TaskFilterError, TaskFilters, TaskKeyword,
-    TaskResult, TaskState, TaskTitle,
+    TaskResult, TaskResultVersion, TaskState, TaskTitle,
 };
 
 #[derive(Debug, Error)]
@@ -56,6 +58,8 @@ pub enum TaskError {
     NoChanges(#[from] TaskChangeError),
     #[error("Task not found")]
     NotFound,
+    #[error("The result version changed; read the latest result before updating it")]
+    ResultChanged,
 }
 
 #[derive(Clone, Debug, Serialize, TypedBuilder)]
@@ -98,6 +102,7 @@ pub struct Task {
     pub planner: Option<String>,
     pub planner_agent_name: Option<String>,
     pub result: String,
+    pub result_version: i64,
     pub created_at: i64,
     pub started_at: Option<i64>,
     pub ended_at: Option<i64>,
@@ -112,6 +117,8 @@ pub struct TaskChanges {
     #[builder(default = None)]
     pub state_reason: Option<String>,
     pub result: Option<TaskResult>,
+    #[builder(default = None)]
+    pub result_version: Option<i64>,
 }
 
 #[derive(Clone, Debug, TypedBuilder)]
@@ -120,10 +127,17 @@ pub struct TaskRead {
     pub task: Task,
     pub scratchpad: Option<Page<Checkpoint>>,
     pub files: Vec<AgentFile>,
+    pub results: Option<Page<TaskResultVersion>>,
+}
+
+#[derive(Clone, Debug)]
+pub enum TaskInclude {
+    Results(PageOptions),
+    Scratchpad(PageOptions),
 }
 
 #[derive(Debug, Error)]
-#[error("Provide a title, state or result.")]
+#[error("Provide a title, state or result; result_version requires a result.")]
 pub struct TaskChangeError;
 
 impl TaskChangeError {
@@ -133,7 +147,9 @@ impl TaskChangeError {
 
 impl TaskChanges {
     pub fn validate(&self) -> Result<(), TaskChangeError> {
-        if self.title.is_none() && self.state.is_none() && self.result.is_none() {
+        if (self.title.is_none() && self.state.is_none() && self.result.is_none())
+            || (self.result.is_none() && self.result_version.is_some())
+        {
             return Err(TaskChangeError);
         }
         Ok(())
@@ -163,6 +179,7 @@ impl TryFrom<(task::Model, String)> for Task {
             .planner_agent_name(task.planner_agent_name)
             .created_at(task.created_at)
             .result(task.result)
+            .result_version(task.result_version)
             .started_at(task.started_at)
             .ended_at(task.ended_at)
             .last_activity_at(task.last_activity_at)
@@ -200,6 +217,7 @@ impl TaskError {
             Self::InvalidReason => "task.reason_invalid",
             Self::HasWork => "task.has_work",
             Self::CheckpointNotFound => "checkpoint.not_found",
+            Self::ResultChanged => "task.result_changed",
         }
     }
 }
@@ -329,11 +347,15 @@ pub async fn change_task(
     };
     let handle = write.handle();
     let task = check_task(write.state(), handle, caller, target.check(action)).await?;
-    let model = changed_task(task, changes, caller)?;
+    let has_result = changes.result.is_some();
+    let task = changed_task(task, changes, caller)?;
+    if has_result {
+        record_result(handle.transaction(), caller, &task).await?;
+    }
     let task = TaskRepository::builder()
         .connection(handle.transaction())
         .build()
-        .update(model)
+        .update(task.into_active_model().reset_all())
         .await?;
     let space_id = task.space_id.clone();
     let result = full_task(write.state(), handle, task, None).await?;
@@ -446,7 +468,7 @@ pub async fn list_tasks(
                     &format!("{}:{}", task.last_activity_at, task.number),
                 )
             });
-            let people = names_for(state, handle, &records).await?;
+            let people = names_for(state, handle, &records, empty()).await?;
             let items = records
                 .into_iter()
                 .map(|task| named_task(task, &people).map(TaskSummary::from))
@@ -461,18 +483,27 @@ pub async fn read_task(
     caller: &Caller,
     space: &str,
     key: &str,
-    scratchpad: Option<PageOptions>,
+    include: Option<TaskInclude>,
 ) -> Result<TaskRead, TaskError> {
     state
         .run_read(async |handle| {
             let task = task_by_key(state, handle, caller, space, key).await?;
-            let checkpoints = match scratchpad {
-                Some(options) => Some(
-                    checkpoint_page(handle.transaction(), caller, &task, space, options).await?,
+            let checkpoints = match &include {
+                Some(TaskInclude::Scratchpad(options)) => Some(
+                    checkpoint_page(handle.transaction(), caller, &task, space, options.clone())
+                        .await?,
                 ),
-                None => None,
+                _ => None,
             };
-            full_task(state, handle, task, checkpoints).await
+            let results = match include {
+                Some(TaskInclude::Results(options)) => {
+                    Some(result_page(state, handle, caller, &task, options).await?)
+                }
+                _ => None,
+            };
+            let mut read = full_task(state, handle, task, checkpoints).await?;
+            read.results = results;
+            Ok(read)
         })
         .await
 }
@@ -562,6 +593,7 @@ async fn create_new_task(
             title: Set(title.into()),
             state: Set(if planned { "planned" } else { "working" }.to_owned()),
             result: Set(String::new()),
+            result_version: Set(0),
             started_at: Set((!planned).then_some(now)),
             ended_at: Set(None),
             last_activity_at: Set(now),
@@ -579,7 +611,7 @@ fn changed_task(
     task: task::Model,
     changes: TaskChanges,
     caller: &Caller,
-) -> Result<task::ActiveModel, TaskError> {
+) -> Result<task::Model, TaskError> {
     let mut task = task;
     let repeating = changes
         .state
@@ -607,28 +639,32 @@ fn changed_task(
         task.title = title.into();
     }
     if let Some(result) = changes.result {
+        let expected = (task.result_version > 0).then_some(task.result_version);
+        if changes.result_version != expected {
+            return Err(TaskError::ResultChanged);
+        }
+        task.result_version = task
+            .result_version
+            .checked_add(1)
+            .ok_or_else(|| anyhow::anyhow!("Result version overflow"))?;
         task.result = result.into();
         task.work_recorded = 1;
         task.last_activity_at = now_millis()?.max(task.last_activity_at);
     }
-    Ok(task.into_active_model().reset_all())
+    Ok(task)
 }
 
 async fn names_for(
     state: &LibraryState,
     handle: OperationHandle<'_>,
     tasks: &[task::Model],
+    state_changers: impl Iterator<Item = String>,
 ) -> anyhow::Result<HashMap<String, String>> {
     let mut ids: Vec<String> = tasks
         .iter()
-        .flat_map(|task| {
-            [
-                Some(task.person_id.clone()),
-                task.planner_person_id.clone(),
-                Some(task.state_changed_by.clone()),
-            ]
-        })
+        .flat_map(|task| [Some(task.person_id.clone()), task.planner_person_id.clone()])
         .flatten()
+        .chain(state_changers)
         .collect();
     ids.sort_unstable();
     ids.dedup();
@@ -654,10 +690,6 @@ fn named_task(task: task::Model, names: &HashMap<String, String>) -> Result<Task
         })
         .transpose()?;
     let mut result = Task::try_from((task, name))?;
-    result.state_changed_by = names
-        .get(&result.state_changed_by)
-        .cloned()
-        .ok_or_else(|| DbErr::Type("Missing state changer person name".into()))?;
     result.planner = planner;
     Ok(result)
 }
@@ -668,16 +700,28 @@ pub(super) async fn full_task(
     task: task::Model,
     checkpoints: Option<Page<Checkpoint>>,
 ) -> Result<TaskRead, TaskError> {
-    let names = names_for(state, handle, from_ref(&task)).await?;
+    let names = names_for(
+        state,
+        handle,
+        from_ref(&task),
+        once(task.state_changed_by.clone()),
+    )
+    .await?;
     let files = completed_agent_files(handle.transaction(), &task.id).await?;
+    let mut task = named_task(task, &names)?;
+    task.state_changed_by = names
+        .get(&task.state_changed_by)
+        .cloned()
+        .ok_or_else(|| DbErr::Type("Missing state changer person name".into()))?;
     Ok(TaskRead {
-        task: named_task(task, &names)?,
+        task,
         scratchpad: checkpoints,
         files,
+        results: None,
     })
 }
 
-async fn task_by_key(
+pub(super) async fn task_by_key(
     state: &LibraryState,
     handle: OperationHandle<'_>,
     caller: &Caller,

@@ -223,18 +223,7 @@ async fn list_tasks_matches_keyword_in_result() {
         &["TK-2"],
     )
     .await;
-    change(
-        &server,
-        &agent,
-        &result_task,
-        json!({"result":"Replacement"}),
-    )
-    .await;
-    assert_keys(&server, &person, &[("keyword", "a_b")], &[]).await;
-    assert_keys(&server, &person, &[("keyword", "replacement")], &["TK-2"]).await;
-    change(&server, &agent, &result_task, json!({"result":""})).await;
-    assert_keys(&server, &person, &[("keyword", "replacement")], &[]).await;
-    assert_keys(&server, &person, &[("keyword", "searchable")], &["TK-1"]).await;
+    replace_search_result(&server, &person, &agent, &result_task).await;
     server.stop().await;
 }
 
@@ -471,4 +460,25 @@ fn keys(page: &Value) -> Vec<&str> {
         .iter()
         .map(|task| task["key"].as_str().unwrap())
         .collect()
+}
+
+async fn replace_search_result(server: &Server, person: &Value, agent: &Value, task: &Value) {
+    change(
+        server,
+        agent,
+        task,
+        json!({"result":"Replacement", "result_version":1}),
+    )
+    .await;
+    assert_keys(server, person, &[("keyword", "a_b")], &[]).await;
+    assert_keys(server, person, &[("keyword", "replacement")], &["TK-2"]).await;
+    change(
+        server,
+        agent,
+        task,
+        json!({"result":"", "result_version":2}),
+    )
+    .await;
+    assert_keys(server, person, &[("keyword", "replacement")], &[]).await;
+    assert_keys(server, person, &[("keyword", "searchable")], &["TK-1"]).await;
 }

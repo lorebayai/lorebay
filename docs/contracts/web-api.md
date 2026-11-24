@@ -76,8 +76,8 @@ POST /api/v1/spaces/{space}/requests/{key}/approve
 - **Library errors keep their codes.** A library operation's refusal carries the
   library's error code, such as `task.not_found`, with an HTTP status Lorebay
   chooses in one place; `task.state_invalid`, `task.held`, `task.not_holder`,
-  `task.has_work`, `agent_file.not_uploaded`, `agent_file.refused`,
-  `agent_file.too_large`, `space.number_taken`, `knowledge.name_taken` and
+  `task.has_work`, `task.result_changed`, `agent_file.not_uploaded`,
+  `agent_file.refused`, `agent_file.too_large`, `space.number_taken`, `knowledge.name_taken` and
   `person_request.decided` answer 409.
 - **Writes don't check references**; see [Keys and
   references](../../lib/docs/contracts/keys-and-references.md#5-references).
@@ -93,6 +93,17 @@ POST /api/v1/spaces/{space}/requests/{key}/approve
 - **Canceling changes state to `canceled` with `state_reason`**, a required
   one-line reason. People cancel their own tasks; owners and admins may cancel
   anyone's. There is no close operation.
+
+- **Task reads and changes return `result_version`** beside `result`. A PATCH
+  carrying `result` supplies the version it replaces in `result_version`,
+  omitted or null for the first write. The result rules are in
+  [Tasks](../../lib/docs/contracts/tasks.md#33-fields).
+- **Result history** is `GET /api/v1/spaces/{space}/tasks/{key}/results`,
+  paged by `page_size` and `cursor`, newest version first. Each row has
+  `version`, `result`, `person`, `agent_name` and `created_at`. Task reads
+  accept `include_results=true` to include that page under `results`, or
+  `include_scratchpad=true` for checkpoints, with the same pagination
+  parameters; the two flags cannot both be true.
 
 - **Listing users** exists for adding space members. Everyone signed in may
   call it and sees every username.

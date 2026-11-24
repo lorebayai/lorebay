@@ -20,14 +20,15 @@ Lorebay is the first product built on it. Terms follow the
   reaches the same operations, and how files travel beside them.
 - [Storage](architecture/storage.md): the file storage interface, the rules
   every file follows, the data layer, transactions and search.
-- [Data model](architecture/data-model.md): the seven tables, their columns,
+- [Data model](architecture/data-model.md): the eight tables, their columns,
   constraints and rules, and their DDL on SQLite.
 
 ## Contracts
 
 - [Access control](contracts/access-control.md): roles, the permission of
   every library operation, and the space and task checks.
-- [Tasks](contracts/tasks.md): tasks, Scratchpads, checkpoints and files.
+- [Tasks](contracts/tasks.md): tasks, result versions, Scratchpads,
+  checkpoints and files.
 - [Knowledge](contracts/knowledge.md): knowledge entries, versions and
   requests.
 - [Keys and references](contracts/keys-and-references.md): keys, task IDs

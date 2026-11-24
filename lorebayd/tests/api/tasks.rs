@@ -18,6 +18,7 @@ mod attribution;
 mod change;
 mod deletion;
 mod filters;
+mod results;
 
 #[tokio::test]
 async fn create_task_returns_task_id_and_key() {
@@ -520,7 +521,7 @@ async fn read_task_fails_when_task_is_in_another_space() {
         format!("{TASKS}/TK-999"),
         format!("{TASKS}/TK-01"),
     ] {
-        for suffix in ["", "/scratchpad"] {
+        for suffix in ["", "/scratchpad", "/results"] {
             let error = assert_problem(
                 request(
                     &server,

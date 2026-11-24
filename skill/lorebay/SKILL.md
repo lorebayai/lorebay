@@ -197,7 +197,10 @@ would be empty:
 
 Update the result each time you finish a stretch and stop to wait for the
 person, not only when the session ends. Describe the whole piece of work so
-far, not just the last stretch.
+far, not just the last stretch. Name the result version you replace; the first
+result names none. Use the returned version for the next update. On
+`task.result_changed`, read the latest result and reconcile it before writing
+again.
 
 When continuing someone else's `done` task, reference it in the result, such
 as `#TK-12`. Carry over what is still unresolved in its Open, so a reader

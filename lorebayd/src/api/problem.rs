@@ -338,7 +338,7 @@ impl From<TaskError> for ApiError {
             TaskError::InvalidPageSize(_) => {
                 return invalid_query(PageSizeError::FIELD).with_library_code(code);
             }
-            TaskError::HasWork => StatusCode::CONFLICT,
+            TaskError::HasWork | TaskError::ResultChanged => StatusCode::CONFLICT,
             TaskError::InvalidReason => StatusCode::BAD_REQUEST,
             TaskError::NoChanges(error) => return Self::from(error).with_library_code(code),
             TaskError::NotFound | TaskError::CheckpointNotFound => StatusCode::NOT_FOUND,

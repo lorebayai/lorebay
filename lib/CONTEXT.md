@@ -86,7 +86,12 @@ agent practice.
 holder, result, Scratchpad and files. A task may be planned before an agent
 works on it.
 
-**Result**: A task's Markdown summary of the work so far: the task result.
+**Result**: A task's Markdown summary of the work so far, shown at its latest
+version.
+
+**Result version**: One whole result written to a task, numbered from 1 within
+that task, with its writing agent, person and time. An update names the version
+it replaces; the first result names none.
 
 **Task state**: Where a task stands: `planned`, `working`, `waiting`, `done`,
 `failed` or `canceled`. The library holds it and refuses any other change.

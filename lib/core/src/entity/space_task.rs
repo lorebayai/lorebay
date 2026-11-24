@@ -39,6 +39,7 @@ pub struct Model {
     pub state: String,
     #[sea_orm(column_type = "Text")]
     pub result: String,
+    pub result_version: i64,
     pub started_at: Option<i64>,
     pub ended_at: Option<i64>,
     pub last_activity_at: i64,
@@ -60,6 +61,8 @@ pub enum Relation {
     SpaceCheckpoint,
     #[sea_orm(has_many = "super::space_person_request::Entity")]
     SpacePersonRequest,
+    #[sea_orm(has_many = "super::space_task_result::Entity")]
+    SpaceTaskResult,
 }
 
 impl Related<super::space::Entity> for Entity {
@@ -83,6 +86,12 @@ impl Related<super::space_checkpoint::Entity> for Entity {
 impl Related<super::space_person_request::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::SpacePersonRequest.def()
+    }
+}
+
+impl Related<super::space_task_result::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::SpaceTaskResult.def()
     }
 }
 

@@ -81,6 +81,7 @@ async fn change_task_replaces_result_and_updates_last_activity() {
     .await;
     let mut expected = original.clone();
     expected["result"] = json!("# Findings\nFirst result with #KN-999");
+    expected["result_version"] = json!(1);
     expected["last_activity_at"] = changed["last_activity_at"].clone();
     assert_eq!(changed, expected);
     assert!(changed["last_activity_at"].as_i64() > before["data"][0]["last_activity_at"].as_i64());
@@ -100,22 +101,19 @@ async fn change_task_replaces_result_and_updates_last_activity() {
         &server,
         &agent,
         &first,
-        json!({"state":"working", "result":"Replacement Markdown **result**"}),
+        json!({"state":"working", "result":"Replacement Markdown **result**", "result_version":1}),
     )
     .await;
     expected["state"] = json!("working");
     expected["holder"] = json!("Research agent");
     expected["ended_at"] = Value::Null;
     expected["result"] = json!("Replacement Markdown **result**");
+    expected["result_version"] = json!(2);
     expected["last_activity_at"] = replaced["last_activity_at"].clone();
     expected["state_changed_at"] = replaced["state_changed_at"].clone();
     assert_eq!(replaced, expected);
     assert!(replaced["last_activity_at"].as_i64() > changed["last_activity_at"].as_i64());
-    let cleared = change(&server, &agent, &first, json!({"result":""})).await;
-    expected["result"] = json!("");
-    expected["last_activity_at"] = cleared["last_activity_at"].clone();
-    assert_eq!(cleared, expected);
-    assert_eq!(scratchpad(&server, &person, "TK-1").await, json!([]));
+    clear_result(&server, &agent, &first, expected).await;
     server.stop().await;
 }
 
@@ -493,13 +491,22 @@ async fn assert_task_text_limits(server: &Server, agent: &Value, task: &Value) {
             server,
             agent,
             task,
-            json!({"state":"working", "result":"  "})
+            json!({"state":"working", "result":"  ", "result_version":1})
         )
         .await["result"],
         "  "
     );
     assert_eq!(
-        change(server, agent, task, json!({"result":""})).await["result"],
+        change(server, agent, task, json!({"result":"","result_version":2})).await["result"],
         ""
     );
+}
+
+async fn clear_result(server: &Server, agent: &Value, task: &Value, mut expected: Value) {
+    let cleared = change(server, agent, task, json!({"result":"","result_version":2})).await;
+    expected["result"] = json!("");
+    expected["result_version"] = json!(3);
+    expected["last_activity_at"] = cleared["last_activity_at"].clone();
+    assert_eq!(cleared, expected);
+    assert_eq!(scratchpad(server, agent, "TK-1").await, json!([]));
 }

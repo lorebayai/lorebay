@@ -11,6 +11,7 @@ impl MigrationTrait for Migration {
         for table in [
             space(),
             task(),
+            task_result(),
             checkpoint(),
             agent_file(),
             knowledge(manager.get_database_backend()),
@@ -32,6 +33,7 @@ impl MigrationTrait for Migration {
             SpaceKnowledge::Table.into_iden(),
             SpaceAgentFile::Table.into_iden(),
             SpaceCheckpoint::Table.into_iden(),
+            SpaceTaskResult::Table.into_iden(),
             SpaceTask::Table.into_iden(),
             Space::Table.into_iden(),
         ] {
@@ -82,6 +84,7 @@ fn task() -> TableCreateStatement {
         .col(text(SpaceTask::Title))
         .col(text(SpaceTask::State))
         .col(text(SpaceTask::Result).default(""))
+        .col(big_integer(SpaceTask::ResultVersion).default(0))
         .col(big_integer_null(SpaceTask::StartedAt))
         .col(big_integer_null(SpaceTask::EndedAt))
         .col(big_integer(SpaceTask::LastActivityAt))
@@ -141,6 +144,31 @@ fn checkpoint() -> TableCreateStatement {
         .foreign_key(
             ForeignKey::create()
                 .from(SpaceCheckpoint::Table, SpaceCheckpoint::TaskId)
+                .to(SpaceTask::Table, SpaceTask::Id)
+                .on_delete(ForeignKeyAction::Cascade),
+        )
+        .to_owned()
+}
+
+fn task_result() -> TableCreateStatement {
+    Table::create()
+        .table(SpaceTaskResult::Table)
+        .col(text(SpaceTaskResult::Id).primary_key())
+        .col(text(SpaceTaskResult::TaskId))
+        .col(big_integer(SpaceTaskResult::Version))
+        .col(text(SpaceTaskResult::Result))
+        .col(text(SpaceTaskResult::PersonId))
+        .col(text(SpaceTaskResult::AgentName))
+        .col(big_integer(SpaceTaskResult::CreatedAt))
+        .index(
+            Index::create()
+                .unique()
+                .col(SpaceTaskResult::TaskId)
+                .col(SpaceTaskResult::Version),
+        )
+        .foreign_key(
+            ForeignKey::create()
+                .from(SpaceTaskResult::Table, SpaceTaskResult::TaskId)
                 .to(SpaceTask::Table, SpaceTask::Id)
                 .on_delete(ForeignKeyAction::Cascade),
         )
@@ -555,6 +583,7 @@ enum SpaceTask {
     PlannerPersonId,
     RandomId,
     Result,
+    ResultVersion,
     SpaceId,
     StartedAt,
     State,
@@ -566,4 +595,16 @@ enum SpaceTask {
     Title,
     WaitingRequestId,
     WorkRecorded,
+}
+
+#[derive(DeriveIden)]
+enum SpaceTaskResult {
+    AgentName,
+    CreatedAt,
+    Id,
+    PersonId,
+    Result,
+    Table,
+    TaskId,
+    Version,
 }

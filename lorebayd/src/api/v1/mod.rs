@@ -16,38 +16,7 @@ pub(crate) fn router() -> Router<ServerState> {
             "/spaces/{space}/files/{key}/url",
             get(agent_files::download_url),
         )
-        .route(
-            "/spaces/{space}/tasks",
-            get(tasks::list).post(tasks::create),
-        )
-        .route(
-            "/spaces/{space}/tasks/{task}",
-            get(tasks::read).patch(tasks::change).delete(tasks::delete),
-        )
-        .route(
-            "/spaces/{space}/tasks/{task}/checkpoints",
-            post(tasks::append_checkpoint),
-        )
-        .route(
-            "/spaces/{space}/tasks/{task}/checkpoints/{time}",
-            delete(tasks::remove_checkpoint),
-        )
-        .route(
-            "/spaces/{space}/tasks/{task}/scratchpad",
-            get(tasks::scratchpad),
-        )
-        .route(
-            "/spaces/{space}/tasks/{task}/files",
-            post(agent_files::register),
-        )
-        .route(
-            "/spaces/{space}/tasks/{task}/files/{key}",
-            delete(agent_files::delete),
-        )
-        .route(
-            "/spaces/{space}/tasks/{task}/files/{key}/complete",
-            post(agent_files::complete),
-        )
+        .merge(task_router())
         .route("/users", get(users::list))
         .route("/spaces/{space}/members", get(space_members::list))
         .route(
@@ -78,6 +47,43 @@ mod space_members;
 mod spaces;
 mod tasks;
 mod users;
+
+fn task_router() -> Router<ServerState> {
+    Router::new()
+        .route(
+            "/spaces/{space}/tasks",
+            get(tasks::list).post(tasks::create),
+        )
+        .route(
+            "/spaces/{space}/tasks/{task}",
+            get(tasks::read).patch(tasks::change).delete(tasks::delete),
+        )
+        .route(
+            "/spaces/{space}/tasks/{task}/checkpoints",
+            post(tasks::append_checkpoint),
+        )
+        .route(
+            "/spaces/{space}/tasks/{task}/checkpoints/{time}",
+            delete(tasks::remove_checkpoint),
+        )
+        .route(
+            "/spaces/{space}/tasks/{task}/scratchpad",
+            get(tasks::scratchpad),
+        )
+        .route("/spaces/{space}/tasks/{task}/results", get(tasks::results))
+        .route(
+            "/spaces/{space}/tasks/{task}/files",
+            post(agent_files::register),
+        )
+        .route(
+            "/spaces/{space}/tasks/{task}/files/{key}",
+            delete(agent_files::delete),
+        )
+        .route(
+            "/spaces/{space}/tasks/{task}/files/{key}/complete",
+            post(agent_files::complete),
+        )
+}
 
 fn person_requests_router() -> Router<ServerState> {
     Router::new()

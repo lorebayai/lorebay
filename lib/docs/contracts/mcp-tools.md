@@ -49,9 +49,9 @@ A task uses `state` and `state_reason`; a request uses `status`. Task tools acce
 | `create_task` | Space | Creates a `working` task with the caller as holder, or a `planned` task with `planned=true`; returns task ID, key and title | Create or plan a task |
 | `claim_task` | Task ID | Claims a `planned` task across parties, or takes over a held task of the caller's party; returns state, title, holder and planner | Claim a task |
 | `release_task` | Task ID | Releases the caller's `working` task to `planned` before recording work; otherwise `task.has_work` | Release a task |
-| `update_task` | Task ID | Changes title, state with `state_reason`, or result; `waiting`, `failed` and `canceled` require a one-line reason | Change a task |
+| `update_task` | Task ID | Changes title, state with `state_reason`, or result; a result names the `result_version` it replaces, omitted or null for the first result, and returns its version; `waiting`, `failed` and `canceled` require a one-line reason | Change a task |
 | `list_tasks` | Space | Filters by person, agent, state or keyword; `own_open` selects own party's `working` and `waiting` tasks, `claimable` selects `planned` tasks; rows include state, reason, holder and planner | List tasks |
-| `get_task` | Space | Reads state and reason, who set it and when, holder, planner, result, files and optionally Scratchpad; each file and checkpoint includes its writing or registering agent's copied name | Read a task |
+| `get_task` | Space | Reads state and reason, who set it and when, holder, planner, result and `result_version`, and files; `include_scratchpad` adds checkpoints, or `include_results` adds result history with each version's result, person, copied agent name and time; each file and checkpoint includes its agent's copied name | Read a task |
 | `add_checkpoint` | Task ID | Appends a checkpoint to a `working` or `waiting` task the caller holds | Append a checkpoint |
 | `create_file` | Task ID | Registers a file name and summary on a task the caller holds; returns an upload URL and headers | Register a file |
 | `complete_file` | Task ID | Reports the upload finished; the library checks the content is in storage and within the size limit, and only then is the upload complete | Report an upload complete |
@@ -63,10 +63,14 @@ A task uses `state` and `state_reason`; a request uses `status`. Task tools acce
 | `get_request` | Space | Reads one request: content, status, the 'changed since requested' mark, rejection reason | Read a request |
 
 - **Lists are paginated.** `list_spaces`, `list_tasks`, `list_knowledge`,
-  `list_requests` and the Scratchpad in `get_task` return pages, so no call puts an
-  unbounded result into the model's context. Each page follows a cursor,
-  in a fixed order, with a default page size the caller may change, up to
+  `list_requests` and the Scratchpad or result history in `get_task` return
+  pages, so no call puts an unbounded result into the model's context. Each
+  page follows a cursor, in a fixed order, with a default page size the caller may change, up to
   the library's limit.
+- **`get_task` includes at most one history.** `include_scratchpad` and
+  `include_results` cannot both be true. `page_size` and `cursor` apply to the
+  selected history; neither is accepted without one. Result history is in
+  descending version order.
 - **`create_file` returns an object, not a bare URL**, so multipart
   upload can be added without changing the tool. How an upload uses the URL
   and headers is in [Tasks](tasks.md#5-files).
@@ -77,9 +81,9 @@ A task uses `state` and `state_reason`; a request uses `status`. Task tools acce
 
 What MCP leaves out, people do through a product's entry points: deleting
 tasks, checkpoints and files; approving and rejecting requests; changing
-Knowledge directly; viewing history and rolling back. Creating spaces and
-managing who is in them are the product's. Agents may also read one space
-through a product's entry point; that operation has no tool.
+Knowledge directly; viewing Knowledge history and rolling back. Creating
+spaces and managing who is in them are the product's. Agents may also read
+one space through a product's entry point; that operation has no tool.
 
 ## 5. The MCP layer
 

@@ -4,7 +4,7 @@ use std::sync::atomic::Ordering;
 use futures_util::future::join_all;
 use lorebay_lib_core::{
     Caller, CheckpointContent, NewSpace, SpaceError, SpaceInputError, SpaceRole, TaskChanges,
-    TaskState, WriteOperation, add_checkpoint, change_task,
+    TaskInclude, TaskState, WriteOperation, add_checkpoint, change_task,
     complete_agent_file as record_completion, create_space, delete_task,
     get_agent_file_download_url, highest_space_number, list_tasks, prepare_agent_file_completion,
     read_task, register_agent_file, remove_orphaned_files, resolve_space,
@@ -188,7 +188,7 @@ async fn add_checkpoint_keeps_times_increasing_when_appended_concurrently() {
             &fixture.person,
             SPACE,
             &task.key,
-            Some(page()),
+            Some(TaskInclude::Scratchpad(page())),
         )
         .await
         .unwrap();
@@ -258,7 +258,7 @@ async fn add_checkpoint_fails_when_task_ends_concurrently() {
             &fixture.person,
             SPACE,
             &task.key,
-            Some(page()),
+            Some(TaskInclude::Scratchpad(page())),
         )
         .await
         .unwrap();
@@ -389,6 +389,7 @@ async fn list_tasks_matches_keyword_when_ascii_case_differs() {
                         title: None,
                         state: None,
                         state_reason: None,
+                        result_version: None,
                         result: Some("BUILD done".to_owned().try_into().unwrap()),
                     },
                 )
@@ -462,7 +463,7 @@ async fn delete_task_keeps_rows_and_files_when_product_rolls_back() {
             &fixture.person,
             SPACE,
             &task.key,
-            Some(page()),
+            Some(TaskInclude::Scratchpad(page())),
         )
         .await
         .unwrap();
@@ -863,6 +864,7 @@ fn ended() -> TaskChanges {
         title: None,
         state: Some(TaskState::Done),
         state_reason: None,
+        result_version: None,
         result: None,
     }
 }

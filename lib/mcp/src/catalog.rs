@@ -75,9 +75,9 @@ fn build_catalog() -> Vec<(ToolName, Tool)> {
         list_tasks(),
         tool(
             ToolName::GetTask,
-            "Read a task by space and key such as TK-1, including who set its state and when, its result and files with each registering agent. Set include_scratchpad to true to read checkpoints with each writing agent; page_size and cursor then page the Scratchpad.",
+            "Read a task by space and key such as TK-1, including who set its state and when, its result and result_version, and files with each registering agent. Set include_scratchpad for checkpoints or include_results for result history, newest first with each writer and time. Choose at most one; page_size and cursor page that history.",
             paged(
-                json!({"space":space(), "key":{"type":"string"}, "include_scratchpad":{"type":"boolean", "default":false}}),
+                json!({"space":space(), "key":{"type":"string"}, "include_scratchpad":{"type":"boolean", "default":false}, "include_results":{"type":"boolean", "default":false}}),
             ),
             &["space", "key"],
             true,
@@ -207,13 +207,14 @@ fn create_task() -> (ToolName, Tool) {
 fn update_task() -> (ToolName, Tool) {
     tool(
         ToolName::UpdateTask,
-        "Change a task using task_id, not a task key. Provide at least one of title, state or result. Only the holder writes. Reopen done with state working; waiting, failed and canceled require a one-line reason; result replaces the whole Markdown result and an empty string clears it. Returns the updated task and its title.",
+        "Change a task using task_id, not a task key. Provide at least one of title, state or result. Only the holder writes. Reopen done with state working; waiting, failed and canceled require a one-line reason. A result replaces the whole Markdown text and an empty string clears it. Pass the result_version it replaces; omit it or pass null for the first result. A mismatch returns task.result_changed. Returns the updated task, its title and result_version.",
         json!({
             "task_id":{"type":"string"},
             "title":{"type":"string", "minLength":1, "maxLength":TITLE_MAX_CHARACTERS},
             "state":{"type":"string", "enum":["working", "waiting", "done", "failed", "canceled"]},
             "state_reason":{"type":"string", "minLength":1, "maxLength":TASK_REASON_MAX_CHARACTERS},
-            "result":{"type":"string", "maxLength":RESULT_MAX_CHARACTERS}
+            "result":{"type":"string", "maxLength":RESULT_MAX_CHARACTERS},
+            "result_version":{"type":["integer","null"], "minimum":1, "maximum":i64::MAX}
         }),
         &["task_id"],
         false,

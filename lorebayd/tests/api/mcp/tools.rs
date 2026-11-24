@@ -392,7 +392,12 @@ async fn call_version(
     result["structuredContent"].clone()
 }
 
-async fn call_error(server: &Server, tokens: &Value, name: &str, arguments: Value) -> Value {
+pub(crate) async fn call_error(
+    server: &Server,
+    tokens: &Value,
+    name: &str,
+    arguments: Value,
+) -> Value {
     let result = invoke(server, tokens, name, arguments, NEWEST_VERSION).await;
     assert_eq!(result["isError"], true, "{result}");
     result["structuredContent"].clone()
