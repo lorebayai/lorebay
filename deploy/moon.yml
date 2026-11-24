@@ -1,0 +1,11 @@
+language: 'python'
+layer: 'tool'
+
+tasks:
+  check:
+    command: 'python3 -B deploy/common/check.py'
+    inputs:
+      - '**/*'
+    options:
+      cache: false
+      runFromWorkspaceRoot: true
