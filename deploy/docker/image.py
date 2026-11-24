@@ -2,6 +2,7 @@ import hashlib
 import json
 import os
 import platform
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -24,33 +25,39 @@ def paths():
         raise SystemExit(f"Unsupported image target: {target}")
     directory = ROOT / "target/release-images" / target
     directory.mkdir(parents=True, exist_ok=True)
-    return target, directory, directory / "image.tar"
+    return target, directory, directory / "image"
 
 
 def build():
-    target, directory, archive = paths()
+    target, directory, stored = paths()
     architecture = {"x86_64": "amd64", "aarch64": "arm64"}[target.split("-")[0]]
     context = ROOT / "target/release-archives" / target / "lorebayd"
     image = f"lorebay-build-{uuid.uuid4().hex}:build"
     try:
         run("docker", "build", "--platform", f"linux/{architecture}",
             "--provenance=false", "--file", ROOT / "deploy/docker/Dockerfile", "--tag", image, context)
-        # Docker archives retain HEALTHCHECK, which OCI config conversion drops.
-        run("docker", "image", "save", "--output", archive, image)
+        with tempfile.TemporaryDirectory(dir=directory) as temporary:
+            archive = Path(temporary) / "image.tar"
+            run("docker", "image", "save", "--output", archive, image)
+            if stored.exists():
+                shutil.rmtree(stored)
+            # Docker-format conversion retains HEALTHCHECK, unlike OCI conversion.
+            run("skopeo", "copy", "--format", "v2s2", "--dest-compress",
+                f"docker-archive:{archive}", f"dir:{stored}")
     finally:
         subprocess.run(["docker", "image", "rm", image], check=False)
-    manifest = subprocess.run(["skopeo", "inspect", "--raw", f"docker-archive:{archive}"], check=True, capture_output=True).stdout
+    manifest = (stored / "manifest.json").read_bytes()
     (directory / "digest.txt").write_text(f"sha256:{hashlib.sha256(manifest).hexdigest()}\n")
 
 
 def smoke():
-    target, directory, archive = paths()
+    target, directory, stored = paths()
     if not target.startswith(platform.machine().replace("arm64", "aarch64")):
         raise SystemExit("Image smoke requires its native architecture")
     name = f"lorebay-smoke-{uuid.uuid4().hex}"
     image = f"{name}:smoke"
     try:
-        run("skopeo", "copy", f"docker-archive:{archive}", f"docker-daemon:{image}")
+        run("skopeo", "copy", f"dir:{stored}", f"docker-daemon:{image}")
         binary = ROOT / "target" / target / "release/lorebayd"
         hashed = run(binary, "hash-password", input="smoke\n", capture_output=True).stdout.strip()
         with tempfile.TemporaryDirectory(dir=directory) as temporary:
@@ -85,10 +92,10 @@ def setup():
 
 
 def push():
-    _, directory, archive = paths()
+    _, directory, stored = paths()
     digest = (directory / "digest.txt").read_text().strip()
     run("skopeo", "copy", "--preserve-digests", "--authfile", Path.home() / ".docker/config.json",
-        f"docker-archive:{archive}", f"docker://{REPOSITORY}@{digest}")
+        f"dir:{stored}", f"docker://{REPOSITORY}@{digest}")
 
 
 def manifest():

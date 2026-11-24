@@ -32,11 +32,11 @@ accepts loopback redirects on any port and takes no agent name.
 `hash-password` reads a password from standard input, removes one final line
 ending and prints an Argon2id PHC hash; it starts no server and accepts no
 password argument. Both flags are optional; `users_file` is required in configuration.
-The users file is a YAML list or JSON array with the fields below. Usernames
-must be unique, nonempty and have no leading or trailing whitespace. All hashes
-in one file must use the same Argon2 parameters. Restart the server after
-editing the file. Changing a hash does not end existing sign-ins or agent
-sign-ins; to end them, remove the username, restart, add it back and restart.
+The users file is a YAML list or JSON array; each hash is the command's complete
+output. Usernames must be unique, nonempty, with no leading or trailing whitespace.
+All hashes in a file must share Argon2 parameters. Restart after editing the file.
+Changing a hash does not end existing sign-ins or agent sign-ins; to end them,
+remove the username, restart, add it back and restart.
 
 ```yaml
 - username: alice

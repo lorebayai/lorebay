@@ -35,7 +35,7 @@ test -d "$DATA_DIRECTORY"
 stat -c '%u:%g %a %n' "$DATA_DIRECTORY" "$USERS_FILE"
 test -r "$USERS_FILE"
 pgrep -a lorebayd || true
-docker ps --format '{{.Names}} {{.Mounts}}'
+docker ps --no-trunc --format '{{.Names}} {{.Mounts}}'
 sudo chown 65532:65532 "$DATA_DIRECTORY" "$USERS_FILE"
 sudo chmod 0700 "$DATA_DIRECTORY"
 sudo chmod 0400 "$USERS_FILE"

@@ -1,6 +1,7 @@
 # Contribution
 
-How a change lands and ships in Lorebay. Applies to every change in the repo.
+How a change lands and ships in Lorebay: issues, worktrees, pull requests,
+reviews, landing, cleanup and releases. Applies to every change in the repo.
 
 ## Issues
 
@@ -62,6 +63,7 @@ How a change lands and ships in Lorebay. Applies to every change in the repo.
   | `Related to #n` | Context only |
 
 - Open a PR ready for review, not as a draft.
+
 ## CI
 
 - Run the fast checks the change touches (format, lint, type checks, unit
@@ -139,12 +141,10 @@ git push origin --delete "$BRANCH" || true
 
 ## Releases
 
-- The release PR sets the workspace version, README and skill example tags,
-  every version-bound deployment reference, and `CHANGELOG.md`; it merges last.
-- A maintainer runs `moon run lorebayd:deny cli:deny` on the head of `main`,
-  tags it `v<version>` and pushes the tag. The workflow gates dependencies,
-  smokes both images before pushing, attests downloads and the image manifest,
-  and leaves a draft release to check and publish. Pre-release tags that push
-  images require the user's word for each push. A failure after any image push
-  burns that version; the user names the next one. Never move or reuse a tag.
-- `lib-v` tags belong to the library ([lib/README.md](../../lib/README.md#usage)).
+- The release PR sets the workspace version, README and skill tags, every
+  version-bound deployment reference and `CHANGELOG.md`; it merges last.
+- A maintainer runs `moon run lorebayd:deny cli:deny` on `main`'s head, then tags
+  and pushes `v<version>`. The workflow checks dependencies, smokes both images before
+  any push, attests downloads and the manifest, and drafts a release. Each pre-release
+  image push needs the user's word; a failure after any image push burns the version.
+  The user names the next version; never move or reuse tags. `lib-v` tags belong to the [library](../../lib/README.md#usage).

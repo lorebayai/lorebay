@@ -111,13 +111,18 @@ def package(project):
     print(f"Packaged {archive.name}: {actual}; static ELF")
 
 
+def deployment_metadata(member):
+    member.uid = member.gid = 0
+    member.uname = member.gname = ""
+    member.mode = 0o755 if member.isdir() or member.mode & 0o111 else 0o644
+    return member
+
+
 def assets():
     directory = ROOT / "target/release-archives"
     directory.mkdir(parents=True, exist_ok=True)
     with tarfile.open(directory / "lorebay-deploy.tar.gz", "w:gz") as archive:
-        for source in sorted((ROOT / "deploy").rglob("*")):
-            if source.is_file():
-                archive.add(source, arcname=str(source.relative_to(ROOT)))
+        archive.add(ROOT / "deploy", arcname="deploy", filter=deployment_metadata)
     downloads = sorted(directory.glob("*.tar.gz"))
     if len(downloads) != 5:
         raise SystemExit("Expected four executable archives and the deployment bundle")

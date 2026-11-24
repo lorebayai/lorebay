@@ -1,3 +1,5 @@
+name: lorebay
+
 services:
   lorebayd:
     image: ghcr.io/lorebayai/lorebayd:0.1.2
