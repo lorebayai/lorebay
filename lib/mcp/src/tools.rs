@@ -36,7 +36,7 @@ pub(super) async fn call(
                 caller,
                 &arguments.string("space")?,
                 &arguments.string("key")?,
-                arguments.scratchpad()?,
+                arguments.include()?,
             )
             .await?,
         ),
@@ -151,6 +151,9 @@ fn task_response(read: TaskRead) -> Result<Value, ToolError> {
     result["files"] = value(read.files)?;
     if let Some(scratchpad) = read.scratchpad {
         result["scratchpad"] = page_response(scratchpad)?;
+    }
+    if let Some(results) = read.results {
+        result["results"] = page_response(results)?;
     }
     Ok(result)
 }

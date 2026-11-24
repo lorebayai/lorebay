@@ -92,7 +92,8 @@ contains spaces. Optional arguments appear in brackets. List rows follow
 | `member set-role <space> <username> --role <role>` | Change a space member's role | Updated space member |
 | `member remove <space> <username>` | Remove a space member | Removal result |
 | `task list <space> [--person <username>] [--agent <name>] [--state <state>] [--keyword <text>] [--own-open] [--claimable]` | List tasks | Task keys, titles, states, reasons, people, holders, planners and last activity times |
-| `task show <space> <task>` | Read a task | Task fields, including state, reason, who set the state and when, holder, planner and its task ID, result and completed file list with each registering agent's copied name |
+| `task show <space> <task>` | Read a task | Task fields, including state, reason, who set the state and when, holder, planner and its task ID, result, result version and completed file list with each registering agent's copied name |
+| `task results <space> <task>` | Read a task's result history | One page of whole result versions, newest first, with each writer's person, copied agent name and time |
 | `task scratchpad <space> <task>` | Read a task's Scratchpad | One page of checkpoints, with their times and each writing agent's copied name, in time order |
 | `task plan <space> --title <title>` | Plan a task | Planned task key, task ID and title |
 | `task cancel <space> <task-id> --reason <reason>` | Change a task to `canceled` with a reason | Updated task |
@@ -246,7 +247,8 @@ Exit codes:
 - **A list command prints one page.** It accepts `--page-size <count>` and
   `--cursor <cursor>`, passed as the Web API's `page_size` and `cursor`.
   Omission uses the Web API defaults and order. This also applies to
-  `task scratchpad`, `knowledge history` and `knowledge deleted`.
+  `task scratchpad`, `task results`, `knowledge history` and
+  `knowledge deleted`.
 - **The next cursor stays opaque.** A nonempty `meta.next_cursor` is kept in
   JSON output. In either output mode, standard error gives the command for
   the next page with that cursor, retaining the space, page size and every

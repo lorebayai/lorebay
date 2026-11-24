@@ -15,7 +15,10 @@ use lorebay_lib_core::{
     add_checkpoint, change_task, create_task, delete_checkpoint, delete_task, list_tasks,
     plan_task, read_scratchpad, read_task,
 };
-use lorebay_lib_core::{Page, PageOptions, TaskStateError, TaskSummary, TaskTarget};
+use lorebay_lib_core::{
+    Page, PageOptions, TaskInclude, TaskResultVersion, TaskStateError, TaskSummary, TaskTarget,
+    read_task_results,
+};
 
 use super::person_sign_in::invalid_json;
 use lorebay_lib_core::AgentFile;
@@ -48,6 +51,7 @@ pub(crate) struct ChangeTaskRequest {
     state_reason: Option<String>,
     #[serde(default, deserialize_with = "present_string")]
     result: Option<String>,
+    result_version: Option<i64>,
 }
 
 #[derive(Clone, Debug, Deserialize, TypedBuilder)]
@@ -72,6 +76,8 @@ pub(crate) struct ListTasksQuery {
 pub(crate) struct ReadTaskQuery {
     #[serde(default)]
     include_scratchpad: bool,
+    #[serde(default)]
+    include_results: bool,
     page_size: Option<String>,
     cursor: Option<String>,
 }
@@ -92,12 +98,15 @@ pub(crate) struct TaskResponse {
     state_changed_agent_name: Option<String>,
     state_changed_at: i64,
     result: String,
+    result_version: i64,
     created_at: i64,
     started_at: Option<i64>,
     ended_at: Option<i64>,
     files: Vec<AgentFile>,
     #[serde(skip_serializing_if = "Option::is_none")]
     scratchpad: Option<Envelope<Vec<Checkpoint>>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    results: Option<Envelope<Vec<TaskResultVersion>>>,
 }
 
 impl TryFrom<CreateTaskRequest> for TaskTitle {
@@ -120,6 +129,13 @@ impl TryFrom<ChangeTaskRequest> for TaskChanges {
     type Error = ApiError;
 
     fn try_from(request: ChangeTaskRequest) -> Result<Self, Self::Error> {
+        if request.result_version.is_some_and(|version| version <= 0) {
+            return Err(invalid_field(
+                "result_version",
+                "invalid",
+                "Expected a positive result version or null.",
+            ));
+        }
         let title = request
             .title
             .map(TaskTitle::try_from)
@@ -147,6 +163,7 @@ impl TryFrom<ChangeTaskRequest> for TaskChanges {
             .state(state)
             .state_reason(request.state_reason)
             .result(result)
+            .result_version(request.result_version)
             .build();
         changes.validate()?;
         Ok(changes)
@@ -187,8 +204,11 @@ impl TryFrom<ListTasksQuery> for (PageOptions, TaskFilters) {
 }
 
 impl ReadTaskQuery {
-    pub(crate) fn scratchpad(self) -> Result<Option<PageOptions>, ApiError> {
-        if !self.include_scratchpad {
+    pub(crate) fn include(self) -> Result<Option<TaskInclude>, ApiError> {
+        if self.include_scratchpad && self.include_results {
+            return Err(invalid_query("query"));
+        }
+        if !self.include_scratchpad && !self.include_results {
             if self.page_size.is_some() {
                 return Err(invalid_query("page_size"));
             }
@@ -201,7 +221,12 @@ impl ReadTaskQuery {
             .page_size(self.page_size)
             .cursor(self.cursor)
             .build();
-        Ok(Some(options.try_into()?))
+        let options = options.try_into()?;
+        Ok(Some(if self.include_results {
+            TaskInclude::Results(options)
+        } else {
+            TaskInclude::Scratchpad(options)
+        }))
     }
 }
 
@@ -218,12 +243,14 @@ impl From<TaskRead> for TaskResponse {
             .state_changed_agent_name(read.task.state_changed_agent_name.clone())
             .state_changed_at(read.task.state_changed_at)
             .result(read.task.result.clone())
+            .result_version(read.task.result_version)
             .created_at(read.task.created_at)
             .started_at(read.task.started_at)
             .ended_at(read.task.ended_at)
             .summary(TaskSummary::from(read.task))
             .files(read.files)
             .scratchpad(read.scratchpad.map(checkpoint_page))
+            .results(read.results.map(result_page))
             .build()
     }
 }
@@ -378,7 +405,7 @@ pub(crate) async fn read(
         &caller.library_caller(),
         &space,
         &key,
-        query.scratchpad()?,
+        query.include()?,
     )
     .await?;
     Ok(Envelope::builder().data(task).build())
@@ -401,6 +428,32 @@ pub(crate) async fn scratchpad(
     )
     .await?;
     Ok(checkpoint_page(page))
+}
+
+pub(crate) async fn results(
+    State(state): State<ServerState>,
+    caller: VerifiedCaller,
+    path: Result<Path<(String, String)>, PathRejection>,
+    query: Result<Query<ListQuery>, QueryRejection>,
+) -> Result<Envelope<Vec<TaskResultVersion>>, ApiError> {
+    let Path((space, key)) = path.map_err(invalid_path)?;
+    let Query(query) = query.map_err(|_| invalid_query("query"))?;
+    let page = read_task_results(
+        &state.library,
+        &caller.library_caller(),
+        &space,
+        &key,
+        query.try_into()?,
+    )
+    .await?;
+    Ok(result_page(page))
+}
+
+fn result_page(page: Page<TaskResultVersion>) -> Envelope<Vec<TaskResultVersion>> {
+    Envelope::builder()
+        .data(page.items)
+        .meta(Meta::builder().next_cursor(page.next_cursor).build())
+        .build()
 }
 
 pub(crate) fn invalid_text(field: &str, error: TaskTextError) -> ApiError {

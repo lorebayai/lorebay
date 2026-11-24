@@ -9,6 +9,7 @@ pub(crate) use person_request::{
 };
 pub(crate) use space::SpaceRepository;
 pub(crate) use task::{TaskAfter, TaskListFilter, TaskRepository};
+pub(crate) use task_result::TaskResultRepository;
 
 mod agent_file;
 mod checkpoint;
@@ -17,3 +18,4 @@ mod knowledge_version;
 mod person_request;
 mod space;
 mod task;
+mod task_result;

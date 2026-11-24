@@ -19,6 +19,7 @@ pub use task_access::TaskAccessError;
 pub use task_filter::*;
 pub use task_holds::*;
 pub use task_input::*;
+pub use task_results::*;
 pub use task_state::*;
 pub use tasks::*;
 
@@ -63,6 +64,7 @@ mod task_access;
 mod task_filter;
 mod task_holds;
 mod task_input;
+mod task_results;
 mod task_state;
 mod tasks;
 mod time;

@@ -70,7 +70,7 @@ async fn task_show_prints_result_task_id_and_agent_files() {
     assert_eq!(
         String::from_utf8(human.stdout).unwrap(),
         format!(
-            "Key: TK-1\nTask ID: {id}\nTitle: # Work\n  State: canceled\n  - source\ttext\\u{{1b}}[0m\\r\\u{{7}}\\u{{2066}}\nState: waiting\nPerson: {}\nAgent name: Continuing agent\nHolder: Continuing agent\nReason: Awaiting review\nState changed by: {}\nState changed agent: Continuing agent\nState changed at: {changed_at}\nPlanner: \nPlanner agent: \nCreated at: {started}\nStarted at: {started}\nEnded at: \nLast activity at: {last_activity}\nResult: # Findings\n  Task ID: another-task\n  \n  - **Done**\tcode\\u{{1b}}[0m\\r\\u{{7}}\\u{{202e}}\n  \nFiles: {agent_files}\n",
+            "Key: TK-1\nTask ID: {id}\nTitle: # Work\n  State: canceled\n  - source\ttext\\u{{1b}}[0m\\r\\u{{7}}\\u{{2066}}\nState: waiting\nPerson: {}\nAgent name: Continuing agent\nHolder: Continuing agent\nReason: Awaiting review\nState changed by: {}\nState changed agent: Continuing agent\nState changed at: {changed_at}\nPlanner: \nPlanner agent: \nCreated at: {started}\nStarted at: {started}\nEnded at: \nLast activity at: {last_activity}\nResult: # Findings\n  Task ID: another-task\n  \n  - **Done**\tcode\\u{{1b}}[0m\\r\\u{{7}}\\u{{202e}}\n  \nResult version: 1\nFiles: {agent_files}\n",
             server.username, server.username
         )
     );

@@ -36,6 +36,7 @@ cargo run -p lorebay-cli -- task list SPACE-1 --page-size 20 --output json
 cargo run -p lorebay-cli -- task list SPACE-1 --person alice --agent 'Claude Code' --state working --keyword review
 cargo run -p lorebay-cli -- task list SPACE-1 --own-open
 cargo run -p lorebay-cli -- task show SPACE-1 TK-1
+cargo run -p lorebay-cli -- task results SPACE-1 TK-1 --page-size 20
 cargo run -p lorebay-cli -- task scratchpad SPACE-1 TK-1 --page-size 20
 cargo run -p lorebay-cli -- task plan SPACE-1 --title 'Queued work'
 cargo run -p lorebay-cli -- task cancel SPACE-1 '<task-id>' --reason 'No longer needed'

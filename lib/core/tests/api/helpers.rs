@@ -1,4 +1,4 @@
-use lorebay_lib_core::{TaskRead, read_task};
+use lorebay_lib_core::{TaskInclude, TaskRead, read_task};
 use std::collections::HashMap;
 use std::panic::{AssertUnwindSafe, resume_unwind};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -70,9 +70,15 @@ impl Fixture {
     }
 
     pub async fn read(&self, task: &CreatedTask) -> TaskRead {
-        read_task(&self.state, &self.person, SPACE, &task.key, Some(page()))
-            .await
-            .unwrap()
+        read_task(
+            &self.state,
+            &self.person,
+            SPACE,
+            &task.key,
+            Some(TaskInclude::Scratchpad(page())),
+        )
+        .await
+        .unwrap()
     }
 
     pub fn state_with(&self, gates: Gates, short_abandonment: bool) -> LibraryState {

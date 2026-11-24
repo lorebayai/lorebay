@@ -141,7 +141,7 @@ A task holds:
 | Planner | Who planned the task, a person or an agent with its person; empty for a task created started until its first release |
 | Created, start and end times | Start is set when the task first becomes `working`; end when it becomes `done`, `failed` or `canceled`, cleared when it is reopened |
 | Last activity time | Set by the library whenever the task receives a checkpoint, a file or a new result |
-| Result | Markdown text, rendered as Markdown |
+| Result and version (`result_version`) | The latest Markdown result and its number; 0 before the first result |
 
 - **State attribution describes the current state.** Claiming a planned task,
   releasing it, reopening it and waiting on a request record the caller. A
@@ -149,9 +149,19 @@ A task holds:
   with no agent. A takeover or a title or result update keeps the attribution
   of the current state. Person names are resolved when read; agent names are
   copied when written.
-- **The result is one field.** Each update replaces it whole; the Scratchpad
-  holds the work history. An agent of the task's party may update a `done`
-  task's title or result without reopening it.
+- **Each result update adds a version**, numbered from 1 within the task,
+  with the whole Markdown result, the writing agent's copied name, its person
+  and the time. An empty string clears the latest result and also adds a
+  version; writing the same text again also adds one. The task shows the latest
+  result and its number; its history lists every version, newest first, in
+  pages. Deleting a task deletes its result history too.
+- **A result update names the version it replaces** in `result_version`. The
+  first result omits it or sends null. An absent or different version after
+  the first result is refused with `task.result_changed`; the whole update is
+  refused, including any title or state change. A successful update returns
+  the result's version, so the agent can use it for the next write. An agent
+  of the task's party may update a `done` task's title or result without
+  reopening it.
 - **Finding tasks.** A space's tasks can be filtered by person, agent and state,
   and searched by keyword in titles and results. Two more filters list the
   caller's party's tasks that are `working` or `waiting`, and the `planned`

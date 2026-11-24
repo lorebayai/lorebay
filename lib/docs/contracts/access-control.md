@@ -55,7 +55,7 @@ except where the table says otherwise.
 | --- | --- | --- | --- |
 | Space | List own spaces, read one | Yes | Yes |
 | Space | Change name and summary | Owner, admin | No |
-| Task | List, read one, read its Scratchpad | Yes | Yes |
+| Task | List, read one, read its Scratchpad and result history | Yes | Yes |
 | Task | Plan: create a task as `planned` | Yes, except viewers | Yes, except viewers |
 | Task | Create a task started | No | Yes, except viewers |
 | Task | Claim a `planned` task | No | Yes, except viewers |

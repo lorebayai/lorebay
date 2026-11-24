@@ -22,7 +22,8 @@ the rules they keep, and the SQL that creates them.
 
 ## 2. Scope
 
-This doc covers the library's seven tables: `space`, `space_task`,
+This doc covers the library's eight tables: `space`, `space_task`,
+`space_task_result`,
 `space_checkpoint`, `space_agent_file`, `space_knowledge`,
 `space_knowledge_version` and `space_person_request`. Behavior observable through
 the public API is in the contract docs, and how the library's migrations
@@ -78,7 +79,7 @@ It does not cover:
   says what a delete cascades to or clears.
 - **Person IDs and the tenant ID have no foreign key.** The columns that hold a
   person, `space_task.person_id`, `space_task.planner_person_id`,
-  `space_task.state_changed_by`,
+  `space_task.state_changed_by`, `space_task_result.person_id`,
   `space_person_request.requested_by` and `decided_by`, and
   `space_knowledge_version.applied_by`, and `space.tenant_id` hold the product's
   IDs as text. The library has no table of people or tenants, and removing or
@@ -99,6 +100,7 @@ erDiagram
     space ||--o{ space_task : "holds"
     space ||--o{ space_knowledge : "holds"
     space ||--o{ space_person_request : "holds"
+    space_task ||--o{ space_task_result : "keeps"
     space_task ||--o{ space_checkpoint : "has"
     space_task ||--o{ space_agent_file : "has"
     space_task |o--o{ space_person_request : "is the source of"
@@ -107,8 +109,8 @@ erDiagram
     space_knowledge |o--o{ space_person_request : "is the target of"
 ```
 
-Tasks, knowledge entries and requests belong to a space; checkpoints and
-files belong to a task; each knowledge entry's history is in
+Tasks, knowledge entries and requests belong to a space; result versions,
+checkpoints and files belong to a task; each knowledge entry's history is in
 `space_knowledge_version`. Who belongs to a space is the product's record;
 the library reads it through the
 [space roles interface](library.md#63-space-roles).
@@ -170,7 +172,8 @@ the library reads it through the
 | `created_at` | INTEGER | Not null | Creation time |
 | `title` | TEXT | Not null | |
 | `state` | TEXT | Not null | `planned`, `working`, `waiting`, `done`, `failed` or `canceled` |
-| `result` | TEXT | Not null, default empty | Markdown, replaced whole |
+| `result` | TEXT | Not null, default empty | Latest result text |
+| `result_version` | INTEGER | Not null, default 0 | Latest result number; 0 before the first result |
 | `started_at` | INTEGER | Nullable | First claim or started creation time |
 | `ended_at` | INTEGER | Nullable | Set for `done`, `failed` and `canceled`; cleared on reopen |
 | `last_activity_at` | INTEGER | Not null | Creation time initially, then checkpoint, completed file or result time; never moves backward |
@@ -198,21 +201,39 @@ the library reads it through the
   [person names interface](library.md#62-person-names) for the name, and a
   person filter asks it for the ID, so a removed or deleted person's tasks
   still show their name and are still found by it.
-- **Planner and state changer names use the same person names interface**,
-  resolved with the task's current person. State attribution is initialized on
-  creation and replaced on state transitions under the task lock, including
-  request-driven waits and resumes. A takeover keeps it unchanged.
+- **Planner and state changer names use the same person names interface.**
+  The state attribution columns are written with the state, on the locked
+  task row.
 - **`(id, space_id)` is unique** so that `space_agent_file` can reference a
-  task together with its space; see [section 5.4](#54-space_agent_file).
-- **Deletion is real.** Task deletion cascades to checkpoints and files and
-  clears its requests' source task. File content is removed after commit; see
-  [Storage](storage.md#4-database).
+  task together with its space; see [section 5.5](#55-space_agent_file).
+- **Deletion is real.** Task deletion cascades to results, checkpoints and
+  files and clears its requests' source task. File content is removed after
+  commit; see [Storage](storage.md#4-database).
 - **Indexes:** `space_task_space_activity` on `(space_id, last_activity_at)` and
   `space_task_space_person` on `(space_id, person_id, state)` support listing
   and own-open filters.
 - **Keyword search** covers `title` and `result`.
 
-### 5.3 `space_checkpoint`
+### 5.3 `space_task_result`
+
+| Column | Type | Constraints | Meaning |
+| --- | --- | --- | --- |
+| `id` | TEXT | Primary key, not null | |
+| `task_id` | TEXT | Not null, foreign key to `space_task`, cascades on delete | |
+| `version` | INTEGER | Not null | Counts from 1 per task; `(task_id, version)` is unique |
+| `result` | TEXT | Not null | Whole Markdown result |
+| `person_id` | TEXT | Not null | Writing agent's sponsor, resolved through the person names interface |
+| `agent_name` | TEXT | Not null | Writing agent's name, copied at the write |
+| `created_at` | INTEGER | Not null | |
+
+- **The task row serializes result writes.** Under its lock, the library
+  compares the supplied version, takes `result_version + 1`, inserts the
+  result row and writes `space_task.result` and `result_version` in the same
+  transaction. The result row's time equals the task's last activity time.
+- **The unique `(task_id, version)` index supports history paging**, ordered
+  by descending version. Each page resolves its writers' person names in bulk.
+
+### 5.4 `space_checkpoint`
 
 | Column | Type | Constraints | Meaning |
 | --- | --- | --- | --- |
@@ -228,15 +249,15 @@ the library reads it through the
 - **Index:** `space_checkpoint_task_time`, on `(task_id, created_at)`, for time
   order and paging.
 
-### 5.4 `space_agent_file`
+### 5.5 `space_agent_file`
 
 | Column | Type | Constraints | Meaning |
 | --- | --- | --- | --- |
 | `id` | TEXT | Primary key, not null | |
 | `space_id` | TEXT | Not null, foreign key to `space` | The same as its task's space |
 | `task_id` | TEXT | Not null; `(task_id, space_id)` is a foreign key to `space_task`, cascades on delete | |
-| `number` | INTEGER | Not null | The `FL` number; `(space_id, number)` is unique |
 | `agent_name` | TEXT | Not null | Registering agent's name, copied at registration |
+| `number` | INTEGER | Not null | The `FL` number; `(space_id, number)` is unique |
 | `file_name` | TEXT | Not null | |
 | `summary` | TEXT | Not null | |
 | `storage_key` | TEXT | Not null, unique | The file's location, a UUIDv7 generated by the library |
@@ -245,8 +266,6 @@ the library reads it through the
 | `completed_at` | INTEGER | Nullable | When the upload was reported complete; until then the file is not listed among the task's files |
 | `refused_at` | INTEGER | Nullable | When a report found the file over the size limit; a refused file is never completed |
 
-- **The registering agent's name stays with the file**, including when another
-  agent reports the upload complete.
 - **The key is taken at registration**, and `complete_file` names the
   file by it. The abandoned-registration round removes registrations
   neither completed nor refused; their keys stay unused.
@@ -422,6 +441,7 @@ CREATE TABLE space_task (
   title                TEXT    NOT NULL,
   state                TEXT    NOT NULL CHECK (state IN ('planned', 'working', 'waiting', 'done', 'failed', 'canceled')),
   result               TEXT    NOT NULL DEFAULT '',
+  result_version       INTEGER NOT NULL DEFAULT 0,
   started_at           INTEGER,
   ended_at             INTEGER,
   last_activity_at     INTEGER NOT NULL,
@@ -433,6 +453,17 @@ CREATE TABLE space_task (
 );
 CREATE INDEX space_task_space_activity ON space_task (space_id, last_activity_at);
 CREATE INDEX space_task_space_person ON space_task (space_id, person_id, state);
+
+CREATE TABLE space_task_result (
+  id          TEXT    NOT NULL PRIMARY KEY,
+  task_id     TEXT    NOT NULL REFERENCES space_task (id) ON DELETE CASCADE,
+  version     INTEGER NOT NULL,
+  result      TEXT    NOT NULL,
+  person_id   TEXT    NOT NULL,
+  agent_name  TEXT    NOT NULL,
+  created_at  INTEGER NOT NULL,
+  UNIQUE (task_id, version)
+);
 
 CREATE TABLE space_checkpoint (
   id          TEXT    NOT NULL PRIMARY KEY,

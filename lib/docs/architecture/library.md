@@ -91,7 +91,7 @@ flowchart TD
 - **Agent practices:** what an agent follows so that the records it writes
   through the tools make sense, with each practice's backstop, in
   [Agent practices](../contracts/agent-practices.md).
-- **Seven tables**, listed in [section 12](#12-data).
+- **Eight tables**, listed in [section 12](#12-data).
 
 ### 3.2 What a product holds
 
@@ -623,15 +623,16 @@ state:
 
 ## 12. Data
 
-The library has seven tables: `space`, `space_task`, `space_checkpoint`,
-`space_agent_file`, `space_knowledge`, `space_knowledge_version` and
-`space_person_request`. No library table refers to a product's table.
+The library has eight tables: `space`, `space_task`, `space_task_result`,
+`space_checkpoint`, `space_agent_file`, `space_knowledge`,
+`space_knowledge_version` and `space_person_request`. No library table refers
+to a product's table.
 
 - **People are IDs.** The library has no table of people. It stores a
-  person only as the product's ID, in four columns with no foreign key: a
-  task's person, a request's requester and decider, and the person who
-  applied a Knowledge version. Removing or deleting a person writes nothing
-  in the library.
+  person only as the product's ID, without foreign keys: a task's person,
+  planner and state changer, a result version's writer, a request's requester
+  and decider, and the person who applied a Knowledge version. Removing or
+  deleting a person writes nothing in the library.
 - **The tenant ID** of a space is text with no foreign key.
 - **Two groups of migrations share one database.** The library's migrator
   records its history in its own table, `space_migration`, and a product's
@@ -683,7 +684,7 @@ both.
 | Create a task, started or planned | Space counter | Concurrent creations take distinct, consecutive numbers |
 | Claim a task | Task | State and holder are checked again under the lock; competing planned claims see the winning holder |
 | Release a task | Task | The work marker is checked under the lock, so deleted or cleared work cannot permit a release |
-| Change a task | Task | Holder, transition, reason and end time are checked or computed from the locked row |
+| Change a task | Task | Holder, transition, reason, end time and result version are checked or computed from the locked row; a result row takes `result_version + 1` and updates the task in the same transaction |
 | Append a checkpoint | Task | Holder and state are checked under the lock; the checkpoint time exceeds both latest checkpoint and last activity |
 | Delete a checkpoint | None | Only held or finished tasks can have recorded work, so their party cannot change through release or cross-party claim; a deleted checkpoint time is never reused |
 | Delete a task | Task | A registration or checkpoint waiting on the task finds it gone; the files deleted are those of the rows deleted |

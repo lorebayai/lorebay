@@ -203,12 +203,12 @@ async fn replace_and_clear_result(
     task: &Value,
     version: &str,
 ) {
-    for result in ["Replacement result", ""] {
+    for (index, result) in ["Replacement result", ""].into_iter().enumerate() {
         let updated = call_version(
             server,
             agent,
             "update_task",
-            json!({"task_id":task["task_id"], "result":result}),
+            json!({"task_id":task["task_id"], "result":result,"result_version":index + 1}),
             version,
         )
         .await;

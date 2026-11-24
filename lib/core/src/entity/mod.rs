@@ -7,3 +7,4 @@ pub mod space_knowledge;
 pub mod space_knowledge_version;
 pub mod space_person_request;
 pub mod space_task;
+pub mod space_task_result;

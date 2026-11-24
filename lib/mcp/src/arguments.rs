@@ -4,7 +4,7 @@ use typed_builder::TypedBuilder;
 
 use lorebay_lib_core::{
     AgentFileName, AgentFileSummary, NewAgentFile, PageOptions, PageSizeError, TaskChanges,
-    TaskFilters, TaskKeyword, TaskResult, TaskState, TaskStateError, TaskTitle,
+    TaskFilters, TaskInclude, TaskKeyword, TaskResult, TaskState, TaskStateError, TaskTitle,
 };
 
 use crate::catalog::ToolName;
@@ -40,12 +40,15 @@ impl Arguments {
                 Some("string") => value.is_string(),
                 Some("boolean") => value.is_boolean(),
                 Some("integer") => value.as_u64().is_some(),
+                _ if name == "result_version" => {
+                    value.is_null() || value.as_i64().is_some_and(|version| version > 0)
+                }
                 _ => false,
             };
             if !valid {
                 return Err(match name.as_str() {
                     "page_size" | "cursor" => invalid_query(name),
-                    "include_scratchpad" => invalid_query("query"),
+                    "include_scratchpad" | "include_results" => invalid_query("query"),
                     _ if tool_name == ToolName::ListTasks => invalid_query("query"),
                     _ => ToolError::invalid_body(),
                 });
@@ -80,9 +83,15 @@ impl Arguments {
         .map_err(|_| invalid_query(PageSizeError::FIELD))
     }
 
-    pub fn scratchpad(&self) -> Result<Option<PageOptions>, ToolError> {
+    pub fn include(&self) -> Result<Option<TaskInclude>, ToolError> {
+        if self.enabled("include_results") {
+            if self.enabled("include_scratchpad") {
+                return Err(invalid_query("query"));
+            }
+            return self.page().map(TaskInclude::Results).map(Some);
+        }
         if self.enabled("include_scratchpad") {
-            return self.page().map(Some);
+            return self.page().map(TaskInclude::Scratchpad).map(Some);
         }
         if self.values.contains_key("page_size") {
             return Err(invalid_query("page_size"));
@@ -116,6 +125,7 @@ impl Arguments {
             state,
             state_reason: self.optional_string("state_reason"),
             result,
+            result_version: self.values.get("result_version").and_then(Value::as_i64),
         };
         changes.validate()?;
         Ok(changes)

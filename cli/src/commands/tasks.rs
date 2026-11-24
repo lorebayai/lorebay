@@ -40,6 +40,9 @@ pub(super) async fn run(command: TaskCommand, store: &Store, mode: OutputMode) -
         TaskCommand::Scratchpad { space, task, page } => {
             scratchpad(store, &space, &task, page, mode).await
         }
+        TaskCommand::Results { space, task, page } => {
+            results(store, &space, &task, page, mode).await
+        }
         TaskCommand::Show { space, task } => {
             let body = Http::new()?
                 .authorized(
@@ -150,6 +153,44 @@ async fn scratchpad(
     .await
 }
 
+async fn results(
+    store: &Store,
+    space: &str,
+    task: &str,
+    page: Page,
+    mode: OutputMode,
+) -> Result<Outcome> {
+    list_page(
+        store,
+        page,
+        mode,
+        Listing::builder()
+            .path(api_path(&[SPACES, space, TASKS, task, "results"])?)
+            .command(format!(
+                "task results {} {}",
+                output::shell_word(space),
+                output::shell_word(task)
+            ))
+            .columns(vec![
+                "Version",
+                "Person",
+                "Agent name",
+                "Created at",
+                "Result",
+            ])
+            .fields(vec![
+                "version",
+                "person",
+                "agent_name",
+                "created_at",
+                "result",
+            ])
+            .multiline_columns(vec![4])
+            .build(),
+    )
+    .await
+}
+
 fn filter_query(filters: TaskFilters) -> Vec<(&'static str, String)> {
     let mut query = Vec::new();
     for (name, value) in [
@@ -196,6 +237,7 @@ fn task_output(body: Value) -> Outcome {
                 ("Ended at", "ended_at"),
                 ("Last activity at", "last_activity_at"),
                 ("Result", "result"),
+                ("Result version", "result_version"),
                 ("Files", "files"),
             ]
             .into_iter()

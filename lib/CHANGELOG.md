@@ -7,6 +7,13 @@ crates `lorebay-lib-types`, `lorebay-lib-core`, `lorebay-lib-migration` and
 
 ## Unreleased
 
+- **Breaking:** Each task result write adds a numbered version with its
+  agent, person and time. Result updates name the `result_version` they replace
+  and return the written version; a mismatch is `task.result_changed`. Task
+  reads include `result_version` and optionally paged result history. The
+  created migration adds `space_task.result_version` and `space_task_result`
+  in place; databases must be recreated.
+
 - **Breaking:** Checkpoints and files expose the writing or registering
   agent's copied `agent_name`. Tasks expose `state_changed_by`,
   `state_changed_agent_name` and `state_changed_at` for the current state,
