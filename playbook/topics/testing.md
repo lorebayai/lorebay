@@ -1,6 +1,6 @@
 # Testing
 
-How `lorebayd` and the product are tested: the three test levels, what each
+How `lorebayd` and the product are tested: the four test levels, what each
 one verifies, and where its tests live. Imported by the `AGENTS.md` of every
 Rust crate and test suite.
 
@@ -10,6 +10,7 @@ Rust crate and test suite.
 | --- | --- | --- | --- |
 | Integration | `lorebayd`'s contract through the Web API, MCP and file URLs, or one crate's contract through its public API | The crate's `tests/` folder | Pull request CI, when the crate is affected |
 | E2E | Product features, through the browser | `tests/e2e/` | Nightly |
+| Deployment | A release's native installation and Compose deployment, operation, removal and product workflows through HTTPS, the browser and CLI | `tests/deploy/` | Locally or by hand, with `runInCI: false` |
 | Unit | One intricate pure function | A `#[cfg(test)] mod tests`, see [Unit tests](#unit-tests) | Pull request CI, when affected |
 
 - Integration tests are the level for backend behavior. Unit tests are a rare
@@ -114,6 +115,25 @@ running `lorebayd`.
   out of pull request CI. Run it locally with `moon run tests/e2e:e2e`.
 - CI retries a failed journey once and records a trace of the retry. A
   journey that passes only on retry is flaky; fix it.
+
+## Deployment tests
+
+A deployment test qualifies release files and complete installations as a
+black box. It runs the executables and deployment tools as their users do,
+and must not import a crate or substitute source builds for release files.
+
+- The Python suite lives in `tests/deploy/`. One configuration file selects
+  a release or local release directory, TLS inputs and two test people.
+- Every run creates a fresh environment with a unique prefix and removes
+  its containers, networks, volumes, images and paths, including on failure.
+  It must not change unrelated host resources or existing credentials.
+- Check file integrity, install refusals, HTTPS, caller limits, large-file
+  streaming, certificate replacement, persistence, removal and the product
+  workflows for both deployment methods. Harness sessions remain manual.
+- Never print or log credentials or passwords. Clients and browsers must
+  trust the supplied authority without disabling certificate verification.
+- The deployment task sets `runInCI: false`. Run it with
+  `moon run tests/deploy:deploy -- /absolute/path/to/config.json`.
 
 ## Unit tests
 

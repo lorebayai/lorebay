@@ -1,0 +1,22 @@
+language: 'python'
+layer: 'tool'
+
+tasks:
+  check:
+    command: 'python3 -B tests/deploy/check.py'
+    inputs:
+      - '**/*'
+    options:
+      runFromWorkspaceRoot: true
+  deploy:
+    command: 'python3 -B tests/deploy/run.py'
+    options:
+      cache: false
+      runInCI: false
+      runFromWorkspaceRoot: true
+  local-files:
+    command: 'python3 -B tests/deploy/local_files.py'
+    options:
+      cache: false
+      runInCI: false
+      runFromWorkspaceRoot: true

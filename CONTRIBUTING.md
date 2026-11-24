@@ -37,6 +37,9 @@ and deployment syntax checks. Deployment checks cover every `deploy/` subfolder
 and need OpenSSL and Docker;
 they run `nginx -t` in a pinned nginx image with a throwaway certificate.
 
+For release qualification, see the [deployment suite](tests/deploy/README.md)
+for its required tools and local usage.
+
 Install moon, then add `~/.moon/bin` to `PATH`:
 
 ```bash

@@ -1,0 +1,14 @@
+import json
+from pathlib import Path
+
+
+directory = Path(__file__).parent
+for path in [*directory.glob("*.py"), *directory.glob("Dockerfile.*")]:
+    source = path.read_text()
+    if path.suffix == ".py":
+        compile(source, str(path), "exec")
+    for number, line in enumerate(source.splitlines(), 1):
+        if len(line) > 120:
+            raise SystemExit(f"{path}:{number}: line exceeds 120 characters")
+json.loads((directory / "example.json").read_text())
+print("Deployment suite syntax and example JSON passed")

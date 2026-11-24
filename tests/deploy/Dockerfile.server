@@ -1,0 +1,10 @@
+ARG BASE
+FROM ${BASE}
+ENV container=docker
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+       systemd systemd-sysv openssh-server python3 curl openssl ca-certificates \
+       tar gzip coreutils iproute2 procps \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+STOPSIGNAL SIGRTMIN+3
+CMD ["/bin/sh", "-c", "mount --make-rshared /run && exec /sbin/init"]
