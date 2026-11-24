@@ -1,0 +1,24 @@
+[Unit]
+Description=Lorebay server
+After=network.target
+
+[Service]
+Type=exec
+User=lorebay
+Group=lorebay
+WorkingDirectory=/opt/lorebay
+LoadCredential=users:@USERS@
+ExecStart=/opt/lorebay/lorebayd --config /etc/lorebay/lorebayd.json
+Environment=LOREBAYD__USERS_FILE=%d/users
+Restart=on-failure
+RestartSec=3
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=@DATA@
+InaccessiblePaths=/etc/nginx/lorebay-tls
+
+[Install]
+WantedBy=multi-user.target

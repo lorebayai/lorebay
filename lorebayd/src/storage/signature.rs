@@ -1,4 +1,4 @@
-use std::fs::{self, File};
+use std::fs::{self, File, Permissions};
 use std::io::{ErrorKind, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
@@ -19,6 +19,9 @@ pub(super) fn load_key(directory: &Path) -> Result<Secret<Vec<u8>>> {
         let mut temporary = Builder::new()
             .prefix(".file-url-key-")
             .tempfile_in(directory)?;
+        temporary
+            .as_file()
+            .set_permissions(Permissions::from_mode(KEY_MODE))?;
         let mut bytes = [0; KEY_BYTES];
         getrandom::fill(&mut bytes)?;
         temporary.write_all(&bytes)?;
@@ -67,6 +70,7 @@ pub(super) fn verify(
 }
 
 const KEY_BYTES: usize = 32;
+const KEY_MODE: u32 = 0o600;
 
 fn tag(
     key: &[u8],

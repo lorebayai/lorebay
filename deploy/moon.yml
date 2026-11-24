@@ -1,0 +1,41 @@
+language: 'python'
+layer: 'tool'
+
+tasks:
+  check:
+    command: 'python3 -B deploy/common/check.py'
+    inputs:
+      - '**/*'
+    options:
+      cache: false
+      runFromWorkspaceRoot: true
+  image-build:
+    command: 'python3 -B deploy/docker/image.py build'
+    options:
+      cache: false
+      runInCI: false
+      runFromWorkspaceRoot: true
+  image-smoke:
+    command: 'python3 -B deploy/docker/image.py smoke'
+    options:
+      cache: false
+      runInCI: false
+      runFromWorkspaceRoot: true
+  image-push:
+    command: 'python3 -B deploy/docker/image.py push'
+    options:
+      cache: false
+      runInCI: false
+      runFromWorkspaceRoot: true
+  image-manifest:
+    command: 'python3 -B deploy/docker/image.py manifest'
+    options:
+      cache: false
+      runInCI: false
+      runFromWorkspaceRoot: true
+  image-setup:
+    command: 'python3 -B deploy/docker/image.py setup'
+    options:
+      cache: false
+      runInCI: false
+      runFromWorkspaceRoot: true

@@ -1,0 +1,57 @@
+name: lorebay
+
+services:
+  lorebayd:
+    image: ghcr.io/lorebayai/lorebayd:0.1.2
+    restart: unless-stopped
+    environment:
+      LOREBAYD__PUBLIC_URL: https://${DOMAIN:?Set DOMAIN}${HTTPS_SUFFIX:-}
+      LOREBAYD__LISTEN_ADDRESS: 0.0.0.0:8080
+    volumes:
+      - type: bind
+        source: ${DATA_DIRECTORY:?Set DATA_DIRECTORY}
+        target: /data
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${USERS_FILE:?Set USERS_FILE}
+        target: /etc/lorebay/users.yaml
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${CONFIG_FILE:?Set CONFIG_FILE}
+        target: /etc/lorebay/lorebayd.json
+        read_only: true
+        bind:
+          create_host_path: false
+  nginx:
+    image: nginx:1.28-alpine@sha256:a8b39bd9cf0f83869a2162827a0caf6137ddf759d50a171451b335cecc87d236
+    restart: unless-stopped
+    depends_on:
+      lorebayd:
+        condition: service_healthy
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN}
+    ports:
+      - '${HTTPS_PORT:-443}:443'
+    entrypoint: ['/bin/sh', '/etc/lorebay/start-nginx.sh']
+    volumes:
+      - type: bind
+        source: ${CERTIFICATE_DIRECTORY:?Set CERTIFICATE_DIRECTORY}
+        target: /etc/nginx/lorebay-tls
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ../common/nginx.conf.in
+        target: /etc/lorebay/nginx.conf.in
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./start-nginx.sh
+        target: /etc/lorebay/start-nginx.sh
+        read_only: true
+        bind:
+          create_host_path: false

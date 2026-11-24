@@ -13,11 +13,11 @@ Follow these playbook fragments:
   `main` ([testing.md](../playbook/topics/testing.md#black-box)).
 - The server crate exposes only what `main.rs` and the start helper use: the
   `Config` type, the entry point `run`, and the function that hashes a
-  password for the users file. Every other item is `pub(crate)`.
-- `main.rs` also runs the command that produces a password hash for the
-  users file ([Identity](../docs/architecture/identity.md#3-accounts)). The
-  command hashes with the same function as sign-in, so they always agree,
-  and it starts nothing.
+  password for the users file, and the HTTP readiness probe. Every other item
+  is `pub(crate)`.
+- `main.rs` also runs `hash-password`, using sign-in's hash function
+  ([Identity](../docs/architecture/identity.md#3-accounts)), and `readiness`,
+  which probes the configured HTTP `/readyz`. Neither command starts a server.
 - The `migration/` crate owns Lorebay's schema migrations.
 - The source follows this layout, with only the folders the code needs:
 

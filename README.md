@@ -11,57 +11,26 @@ pages, the Web API and the MCP server that people and agents use.
 `lorebay` CLI and an agent harness, Claude Code or Codex, on their own machine,
 and both reach the server over HTTPS.
 
-On the server host, download the `lorebayd` archive for its architecture from
-the latest release, check it against `SHA256SUMS` and unpack it; on Debian,
-install `curl` and `ca-certificates` first. The archives run on Linux, on
-x86_64 or aarch64, in any distribution.
+On the server host, follow [the deployment guides](deploy/README.md) to run
+`lorebayd` behind nginx HTTPS, as a systemd service or with Docker Compose. The installer qualifies
+x86_64 Debian 12 and Ubuntu 24.04; Linux musl archives are also available for
+manual use on x86_64 and aarch64. Supply the users file, domain, certificate,
+key and a private local data path. The installer checks the selected archive
+against the release's `SHA256SUMS`.
+Back up the data directory only while stopped
+([Storage](docs/architecture/storage.md#3-layers)).
 
-```bash
-base=https://github.com/lorebayai/lorebay/releases/latest/download
-archive=lorebayd-$(uname -m)-unknown-linux-musl.tar.gz
-curl -fsSL -O "$base/$archive" -O "$base/SHA256SUMS"
-sha256sum -c --ignore-missing SHA256SUMS && tar -xzf "$archive"
-```
-
-Write a configuration file, such as `lorebayd.json`;
-[lorebayd/README.md](lorebayd/README.md#configuration) lists every key. Then
-create the users file: hash each person's password and list each username with
-its hash, in single quotes, as [lorebayd/README.md](lorebayd/README.md#usage)
-shows:
-
-```json
-{
-  "public_url": "https://lorebay.example.com",
-  "data_directory": "/var/lib/lorebay",
-  "users_file": "/etc/lorebay/users.yaml"
-}
-```
-
-```bash
-mkdir -p -m 0700 /etc/lorebay /var/lib/lorebay
-./lorebayd hash-password < alice-password.txt
-```
-
-Start `./lorebayd --config lorebayd.json` behind a reverse proxy that
-terminates HTTPS at `public_url` and forwards to `listen_address`,
-`127.0.0.1:8080` by default; harnesses refuse OAuth over plain HTTP outside
-loopback. Uploads pass through the proxy, so let it accept request bodies up to
-`upload_size_limit_bytes`, 5 GB by default. Set limits per caller on the proxy,
-and give it `/healthz` and `/readyz` as health checks. Keep the data directory
-on a local file system, readable only by the user that runs `lorebayd`: it
-holds the database and the signing keys. Back it up only while `lorebayd` is
-stopped ([Storage](docs/architecture/storage.md#3-layers)).
-
-On each person's machine, get `lorebay` from the same release on Linux, as
-above with `lorebay-$(uname -m)-unknown-linux-musl.tar.gz`, and install it with
-the first command below; elsewhere, use the second, which needs Rust. A server
+On each person's machine, get `lorebay` from the same release on Linux, using
+`lorebay-$(uname -m)-unknown-linux-musl.tar.gz`, check it against `SHA256SUMS`,
+unpack it, and install it with the first command below; elsewhere, use the
+second, which needs Rust. A server
 whose certificate comes from a private authority needs `SSL_CERT_FILE`, as
 [skill/README.md](skill/README.md#usage) describes. Then sign in, with
 `--device` on a machine without a browser, and create a space:
 
 ```bash
 install -m 0755 lorebay /usr/local/bin/
-cargo install --locked --git https://github.com/lorebayai/lorebay --tag v0.1.1 lorebay-cli
+cargo install --locked --git https://github.com/lorebayai/lorebay --tag v0.1.2 lorebay-cli
 lorebay login https://lorebay.example.com
 lorebay space create --name Team --summary 'Team work'
 ```
@@ -76,6 +45,7 @@ To change Lorebay, set up the tools as
 
 - `base/`: the Rust library for configuration, logging and clocks.
 - `cli/`: the Rust crate that builds the `lorebay` command-line client.
+- `deploy/`: installation guides, shared nginx policy and certificate tools.
 - `docs/`: product and system design docs.
 - `lib/`: the library crates and design for features every product shares.
 - `lorebayd/`: the Rust crate that builds the `lorebayd` executable and

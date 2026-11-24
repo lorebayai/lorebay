@@ -22,9 +22,13 @@ def run(*args, **kwargs):
     return subprocess.run(args, check=True, text=True, **kwargs)
 
 
+def workspace_version():
+    return tomllib.loads((ROOT / "Cargo.toml").read_text())["workspace"]["package"]["version"]
+
+
 def version():
     tag = os.environ["GITHUB_REF_NAME"]
-    number = tomllib.loads((ROOT / "Cargo.toml").read_text())["workspace"]["package"]["version"]
+    number = workspace_version()
     if not re.fullmatch(r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?", tag):
         raise SystemExit(f"Invalid release tag: {tag}")
     if tag != f"v{number}":
@@ -65,7 +69,7 @@ def build(project):
 
 def setup():
     run("sudo", "apt-get", "update")
-    run("sudo", "apt-get", "install", "-y", "musl-tools", "cmake", "pkg-config")
+    run("sudo", "apt-get", "install", "-y", "musl-tools", "cmake", "pkg-config", "skopeo")
 
 
 def notices(project):
@@ -87,7 +91,7 @@ def notices(project):
 
 
 def package(project):
-    number = version()
+    number = workspace_version()
     target = os.environ["RELEASE_TARGET"]
     executable = EXECUTABLES[project]
     binary = ROOT / "target" / target / "release" / executable
@@ -107,21 +111,44 @@ def package(project):
     print(f"Packaged {archive.name}: {actual}; static ELF")
 
 
+def deployment_metadata(member):
+    member.uid = member.gid = 0
+    member.uname = member.gname = ""
+    member.mode = 0o755 if member.isdir() or member.mode & 0o111 else 0o644
+    return member
+
+
+def assets():
+    directory = ROOT / "target/release-archives"
+    directory.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(directory / "lorebay-deploy.tar.gz", "w:gz") as archive:
+        archive.add(ROOT / "deploy", arcname="deploy", filter=deployment_metadata)
+    downloads = sorted(directory.glob("*.tar.gz"))
+    if len(downloads) != 5:
+        raise SystemExit("Expected four executable archives and the deployment bundle")
+    checksums = []
+    for archive in downloads:
+        with archive.open("rb") as source:
+            checksums.append(f"{hashlib.file_digest(source, 'sha256').hexdigest()}  {archive.name}\n")
+    (directory / "SHA256SUMS").write_text("".join(checksums))
+
+
 def publish():
     number = version()
     directory = ROOT / "target" / "release-archives"
-    expected = sorted(f"{name}-{target}.tar.gz" for name in EXECUTABLES.values() for target in TARGETS)
+    expected = sorted([f"{name}-{target}.tar.gz" for name in EXECUTABLES.values() for target in TARGETS] + ["lorebay-deploy.tar.gz"])
     archives = sorted(directory.glob("*.tar.gz"))
     if [a.name for a in archives] != expected:
-        raise SystemExit(f"Expected four release archives: {expected}")
+        raise SystemExit(f"Unexpected release downloads; expected: {expected}")
     checksums = directory / "SHA256SUMS"
-    checksums.write_text("".join(f"{hashlib.sha256(a.read_bytes()).hexdigest()}  {a.name}\n" for a in archives))
+    if not checksums.is_file():
+        raise SystemExit("Release checksums must be prepared and attested first")
     tag = f"v{number}"
     repository = os.environ["GITHUB_REPOSITORY"]
     pages = json.loads(run("gh", "api", "--paginate", "--slurp", f"repos/{repository}/releases?per_page=100", capture_output=True).stdout)
     if any(release["tag_name"] == tag for page in pages for release in page):
         raise SystemExit(f"A release already exists for {tag}; refusing to replace it")
-    arguments = ["gh", "release", "create", tag, "--repo", repository, "--verify-tag", "--draft", "--title", tag, "--notes", f"Lorebay {number}. Review the archives and SHA256SUMS before publishing."]
+    arguments = ["gh", "release", "create", tag, "--repo", repository, "--verify-tag", "--draft", "--title", tag, "--notes", f"Lorebay {number}. Review the archives, deployment bundle, image and SHA256SUMS before publishing."]
     if "-" in number:
         arguments.append("--prerelease")
     run(*arguments, *(str(a) for a in archives), str(checksums))
@@ -130,6 +157,6 @@ def publish():
 if __name__ == "__main__":
     os.chdir(ROOT)
     try:
-        {"version": version, "deny": deny, "setup": setup, "build": build, "notices": notices, "package": package, "publish": publish}[sys.argv[1]](*sys.argv[2:])
+        {"version": version, "deny": deny, "setup": setup, "build": build, "notices": notices, "package": package, "assets": assets, "publish": publish}[sys.argv[1]](*sys.argv[2:])
     except subprocess.CalledProcessError as error:
         raise SystemExit(error.returncode) from None

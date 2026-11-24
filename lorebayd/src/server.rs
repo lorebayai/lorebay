@@ -1,5 +1,8 @@
+use std::fs::{DirBuilder, Permissions, set_permissions};
 use std::future::Future;
+use std::io::{ErrorKind, Result as IoResult};
 use std::num::NonZeroU32;
+use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -64,9 +67,12 @@ pub async fn run(
         .as_deref()
         .context("users_file path is required")?;
     let users: Arc<dyn UserStore> = Arc::new(FileUserStore::load(users_path).await?);
-    fs::create_dir_all(&config.data_directory)
-        .await
-        .context("could not create data_directory")?;
+    create_data_directory(&config.data_directory).with_context(|| {
+        format!(
+            "could not create data_directory {}",
+            config.data_directory.display()
+        )
+    })?;
     let database = open_database(&config.data_directory).await?;
     account::sync(&database, users.as_ref(), now_millis()?).await?;
     let identity = Arc::new(identity(config.clone(), users)?);
@@ -103,6 +109,8 @@ const READINESS_PATH: &str = "/readyz";
 const API_PREFIX: &str = "/api/v1";
 const ACCEPT_RETRY_DELAY: Duration = Duration::from_millis(100);
 const DATABASE_FILE: &str = "lorebay.sqlite3";
+const DATA_DIRECTORY_MODE: u32 = 0o700;
+const DATABASE_MODE: u32 = 0o600;
 const EARLIER_SCHEMA_MIGRATION: &str = "m20261116_000001_create_tables";
 const EARLIER_FILE_TABLE: &str = "space_artifact";
 const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(5);
@@ -137,8 +145,48 @@ fn identity(config: Config, users: Arc<dyn UserStore>) -> Result<Identity> {
         .build())
 }
 
+fn create_data_directory(directory: &Path) -> IoResult<()> {
+    match DirBuilder::new()
+        .mode(DATA_DIRECTORY_MODE)
+        .create(directory)
+    {
+        // The umask can clear owner bits, so set the exact mode after creation.
+        Ok(()) => set_permissions(directory, Permissions::from_mode(DATA_DIRECTORY_MODE)),
+        Err(error) if error.kind() == ErrorKind::NotFound => {
+            let parent = directory
+                .parent()
+                .filter(|parent| !parent.as_os_str().is_empty())
+                .ok_or(error)?;
+            create_data_directory(parent)?;
+            create_data_directory(directory)
+        }
+        Err(error) if error.kind() == ErrorKind::AlreadyExists && directory.is_dir() => Ok(()),
+        Err(error) => Err(error),
+    }
+}
+
+async fn create_database(path: &Path) -> IoResult<()> {
+    match fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(DATABASE_MODE)
+        .open(path)
+        .await
+    {
+        Ok(file) => {
+            file.set_permissions(Permissions::from_mode(DATABASE_MODE))
+                .await
+        }
+        Err(error) if error.kind() == ErrorKind::AlreadyExists => Ok(()),
+        Err(error) => Err(error),
+    }
+}
+
 async fn open_database(directory: &Path) -> Result<DatabaseConnection> {
     let path = directory.join(DATABASE_FILE);
+    create_database(&path)
+        .await
+        .with_context(|| format!("could not create database {}", path.display()))?;
     let filename = path.clone();
     let mut options = ConnectOptions::new("sqlite://");
     options
@@ -147,7 +195,7 @@ async fn open_database(directory: &Path) -> Result<DatabaseConnection> {
         .map_sqlx_sqlite_opts(move |options| {
             options
                 .filename(&filename)
-                .create_if_missing(true)
+                .create_if_missing(false)
                 .foreign_keys(true)
                 .busy_timeout(SQLITE_BUSY_TIMEOUT)
         });
