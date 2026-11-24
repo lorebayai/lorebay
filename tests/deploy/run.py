@@ -22,6 +22,7 @@ HERE = Path(__file__).resolve().parent
 REPOSITORY = "lorebayai/lorebay"
 IMAGE = "ghcr.io/lorebayai/lorebayd"
 LABEL = "io.lorebay.deploy"
+VERSION_PATTERN = r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?"
 ARCHIVES = [f"{name}-{arch}-unknown-linux-musl.tar.gz"
             for name in ("lorebay", "lorebayd") for arch in ("x86_64", "aarch64")]
 
@@ -59,7 +60,6 @@ class Suite:
         parent.mkdir(parents=True, exist_ok=True)
         self.root = Path(tempfile.mkdtemp(prefix=self.prefix + "-", dir=parent))
         try:
-            self.root.chmod(0o755)
             for key, source in sources.items():
                 shutil.copyfile(source, self.root / (key + ".pem"))
                 (self.root / (key + ".pem")).chmod(0o600)
@@ -196,7 +196,7 @@ class Suite:
         hosted = "directory" not in target
         if hosted:
             self.version = target["version"]
-            require(re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", self.version), "Invalid release version")
+            require(re.fullmatch("v" + VERSION_PATTERN, self.version), "Invalid release version")
             metadata = json.loads(self.run("gh", "release", "view", self.version, "--repo", REPOSITORY,
                                            "--json", "assets,tagName,isDraft").stdout)
             names = {asset["name"] for asset in metadata["assets"]}
@@ -258,7 +258,7 @@ class Suite:
             with tarfile.open(self.release / f"{name}-x86_64-unknown-linux-musl.tar.gz") as archive:
                 archive.extractall(destination, filter="data")
         cli_version = self.run(self.root / "lorebay/lorebay", "--version").stdout.strip()
-        require(re.fullmatch(r"lorebay [0-9]+\.[0-9]+\.[0-9]+", cli_version), "Invalid CLI archive version")
+        require(re.fullmatch("lorebay " + VERSION_PATTERN, cli_version), "Invalid CLI archive version")
         if hosted:
             require(cli_version == "lorebay " + self.version[1:], "CLI version differs from target")
         else:
@@ -355,6 +355,9 @@ class Suite:
         if hasattr(self, "native"):
             result = self.execute(self.native, "journalctl", "-u", "lorebay", "-n", "30", "--no-pager", check=False)
             self.say(result.stdout)
+        if self.compose_args:
+            result = self.compose("logs", "--no-color", "--tail", "30", check=False)
+            self.say(f"Compose diagnostics:\n{result.stdout}\n{result.stderr}")
 
     def audit(self, files=False):
         private = [p["password"].encode() for p in self.people]
@@ -369,6 +372,11 @@ class Suite:
         if hasattr(self, "native"):
             raw = self.execute(self.native, "journalctl", "-u", "lorebay", "--no-pager", check=False).stdout.encode()
             require(not any(secret in raw for secret in private), "Credential found in service journal")
+        if self.compose_args:
+            logs = self.compose("logs", "--no-color", check=False)
+            require(logs.returncode == 0, "Cannot inspect Compose service logs")
+            raw = (logs.stdout + logs.stderr).encode()
+            require(not any(secret in raw for secret in private), "Credential found in Compose logs")
         if files:
             overlap = max(map(len, private))
             for path in self.root.rglob("*"):
@@ -638,8 +646,15 @@ class Suite:
         self.run("sudo", "-n", "mkdir", "-m", "0700", data)
         self.run("sudo", "-n", "chown", "65532:65532", data, self.root / "users.yaml")
         self.run("sudo", "-n", "chmod", "0400", self.root / "users.yaml")
-        self.run("sudo", "-n", "setpriv", "--reuid=65532", "--regid=65532", "--clear-groups", "test", "-r", self.root / "users.yaml")
-        self.run("sudo", "-n", "setpriv", "--reuid=65532", "--regid=65532", "--clear-groups", "test", "-w", data)
+        access = self.container(
+            "compose-access", self.client_image, "--network", "none", "--user", "65532:65532",
+            "--mount", f"type=bind,source={self.root}/users.yaml,target=/inputs/users.yaml,readonly",
+            "--mount", f"type=bind,source={data},target=/data",
+            command=["sh", "-c", "test -r /inputs/users.yaml && test -w /data"],
+        )
+        require(self.docker("wait", access).stdout.strip() == "0", "Service UID cannot access the bind-mounted inputs")
+        self.docker("rm", "-v", access)
+        self.say("PASS compose_bind_mounts_allow_service_access_with_private_ancestors")
         tls = self.root / "tls"
         (tls / "initial").mkdir(parents=True)
         tls.chmod(0o700)
@@ -667,6 +682,7 @@ class Suite:
             missing = self.root / ("missing-" + variable.lower())
             result = self.compose("up", "-d", env=self.environment | {variable: str(missing)}, check=False)
             require(result.returncode != 0 and not missing.exists() and "does not exist" in result.stderr, "Missing bind source was not refused: " + result.stderr)
+            self.audit()
             self.compose("down", "--volumes", "--remove-orphans")
             self.say("PASS compose_refuses_missing_bind_source " + variable)
         refusal = self.root / "refusal.json"
@@ -685,8 +701,11 @@ class Suite:
             require("/etc/lorebay/users.yaml" in logs, "Unreadable users diagnostic omits the input")
             self.say("PASS compose_refuses_unreadable_users_file")
         finally:
-            self.run("sudo", "-n", "chmod", "0400", self.root / "users.yaml")
-            self.compose("down", "--volumes", "--remove-orphans")
+            try:
+                self.audit()
+            finally:
+                self.run("sudo", "-n", "chmod", "0400", self.root / "users.yaml")
+                self.compose("down", "--volumes", "--remove-orphans")
         self.compose("up", "-d", "--wait", "--wait-timeout", "120")
         self.ready()
         app = self.compose("ps", "-q", "lorebayd").stdout.strip()
@@ -705,6 +724,7 @@ class Suite:
         self.certificate_checks()
         self.stage = "compose: persistence"
         for operation in (("restart",), ("up", "-d", "--force-recreate", "--wait", "--wait-timeout", "120"), ("down",)):
+            self.audit()
             self.compose(*operation)
             if operation == ("down",):
                 self.compose("up", "-d", "--wait", "--wait-timeout", "120")

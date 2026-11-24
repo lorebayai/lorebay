@@ -8,7 +8,7 @@ containers. It calls no Rust crate function.
 ## Usage
 
 On an x86_64 Linux host, install Python 3.12+, Docker Engine with Compose and
-buildx, GitHub CLI with `gh attestation`, OpenSSL, curl, sudo and util-linux.
+buildx, GitHub CLI with `gh attestation`, OpenSSL, curl and sudo.
 Local image archives also need Skopeo for import under an owned image name.
 Docker must support privileged systemd containers; the current user needs
 Docker access and passwordless sudo for the suite's own deployment data.
@@ -39,6 +39,8 @@ All created resources and newly pulled image references are removed in
 `finally`; preexisting images are retained. The existing GitHub sign-in is
 read at run time; a temporary Docker credential helper returns the token
 from memory, and the Docker configuration contains no credential.
+Service readability is checked through container bind mounts, so private
+temporary-directory ancestors and restrictive umasks remain supported.
 
 For local release files, replace `target` with:
 
@@ -71,7 +73,7 @@ paths are resolved from the command's working directory; `~` is supported.
 
 | Key | Value |
 | --- | --- |
-| `target.version` | GitHub release tag; mutually exclusive with `directory` |
+| `target.version` | GitHub release tag, including prereleases; mutually exclusive with `directory` |
 | `target.directory` | Local release directory described above |
 | `domain` | Lowercase DNS name covered by the certificate |
 | `certificate`, `key` | PEM certificate chain and unencrypted private key |
