@@ -1,6 +1,6 @@
 services:
   lorebayd:
-    image: ghcr.io/lorebayai/lorebayd:0.1.1
+    image: ghcr.io/lorebayai/lorebayd:0.1.2
     environment:
       LOREBAYD__PUBLIC_URL: https://${DOMAIN:?Set DOMAIN}${HTTPS_SUFFIX:-}
       LOREBAYD__LISTEN_ADDRESS: 0.0.0.0:8080

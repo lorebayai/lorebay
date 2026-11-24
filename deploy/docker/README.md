@@ -12,7 +12,7 @@ and check the deployment bundle as root; optional attestations require GitHub CL
 ```bash
 mkdir -p /srv/lorebay
 cd /srv/lorebay
-VERSION=v0.1.1
+VERSION=v0.1.2
 RELEASE="https://github.com/lorebayai/lorebay/releases/download/$VERSION"
 curl -fLO "$RELEASE/lorebay-deploy.tar.gz"
 curl -fLO "$RELEASE/SHA256SUMS"
