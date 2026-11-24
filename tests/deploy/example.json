@@ -1,0 +1,9 @@
+{
+  "target": {"version": "v0.1.2"},
+  "domain": "lorebay.example.com",
+  "certificate": "/path/to/certificate.pem",
+  "key": "/path/to/key.pem",
+  "authority": "/path/to/authority.pem",
+  "people": ["alice", "bob"],
+  "registry": {"github_account": "your-github-login"}
+}
