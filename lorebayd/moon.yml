@@ -33,6 +33,12 @@ tasks:
       cache: false
       runInCI: false
       runFromWorkspaceRoot: true
+  release-assets:
+    command: 'python3 -B .moon/release.py assets'
+    options:
+      cache: false
+      runInCI: false
+      runFromWorkspaceRoot: true
   release-publish:
     command: 'python3 -B .moon/release.py publish'
     options:

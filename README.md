@@ -11,8 +11,8 @@ pages, the Web API and the MCP server that people and agents use.
 `lorebay` CLI and an agent harness, Claude Code or Codex, on their own machine,
 and both reach the server over HTTPS.
 
-On the server host, follow [the native guide](deploy/native/README.md) to install
-`lorebayd` as a systemd service behind nginx HTTPS. The installer qualifies
+On the server host, follow [the deployment guides](deploy/README.md) to run
+`lorebayd` behind nginx HTTPS, as a systemd service or with Docker Compose. The installer qualifies
 x86_64 Debian 12 and Ubuntu 24.04; Linux musl archives are also available for
 manual use on x86_64 and aarch64. Supply the users file, domain, certificate,
 key and a private local data path. The installer checks the selected archive

@@ -1,0 +1,8 @@
+{
+  "data_directory": "/data",
+  "users_file": "/etc/lorebay/users.yaml",
+  "login_rate_limit": 1000,
+  "registration_rate_limit": 1000,
+  "device_rate_limit": 1000,
+  "device_verification_rate_limit": 1000
+}
