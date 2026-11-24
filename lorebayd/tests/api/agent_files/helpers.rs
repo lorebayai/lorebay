@@ -25,12 +25,12 @@ pub async fn set_status(server: &Server, tokens: &Value, task: &Value, status: &
         tokens,
         Method::PATCH,
         &format!("/api/v1/spaces/{SPACE}/tasks/{task_id}"),
-        json!({"status":status}),
+        json!({"state":status}),
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
     let task = response.json::<Value>().await.unwrap()["data"].clone();
-    assert_eq!(task["status"], status);
+    assert_eq!(task["state"], status);
     task
 }
 

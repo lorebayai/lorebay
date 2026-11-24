@@ -68,11 +68,18 @@ fn task() -> TableCreateStatement {
         .col(big_integer(SpaceTask::Number))
         .col(text_uniq(SpaceTask::RandomId))
         .col(text(SpaceTask::PersonId))
-        .col(text(SpaceTask::AgentName))
+        .col(text_null(SpaceTask::AgentName))
+        .col(text_null(SpaceTask::Holder))
+        .col(text_null(SpaceTask::PlannerPersonId))
+        .col(text_null(SpaceTask::PlannerAgentName))
+        .col(text_null(SpaceTask::StateReason))
+        .col(text_null(SpaceTask::WaitingRequestId))
+        .col(big_integer(SpaceTask::WorkRecorded).default(0))
+        .col(big_integer(SpaceTask::CreatedAt))
         .col(text(SpaceTask::Title))
-        .col(text(SpaceTask::Status))
+        .col(text(SpaceTask::State))
         .col(text(SpaceTask::Result).default(""))
-        .col(big_integer(SpaceTask::StartedAt))
+        .col(big_integer_null(SpaceTask::StartedAt))
         .col(big_integer_null(SpaceTask::EndedAt))
         .col(big_integer(SpaceTask::LastActivityAt))
         .index(
@@ -87,12 +94,25 @@ fn task() -> TableCreateStatement {
                 .col(SpaceTask::Id)
                 .col(SpaceTask::SpaceId),
         )
-        .check(Expr::col(SpaceTask::Status).is_in(["in progress", "ended"]))
+        .check(Expr::col(SpaceTask::State).is_in([
+            "planned", "working", "waiting", "done", "failed", "canceled",
+        ]))
         .check(
-            Expr::col(SpaceTask::Status)
-                .eq("ended")
+            Expr::col(SpaceTask::State)
+                .is_in(["working", "waiting"])
+                .eq(Expr::col(SpaceTask::Holder).is_not_null()),
+        )
+        .check(
+            Expr::col(SpaceTask::State)
+                .is_in(["done", "failed", "canceled"])
                 .eq(Expr::col(SpaceTask::EndedAt).is_not_null()),
         )
+        .check(
+            Expr::col(SpaceTask::State)
+                .is_in(["waiting", "failed", "canceled"])
+                .eq(Expr::col(SpaceTask::StateReason).is_not_null()),
+        )
+        .check(Expr::col(SpaceTask::WorkRecorded).is_in([0, 1]))
         .foreign_key(
             ForeignKey::create()
                 .from(SpaceTask::Table, SpaceTask::SpaceId)
@@ -375,7 +395,7 @@ fn indexes() -> [IndexCreateStatement; 6] {
         index(
             "space_task_space_person",
             SpaceTask::Table,
-            [SpaceTask::SpaceId, SpaceTask::PersonId, SpaceTask::Status],
+            [SpaceTask::SpaceId, SpaceTask::PersonId, SpaceTask::State],
         ),
         index(
             "space_checkpoint_task_time",
@@ -511,16 +531,23 @@ enum Space {
 #[derive(DeriveIden)]
 enum SpaceTask {
     AgentName,
+    CreatedAt,
     EndedAt,
+    Holder,
     Id,
     LastActivityAt,
     Number,
     PersonId,
+    PlannerAgentName,
+    PlannerPersonId,
     RandomId,
     Result,
     SpaceId,
     StartedAt,
-    Status,
+    State,
+    StateReason,
     Table,
     Title,
+    WaitingRequestId,
+    WorkRecorded,
 }

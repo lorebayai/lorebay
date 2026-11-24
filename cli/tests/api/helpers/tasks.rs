@@ -224,3 +224,33 @@ fn next_cursor(output: &Output, command: &str, mode: &str) -> String {
         .unwrap()
         .to_owned()
 }
+
+pub async fn assert_waiting_task_listed(server: &Server, space: &str) {
+    let agent = server.agent("Waiting agent").await;
+    let task = create_task(server, space, &agent, "Awaiting a person").await;
+    let id = task["task_id"].as_str().unwrap();
+    server
+        .json(
+            Method::PATCH,
+            &format!("/api/v1/spaces/{space}/tasks/{id}"),
+            json!({"state":"waiting","state_reason":"Awaiting answer"}),
+            agent["access_token"].as_str(),
+        )
+        .await;
+    for filter in [vec!["--own-open"], vec!["--state", "waiting"]] {
+        let mut args = vec!["task", "list", space, "--output", "json"];
+        args.extend(filter);
+        let listed = server.run(&args).await;
+        super::assert_success(&listed);
+        assert_eq!(
+            super::body(&listed)["data"].as_array().map(Vec::len),
+            Some(1)
+        );
+        assert_eq!(super::body(&listed)["data"][0]["state"], "waiting");
+        assert_eq!(super::body(&listed)["data"][0]["holder"], "Waiting agent");
+        assert_eq!(
+            super::body(&listed)["data"][0]["state_reason"],
+            "Awaiting answer"
+        );
+    }
+}

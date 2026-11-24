@@ -12,23 +12,31 @@ use super::space_access::{SpaceAccessError, SpaceRole, role_in_space, tenant_spa
 pub enum TaskAccessError {
     #[error(transparent)]
     Database(#[from] DbErr),
-    #[error("Set the task back to in progress before {0}")]
-    Ended(&'static str),
+    #[error("Task is already held by {0}")]
+    Held(String),
+    #[error("Task is held by {0} in another party")]
+    HeldByAnotherParty(String),
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
     #[error("Task not found")]
     NotFound,
+    #[error("Only the holder {0} may write; claim the task to take it over")]
+    NotHolder(String),
     #[error("The space role does not allow this operation")]
     PermissionRequired,
     #[error(transparent)]
     Space(#[from] SpaceAccessError),
+    #[error("Operation is not allowed while the task is {0}; {hint}", hint = invalid_state_hint(.0))]
+    StateInvalid(String),
 }
 
 impl TaskAccessError {
     pub const fn code(&self) -> &'static str {
         match self {
             Self::Database(_) | Self::Internal(_) => "server.internal",
-            Self::Ended(_) => "task.ended",
+            Self::Held(_) | Self::HeldByAnotherParty(_) => "task.held",
+            Self::NotHolder(_) => "task.not_holder",
+            Self::StateInvalid(_) => "task.state_invalid",
             Self::NotFound => "task.not_found",
             Self::PermissionRequired => "space.permission_required",
             Self::Space(error) => error.code(),
@@ -39,13 +47,15 @@ impl TaskAccessError {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum TaskAction {
     AppendCheckpoint,
+    Cancel,
     Change,
-    Close,
+    Claim,
     CompleteAgentFile,
     Delete,
     DeleteAgentFile,
     DeleteCheckpoint,
     RegisterAgentFile,
+    Release,
     SubmitPersonRequest,
 }
 
@@ -98,6 +108,7 @@ pub(super) async fn check_task(
             .ok_or(TaskAccessError::NotFound)?,
     };
     check_party(&task, caller, role, check.action)?;
+    let observed_state = task.state.clone();
     let task = match (handle, check.action) {
         (OperationHandle::Write(_), TaskAction::DeleteAgentFile | TaskAction::DeleteCheckpoint)
         | (OperationHandle::Read(_), _) => task,
@@ -106,7 +117,16 @@ pub(super) async fn check_task(
             .await?
             .ok_or(TaskAccessError::NotFound)?,
     };
-    check_task_state(&task, check.action)?;
+    check_party(&task, caller, role, check.action)?;
+    if check.action == TaskAction::Claim && observed_state == "planned" && task.state != "planned" {
+        return Err(TaskAccessError::Held(
+            task.holder.clone().unwrap_or_default(),
+        ));
+    }
+    if check.action == TaskAction::Change && caller.agent_name.is_none() {
+        return Err(TaskAccessError::PermissionRequired);
+    }
+    check_task_state(&task, caller, check.action)?;
     Ok(task)
 }
 
@@ -116,9 +136,23 @@ fn check_party(
     role: SpaceRole,
     action: TaskAction,
 ) -> Result<(), TaskAccessError> {
+    if role == SpaceRole::Viewer {
+        return Err(TaskAccessError::PermissionRequired);
+    }
+    if action == TaskAction::Claim {
+        if !matches!(task.state.as_str(), "planned" | "working" | "waiting") {
+            return Err(TaskAccessError::StateInvalid(task.state.clone()));
+        }
+        if task.state == "planned" || task.person_id == caller.person_id() {
+            return Ok(());
+        }
+        return Err(TaskAccessError::HeldByAnotherParty(
+            task.holder.clone().unwrap_or_default(),
+        ));
+    }
     let may_manage_others = matches!(
         action,
-        TaskAction::Close
+        TaskAction::Cancel
             | TaskAction::Delete
             | TaskAction::DeleteAgentFile
             | TaskAction::DeleteCheckpoint
@@ -129,14 +163,42 @@ fn check_party(
     Ok(())
 }
 
-fn check_task_state(task: &Model, action: TaskAction) -> Result<(), TaskAccessError> {
-    match (action, task.status.as_str()) {
-        (TaskAction::AppendCheckpoint, "ended") => {
-            Err(TaskAccessError::Ended("appending a checkpoint"))
-        }
-        (TaskAction::RegisterAgentFile, "ended") => {
-            Err(TaskAccessError::Ended("registering a file"))
-        }
-        _ => Ok(()),
+fn check_task_state(
+    task: &Model,
+    caller: &Caller,
+    action: TaskAction,
+) -> Result<(), TaskAccessError> {
+    let held = matches!(task.state.as_str(), "working" | "waiting");
+    let needs_holder = matches!(
+        action,
+        TaskAction::AppendCheckpoint
+            | TaskAction::Change
+            | TaskAction::RegisterAgentFile
+            | TaskAction::Release
+            | TaskAction::SubmitPersonRequest
+    ) || (action == TaskAction::Cancel && caller.agent_name.is_some());
+    if held && needs_holder && task.holder != caller.agent_name {
+        return Err(TaskAccessError::NotHolder(
+            task.holder.clone().unwrap_or_default(),
+        ));
+    }
+    let valid = match action {
+        TaskAction::AppendCheckpoint | TaskAction::RegisterAgentFile => held,
+        TaskAction::Release => task.state == "working",
+        TaskAction::Claim => held || task.state == "planned",
+        _ => true,
+    };
+    if valid {
+        Ok(())
+    } else {
+        Err(TaskAccessError::StateInvalid(task.state.clone()))
+    }
+}
+
+fn invalid_state_hint(state: &str) -> &'static str {
+    if matches!(state, "failed" | "canceled") {
+        "create a new task"
+    } else {
+        "claim or reopen it first"
     }
 }

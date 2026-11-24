@@ -82,13 +82,47 @@ agent practice.
 
 ## Data
 
-**Task**: The record of one piece of work an agent does for a person in a
-space: its title, status, result, Scratchpad and files.
+**Task**: The record of one piece of agent work in a space: its title, state,
+holder, result, Scratchpad and files. A task may be planned before an agent
+works on it.
 
 **Result**: A task's Markdown summary of the work so far: the task result.
 
-**Ended**: The task status that means nobody is working on the task now.
-It does not mean the work is done; the result says that.
+**Task state**: Where a task stands: `planned`, `working`, `waiting`, `done`,
+`failed` or `canceled`. The library holds it and refuses any other change.
+
+**Planned**: The task state of a task planned for later, which no agent holds
+yet. Any agent in the space, except a space viewer's, may claim it.
+
+**Working**: The task state of a task its holder works on.
+
+**Waiting**: The task state of a held task whose work waits on a person, such as
+an answer or a request's decision, with a reason that says on whom.
+
+**Done**: The task state of a task its holder reports done. It is not accepted
+or reviewed, and it can be reopened.
+
+**Failed**: The final task state of a task finished without doing the work, with
+a reason.
+
+**Canceled**: The final task state of a task deliberately not done, with a
+reason.
+
+**Holder**: The one agent that holds a `working` or `waiting` task, and the only
+one that writes into it.
+
+**Claim**: Taking hold of a task: of a `planned` one, which moves the task to
+the claiming agent's party, or of one another agent of the same party holds,
+which is a takeover.
+
+**Takeover**: A claim by an agent of the holder's party, which moves the hold to
+it and keeps the task's state.
+
+**Release**: Giving up the hold of a `working` task before any work is recorded
+on it, which sets it back to `planned`.
+
+**Planner**: The person or agent that planned a task, or the holder recorded as
+planner on its first release.
 
 **Write record**: What the library hands the product's commit hook for one
 committed write: the operation, its caller and its space.

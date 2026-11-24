@@ -73,18 +73,26 @@ POST /api/v1/spaces/{space}/requests/{key}/approve
 - **Every list is paginated** with a cursor, a default page size and a fixed
   order, as the library's
   [lists](../../lib/docs/contracts/mcp-tools.md#4-tools) are.
-- **Library errors keep their codes.** A library operation's refusal
-  carries the library's error code, such as `task.not_found`, with an HTTP
-  status Lorebay chooses in one place; `task.ended`,
-  `agent_file.not_uploaded`, `agent_file.refused`, `agent_file.too_large`,
-  `space.number_taken`, `knowledge.name_taken` and `person_request.decided`
-  answer 409.
-- **Writes don't check references**; see
-  [Keys and references](../../lib/docs/contracts/keys-and-references.md#5-references).
-- **Ended tasks reject checkpoints and file registrations**; see
-  [Tasks](../../lib/docs/contracts/tasks.md#3-tasks).
+- **Library errors keep their codes.** A library operation's refusal carries the
+  library's error code, such as `task.not_found`, with an HTTP status Lorebay
+  chooses in one place; `task.state_invalid`, `task.held`, `task.not_holder`,
+  `task.has_work`, `agent_file.not_uploaded`, `agent_file.refused`,
+  `agent_file.too_large`, `space.number_taken`, `knowledge.name_taken` and
+  `person_request.decided` answer 409.
+- **Writes don't check references**; see [Keys and
+  references](../../lib/docs/contracts/keys-and-references.md#5-references).
+- **Only the holder of a `working` or `waiting` task writes checkpoints and file
+  registrations**; see [Tasks](../../lib/docs/contracts/tasks.md#3-tasks).
 
 ## 5. Operations
+
+- **Task fields are `state` and `state_reason`** in requests and responses.
+  Requests use `status`.
+- **Planning uses task creation with `planned=true`**, for a person or agent.
+  Only agents create a started task.
+- **Canceling changes state to `canceled` with `state_reason`**, a required
+  one-line reason. People cancel their own tasks; owners and admins may cancel
+  anyone's. There is no close operation.
 
 - **Listing users** exists for adding space members. Everyone signed in may
   call it and sees every username.

@@ -41,10 +41,9 @@ async fn register_agent_file_returns_key_upload_url_and_headers() {
     assert_eq!(url.origin().ascii_serialization(), server.public_url);
     assert!(url.path().starts_with("/files/"));
     assert!(!url.path().contains("report.txt"));
-    let second_agent = authorize_for(&server, &person, "Second agent").await;
     let (second, third) = tokio::join!(
         register(&server, &agent, &task),
-        register(&server, &second_agent, &task)
+        register(&server, &agent, &task)
     );
     let mut keys = [
         second["key"].as_str().unwrap(),
@@ -405,11 +404,11 @@ async fn complete_agent_file_fails_when_file_was_not_uploaded() {
 }
 
 #[tokio::test]
-async fn register_agent_file_fails_with_reopen_hint_when_task_is_ended() {
+async fn register_agent_file_fails_with_reopen_hint_when_task_is_done() {
     let (server, person, agent) = setup().await;
     let task = create(&server, &agent, SPACE, "Paused file work").await;
     let registered = register(&server, &agent, &task).await;
-    let ended = set_status(&server, &agent, &task, "ended").await;
+    let ended = set_status(&server, &agent, &task, "done").await;
     let refusal = assert_problem(
         registration(
             &server,
@@ -420,12 +419,12 @@ async fn register_agent_file_fails_with_reopen_hint_when_task_is_ended() {
         )
         .await,
         StatusCode::CONFLICT,
-        "task.ended",
+        "task.state_invalid",
     )
     .await;
     assert_eq!(
         refusal["title"],
-        "Set the task back to in progress before registering a file"
+        "Operation is not allowed while the task is done; claim or reopen it first"
     );
     assert_eq!(read(&server, &person, "TK-1").await, ended);
     upload_ok(&server, &registered, "Before ending").await;
@@ -436,11 +435,11 @@ async fn register_agent_file_fails_with_reopen_hint_when_task_is_ended() {
     assert_eq!(completed["task_title"], "Paused file work");
     assert_eq!(completed["size"], 13);
     let after = read(&server, &person, "TK-1").await;
-    assert_eq!(after["status"], "ended");
+    assert_eq!(after["state"], "done");
     assert_eq!(after["ended_at"], ended["ended_at"]);
     assert_eq!(after["files"][0]["key"], "FL-1");
     assert_eq!(after["files"][0]["completed_at"], completed["completed_at"]);
-    let reopened = set_status(&server, &person, &task, "in progress").await;
+    let reopened = set_status(&server, &agent, &task, "working").await;
     assert_eq!(reopened["files"], after["files"]);
     assert_eq!(read(&server, &person, "TK-1").await, reopened);
     assert_eq!(register(&server, &agent, &task).await["key"], "FL-2");

@@ -61,11 +61,11 @@ pub async fn assert_filtered_pages(server: &Server, space: &str, filters: &[&str
 }
 
 pub async fn assert_filter_errors(server: &mut Server, space: &str) {
-    for extra in ["--person", "--status"] {
+    for extra in ["--person", "--state"] {
         let value = if extra == "--person" {
             server.username.as_str()
         } else {
-            "ended"
+            "canceled"
         };
         let refused = server
             .run(&[
@@ -84,9 +84,7 @@ pub async fn assert_filter_errors(server: &mut Server, space: &str) {
     server.stop();
     for status in ["unknown", "in-progress"] {
         let refused = server
-            .run(&[
-                "task", "list", space, "--status", status, "--output", "json",
-            ])
+            .run(&["task", "list", space, "--state", status, "--output", "json"])
             .await;
         assert_usage(&refused);
     }
@@ -137,7 +135,7 @@ async fn create_filter_fixtures(
             let changes = if index == 0 {
                 json!({"result": FILTER_KEYWORD})
             } else {
-                json!({"status": "ended"})
+                json!({"state": "canceled", "state_reason":"Fixture complete"})
             };
             let id = task["task_id"].as_str().unwrap();
             server

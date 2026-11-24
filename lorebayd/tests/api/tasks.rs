@@ -8,6 +8,7 @@ use crate::helpers::{
     Server, TEST_PASSWORD, assert_problem, authorize_for, create_space, list_page, list_response,
     login, request, walk,
 };
+use crate::mcp::tools::call as call_tool;
 
 use helpers::*;
 
@@ -30,7 +31,7 @@ async fn create_task_returns_task_id_and_key() {
     assert_eq!(created["key"], "TK-1");
     let task = read(&server, &person, "TK-1").await;
     assert_eq!(task["title"], "Research #KN-999");
-    assert_eq!(task["status"], "in progress");
+    assert_eq!(task["state"], "working");
     assert_eq!(task["person"], "alice");
     assert_eq!(task["agent_name"], "Research agent");
     assert_eq!(task["task_id"], id);
@@ -370,11 +371,18 @@ async fn add_checkpoint_succeeds_when_task_was_created_by_another_agent_of_same_
     let (server, person, agent) = setup().await;
     let task = create(&server, &agent, SPACE, "Shared party").await;
     let second = authorize_for(&server, &person, "Other agent").await;
+    call_tool(
+        &server,
+        &second,
+        "claim_task",
+        json!({"task_id":task["task_id"]}),
+    )
+    .await;
     let checkpoint = append(&server, &second, &task, "Continuing").await;
     assert_eq!(checkpoint["task_title"], "Shared party");
     assert_eq!(
         read(&server, &person, "TK-1").await["agent_name"],
-        "Research agent"
+        "Other agent"
     );
     assert_eq!(
         scratchpad(&server, &second, "TK-1").await,
@@ -454,7 +462,7 @@ async fn list_tasks_returns_newest_activity_first() {
     for task in &expected {
         assert_eq!(task["person"], "alice");
         assert_eq!(task["agent_name"], "Research agent");
-        assert_eq!(task["status"], "in progress");
+        assert_eq!(task["state"], "working");
         let checkpoint = append(&server, &agent, task, "Found by ID").await;
         assert_eq!(checkpoint["task_title"], task["title"]);
     }

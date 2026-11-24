@@ -34,9 +34,10 @@ pub(super) fn read_knowledge() -> (ToolName, Tool) {
 pub(super) fn create_person_request() -> (ToolName, Tool) {
     tool(
         ToolName::CreatePersonRequest,
-        "Request a Knowledge change using task_id, not a space or task key. action create requires name, summary and content. action change requires exactly one of target_name or target_key and at least one replacement name, summary or content. action delete requires exactly one target and no replacement fields. Content is nonempty Markdown, at most 1048576 UTF-8 bytes. Only your party's tasks accept submissions, including ended tasks. Returns the pending request and task title; Knowledge changes only after a person approves it.",
+        "Request a Knowledge change using task_id, not a space or task key. action create requires name, summary and content. action change requires exactly one of target_name or target_key and at least one replacement name, summary or content. action delete requires exactly one target and no replacement fields. Content is nonempty Markdown, at most 1048576 UTF-8 bytes. Only your party's tasks accept submissions, including finished tasks. Set wait=true from your working task to wait for its decision. Only the holder submits from a held task. Returns the pending request and task title; Knowledge changes only after a person approves it.",
         json!({
             "task_id":{"type":"string"},
+            "wait":{"type":"boolean", "default":false},
             "action":{"type":"string", "enum":["create", "change", "delete"]},
             "target_name":name(), "target_key":{"type":"string"}, "name":name(),
             "summary":{"type":"string", "minLength":1, "maxLength":KNOWLEDGE_SUMMARY_MAX_CHARACTERS},

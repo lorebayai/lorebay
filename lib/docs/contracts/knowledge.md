@@ -70,6 +70,8 @@ decisions an agent needs from a person in the middle of its work.
 
 ## 4. Requests
 
+- **A request can hold its task in `waiting`.** An agent submitting from its `working` task may ask to wait on it. The task records the request as its reason. Approval, rejection or withdrawal returns it to `working` only while it still waits on that request; another wait or a finished task is unchanged. See [Tasks](tasks.md#31-states).
+
 ```mermaid
 flowchart TD
     agent["Agent"]

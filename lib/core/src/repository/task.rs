@@ -25,7 +25,8 @@ pub(crate) struct TaskRepository<'a, C> {
 pub(crate) struct TaskListFilter<'a> {
     pub person_id: Option<&'a str>,
     pub agent: Option<&'a str>,
-    pub status: Option<&'a str>,
+    pub state: Option<&'a str>,
+    pub own_open: bool,
     pub keyword: Option<&'a str>,
 }
 
@@ -38,8 +39,11 @@ impl TaskListFilter<'_> {
         if let Some(agent) = self.agent {
             condition = condition.add(Column::AgentName.eq(agent));
         }
-        if let Some(status) = self.status {
-            condition = condition.add(Column::Status.eq(status));
+        if let Some(state) = self.state {
+            condition = condition.add(Column::State.eq(state));
+        }
+        if self.own_open {
+            condition = condition.add(Column::State.is_in(["working", "waiting"]));
         }
         if let Some(keyword) = self.keyword {
             condition = condition.add(keyword_match(backend, keyword));

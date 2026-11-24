@@ -12,7 +12,12 @@ use super::{Listing, api_path, delete, display_value, list_page};
 
 pub(super) async fn run(command: TaskCommand, store: &Store, mode: OutputMode) -> Result<Outcome> {
     match command {
-        TaskCommand::Close { space, task_id } => close(store, &space, &task_id).await,
+        TaskCommand::Cancel {
+            space,
+            task_id,
+            reason,
+        } => cancel(store, &space, &task_id, &reason).await,
+        TaskCommand::Plan { space, title } => plan(store, &space, &title).await,
         TaskCommand::Delete {
             space,
             task_id,
@@ -54,13 +59,13 @@ const SCRATCHPAD: &str = "scratchpad";
 const SPACES: &str = "spaces";
 const TASKS: &str = "tasks";
 
-async fn close(store: &Store, space: &str, task_id: &str) -> Result<Outcome> {
+async fn cancel(store: &Store, space: &str, task_id: &str, reason: &str) -> Result<Outcome> {
     let body = Http::new()?
         .authorized(
             store,
             Method::PATCH,
             &api_path(&[SPACES, space, TASKS, task_id])?,
-            Some(&json!({"status": "ended"})),
+            Some(&json!({"state": "canceled", "state_reason":reason})),
         )
         .await?;
     Ok(task_output(body))
@@ -76,8 +81,8 @@ async fn list(
     let query = filter_query(filters);
     let mut command = format!("task list {}", output::shell_word(space));
     for (name, value) in &query {
-        if *name == OWN_OPEN {
-            command.push_str(" --own-open");
+        if matches!(*name, OWN_OPEN | "claimable") {
+            command.push_str(&format!(" --{}", name.replace('_', "-")));
         } else {
             command.push_str(&format!(" --{name} {}", output::shell_word(value)));
         }
@@ -93,17 +98,25 @@ async fn list(
             .columns(vec![
                 "Key",
                 "Title",
-                "Status",
+                "State",
                 "Person",
                 "Agent name",
+                "Holder",
+                "Reason",
+                "Planner",
+                "Planner agent",
                 "Last activity at",
             ])
             .fields(vec![
                 "key",
                 "title",
-                "status",
+                "state",
                 "person",
                 "agent_name",
+                "holder",
+                "state_reason",
+                "planner",
+                "planner_agent_name",
                 "last_activity_at",
             ])
             .build(),
@@ -143,14 +156,17 @@ fn filter_query(filters: TaskFilters) -> Vec<(&'static str, String)> {
         ("person", filters.person),
         ("agent", filters.agent),
         (
-            "status",
-            filters.status.map(|status| status.as_str().to_owned()),
+            "state",
+            filters.state.map(|state| state.as_str().to_owned()),
         ),
         ("keyword", filters.keyword),
     ] {
         if let Some(value) = value {
             query.push((name, value));
         }
+    }
+    if filters.claimable {
+        query.push(("claimable", "true".to_owned()));
     }
     if filters.own_open {
         query.push((OWN_OPEN, "true".to_owned()));
@@ -165,9 +181,14 @@ fn task_output(body: Value) -> Outcome {
                 ("Key", "key"),
                 ("Task ID", "task_id"),
                 ("Title", "title"),
-                ("Status", "status"),
+                ("State", "state"),
                 ("Person", "person"),
                 ("Agent name", "agent_name"),
+                ("Holder", "holder"),
+                ("Reason", "state_reason"),
+                ("Planner", "planner"),
+                ("Planner agent", "planner_agent_name"),
+                ("Created at", "created_at"),
                 ("Started at", "started_at"),
                 ("Ended at", "ended_at"),
                 ("Last activity at", "last_activity_at"),
@@ -187,4 +208,21 @@ fn task_output(body: Value) -> Outcome {
         )
         .build();
     Outcome::new(body, fields)
+}
+
+async fn plan(store: &Store, space: &str, title: &str) -> Result<Outcome> {
+    let mut body = Http::new()?
+        .authorized(
+            store,
+            Method::POST,
+            &api_path(&[SPACES, space, TASKS])?,
+            Some(&json!({"title":title,"planned":true})),
+        )
+        .await?;
+    body[DATA]["title"] = json!(title);
+    let values = [("Key", "key"), ("Task ID", "task_id"), ("Title", "title")]
+        .into_iter()
+        .map(|(label, field)| Field::SingleLine(label, display_value(&body[DATA][field])))
+        .collect::<Vec<_>>();
+    Ok(Outcome::new(body, Fields::builder().values(values).build()))
 }

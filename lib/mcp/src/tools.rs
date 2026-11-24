@@ -1,7 +1,8 @@
 use lorebay_lib_core::{
     Caller, CheckpointContent, LibraryState, Page, TaskRead, TaskTarget, TaskTitle, add_checkpoint,
-    change_task, complete_agent_file, create_task, get_agent_file_download_url, list_spaces,
-    list_tasks, prepare_agent_file_completion, read_task, register_agent_file,
+    change_task, claim_task, complete_agent_file, create_task, get_agent_file_download_url,
+    list_spaces, list_tasks, plan_task, prepare_agent_file_completion, read_task,
+    register_agent_file, release_task,
 };
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -21,6 +22,7 @@ pub(super) async fn call(
     match name {
         ToolName::ListSpaces => page_response(list_spaces(state, caller, arguments.page()?).await?),
         ToolName::CreateTask => create(state, caller, &arguments).await,
+        ToolName::ClaimTask | ToolName::ReleaseTask => hold(state, caller, name, &arguments).await,
         ToolName::UpdateTask => update(state, caller, &arguments).await,
         ToolName::ListTasks => {
             let (options, filters) = arguments.tasks()?;
@@ -96,7 +98,13 @@ async fn create(
         .map_err(|error| ToolError::task_text("title", error))?;
     let space = arguments.string("space")?;
     let task = state
-        .run_write(async |write| create_task(write, caller, &space, title).await)
+        .run_write(async |write| {
+            if arguments.enabled("planned") {
+                plan_task(write, caller, &space, title).await
+            } else {
+                create_task(write, caller, &space, title).await
+            }
+        })
         .await?;
     value(task)
 }
@@ -160,4 +168,23 @@ fn value(data: impl Serialize) -> Result<Value, ToolError> {
         tracing::error!(%error, "MCP result serialization failed");
         ToolError::internal()
     })
+}
+
+async fn hold(
+    state: &LibraryState,
+    caller: &Caller,
+    name: ToolName,
+    arguments: &Arguments,
+) -> Result<Value, ToolError> {
+    let task_id = arguments.string("task_id")?;
+    let read = state
+        .run_write(async |write| {
+            if name == ToolName::ClaimTask {
+                claim_task(write, caller, target(&task_id)).await
+            } else {
+                release_task(write, caller, target(&task_id)).await
+            }
+        })
+        .await?;
+    task_response(read)
 }

@@ -22,6 +22,13 @@ async fn call_update_task_returns_task_title_and_sets_status() {
             version,
         )
         .await;
+        call(
+            &server,
+            &peer,
+            "claim_task",
+            json!({"task_id":task["task_id"]}),
+        )
+        .await;
         update_and_reopen(&server, &person, &peer, &task, version).await;
     }
     server.stop().await;
@@ -41,9 +48,9 @@ async fn call_update_task_fails_when_arguments_are_invalid() {
         json!({"title":"x".repeat(201)}),
         json!({"title":null}),
         json!({"title":false}),
-        json!({"status":"closed"}),
-        json!({"status":null}),
-        json!({"status":false}),
+        json!({"state":"closed"}),
+        json!({"state":null}),
+        json!({"state":false}),
         json!({"result":"x".repeat(100_001)}),
         json!({"result":null}),
         json!({"result":false}),
@@ -81,11 +88,11 @@ async fn call_update_task_fails_when_task_is_outside_writable_party() {
         &server,
         &bob_agent,
         "update_task",
-        json!({"task_id":"unknown", "status":"ended"}),
+        json!({"task_id":"unknown", "state":"done"}),
     )
     .await;
     assert_eq!(unknown["code"], "task.not_found");
-    let alice_close = json!({"task_id":alice_task["task_id"], "status":"ended"});
+    let alice_close = json!({"task_id":alice_task["task_id"], "state":"done"});
     assert_eq!(
         call_error(&server, &bob_agent, "update_task", alice_close.clone()).await,
         unknown
@@ -95,7 +102,7 @@ async fn call_update_task_fails_when_task_is_outside_writable_party() {
             &server,
             &owner_agent,
             "update_task",
-            json!({"task_id":"TK-1", "status":"ended"})
+            json!({"task_id":"TK-1", "state":"done"})
         )
         .await,
         unknown
@@ -107,7 +114,7 @@ async fn call_update_task_fails_when_task_is_outside_writable_party() {
     );
     let bob_task = tasks::create(&server, &bob_agent, SPACE, "Bob task").await;
     let bob_original = tasks::read(&server, &person, "TK-2").await;
-    let bob_close = json!({"task_id":bob_task["task_id"], "status":"ended"});
+    let bob_close = json!({"task_id":bob_task["task_id"], "state":"done"});
     assert_eq!(
         call_error(&server, &owner_agent, "update_task", bob_close.clone()).await["code"],
         "space.permission_required"
@@ -140,12 +147,12 @@ async fn update_and_reopen(
     version: &str,
 ) {
     let updated = call_version(server, agent, "update_task", json!({
-        "task_id":task["task_id"], "title":"Revised title", "status":"ended", "result":"# Findings\nFirst result"
+        "task_id":task["task_id"], "title":"Revised title", "state":"done", "result":"# Findings\nFirst result"
     }), version).await;
     assert_eq!(updated["task_title"], "Revised title");
-    assert_eq!(updated["status"], "ended");
+    assert_eq!(updated["state"], "done");
     assert_eq!(updated["result"], "# Findings\nFirst result");
-    assert_eq!(updated["agent_name"], "Research agent");
+    assert_eq!(updated["agent_name"], "Continuing agent");
     assert!(updated["ended_at"].as_i64().unwrap() >= updated["started_at"].as_i64().unwrap());
     assert_readback(server, person, &updated).await;
     let error = call_error(
@@ -155,21 +162,21 @@ async fn update_and_reopen(
         json!({"task_id":task["task_id"], "content":"Refused"}),
     )
     .await;
-    assert_eq!(error["code"], "task.ended");
+    assert_eq!(error["code"], "task.state_invalid");
     assert_eq!(
         error["message"],
-        "Set the task back to in progress before appending a checkpoint"
+        "Operation is not allowed while the task is done; claim or reopen it first"
     );
     let reopened = call_version(
         server,
         agent,
         "update_task",
-        json!({"task_id":task["task_id"], "status":"in progress"}),
+        json!({"task_id":task["task_id"], "state":"working"}),
         version,
     )
     .await;
     assert_eq!(reopened["task_title"], "Revised title");
-    assert_eq!(reopened["status"], "in progress");
+    assert_eq!(reopened["state"], "working");
     assert!(reopened["ended_at"].is_null());
     assert_eq!(reopened["result"], updated["result"]);
     assert_readback(server, person, &reopened).await;

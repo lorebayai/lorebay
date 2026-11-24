@@ -18,7 +18,7 @@ async fn call_create_person_request_returns_task_title_and_pending_person_reques
         &server,
         &agent,
         "update_task",
-        json!({"task_id":task["task_id"], "status":"ended"}),
+        json!({"task_id":task["task_id"], "state":"done"}),
     )
     .await;
     for (index, body) in [
@@ -43,10 +43,7 @@ async fn call_create_person_request_returns_task_title_and_pending_person_reques
         person_requests::entry(&server, &person, "KN-1").await["name"],
         "Existing"
     );
-    assert_eq!(
-        tasks::read(&server, &person, "TK-1").await["status"],
-        "ended"
-    );
+    assert_eq!(tasks::read(&server, &person, "TK-1").await["state"], "done");
     assert_invalid_person_requests(&server, &agent, &task).await;
     assert_eq!(
         list_page(&server, &person, PATH, &[]).await["data"]

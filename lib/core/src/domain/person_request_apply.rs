@@ -1,7 +1,7 @@
-use sea_orm::{DatabaseTransaction, IntoActiveModel, Set, TransactionTrait};
+use sea_orm::{ActiveModelTrait, DatabaseTransaction, IntoActiveModel, Set, TransactionTrait};
 
 use crate::entity::{space_knowledge as entry, space_person_request as person_request};
-use crate::repository::{KnowledgeRepository, PersonRequestRepository};
+use crate::repository::{KnowledgeRepository, PersonRequestRepository, TaskRepository};
 use crate::{Caller, Write, WriteOperation};
 
 use super::key::parse_key;
@@ -28,6 +28,7 @@ pub async fn approve_person_request(
         return Err(PersonRequestError::OwnParty);
     }
     let entry = apply_person_request(write.transaction(), caller, &model).await?;
+    resume_waiting_task(write.transaction(), &model).await?;
     let number = model.number;
     let space_id = model.space_id.clone();
     let mut model = model.into_active_model();
@@ -54,6 +55,7 @@ pub async fn reject_person_request(
 ) -> Result<PersonRequest, PersonRequestError> {
     write.begin_operation(Some(caller))?;
     let (model, _) = decision_person_request(write, caller, space, key).await?;
+    resume_waiting_task(write.transaction(), &model).await?;
     let number = model.number;
     let space_id = model.space_id.clone();
     let mut model = model.into_active_model();
@@ -83,9 +85,21 @@ async fn decision_person_request(
         return Err(SpaceAccessError::PermissionRequired.into());
     }
     let number = parse_key("RQ", key).ok_or(PersonRequestError::NotFound)?;
-    let model = PersonRequestRepository::builder()
+    let requests = PersonRequestRepository::builder()
         .connection(write.transaction())
-        .build()
+        .build();
+    let observed = requests
+        .read(&space.space.id, number)
+        .await?
+        .ok_or(PersonRequestError::NotFound)?;
+    if let Some(task_id) = &observed.model.from_task_id {
+        TaskRepository::builder()
+            .connection(write.transaction())
+            .build()
+            .lock_by_id(task_id)
+            .await?;
+    }
+    let model = requests
         .locked(&space.space.id, number)
         .await?
         .ok_or(PersonRequestError::NotFound)?;
@@ -219,4 +233,26 @@ async fn apply_delete(
         .await?;
     append_version(transaction, caller, &entry, None, Some(person_request)).await?;
     Ok(entry)
+}
+
+async fn resume_waiting_task(
+    transaction: &DatabaseTransaction,
+    request: &person_request::Model,
+) -> Result<(), PersonRequestError> {
+    let Some(id) = &request.from_task_id else {
+        return Ok(());
+    };
+    let repository = TaskRepository::builder().connection(transaction).build();
+    let Some(mut task) = repository.lock_by_id(id).await? else {
+        return Ok(());
+    };
+    if task.state == "waiting" && task.waiting_request_id.as_deref() == Some(request.id.as_str()) {
+        task.state = "working".to_owned();
+        task.state_reason = None;
+        task.waiting_request_id = None;
+        repository
+            .update(task.into_active_model().reset_all())
+            .await?;
+    }
+    Ok(())
 }

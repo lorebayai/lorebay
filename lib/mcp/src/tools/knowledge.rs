@@ -52,7 +52,11 @@ pub(super) async fn propose(
                 submit_person_request(
                     write,
                     caller,
-                    PersonRequestSource::Task(target(&task_id)),
+                    if arguments.enabled("wait") {
+                        PersonRequestSource::WaitingTask(target(&task_id))
+                    } else {
+                        PersonRequestSource::Task(target(&task_id))
+                    },
                     content,
                 )
                 .await

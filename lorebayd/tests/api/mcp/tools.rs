@@ -12,6 +12,8 @@ mod agent_files;
 mod filters;
 mod knowledge;
 mod person_requests;
+mod task_lifecycle;
+mod task_review;
 mod update;
 
 #[tokio::test]
@@ -111,7 +113,7 @@ async fn call_create_task_returns_task_id_and_key() {
     assert_eq!(task["task_id"], created["task_id"]);
     assert_eq!(task["title"], title);
     assert_eq!(task["agent_name"], "Research agent");
-    assert_eq!(task["status"], "in progress");
+    assert_eq!(task["state"], "working");
     assert_eq!(
         call(
             &server,
@@ -139,6 +141,13 @@ async fn call_add_checkpoint_returns_task_title() {
             "create_task",
             json!({"space":SPACE, "title":version}),
             version,
+        )
+        .await;
+        call(
+            &server,
+            &peer,
+            "claim_task",
+            json!({"task_id":created["task_id"]}),
         )
         .await;
         let result = call_version(
@@ -366,7 +375,7 @@ async fn call_get_task_returns_scratchpad_page_when_requested() {
     server.stop().await;
 }
 
-async fn call(server: &Server, tokens: &Value, name: &str, arguments: Value) -> Value {
+pub(crate) async fn call(server: &Server, tokens: &Value, name: &str, arguments: Value) -> Value {
     call_version(server, tokens, name, arguments, NEWEST_VERSION).await
 }
 

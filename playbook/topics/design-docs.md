@@ -57,8 +57,8 @@ Then number the top-level sections, in this order:
 - Link with relative paths, to a section anchor when citing one rule.
 - Give each technology choice the reason for it. Keep a rejected
   alternative only as the trade-off a reader needs to understand the choice.
-- Write status values as inline code, exactly as stored: `in progress` and
-  `ended` for tasks; `pending`, `approved` and `rejected` for requests.
+- Write task states and request statuses as inline code, exactly as stored:
+  `planned`, `working`, `waiting`, `done`, `failed` and `canceled` for tasks; `pending`, `approved` and `rejected` for requests.
 - Name objects in examples by key, such as `TK-12` or `#KN-1`.
 - Draw a Mermaid diagram when a structure, sequence or flow reads more
   clearly as a picture, and keep it in agreement with the prose. Label each

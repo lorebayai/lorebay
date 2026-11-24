@@ -313,8 +313,13 @@ pub(crate) enum UserCommand {
 
 #[derive(Clone, Debug, Subcommand)]
 pub(crate) enum TaskCommand {
-    /// End a task named by its task ID.
-    Close { space: String, task_id: String },
+    /// Cancel a task named by its task ID, with a one-line reason.
+    Cancel {
+        space: String,
+        task_id: String,
+        #[arg(long, help = "One-line reason for canceling the task")]
+        reason: String,
+    },
     /// Delete a task, its checkpoints, files and their content.
     Delete {
         space: String,
@@ -330,6 +335,12 @@ pub(crate) enum TaskCommand {
         #[command(flatten)]
         filters: TaskFilters,
     },
+    /// Plan a task for an agent to claim later.
+    Plan {
+        space: String,
+        #[arg(long, help = "One sentence naming the work to plan")]
+        title: String,
+    },
     /// Read one page of a task's checkpoints in time order.
     Scratchpad {
         space: String,
@@ -342,10 +353,13 @@ pub(crate) enum TaskCommand {
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
-pub(crate) enum TaskStatus {
-    Ended,
-    #[value(name = "in progress")]
-    InProgress,
+pub(crate) enum TaskState {
+    Canceled,
+    Done,
+    Failed,
+    Planned,
+    Waiting,
+    Working,
 }
 
 #[derive(Clone, Debug, Parser, TypedBuilder)]
@@ -397,18 +411,24 @@ pub(crate) struct TaskFilters {
     #[arg(long)]
     pub agent: Option<String>,
     #[arg(long, value_enum)]
-    pub status: Option<TaskStatus>,
+    pub state: Option<TaskState>,
     #[arg(long)]
     pub own_open: bool,
+    #[arg(long)]
+    pub claimable: bool,
     #[arg(long)]
     pub keyword: Option<String>,
 }
 
-impl TaskStatus {
+impl TaskState {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Ended => "ended",
-            Self::InProgress => "in progress",
+            Self::Canceled => "canceled",
+            Self::Done => "done",
+            Self::Failed => "failed",
+            Self::Planned => "planned",
+            Self::Waiting => "waiting",
+            Self::Working => "working",
         }
     }
 }

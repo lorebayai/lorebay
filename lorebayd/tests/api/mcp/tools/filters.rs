@@ -17,7 +17,7 @@ async fn call_list_tasks_returns_own_party_tasks_not_ended() {
         &server,
         &agent,
         "update_task",
-        json!({"task_id":ended["task_id"], "status":"ended"}),
+        json!({"task_id":ended["task_id"], "state":"done"}),
     )
     .await;
     let bob_agent = add_bob_agent(&server, &person).await;
@@ -43,21 +43,10 @@ async fn call_list_tasks_returns_own_party_tasks_not_ended() {
     );
     assert!(
         rows.iter()
-            .all(|row| row["person"] == "alice" && row["status"] == "in progress")
+            .all(|row| row["person"] == "alice" && row["state"] == "working")
     );
     assert_party_tasks(&server, &agent).await;
-    let checkpoint = call(
-        &server,
-        &agent,
-        "add_checkpoint",
-        json!({"task_id":rows[0]["task_id"], "content":"Recovered own task"}),
-    )
-    .await;
-    assert_eq!(checkpoint["task_title"], "Own second");
-    assert_eq!(
-        tasks::scratchpad(&server, &person, "TK-2").await,
-        json!([{"time":checkpoint["time"], "content":"Recovered own task"}])
-    );
+    recover_own_task(&server, &person, &agent, &rows[0]).await;
     let page = call(
         &server,
         &agent,
@@ -80,7 +69,7 @@ async fn call_list_tasks_applies_filters_and_binds_cursors() {
         &server,
         &agent,
         "update_task",
-        json!({"task_id":ended["task_id"],"status":"ended","result":"Needle in result"}),
+        json!({"task_id":ended["task_id"],"state":"done","result":"Needle in result"}),
     )
     .await;
     let bob_agent = add_bob_agent(&server, &person).await;
@@ -89,7 +78,7 @@ async fn call_list_tasks_applies_filters_and_binds_cursors() {
     for (field, initial, changed) in [
         ("person", json!("alice"), json!("bob")),
         ("agent", json!("Research agent"), json!("Unknown agent")),
-        ("status", json!("in progress"), json!("ended")),
+        ("state", json!("working"), json!("done")),
         ("keyword", json!("Shared"), json!("Needle")),
         ("own_open", json!(true), json!(false)),
     ] {
@@ -98,7 +87,7 @@ async fn call_list_tasks_applies_filters_and_binds_cursors() {
     for (filters, count) in [
         (json!({"person":"bob","agent":"Research agent"}), 2),
         (json!({"agent":"Research agent"}), 5),
-        (json!({"status":"ended"}), 1),
+        (json!({"state":"done"}), 1),
         (json!({"keyword":"Needle"}), 1),
         (json!({"person":"unknown"}), 0),
     ] {
@@ -120,9 +109,9 @@ async fn call_list_tasks_fails_when_filters_are_invalid() {
         json!({"keyword":""}),
         json!({"keyword":"   "}),
         json!({"keyword":"x".repeat(201)}),
-        json!({"status":"closed"}),
+        json!({"state":"closed"}),
         json!({"own_open":true,"person":"alice"}),
-        json!({"own_open":true,"status":"in progress"}),
+        json!({"own_open":true,"state":"working"}),
         json!({"own_open":"yes"}),
         json!({"unknown":"private-sentinel"}),
     ] {
@@ -169,7 +158,7 @@ async fn assert_party_tasks(server: &Server, agent: &Value) {
     assert!(rows.iter().all(|row| row["person"] == *person));
     assert!(
         rows.iter()
-            .any(|row| row["title"] == "Own ended" && row["status"] == "ended")
+            .any(|row| row["title"] == "Own ended" && row["state"] == "done")
     );
 }
 
@@ -221,4 +210,26 @@ fn query(arguments: &Value) -> Vec<(String, String)> {
             )
         })
         .collect()
+}
+
+async fn recover_own_task(server: &Server, person: &Value, agent: &Value, task: &Value) {
+    call(
+        server,
+        agent,
+        "claim_task",
+        json!({"task_id":task["task_id"]}),
+    )
+    .await;
+    let checkpoint = call(
+        server,
+        agent,
+        "add_checkpoint",
+        json!({"task_id":task["task_id"], "content":"Recovered own task"}),
+    )
+    .await;
+    assert_eq!(checkpoint["task_title"], "Own second");
+    assert_eq!(
+        tasks::scratchpad(server, person, "TK-2").await,
+        json!([{"time":checkpoint["time"], "content":"Recovered own task"}])
+    );
 }

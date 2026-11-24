@@ -42,6 +42,10 @@ is one sentence naming what the person wants done, not how; change it with
 `update_task` when the scope changes. A subagent is not a separate session: it
 creates no task, and you write its work into checkpoints.
 
+Create the task started, as `working`, so you hold it. Use `planned=true` only
+when the person asks to queue work for later or another agent. A planned task is
+not yours until you claim it.
+
 Every session has a task, even one that only answers questions, except when:
 
 - practice 1 left you without a space;
@@ -57,37 +61,37 @@ not its key such as `TK-12`.
 
 ### 3. Continue a task
 
-Look for an earlier task only when the person says to continue. Look among
-your own party's tasks, which include those created by the person's other
-agents: call `list_tasks` with `person` set to the `caller_person` that
-`list_spaces` returns, which lists `ended` tasks too. If none matches, or
-several look alike, ask the person; don't guess. Before continuing any task,
-read its result and its checkpoints with `get_task`.
+Look for an earlier task only when the person says to continue or names a
+planned task. List your own party's tasks, including those created by the
+person's other agents: call `list_tasks` with `person` set to the
+`caller_person` that `list_spaces` returns. For a named planned task, list
+claimable tasks and claim the one the person means with `claim_task`.
+If none matches, or several look alike, ask the person; don't guess. Before
+continuing any task, read its result and checkpoints with `get_task`.
 
-- **Your own party's task:** keep writing to it instead of creating a task; if
-  it is `ended`, set it back to `in progress` first.
-- **Someone else's `ended` task:** never reopen it; continue it in a new task
-  (practice 10).
-- **Someone else's `in progress` task:** don't continue it; tell the person it
-  is still in progress, and whose it is.
+- **Your own party's task:** claim a `working` or `waiting` task before
+  writing, taking it over when another of the person's agents holds it.
+  Reopen a `done` task with `update_task` setting `working`, only where
+  practice 12 or 13 permits.
+- **Someone else's `done` task:** continue in a separate task (practice 10).
+- **Someone else's `working` or `waiting` task:** don't continue it; tell the
+  person it is held, and by whom.
 
-A lost task ID, such as after the conversation is compacted, is found the same
-way: list your own party's tasks that are not `ended`, and also `ended` ones
-when you ended the task in this session, and pick by title and last activity
-time, asking the person if unsure.
+Find a lost task ID, such as after compaction, the same way: list your own
+party's `working` and `waiting` tasks, and `done` ones you finished in this
+session. Pick by title and last activity time, asking the person if unsure.
 
 After every write, check the task title in the response to confirm the write
 went to the right task. When a write is refused:
 
+- **Another agent holds the task:** another of the person's agents took it
+  over. Tell the person, and write to it again only if they ask you to take
+  it back.
 - **A task you wrote to before is not found:** a person deleted it. Tell the
   person once that the rest of this session goes unrecorded, and don't look
   for another task.
-- **The task is `ended`:** set it back only where this practice, practice 12 or
-  practice 13 lets you reopen it; if the person or another of their agents ended
-  it while you worked, ask the person first.
-- **Missing permission:** the task is another party's, or the person is now a
-  viewer in that space. A viewer's agent records nothing more and tells the
-  person once.
+- **Missing permission:** the task is another party's, or the person is now
+  a viewer. A viewer's agent records nothing more and tells the person once.
 
 ### 4. Read Knowledge
 
@@ -111,7 +115,7 @@ request (practice 11) after the result, before or after the end.
 Write checkpoints with `add_checkpoint`:
 
 - **The plan,** at the start of each session's work on the task and of each
-  reopening of an `ended` task: what was missed, when you reopen to fix it
+  reopening of a `done` task: what was missed, when you reopen to fix it
   (practice 13); what the person wants this time; then the steps you intend to
   take.
 - **After each step:** what you did, and why. The steps are each thing the
@@ -195,7 +199,7 @@ Update the result each time you finish a stretch and stop to wait for the
 person, not only when the session ends. Describe the whole piece of work so
 far, not just the last stretch.
 
-When continuing someone else's `ended` task, reference it in the result, such
+When continuing someone else's `done` task, reference it in the result, such
 as `#TK-12`. Carry over what is still unresolved in its Open, so a reader
 needs only the latest task.
 
@@ -212,7 +216,7 @@ propose again. Otherwise, tell the person in the harness what you intend to
 propose, and submit it with `create_request` only after the person confirms.
 A change the person asks for by name counts as confirmed.
 
-The task may be `ended` by then: the confirmation answers your question and is
+The task may be `done` by then: the confirmation answers your question and is
 no ask for more work, so submit from the task without reopening it, then
 add the request's reference, such as `#RQ-3`, to the result's Deliverables. A
 session with no task proposes nothing: tell the person what you would have
@@ -231,26 +235,32 @@ End the task with `update_task` in three cases:
 - the person switches to unrelated work in the same session: end the current
   task with its unfinished work in Open, then create a new one.
 
-When the person asks for more on the same work after you ended its task in
-this session, set the task back to `in progress` and continue in it instead of
-creating one; if another task is `in progress`, end it first, as on a switch.
-Work is the same unless it is unrelated to what the task's title names; if
-unsure, treat it as the same work.
+When the person asks for more on the same work after you finished its task in
+this session, set the task back to `working` and continue in it instead of
+creating one; if another task is `working` or `waiting`, end it first, as on a
+switch. Work is the same unless it is unrelated to what the task's title names;
+if unsure, treat it as the same work.
 
-`ended` means only that nobody is working on the task now; whether it is done
-shows in Open.
+Set `done` when work is done, `failed` with a one-line `state_reason` when it
+could not be done, or `canceled` with a reason when the person drops it. `done`
+means you report the work done; it is not accepted.
+
+When work cannot continue without a person, set `waiting` with a one-line
+`state_reason` naming whom and what it waits on. Return to `working` when the
+person answers.
 
 ### 13. Fix missed work in the original task
 
-When something turns out missing after a task ended, continue in that task
-instead of creating one. In a new session, find it by practice 3.
+When something turns out missing after a task is `done`, continue in that task
+instead of creating one. A `failed` or `canceled` task is final: create a new
+task referencing it. In a new session, find it by practice 3.
 
-- **The person points it out:** set the task back to `in progress`.
+- **The person points it out:** set the task back to `working`.
 - **You notice it yourself:** tell the person, and reopen it only after they
   agree.
 
 If you are working on another task at the time, end it first, with its
-unfinished work in Open, so only one task is `in progress` at a time.
+unfinished work in Open, so only one task is `working` or `waiting` at a time.
 
 After reopening, record the fix by practice 5, from the plan to the result, then
 end the task.

@@ -1,4 +1,4 @@
-use sea_orm::{DatabaseTransaction, IntoActiveModel};
+use sea_orm::{ActiveModelTrait, DatabaseTransaction, IntoActiveModel};
 use serde::Serialize;
 use typed_builder::TypedBuilder;
 
@@ -47,6 +47,7 @@ pub async fn submit_person_request(
     content: PersonRequestContent,
 ) -> Result<SubmittedPersonRequest, PersonRequestError> {
     write.begin_operation(Some(caller))?;
+    let wait = matches!(source, PersonRequestSource::WaitingTask(_));
     let (space_id, task) = submission_space(write, caller, source).await?;
     let mut model = proposed_model(write.transaction(), caller, &space_id, content).await?;
     model.from_task_id = task.as_ref().map(|(id, _)| id.clone());
@@ -56,6 +57,9 @@ pub async fn submit_person_request(
         .take_number(&space_id, space::Column::NextPersonRequestNumber)
         .await?;
     let number = model.number;
+    if wait && let Some((id, _)) = &task {
+        wait_for_request(write, id, &model.id, number).await?;
+    }
     PersonRequestRepository::builder()
         .connection(write.transaction())
         .build()
@@ -148,7 +152,8 @@ async fn submission_space(
             caller.person()?;
             Ok((space.space.id, None))
         }
-        PersonRequestSource::Task(target) => {
+        PersonRequestSource::Task(target) | PersonRequestSource::WaitingTask(target) => {
+            caller.agent()?;
             let task = check_task(
                 write.state(),
                 write.handle(),
@@ -156,7 +161,6 @@ async fn submission_space(
                 target.check(TaskAction::SubmitPersonRequest),
             )
             .await?;
-            caller.agent()?;
             Ok((task.space_id, Some((task.id, task.title))))
         }
     }
@@ -244,4 +248,29 @@ async fn changed_since_requested(
                 .is_some_and(|(latest, base)| latest > base),
         )
     })
+}
+
+async fn wait_for_request(
+    write: &Write<'_>,
+    task_id: &str,
+    request_id: &str,
+    number: i64,
+) -> Result<(), PersonRequestError> {
+    let repository = crate::repository::TaskRepository::builder()
+        .connection(write.transaction())
+        .build();
+    let mut task = repository
+        .lock_by_id(task_id)
+        .await?
+        .ok_or(super::TaskAccessError::NotFound)?;
+    if task.state != "working" {
+        return Err(super::TaskAccessError::StateInvalid(task.state).into());
+    }
+    task.state = "waiting".to_owned();
+    task.state_reason = Some(format!("Waiting on request RQ-{number}"));
+    task.waiting_request_id = Some(request_id.to_owned());
+    repository
+        .update(task.into_active_model().reset_all())
+        .await?;
+    Ok(())
 }

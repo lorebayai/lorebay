@@ -14,15 +14,27 @@ pub struct Model {
     pub random_id: String,
     #[sea_orm(column_type = "Text")]
     pub person_id: String,
-    #[sea_orm(column_type = "Text")]
-    pub agent_name: String,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub agent_name: Option<String>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub holder: Option<String>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub planner_person_id: Option<String>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub planner_agent_name: Option<String>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub state_reason: Option<String>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub waiting_request_id: Option<String>,
+    pub work_recorded: i64,
+    pub created_at: i64,
     #[sea_orm(column_type = "Text")]
     pub title: String,
     #[sea_orm(column_type = "Text")]
-    pub status: String,
+    pub state: String,
     #[sea_orm(column_type = "Text")]
     pub result: String,
-    pub started_at: i64,
+    pub started_at: Option<i64>,
     pub ended_at: Option<i64>,
     pub last_activity_at: i64,
 }

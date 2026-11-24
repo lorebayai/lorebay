@@ -6,7 +6,7 @@ use tokio::time::sleep;
 
 use crate::helpers::{Server, Settings};
 
-mod tools;
+pub(crate) mod tools;
 
 #[tokio::test]
 async fn call_mcp_fails_with_authorization_challenge_when_token_is_missing() {
@@ -26,7 +26,7 @@ async fn call_mcp_fails_with_authorization_challenge_when_token_is_missing() {
 }
 
 #[tokio::test]
-async fn list_tools_returns_fourteen_tools_in_fixed_order() {
+async fn list_tools_returns_sixteen_tools_in_fixed_order() {
     let server = Server::start().await;
     let agent = server.authorize_agent("MCP agent").await;
     let token = agent.tokens["access_token"].as_str().unwrap();
@@ -397,6 +397,8 @@ async fn assert_tools(version: &str, response: Response) {
         ("list_tasks", true),
         ("get_task", true),
         ("add_checkpoint", false),
+        ("claim_task", false),
+        ("release_task", false),
         ("create_file", false),
         ("complete_file", false),
         ("get_file_url", true),
