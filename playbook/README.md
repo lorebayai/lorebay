@@ -44,8 +44,8 @@ Fragments:
 - [topics/seaorm.md](topics/seaorm.md): storing data through SeaORM, on
   SQLite and, where it differs, on Postgres: migrations, generated entities,
   repositories, queries and transactions.
-- [topics/testing.md](topics/testing.md): the integration, E2E, deployment and unit test
-  levels, and where each one's tests live.
+- [topics/testing.md](topics/testing.md): the integration, deployment and
+  unit test levels, where each one's tests live, and milestone acceptance.
 
 ## Invariants
 
