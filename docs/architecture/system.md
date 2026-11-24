@@ -12,10 +12,10 @@
 
 ## 1. Purpose
 
-A team should get Lorebay running by starting one executable, with no other
-service beside it. `lorebayd` holds the library, Lorebay's implementations
-of the library's interfaces, the Web API, the web pages and the background
-jobs.
+**One `lorebayd` process holds the product.** It holds the library,
+Lorebay's implementations of the library's interfaces, the Web API, the web
+pages and the background jobs. A deployment puts nginx in front of it for
+HTTPS and per-caller rate limits; `lorebayd` serves plain HTTP privately.
 
 ## 2. Scope
 
@@ -35,6 +35,7 @@ flowchart TD
     human["Person"]
     program["External program"]
     agent["Agent"]
+    nginx["nginx, HTTPS and per-caller limits"]
     subgraph lorebayd["lorebayd, one process"]
         web["Web API and pages"]
         oauth["OAuth endpoints"]
@@ -44,16 +45,24 @@ flowchart TD
     end
     sqlite["SQLite"]
     store["File content<br/>local directory or S3"]
-    human -- "sign-in" --> web
-    program -- "agent sign-in" --> web
-    agent -- "agent sign-in" --> library
-    agent -- "authorize" --> oauth
+    human -- "sign-in" --> nginx
+    program -- "agent sign-in" --> nginx
+    agent -- "MCP and authorization" --> nginx
+    nginx -- "HTTP, Web API and pages" --> web
+    nginx -- "HTTP, MCP" --> library
+    nginx -- "HTTP, OAuth" --> oauth
     web --> library
     jobs --> library
     library --> impls
     impls --> sqlite
     impls --> store
 ```
+
+**nginx owns HTTPS and per-caller limits.** The native deployment runs
+`lorebayd` under systemd on loopback. nginx consumes the operator's certificate,
+streams uploads and downloads, and limits callers by IPv4 address or IPv6 /64.
+The application's limits cover the team's shared proxy peer; it continues to
+key them on the TCP peer without reading forwarded headers.
 
 `v0.1.1` keeps file content in a local directory; the S3 backend is
 designed but not built ([Storage](storage.md)).

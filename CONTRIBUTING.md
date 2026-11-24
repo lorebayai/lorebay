@@ -32,7 +32,9 @@ Install [rustup](https://rustup.rs), then install the Rust release that
 rustup toolchain install
 ```
 
-Install Python 3.11 or later for the library boundary check and entity generation.
+Install Python 3.11 or later for the library boundary check, entity generation
+and deployment syntax checks. Deployment checks also need OpenSSL and Docker;
+they run `nginx -t` in a pinned nginx image with a throwaway certificate.
 
 Install moon, then add `~/.moon/bin` to `PATH`:
 
