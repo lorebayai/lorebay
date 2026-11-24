@@ -74,6 +74,11 @@ def inputs(args):
 
 
 def data_directory(path):
+    for temporary in (Path("/tmp"), Path("/var/tmp")):
+        if path == temporary or temporary in path.parents:
+            fail(
+                "Data directory must be outside /tmp and /var/tmp; the service uses private temporary directories"
+            )
     if path.exists():
         if not path.is_dir():
             fail("Data path is not a directory")
@@ -242,6 +247,7 @@ def install(args):
         try:
             CONFIG.mkdir(mode=0o700)
             INSTALL_DIRECTORY.mkdir(mode=0o755)
+            INSTALL_DIRECTORY.chmod(0o755)
             TLS.mkdir(mode=0o700)
             copy_pair(args.certificate, args.key, TLS / "initial")
             (TLS / "live").symlink_to("initial")
@@ -265,7 +271,11 @@ def install(args):
             )
             user_created = True
             account = pwd.getpwnam("lorebay")
-            args.data.mkdir(parents=True, exist_ok=True, mode=0o700)
+            for parent in reversed(args.data.parents):
+                if not parent.exists():
+                    parent.mkdir(mode=0o755)
+                    parent.chmod(0o755)
+            args.data.mkdir(exist_ok=True, mode=0o700)
             args.data.chmod(0o700)
             os.chown(args.data, account.pw_uid, account.pw_gid)
             config = {

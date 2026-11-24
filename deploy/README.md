@@ -29,16 +29,17 @@ For local archives, append `--archives /srv/releases`, containing
 selects an HTTPS mirror directory instead. An identical repeated install does
 nothing; another version or changed inputs are refused.
 
-Use an empty data directory on a local writable filesystem, or a missing path
-whose parent the service user can traverse. The installer checks for another
-writer and unrecognized data, then makes the directory owned by `lorebay` with
-mode `0700`; `lorebayd` creates its database `0600`. Stop other writers before
-installing. The users file passes through systemd `LoadCredential=`; supplied
-files retain their contents, owner and permissions. Only nginx's root master
-reads the copied key under `/etc/nginx/lorebay-tls` (directory `0700`, key
-`0600`). nginx is installed if absent, without upgrading an existing package.
-Its configuration must include `/etc/nginx/conf.d/*.conf`; address-specific
-443 listeners require manual configuration. Other sites keep their files.
+Use an empty data directory on a local writable filesystem outside `/tmp` and
+`/var/tmp`, or a missing path whose parent the service user can traverse. The
+installer checks for another writer and unrecognized data, then makes the
+directory owned by `lorebay` with mode `0700`; `lorebayd` creates its
+database `0600`. Stop other writers before installing. The users file passes
+through systemd `LoadCredential=`; supplied files retain their contents,
+owner and permissions. Only nginx's root master reads the copied key under
+`/etc/nginx/lorebay-tls` (directory `0700`, key `0600`). nginx is installed
+if absent, without upgrading an existing package. Its configuration must
+include `/etc/nginx/conf.d/*.conf`; address-specific 443 listeners require
+manual configuration. Other sites keep their files.
 
 Replace the certificate, or uninstall while keeping data and supplied inputs:
 
