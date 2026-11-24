@@ -7,7 +7,7 @@ use lorebay_lib_core::{
     PersonRequestContent, PersonRequestFilters, PersonRequestListItem, PersonRequestRejection,
     PersonRequestSource, PersonRequestStatus, SubmittedPersonRequest, TaskTarget,
     approve_person_request, list_person_requests, read_person_request, reject_person_request,
-    submit_person_request,
+    revise_person_request, submit_person_request,
 };
 use lorebay_lib_types::Secret;
 use serde::Deserialize;
@@ -74,6 +74,54 @@ pub(crate) struct ListQuery {
 #[serde(deny_unknown_fields)]
 pub(crate) struct RejectRequest {
     reason: String,
+    revision: i64,
+}
+
+#[derive(Clone, Debug, Deserialize, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+#[serde(deny_unknown_fields)]
+pub(crate) struct DecisionRequest {
+    revision: i64,
+}
+
+#[derive(Clone, Debug, Deserialize, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ReviseRequest {
+    #[serde(default, deserialize_with = "present_string")]
+    name: Option<String>,
+    #[serde(default, deserialize_with = "present_string")]
+    summary: Option<String>,
+    #[serde(default, deserialize_with = "present_string")]
+    content: Option<String>,
+}
+
+pub(crate) async fn revise(
+    State(state): State<ServerState>,
+    caller: VerifiedCaller,
+    path: Result<Path<PersonRequestPath>, PathRejection>,
+    request: Result<Json<ReviseRequest>, JsonRejection>,
+) -> Result<Envelope<PersonRequest>, ApiError> {
+    let Path(path) = path.map_err(|_| invalid_query("path"))?;
+    let Json(request) = request.map_err(invalid_json)?;
+    let changes =
+        if request.name.is_none() && request.summary.is_none() && request.content.is_none() {
+            None
+        } else {
+            Some(KnowledgeChanges::new(
+                request.name,
+                request.summary,
+                request.content,
+            )?)
+        };
+    let caller = caller.library_caller();
+    let result = state
+        .library
+        .run_write(async |write| {
+            revise_person_request(write, &caller, &path.space, &path.key, changes).await
+        })
+        .await?;
+    Ok(Envelope::builder().data(result).build())
 }
 
 impl TryFrom<SubmitRequest> for PersonRequestContent {
@@ -201,13 +249,15 @@ pub(crate) async fn approve(
     State(state): State<ServerState>,
     caller: VerifiedCaller,
     path: Result<Path<PersonRequestPath>, PathRejection>,
+    request: Result<Json<DecisionRequest>, JsonRejection>,
 ) -> Result<Envelope<PersonRequest>, ApiError> {
     let Path(path) = path.map_err(|_| invalid_query("path"))?;
+    let Json(request) = request.map_err(invalid_json)?;
     let caller = caller.library_caller();
     let result = state
         .library
         .run_write(async |write| {
-            approve_person_request(write, &caller, &path.space, &path.key).await
+            approve_person_request(write, &caller, &path.space, &path.key, request.revision).await
         })
         .await?;
     Ok(Envelope::builder().data(result).build())
@@ -221,7 +271,7 @@ pub(crate) async fn reject(
 ) -> Result<Envelope<PersonRequest>, ApiError> {
     let Path(path) = path.map_err(|_| invalid_query("path"))?;
     let Json(request) = request.map_err(invalid_json)?;
-    let rejection = PersonRequestRejection::new(request.reason)?;
+    let rejection = PersonRequestRejection::new(request.reason, request.revision)?;
     let caller = caller.library_caller();
     let result = state
         .library

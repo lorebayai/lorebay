@@ -76,6 +76,7 @@ except where the table says otherwise.
 | Knowledge | Create, change, delete or roll back directly | Owner, admin | No |
 | Request | List, read one | Yes | Yes |
 | Request | Submit | Yes, except viewers | Yes, except viewers |
+| Request | Revise a `pending` request | Own party, except viewers | Own party, except viewers |
 | Request | Approve, reject | Yes, except viewers; see [Knowledge](knowledge.md#4-requests) | No |
 
 - **"Own party's"** means the tasks whose person is the agent's sponsor. A

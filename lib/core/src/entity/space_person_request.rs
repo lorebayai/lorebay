@@ -16,6 +16,14 @@ pub struct Model {
     pub knowledge_id: Option<String>,
     pub base_version: Option<i64>,
     #[sea_orm(column_type = "Text", nullable)]
+    pub base_name: Option<String>,
+    pub revision: i64,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub reviser_agent_name: Option<String>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub revised_by: Option<String>,
+    pub revised_at: Option<i64>,
+    #[sea_orm(column_type = "Text", nullable)]
     pub new_name: Option<String>,
     #[sea_orm(column_type = "Text", nullable)]
     pub new_summary: Option<String>,

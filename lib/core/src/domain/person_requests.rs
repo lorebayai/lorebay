@@ -1,16 +1,16 @@
+use std::slice::from_ref;
+
 use sea_orm::{ActiveModelTrait, DatabaseTransaction, IntoActiveModel};
 use serde::Serialize;
 use typed_builder::TypedBuilder;
 
 use crate::entity::{space, space_person_request as person_request};
-use crate::repository::{
-    KnowledgeRepository, PersonRequestRepository, PersonRequestRow, SpaceRepository,
-};
+use crate::repository::{KnowledgeRepository, PersonRequestRepository, SpaceRepository};
 use crate::{Caller, LibraryState, OperationHandle, Write, WriteOperation};
 
 use super::id::primary_key;
 use super::key::parse_key;
-use super::person_request_list::{PersonRequestListItem, named_item};
+use super::person_request_list::{PersonRequestListItem, named_items};
 use super::space_access::{READ_ROLES, WRITE_ROLES, check_space};
 use super::task_access::{TaskAction, check_task};
 use super::time::now_millis;
@@ -27,8 +27,7 @@ pub struct PersonRequest {
     pub decided_by: Option<String>,
     pub decided_at: Option<i64>,
     pub reject_reason: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub changed_since_requested: Option<bool>,
+    pub base_name: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, TypedBuilder)]
@@ -100,7 +99,6 @@ pub(super) async fn person_request_result(
         .read(space, number)
         .await?
         .ok_or(PersonRequestError::NotFound)?;
-    let changed = changed_since_requested(handle.transaction(), &row).await?;
     let names = state
         .names()
         .names(
@@ -108,13 +106,17 @@ pub(super) async fn person_request_result(
             &[
                 Some(row.model.requested_by.clone()),
                 row.model.decided_by.clone(),
+                row.model.revised_by.clone(),
             ]
             .into_iter()
             .flatten()
             .collect::<Vec<_>>(),
         )
         .await?;
-    let details = named_item(&row, &names)?;
+    let details = named_items(from_ref(&row), &names, handle.transaction())
+        .await?
+        .pop()
+        .ok_or_else(|| anyhow::anyhow!("Request is missing"))?;
     let decided_by = row
         .model
         .decided_by
@@ -136,7 +138,7 @@ pub(super) async fn person_request_result(
         decided_by,
         decided_at: row.model.decided_at,
         reject_reason: row.model.reject_reason,
-        changed_since_requested: changed,
+        base_name: row.model.base_name,
     })
 }
 
@@ -206,7 +208,12 @@ async fn proposed_model(
         number: 0,
         action: action.to_owned(),
         knowledge_id: entry.as_ref().map(|entry| entry.id.clone()),
-        base_version: entry.map(|entry| entry.latest_version),
+        base_version: entry.as_ref().map(|entry| entry.latest_version),
+        base_name: entry.map(|entry| entry.name),
+        revision: 1,
+        reviser_agent_name: None,
+        revised_by: None,
+        revised_at: None,
         new_name: name,
         new_summary: summary,
         new_content: content,
@@ -218,35 +225,6 @@ async fn proposed_model(
         decided_at: None,
         reject_reason: None,
         created_at: now_millis()?,
-    })
-}
-
-async fn changed_since_requested(
-    transaction: &DatabaseTransaction,
-    row: &PersonRequestRow,
-) -> Result<Option<bool>, PersonRequestError> {
-    Ok(if row.model.status != "pending" {
-        None
-    } else if row.model.action == "create" {
-        let name = row
-            .model
-            .new_name
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Create request has no name"))?;
-        Some(
-            KnowledgeRepository::builder()
-                .connection(transaction)
-                .build()
-                .by_name(&row.model.space_id, &name.to_lowercase())
-                .await?
-                .is_some(),
-        )
-    } else {
-        Some(
-            row.latest_version
-                .zip(row.model.base_version)
-                .is_some_and(|(latest, base)| latest > base),
-        )
     })
 }
 

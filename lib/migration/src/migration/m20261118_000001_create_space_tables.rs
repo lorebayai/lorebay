@@ -268,6 +268,11 @@ fn person_request() -> TableCreateStatement {
         .col(text(SpacePersonRequest::Action))
         .col(text_null(SpacePersonRequest::KnowledgeId))
         .col(big_integer_null(SpacePersonRequest::BaseVersion))
+        .col(text_null(SpacePersonRequest::BaseName))
+        .col(big_integer(SpacePersonRequest::Revision).default(1))
+        .col(text_null(SpacePersonRequest::ReviserAgentName))
+        .col(text_null(SpacePersonRequest::RevisedBy))
+        .col(big_integer_null(SpacePersonRequest::RevisedAt))
         .col(text_null(SpacePersonRequest::NewName))
         .col(text_null(SpacePersonRequest::NewSummary))
         .col(text_null(SpacePersonRequest::NewContent))
@@ -296,6 +301,7 @@ fn person_request_checks(table: &mut TableCreateStatement) {
         .check(Expr::col(SpacePersonRequest::Action).is_in(["create", "change", "delete"]))
         .check(Expr::col(SpacePersonRequest::Status).is_in(["pending", "approved", "rejected"]))
         .check(person_request_action())
+        .check(Expr::col(SpacePersonRequest::Revision).gte(1))
         .check(
             Cond::any()
                 .add(
@@ -344,6 +350,7 @@ fn person_request_action() -> Condition {
             Cond::all()
                 .add(Expr::col(SpacePersonRequest::Action).eq("create"))
                 .add(Expr::col(SpacePersonRequest::BaseVersion).is_null())
+                .add(Expr::col(SpacePersonRequest::BaseName).is_null())
                 .add(Expr::col(SpacePersonRequest::NewName).is_not_null())
                 .add(Expr::col(SpacePersonRequest::NewSummary).is_not_null())
                 .add(Expr::col(SpacePersonRequest::NewContent).is_not_null()),
@@ -353,6 +360,7 @@ fn person_request_action() -> Condition {
                 .add(Expr::col(SpacePersonRequest::Action).eq("change"))
                 .add(Expr::col(SpacePersonRequest::KnowledgeId).is_not_null())
                 .add(Expr::col(SpacePersonRequest::BaseVersion).is_not_null())
+                .add(Expr::col(SpacePersonRequest::BaseName).is_not_null())
                 .add(
                     Cond::any()
                         .add(Expr::col(SpacePersonRequest::NewName).is_not_null())
@@ -365,6 +373,7 @@ fn person_request_action() -> Condition {
                 .add(Expr::col(SpacePersonRequest::Action).eq("delete"))
                 .add(Expr::col(SpacePersonRequest::KnowledgeId).is_not_null())
                 .add(Expr::col(SpacePersonRequest::BaseVersion).is_not_null())
+                .add(Expr::col(SpacePersonRequest::BaseName).is_not_null())
                 .add(Expr::col(SpacePersonRequest::NewName).is_null())
                 .add(Expr::col(SpacePersonRequest::NewSummary).is_null())
                 .add(Expr::col(SpacePersonRequest::NewContent).is_null()),
@@ -534,6 +543,7 @@ enum SpaceCheckpoint {
 #[derive(DeriveIden)]
 enum SpacePersonRequest {
     Action,
+    BaseName,
     BaseVersion,
     CreatedAt,
     DecidedAt,
@@ -548,6 +558,10 @@ enum SpacePersonRequest {
     RejectReason,
     RequestedBy,
     RequesterAgentName,
+    RevisedAt,
+    RevisedBy,
+    ReviserAgentName,
+    Revision,
     SpaceId,
     Status,
     Table,

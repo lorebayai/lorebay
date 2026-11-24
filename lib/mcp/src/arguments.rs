@@ -181,7 +181,7 @@ impl Arguments {
             .transpose()
     }
 
-    fn optional_string(&self, name: &str) -> Option<String> {
+    pub(crate) fn optional_string(&self, name: &str) -> Option<String> {
         self.values
             .get(name)
             .and_then(Value::as_str)

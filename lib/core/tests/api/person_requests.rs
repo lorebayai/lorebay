@@ -5,9 +5,9 @@ use lorebay_lib_core::{
     Caller, KnowledgeChanges, KnowledgeEntry, KnowledgeError, KnowledgeInputError, KnowledgeTarget,
     LibraryState, NewKnowledgeEntry, PageOptions, PersonRequest, PersonRequestContent,
     PersonRequestError, PersonRequestFilters, PersonRequestSource, SubmittedPersonRequest,
-    TaskTarget, WriteOperation, approve_person_request, change_knowledge_entry,
-    create_knowledge_entry, list_person_requests, read_knowledge_entry, read_person_request,
-    submit_person_request,
+    TaskTarget, VersionedKnowledgeTarget, WriteOperation, approve_person_request,
+    change_knowledge_entry, create_knowledge_entry, list_person_requests, read_knowledge_entry,
+    read_person_request, submit_person_request,
 };
 use tokio::sync::{Barrier, mpsc};
 
@@ -213,7 +213,7 @@ async fn approve(
     caller: &Caller,
 ) -> Result<PersonRequest, PersonRequestError> {
     state
-        .run_write(async |write| approve_person_request(write, caller, SPACE, "RQ-1").await)
+        .run_write(async |write| approve_person_request(write, caller, SPACE, "RQ-1", 1).await)
         .await
 }
 
@@ -250,7 +250,14 @@ async fn change(state: &LibraryState, caller: &Caller) -> Result<KnowledgeEntry,
     )?;
     state
         .run_write(async |write| {
-            change_knowledge_entry(write, caller, SPACE, target()?, changes).await
+            change_knowledge_entry(
+                write,
+                caller,
+                SPACE,
+                VersionedKnowledgeTarget::new(target()?, 1)?,
+                changes,
+            )
+            .await
         })
         .await
 }

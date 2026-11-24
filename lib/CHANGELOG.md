@@ -7,12 +7,26 @@ crates `lorebay-lib-types`, `lorebay-lib-core`, `lorebay-lib-migration` and
 
 ## Unreleased
 
+- **Breaking:** Requests support `revise_person_request` and MCP
+  `revise_request`, keeping the key and only the latest revision. Reads and
+  lists expose `revision`, `outdated`, submitting and last revising agents,
+  and revision attribution; `outdated` replaces `changed_since_requested`.
+  Approval takes the revision read; `PersonRequestRejection` also requires
+  it. Stale decisions return `PersonRequestError::RevisionChanged`; outdated
+  approval returns `PersonRequestError::Outdated`. Direct changes, deletion
+  and rollback take a `VersionedKnowledgeTarget` and refuse stale versions
+  with `KnowledgeError::VersionChanged`. The created migration adds request
+  snapshots and revision attribution in place; databases must be recreated.
+
 - **Breaking:** Each task result write adds a numbered version with its
   agent, person and time. Result updates name the `result_version` they replace
   and return the written version; a mismatch is `task.result_changed`. Task
   reads include `result_version` and optionally paged result history. The
   created migration adds `space_task.result_version` and `space_task_result`
-  in place; databases must be recreated.
+  in place; databases must be recreated. `read_task` takes a `TaskInclude` for
+  the Scratchpad or result history; `read_task_results` reads the history
+  alone; `TaskChanges` gains `result_version` and `TaskError` gains
+  `ResultChanged`.
 
 - **Breaking:** Checkpoints and files expose the writing or registering
   agent's copied `agent_name`. Tasks expose `state_changed_by`,

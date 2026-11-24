@@ -10,6 +10,7 @@ pub use pagination::{DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, Page, PageOptions, PageSi
 pub use person_request_apply::*;
 pub use person_request_input::*;
 pub use person_request_list::*;
+pub use person_request_revise::*;
 pub use person_requests::*;
 pub use space_access::{
     SpaceAccessError, SpaceReference, SpaceRole, SpaceRoleError, resolve_space,
@@ -57,6 +58,7 @@ mod pagination;
 mod person_request_apply;
 mod person_request_input;
 mod person_request_list;
+mod person_request_revise;
 mod person_requests;
 mod space_access;
 mod spaces;

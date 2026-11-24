@@ -85,15 +85,19 @@ impl PersonRequestFilters {
 #[derive(Clone, Debug)]
 pub struct PersonRequestRejection {
     pub(super) reason: String,
+    pub(super) revision: i64,
 }
 
 impl PersonRequestRejection {
-    pub fn new(reason: String) -> Result<Self, PersonRequestError> {
+    pub fn new(reason: String, revision: i64) -> Result<Self, PersonRequestError> {
         if reason.trim().is_empty() || reason.chars().count() > PERSON_REQUEST_REASON_MAX_CHARACTERS
         {
             return Err(PersonRequestError::InvalidReason);
         }
-        Ok(Self { reason })
+        if revision < 1 {
+            return Err(PersonRequestError::InvalidRevision);
+        }
+        Ok(Self { reason, revision })
     }
 }
 
@@ -120,14 +124,20 @@ pub enum PersonRequestError {
     InvalidPageSize(#[from] PageSizeError),
     #[error("Provide a reason of 1 to 2000 characters.")]
     InvalidReason,
+    #[error("Provide a positive revision.")]
+    InvalidRevision,
     #[error(transparent)]
     Knowledge(KnowledgeError),
     #[error("Knowledge name is already in use")]
     NameTaken,
     #[error("Request not found")]
     NotFound,
+    #[error("Request is outdated; revise it before approval")]
+    Outdated,
     #[error("A contributor cannot approve their own party's request")]
     OwnParty,
+    #[error("Request revision changed; read it before deciding again")]
+    RevisionChanged,
     #[error(transparent)]
     Task(#[from] TaskAccessError),
 }
@@ -139,13 +149,15 @@ impl PersonRequestError {
             Self::Caller(error) => error.code(),
             Self::Database(_) | Self::Internal(_) => "server.internal",
             Self::Decided => "person_request.decided",
-            Self::Input(_) | Self::InvalidReason => "request.invalid_body",
+            Self::Input(_) | Self::InvalidReason | Self::InvalidRevision => "request.invalid_body",
             Self::InvalidCursor | Self::InvalidFilter | Self::InvalidPageSize(_) => {
                 "request.invalid_query"
             }
             Self::Knowledge(error) => error.code(),
             Self::NameTaken => "knowledge.name_taken",
             Self::NotFound => "person_request.not_found",
+            Self::Outdated => "person_request.outdated",
+            Self::RevisionChanged => "person_request.revision_changed",
             Self::OwnParty => "person_request.own_party",
             Self::Task(error) => error.code(),
         }

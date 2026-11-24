@@ -215,11 +215,11 @@ async fn call_get_person_request_returns_rejection_reason() {
     .await;
     let arguments = json!({"space":SPACE, "key":"RQ-1"});
     let pending = call(&server, &agent, "get_request", arguments.clone()).await;
-    assert_eq!(pending["changed_since_requested"], false);
+    assert_eq!(pending["outdated"], false);
     person_requests::change_entry(&server, &person, "KN-1", json!({"content":"Direct change"}))
         .await;
     let changed = call(&server, &agent, "get_request", arguments.clone()).await;
-    assert_eq!(changed["changed_since_requested"], true);
+    assert_eq!(changed["outdated"], true);
     person_requests::reject(&server, &person, "RQ-1").await;
     let rejected = call(&server, &agent, "get_request", arguments).await;
     assert_eq!(
@@ -230,7 +230,7 @@ async fn call_get_person_request_returns_rejection_reason() {
     assert_eq!(rejected["status"], "rejected");
     assert_eq!(rejected["reject_reason"], "Superseded");
     assert_eq!(rejected["decided_by"], "alice");
-    assert!(rejected.get("changed_since_requested").is_none());
+    assert!(rejected.get("outdated").is_none());
     assert_eq!(
         call_error(
             &server,

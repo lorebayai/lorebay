@@ -55,6 +55,10 @@ decisions an agent needs from a person in the middle of its work.
   request whose content is the old version.
 - **Creating, changing and deleting an entry go through a request**, except
   for owners and admins; see [section 4](#4-requests).
+- **Direct changes name the version they replace.** A change, deletion or
+  rollback supplies the entry's current version. A mismatch is refused with
+  `knowledge.version_changed`, applying nothing. A successful write returns
+  the entry's version. Renaming still adds no version.
 - **Deleting.** A deletion is recorded as a version, with who deleted the
   entry and when. The content stays in earlier versions, and rolling back
   restores it. Deleted entries are listed separately for people, who can roll
@@ -95,33 +99,42 @@ flowchart TD
 - **Three actions.** A create carries a name, a summary and content. A change
   carries only the fields it changes, at least one of content, summary and
   name; the rest keep their current values. A delete carries no content.
-- **A submitted request cannot be edited.** To revise it, a person of the
-  proposing party rejects it, which withdraws it, and submits a new one.
+- **A pending request can be revised.** The requesting party's person or any
+  of its agents replaces the supplied content, summary or name. Omitted
+  fields keep their proposed values. The revision number starts at 1 and
+  rises on every revision; the key stays and no earlier revision is kept.
+  Each submission and revision records the target's current version and name.
+  An empty revision refreshes that snapshot; a delete takes no replacement
+  fields. The action and target entry stay the same.
+- **Attribution records both agents.** Reads and lists show the submitting
+  agent's copied name and the last revising agent's copied name, empty when
+  the corresponding writer was a person. The requesting person, last revising
+  person and revision time are also shown; before any revision the latter
+  fields are empty.
 - **Who must propose.** Everyone except owners and admins, people and agents
   alike, creates, changes and deletes entries through requests. Changes by
   owners and admins take effect directly.
 - **Who decides.** Owners, admins and contributors may approve and reject.
   Only people decide; agents can neither approve nor reject. Approval records
-  who approved and when.
+  who approved and when. Approval and rejection name the revision the person
+  read; a mismatch is refused with `person_request.revision_changed`, applying
+  nothing.
 - **Approving one's own.** For approval, a person and the agents they sponsor
   are one party. Owners and admins may approve their own party's requests. A
   contributor may not, whether the contributor or one of their agents
   proposed it; another person must approve it. Rejecting is not limited: a
   person may reject their own party's request, which withdraws it, and must
   give a reason.
-- **Changed since requested.** If someone changes the entry's content or
-  summary after the request was made, the request can still be approved.
-  The request is marked "changed since requested", so a product shows the
-  difference from the current content, and the approver decides. On approval the request's
-  content wins; the change in between stays in the history and can be rolled
-  back to. A rename in between is not marked, because renaming creates no
-  version; if the request also renames the entry, its name replaces the
-  newer one.
-- **The same applies** when a create request's name already belongs to an
-  entry, which approval then gives a new version, and when the target entry
-  was deleted, which approval restores with the request's content as its new
-  version. A content or summary that a change request leaves out then comes
-  from the last version before the deletion.
+- **Outdated requests cannot be approved.** A pending request is outdated
+  when the target's current version or name differs from its recorded
+  snapshot, or a create's name belongs to any entry, deleted entries included.
+  Reads and lists show `outdated` while pending. Approval refuses it with
+  `person_request.outdated`, applying nothing. After reading and reconciling
+  the current entry, revise the request to refresh its snapshot; a create
+  needs an available name. Outdated is a mark, not a status.
+- **A change targeting a deleted entry restores it** when approved against
+  that deletion's version and name. Content or summary it omits comes from the
+  last content version. A create never replaces an existing entry.
 - **Rejecting.** The person who rejects writes a reason. Rejected requests
   are kept, with the content, the requester, who rejected them and the reason,
   visible to everyone.

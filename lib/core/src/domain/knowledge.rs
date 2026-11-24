@@ -14,6 +14,7 @@ use super::space_access::{READ_ROLES, SpaceRole, check_space};
 use super::time::now_millis;
 use super::{
     KnowledgeChanges, KnowledgeError, KnowledgeInputError, KnowledgeTarget, NewKnowledgeEntry,
+    VersionedKnowledgeTarget,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
@@ -75,12 +76,13 @@ pub async fn change_knowledge_entry(
     write: &mut Write<'_>,
     caller: &Caller,
     space: &str,
-    target: KnowledgeTarget,
+    target: VersionedKnowledgeTarget,
     changes: KnowledgeChanges,
 ) -> Result<KnowledgeEntry, KnowledgeError> {
     write.begin_operation(Some(caller))?;
     let space_id = direct_space(write, caller, space).await?;
-    let entry = locked_entry(write.transaction(), &space_id, &target).await?;
+    let entry = locked_entry(write.transaction(), &space_id, &target.target).await?;
+    check_version(&entry, target.version)?;
     if let Some(name) = &changes.name {
         ensure_name_available(write.transaction(), &space_id, name, Some(&entry.id)).await?;
     }
@@ -95,11 +97,12 @@ pub async fn delete_knowledge_entry(
     write: &mut Write<'_>,
     caller: &Caller,
     space: &str,
-    target: KnowledgeTarget,
+    target: VersionedKnowledgeTarget,
 ) -> Result<KnowledgeEntry, KnowledgeError> {
     write.begin_operation(Some(caller))?;
     let space_id = direct_space(write, caller, space).await?;
-    let entry = locked_entry(write.transaction(), &space_id, &target).await?;
+    let entry = locked_entry(write.transaction(), &space_id, &target.target).await?;
+    check_version(&entry, target.version)?;
     let now = now_millis()?;
     let mut model = entry.into_active_model();
     model.latest_version = Set(next_version(*model.latest_version.as_ref())?);
@@ -144,7 +147,7 @@ pub async fn roll_back_knowledge_entry(
     write: &mut Write<'_>,
     caller: &Caller,
     space: &str,
-    target: KnowledgeTarget,
+    target: VersionedKnowledgeTarget,
     version: i64,
 ) -> Result<KnowledgeEntry, KnowledgeError> {
     write.begin_operation(Some(caller))?;
@@ -152,9 +155,10 @@ pub async fn roll_back_knowledge_entry(
     let entry = KnowledgeRepository::builder()
         .connection(write.transaction())
         .build()
-        .target(&space_id, &target, true)
+        .target(&space_id, &target.target, true)
         .await?
         .ok_or(KnowledgeError::NotFound)?;
+    check_version(&entry, target.version)?;
     let source = KnowledgeVersionRepository::builder()
         .connection(write.transaction())
         .build()
@@ -338,6 +342,13 @@ pub(super) async fn append_version(
             created_at: Set(entry.updated_at),
         })
         .await?)
+}
+
+fn check_version(entry: &entry::Model, version: i64) -> Result<(), KnowledgeError> {
+    if entry.latest_version != version {
+        return Err(KnowledgeError::VersionChanged);
+    }
+    Ok(())
 }
 
 pub(super) fn next_version(version: i64) -> Result<i64, KnowledgeError> {

@@ -334,6 +334,7 @@ pub enum WriteOperation {
     RejectPersonRequest,
     ReleaseTask,
     RemoveAbandonedAgentFiles,
+    RevisePersonRequest,
     RollBackKnowledgeEntry,
     SubmitPersonRequest,
 }

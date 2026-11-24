@@ -65,6 +65,14 @@ impl<C: ConnectionTrait> KnowledgeRepository<'_, C> {
             .await
     }
 
+    pub async fn by_names(&self, space: &str, names: Vec<String>) -> Result<Vec<Model>, DbErr> {
+        Entity::find()
+            .filter(Column::SpaceId.eq(space))
+            .filter(Column::NameKey.is_in(names))
+            .all(self.connection)
+            .await
+    }
+
     pub async fn target(
         &self,
         space: &str,

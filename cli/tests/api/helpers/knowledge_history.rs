@@ -7,6 +7,12 @@ use super::{
 
 pub async fn knowledge_json(server: &Server, arguments: &[&str]) -> Value {
     let mut arguments = [vec!["knowledge"], arguments.to_vec()].concat();
+    let version;
+    if matches!(arguments[1], "change" | "delete" | "rollback") && !arguments.contains(&"--version")
+    {
+        version = show_entry(server, arguments[2], arguments[3]).await["version"].to_string();
+        arguments.extend(["--version", &version]);
+    }
     arguments.extend(["--output", "json"]);
     let output = server.run(&arguments).await;
     assert_success(&output);
@@ -127,6 +133,8 @@ pub async fn assert_rollback_refusals(server: &Server, space: &str, deleted: &Va
                     version,
                     "--output",
                     mode,
+                    "--version",
+                    "3",
                 ])
                 .await;
             assert_knowledge_error(&output, mode, "request.invalid_body");
@@ -181,6 +189,8 @@ pub async fn assert_version_usage(server: &mut Server, space: &str) {
                 version,
                 "--output",
                 "json",
+                "--version",
+                "1",
             ],
             vec![
                 "knowledge",

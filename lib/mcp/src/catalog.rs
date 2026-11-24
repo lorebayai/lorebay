@@ -29,6 +29,7 @@ pub(crate) enum ToolName {
     ListTasks,
     ReadKnowledge,
     ReleaseTask,
+    RevisePersonRequest,
     UpdateTask,
 }
 
@@ -50,6 +51,7 @@ impl ToolName {
             Self::ListTasks => "list_tasks",
             Self::ReadKnowledge => "read_knowledge",
             Self::ReleaseTask => "release_task",
+            Self::RevisePersonRequest => "revise_request",
             Self::UpdateTask => "update_task",
         }
     }
@@ -111,6 +113,7 @@ fn build_catalog() -> Vec<(ToolName, Tool)> {
         knowledge::create_person_request(),
         knowledge::list_person_requests(),
         knowledge::get_person_request(),
+        knowledge::revise_person_request(),
     ]
 }
 

@@ -11,6 +11,7 @@ use crate::tasks::helpers::{create as create_task, space_member};
 use helpers::*;
 
 pub(crate) mod helpers;
+mod revisions;
 
 #[tokio::test]
 async fn submit_person_request_returns_pending_person_request_with_key() {
@@ -24,7 +25,7 @@ async fn submit_person_request_returns_pending_person_request_with_key() {
     assert_eq!(person_request["new_summary"], "Summary");
     assert_eq!(person_request["new_content"], "Content");
     assert_eq!(person_request["from_task_key"], Value::Null);
-    assert_eq!(person_request["changed_since_requested"], false);
+    assert_eq!(person_request["outdated"], false);
     assert_eq!(read(&server, &owner, "RQ-1").await, person_request);
     assert_eq!(
         submit(&server, &owner, creation("Next")).await["key"],
@@ -394,7 +395,7 @@ async fn submit_person_request_accepts_content_at_size_limit() {
 }
 
 #[tokio::test]
-async fn read_person_request_marks_changed_since_requested_when_entry_has_newer_version() {
+async fn read_person_request_marks_outdated_when_entry_has_newer_version() {
     let (server, owner) = setup().await;
     seed(&server, &owner, "Guide").await;
     submit(
@@ -409,80 +410,63 @@ async fn read_person_request_marks_changed_since_requested_when_entry_has_newer_
             &owner,
             Method::PATCH,
             &format!("{KNOWLEDGE}/by-key/KN-1"),
-            json!({"name":"Renamed"}),
+            json!({"version":1,"name":"Renamed"}),
         )
         .await,
         StatusCode::OK,
     )
     .await;
-    assert_eq!(
-        read(&server, &owner, "RQ-1").await["changed_since_requested"],
-        false
-    );
+    assert_eq!(read(&server, &owner, "RQ-1").await["outdated"], true);
     data(
         request(
             &server,
             &owner,
             Method::PATCH,
             &format!("{KNOWLEDGE}/by-key/KN-1"),
-            json!({"summary":"Changed"}),
+            json!({"version":1,"summary":"Changed"}),
         )
         .await,
         StatusCode::OK,
     )
     .await;
-    assert_eq!(
-        read(&server, &owner, "RQ-1").await["changed_since_requested"],
-        true
-    );
+    assert_eq!(read(&server, &owner, "RQ-1").await["outdated"], true);
     reject(&server, &owner, "RQ-1").await;
     assert!(
         read(&server, &owner, "RQ-1")
             .await
-            .get("changed_since_requested")
+            .get("outdated")
             .is_none()
     );
 }
 
 #[tokio::test]
-async fn read_person_request_marks_changed_since_requested_when_create_name_exists() {
+async fn read_person_request_marks_outdated_when_create_name_exists() {
     let (server, owner) = setup().await;
     submit(&server, &owner, creation("Guide")).await;
-    assert_eq!(
-        read(&server, &owner, "RQ-1").await["changed_since_requested"],
-        false
-    );
+    assert_eq!(read(&server, &owner, "RQ-1").await["outdated"], false);
     seed(&server, &owner, "GUIDE").await;
-    assert_eq!(
-        read(&server, &owner, "RQ-1").await["changed_since_requested"],
-        true
-    );
+    assert_eq!(read(&server, &owner, "RQ-1").await["outdated"], true);
     data(
         request(
             &server,
             &owner,
             Method::DELETE,
-            &format!("{KNOWLEDGE}/by-key/KN-1"),
+            &format!("{KNOWLEDGE}/by-key/KN-1?version=1"),
             Value::Null,
         )
         .await,
         StatusCode::OK,
     )
     .await;
-    assert_eq!(
-        read(&server, &owner, "RQ-1").await["changed_since_requested"],
-        true
-    );
-    approve(&server, &owner, "RQ-1").await;
+    assert_eq!(read(&server, &owner, "RQ-1").await["outdated"], true);
+    reject(&server, &owner, "RQ-1").await;
     assert!(
         read(&server, &owner, "RQ-1")
             .await
-            .get("changed_since_requested")
+            .get("outdated")
             .is_none()
     );
-    let restored = entry(&server, &owner, "KN-1").await;
-    assert_eq!(restored["name"], "GUIDE");
-    assert_eq!(restored["content"], "Content");
+    assert_eq!(entry(&server, &owner, "KN-1").await["kind"], "deletion");
 }
 
 #[tokio::test]
@@ -541,7 +525,7 @@ async fn approve_person_request_fails_when_contributor_approves_own_partys_perso
                 &bob,
                 Method::POST,
                 &format!("{}/approve", by_key(key)),
-                Value::Null,
+                json!({"revision":1}),
             )
             .await,
             StatusCode::FORBIDDEN,
@@ -606,8 +590,8 @@ async fn approve_person_request_fails_when_caller_is_agent() {
     submit(&server, &owner, creation("Guide")).await;
     let agent = authorize_for(&server, &owner, "Writer").await;
     for (action, body) in [
-        ("approve", Value::Null),
-        ("reject", json!({"reason":"Denied"})),
+        ("approve", json!({"revision":1})),
+        ("reject", json!({"revision":1,"reason":"Denied"})),
     ] {
         assert_problem(
             request(
@@ -633,8 +617,8 @@ async fn approve_person_request_fails_when_person_is_viewer() {
     space_member(&server, &owner, Method::POST, "viewer").await;
     let bob = login(&server, "bob").await;
     for (action, body) in [
-        ("approve", Value::Null),
-        ("reject", json!({"reason":"Denied"})),
+        ("approve", json!({"revision":1})),
+        ("reject", json!({"revision":1,"reason":"Denied"})),
     ] {
         assert_problem(
             request(
@@ -671,7 +655,7 @@ async fn approve_person_request_fails_when_rename_target_belongs_to_another_entr
                     &server,
                     &owner,
                     Method::DELETE,
-                    &format!("{KNOWLEDGE}/by-key/KN-2"),
+                    &format!("{KNOWLEDGE}/by-key/KN-2?version=1"),
                     Value::Null,
                 )
                 .await,
@@ -685,7 +669,7 @@ async fn approve_person_request_fails_when_rename_target_belongs_to_another_entr
                 &owner,
                 Method::POST,
                 &format!("{}/approve", by_key("RQ-1")),
-                Value::Null,
+                json!({"revision":1}),
             )
             .await,
             StatusCode::CONFLICT,
@@ -707,8 +691,8 @@ async fn approve_person_request_fails_when_person_request_is_already_decided() {
     reject(&server, &owner, "RQ-2").await;
     for key in ["RQ-1", "RQ-2", "RQ-99", "invalid"] {
         for (action, body) in [
-            ("approve", Value::Null),
-            ("reject", json!({"reason":"Again"})),
+            ("approve", json!({"revision":1})),
+            ("reject", json!({"revision":1,"reason":"Again"})),
         ] {
             let (status, code) = if key == "RQ-1" || key == "RQ-2" {
                 (StatusCode::CONFLICT, "person_request.decided")
@@ -764,9 +748,9 @@ async fn reject_person_request_fails_when_reason_is_missing() {
     submit(&server, &owner, creation("Guide")).await;
     for body in [
         json!({}),
-        json!({"reason":""}),
-        json!({"reason":" "}),
-        json!({"reason":"a".repeat(2001)}),
+        json!({"revision":1,"reason":""}),
+        json!({"revision":1,"reason":" "}),
+        json!({"revision":1,"reason":"a".repeat(2001)}),
     ] {
         assert_problem(
             request(
@@ -790,7 +774,7 @@ async fn reject_person_request_fails_when_reason_is_missing() {
             &owner,
             Method::POST,
             &format!("{}/reject", by_key("RQ-1")),
-            json!({"reason":reason}),
+            json!({"revision":1,"reason":reason}),
         )
         .await,
         StatusCode::OK,
@@ -850,8 +834,7 @@ async fn approve_person_request_adds_version_with_approver_and_person_request() 
 }
 
 #[tokio::test]
-async fn approve_person_request_applies_person_request_content_when_entry_changed_since_requested()
-{
+async fn approve_person_request_applies_reconciled_content_after_revision() {
     let (server, owner) = setup().await;
     seed(&server, &owner, "Guide").await;
     submit(
@@ -870,11 +853,22 @@ async fn approve_person_request_applies_person_request_content_when_entry_change
     let before = versions(&server, &owner, "KN-1").await;
     assert_eq!(before.as_array().unwrap().len(), 2);
     assert_version(&before[0], 2, "content", "alice", None);
-    assert_eq!(
-        read(&server, &owner, "RQ-1").await["changed_since_requested"],
-        true
-    );
-    approve(&server, &owner, "RQ-1").await;
+    assert_eq!(read(&server, &owner, "RQ-1").await["outdated"], true);
+    assert_problem(
+        request(
+            &server,
+            &owner,
+            Method::POST,
+            &format!("{}/approve", by_key("RQ-1")),
+            json!({"revision":1}),
+        )
+        .await,
+        StatusCode::CONFLICT,
+        "person_request.outdated",
+    )
+    .await;
+    revise(&server, &owner, "RQ-1", json!({})).await;
+    approve_revision(&server, &owner, "RQ-1", 2).await;
     let latest = entry(&server, &owner, "KN-1").await;
     assert_eq!(latest["content"], "Proposed content");
     assert_eq!(latest["summary"], "Current summary");
@@ -907,7 +901,8 @@ async fn approve_person_request_restores_deleted_entry_with_person_request_conte
     delete_entry(&server, &owner, "KN-1").await;
     let before = versions(&server, &owner, "KN-1").await;
     assert_version(&before[0], 2, "deletion", "alice", None);
-    approve(&server, &owner, "RQ-1").await;
+    revise(&server, &owner, "RQ-1", json!({})).await;
+    approve_revision(&server, &owner, "RQ-1", 2).await;
     let agent = authorize_for(&server, &owner, "Reader").await;
     let restored = entry(&server, &agent, "KN-1").await;
     assert_eq!(restored["content"], "Restored content");
@@ -951,39 +946,34 @@ async fn approve_person_request_restores_deleted_entry_with_person_request_conte
 }
 
 #[tokio::test]
-async fn approve_person_request_adds_version_when_create_name_already_exists() {
+async fn approve_person_request_refuses_create_name_of_live_or_deleted_entry() {
     let (server, owner) = setup().await;
     seed(&server, &owner, "Guide").await;
-    let before = versions(&server, &owner, "KN-1").await;
-    submit(&server, &owner, json!({"action":"create","name":"gUIDE","summary":"Replacement summary","content":"Replacement content"})).await;
-    approve(&server, &owner, "RQ-1").await;
-    let replaced = entry(&server, &owner, "KN-1").await;
-    assert_eq!(replaced["name"], "Guide");
-    assert_eq!(replaced["content"], "Replacement content");
-    assert_eq!(replaced["summary"], "Replacement summary");
-    let history = versions(&server, &owner, "KN-1").await;
-    assert_eq!(history.as_array().unwrap().len(), 2);
-    assert_version(&history[0], 2, "content", "alice", Some("RQ-1"));
-    assert_eq!(history[1], before[0]);
-    delete_entry(&server, &owner, "KN-1").await;
-    let before_restore = versions(&server, &owner, "KN-1").await;
-    submit(&server, &owner, json!({"action":"create","name":"GUIDE","summary":"Restored summary","content":"Restored content"})).await;
-    let approved = approve(&server, &owner, "RQ-2").await;
-    assert_eq!(approved["target"], json!({"key":"KN-1","name":"Guide"}));
-    let restored = entry(&server, &owner, "KN-1").await;
-    assert_eq!(restored["name"], "Guide");
-    assert_eq!(restored["content"], "Restored content");
-    assert_eq!(restored["summary"], "Restored summary");
-    let history = versions(&server, &owner, "KN-1").await;
-    assert_eq!(history.as_array().unwrap().len(), 4);
-    assert_version(&history[0], 4, "content", "alice", Some("RQ-2"));
-    assert_eq!(
-        &history.as_array().unwrap()[1..],
-        before_restore.as_array().unwrap()
-    );
-    let listed = list_page(&server, &owner, KNOWLEDGE, &[]).await;
-    assert_eq!(listed["data"].as_array().unwrap().len(), 1);
-    assert_eq!(listed["data"][0]["key"], "KN-1");
+    for (key, deleted) in [("RQ-1", false), ("RQ-2", true)] {
+        if deleted {
+            delete_entry(&server, &owner, "KN-1").await;
+        }
+        let current = entry(&server, &owner, "KN-1").await;
+        let history = versions(&server, &owner, "KN-1").await;
+        submit(&server, &owner, creation("GUIDE")).await;
+        assert_eq!(read(&server, &owner, key).await["outdated"], true);
+        assert_problem(
+            request(
+                &server,
+                &owner,
+                Method::POST,
+                &format!("{}/approve", by_key(key)),
+                json!({"revision":1}),
+            )
+            .await,
+            StatusCode::CONFLICT,
+            "person_request.outdated",
+        )
+        .await;
+        assert_eq!(entry(&server, &owner, "KN-1").await, current);
+        assert_eq!(versions(&server, &owner, "KN-1").await, history);
+        assert_eq!(read(&server, &owner, key).await["status"], "pending");
+    }
 }
 
 #[tokio::test]

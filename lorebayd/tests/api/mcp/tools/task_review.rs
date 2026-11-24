@@ -52,7 +52,7 @@ async fn update_task_repeats_state_without_clearing_request_wait() {
         "/api/v1/spaces/{SPACE}/requests/{}/approve",
         proposed["key"].as_str().unwrap()
     );
-    let approved = request(&server, &person, Method::POST, &path, Value::Null).await;
+    let approved = request(&server, &person, Method::POST, &path, json!({"revision":1})).await;
     assert_eq!(approved.status(), StatusCode::OK);
     assert_eq!(
         tasks::read(&server, &person, "TK-1").await["state"],

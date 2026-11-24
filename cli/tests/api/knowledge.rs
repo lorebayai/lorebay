@@ -7,8 +7,9 @@ use crate::helpers::{
     assert_history_errors, assert_history_pages, assert_key_history, assert_knowledge_error,
     assert_knowledge_prefix_pages, assert_other_content_sources, assert_rollback_content,
     assert_rollback_refusals, assert_success, assert_usage, assert_version_usage,
-    assert_viewer_reads_history, assert_viewer_reads_knowledge, body, content_input, create_entry,
-    knowledge_context, knowledge_json, pages, piped_yes, read_entry_version, show_entry,
+    assert_viewer_reads_history, assert_viewer_reads_knowledge, body, confirm_deletion,
+    content_input, create_entry, knowledge_context, knowledge_json, pages, piped_yes,
+    read_entry_version, rollback_second_version, show_entry,
 };
 
 #[tokio::test]
@@ -91,6 +92,8 @@ async fn knowledge_change_adds_version_shown_in_history() {
             "Human",
             "--content",
             "# Human\n\tcontent",
+            "--version",
+            "3",
         ])
         .await;
     assert_success(&changed);
@@ -129,6 +132,8 @@ async fn knowledge_change_renames_entry() {
             name,
             "--output",
             "json",
+            "--version",
+            "1",
         ])
         .await;
     assert_success(&renamed);
@@ -240,54 +245,36 @@ async fn knowledge_delete_cancels_without_yes() {
         let entry = create_entry(&server, &space, mode, "Keep until confirmed", "Content").await;
         for output in [
             server
-                .run(&["knowledge", "delete", &space, mode, "--output", mode])
+                .run(&[
+                    "knowledge",
+                    "delete",
+                    &space,
+                    mode,
+                    "--output",
+                    mode,
+                    "--version",
+                    "1",
+                ])
                 .await,
             piped_yes(
                 &server,
-                &["knowledge", "delete", &space, mode, "--output", mode],
+                &[
+                    "knowledge",
+                    "delete",
+                    &space,
+                    mode,
+                    "--output",
+                    mode,
+                    "--version",
+                    "1",
+                ],
             )
             .await,
         ] {
             assert_cancelled(&output, mode, &format!("knowledge entry {mode} in {space}"));
             assert_eq!(show_entry(&server, &space, mode).await, entry);
         }
-        let key = entry["key"].as_str().unwrap();
-        let deleted = server
-            .run(&[
-                "knowledge",
-                "delete",
-                &space,
-                key,
-                "--yes",
-                "--output",
-                mode,
-            ])
-            .await;
-        assert_success(&deleted);
-        assert!(deleted.stderr.is_empty());
-        let latest = show_entry(&server, &space, key).await;
-        assert_eq!(latest["kind"], "deletion");
-        assert_eq!(latest["version"], 2);
-        assert_eq!(latest["content"], json!(null));
-        assert_eq!(latest["summary"], json!(null));
-        assert_eq!(latest["applied_by"], server.username);
-        if mode == "json" {
-            assert_eq!(body(&deleted), json!({"data": latest, "meta": {}}));
-        } else {
-            assert_eq!(deleted.stdout, b"Knowledge entry deleted.\n");
-        }
-        let shown = server.run(&["knowledge", "show", &space, key]).await;
-        assert_success(&shown);
-        assert!(
-            String::from_utf8(shown.stdout)
-                .unwrap()
-                .contains("Kind: deletion\n")
-        );
-        let list = server
-            .run(&["knowledge", "list", &space, "--output", "json"])
-            .await;
-        assert_success(&list);
-        assert_eq!(body(&list), json!({"data": [], "meta": {}}));
+        confirm_deletion(&server, &space, mode, &entry).await;
     }
 }
 
@@ -327,8 +314,18 @@ async fn knowledge_create_fails_with_server_error_when_caller_is_contributor() {
                 "KN-1",
                 "--content",
                 "Forbidden",
+                "--version",
+                "1",
             ],
-            vec!["knowledge", "delete", &space, "guide.md", "--yes"],
+            vec![
+                "knowledge",
+                "delete",
+                &space,
+                "guide.md",
+                "--yes",
+                "--version",
+                "1",
+            ],
         ] {
             args.extend(["--output", mode]);
             let output = server.run_as(SECOND_USERNAME, &args).await;
@@ -412,6 +409,8 @@ async fn knowledge_change_reads_content_from_standard_input() {
             "-",
             "--output",
             "json",
+            "--version",
+            "1",
         ],
         content.as_bytes(),
     )
@@ -433,6 +432,8 @@ async fn knowledge_change_reads_content_from_standard_input() {
             "-",
             "--output",
             "json",
+            "--version",
+            "1",
         ],
         &[0xff],
     )
@@ -468,6 +469,8 @@ async fn knowledge_create_fails_with_usage_error_when_content_and_file_are_both_
             "Text",
             "--content-file",
             "-",
+            "--version",
+            "1",
         ],
         vec![
             "knowledge",
@@ -477,7 +480,7 @@ async fn knowledge_create_fails_with_usage_error_when_content_and_file_are_both_
             "--summary",
             "Guide",
         ],
-        vec!["knowledge", "change", &space, "KN-1"],
+        vec!["knowledge", "change", &space, "KN-1", "--version", "1"],
     ] {
         arguments.extend(["--output", "json"]);
         assert_usage(&server.run(&arguments).await);
@@ -514,6 +517,8 @@ async fn knowledge_show_reads_key_form_as_key() {
             "Updated",
             "--output",
             "json",
+            "--version",
+            "1",
         ])
         .await;
     assert_success(&changed);
@@ -524,7 +529,15 @@ async fn knowledge_show_reads_key_form_as_key() {
     );
     assert_success(
         &server
-            .run(&["knowledge", "delete", &space, "KN-01", "--yes"])
+            .run(&[
+                "knowledge",
+                "delete",
+                &space,
+                "KN-01",
+                "--yes",
+                "--version",
+                "2",
+            ])
             .await,
     );
     assert_eq!(
@@ -667,16 +680,7 @@ async fn knowledge_rollback_restores_old_content() {
         knowledge_json(&server, &["deleted", &space]).await,
         json!([])
     );
-    let human = server
-        .run(&["knowledge", "rollback", &space, "KN-1", "2"])
-        .await;
-    assert_success(&human);
-    assert!(human.stderr.is_empty());
-    assert!(
-        String::from_utf8(human.stdout)
-            .unwrap()
-            .contains("Content: # Second\n\ttext\n")
-    );
+    rollback_second_version(&server, &space).await;
     let latest = show_entry(&server, &space, "KN-1").await;
     assert_rollback_content(&latest, &changed, name, 5);
     let found = knowledge_json(&server, &["list", &space, "--keyword", "Second summary"]).await;
@@ -723,6 +727,8 @@ async fn knowledge_rollback_fails_with_server_error_when_caller_is_contributor()
                         "1",
                         "--output",
                         mode,
+                        "--version",
+                        "1",
                     ],
                 )
                 .await;

@@ -102,21 +102,27 @@ contains spaces. Optional arguments appear in brackets. List rows follow
 | `file url <space> <file>` | Get a file download URL | The short-lived download URL |
 | `file delete <space> <task-id> <file>` | Delete a file | Deletion result |
 | `knowledge list <space> [--prefix <prefix>] [--keyword <text>]` | List Knowledge | Entry names, keys and summaries, and the next level's prefixes |
-| `knowledge show <space> <entry> [--version <version>]` | Read the latest or an old knowledge version | Name, key, summary and content, or a deletion version |
+| `knowledge show <space> <entry> [--version <version>]` | Read the latest or an old knowledge version | Name, key, version, summary and content, or a deletion version |
 | `knowledge history <space> <entry>` | View a knowledge entry's history | Versions and their authors and times, including deletions |
 | `knowledge deleted <space>` | List deleted knowledge entries | Deleted entries and the information needed to read their history |
 | `knowledge create <space> <name> --summary <summary> (--content <content> \| --content-file <path\|->)` | Create a knowledge entry directly | Created entry |
-| `knowledge change <space> <entry> [--name <name>] [--summary <summary>] [--content <content> \| --content-file <path\|->]` | Change a knowledge entry directly | Updated entry |
-| `knowledge delete <space> <entry>` | Delete a knowledge entry directly | Deletion result |
-| `knowledge rollback <space> <entry> <version>` | Roll back a knowledge entry directly | Entry with the new version |
+| `knowledge change <space> <entry> --version <version> [--name <name>] [--summary <summary>] [--content <content> \| --content-file <path\|->]` | Change a knowledge entry directly | Updated entry |
+| `knowledge delete <space> <entry> --version <version>` | Delete a knowledge entry directly | Deletion result |
+| `knowledge rollback <space> <entry> <source-version> --version <version>` | Roll back a knowledge entry directly | Entry with the new version |
 | `request list <space> [--status <status>] [--keyword <text>]` | List requests | Request keys, actions, statuses, target entries and proposed summaries |
-| `request show <space> <request>` | Read a request | Its fields, content, status and rejection reason, when present |
+| `request show <space> <request>` | Read a request | Its fields, content, status, revision, outdated mark, submitting and last revising agents and rejection reason, when present |
 | `request create <space> <name> --summary <summary> (--content <content> \| --content-file <path\|->)` | Submit a create request | Submitted request |
 | `request change <space> <entry> [--name <name>] [--summary <summary>] [--content <content> \| --content-file <path\|->]` | Submit a change request | Submitted request |
 | `request delete <space> <entry>` | Submit a delete request | Submitted request |
-| `request approve <space> <request>` | Approve a request | Decided request |
-| `request reject <space> <request> --reason <reason>` | Reject a request, including withdrawing one's own party's | Decided request |
+| `request revise <space> <request> [--name <name>] [--summary <summary>] [--content <content> \| --content-file <path\|->]` | Revise a pending request | Revised request, with the same key and new revision |
+| `request approve <space> <request> --revision <revision>` | Approve a request | Decided request |
+| `request reject <space> <request> --revision <revision> --reason <reason>` | Reject a request, including withdrawing one's own party's | Decided request |
 
+- **Decisions and direct writes require the version read.** `--revision`
+  comes from `request show`; `--version` comes from `knowledge show`. The CLI
+  sends those values without fetching a newer one. Refusals follow
+  [Knowledge](../../lib/docs/contracts/knowledge.md). `request revise` may
+  omit all replacement fields to refresh its target snapshot.
 - **An update requires a field to change.** `space change`, `knowledge
   change` and `request change` require at least one of their optional
   fields; omitted fields are unchanged. Request inputs and version behavior

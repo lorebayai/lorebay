@@ -139,7 +139,7 @@ async fn list_knowledge_versions_fails_when_caller_is_agent() {
                 &agent,
                 Method::POST,
                 &resource(&target, "rollback"),
-                json!({"version":1}),
+                json!({"version":1,"target_version":1}),
             )
             .await,
             StatusCode::FORBIDDEN,
@@ -495,7 +495,7 @@ async fn roll_back_knowledge_entry_fails_when_caller_is_contributor() {
                 &bob,
                 Method::POST,
                 &resource(&by_name("Guide"), "rollback"),
-                json!({"version":1}),
+                json!({"version":1,"target_version":1}),
             )
             .await,
             StatusCode::FORBIDDEN,
@@ -576,13 +576,18 @@ async fn create_knowledge_entry_fails_when_caller_is_agent() {
     .await;
     seed(&server, &owner, "Guide").await;
     for method in [Method::PATCH, Method::DELETE] {
+        let target = if method == Method::DELETE {
+            format!("{}?version=1", by_key("KN-1"))
+        } else {
+            by_key("KN-1")
+        };
         assert_problem(
             request(
                 &server,
                 &agent,
                 method,
-                &by_key("KN-1"),
-                json!({"summary":"Other"}),
+                &target,
+                json!({"version":1,"summary":"Other"}),
             )
             .await,
             StatusCode::FORBIDDEN,
@@ -708,7 +713,10 @@ async fn create_knowledge_entry_accepts_content_at_size_limit() {
     assert_eq!(created["summary"], "\u{1f680}".repeat(500));
     assert_eq!(created["content"], "a".repeat(CONTENT_LIMIT));
     assert_eq!(read(&server, &owner, &by_key("KN-1")).await, created);
-    let body = format!("{{\"content\":\"{}\"}}", "\\u0062".repeat(CONTENT_LIMIT));
+    let body = format!(
+        "{{\"version\":1,\"content\":\"{}\"}}",
+        "\\u0062".repeat(CONTENT_LIMIT)
+    );
     let changed = data(
         raw(&server, &owner, Method::PATCH, &by_key("KN-1"), body).await,
         StatusCode::OK,
@@ -879,7 +887,7 @@ async fn rename_knowledge_entry_fails_when_name_belongs_to_another_entry() {
                 &owner,
                 Method::PATCH,
                 &by_key("KN-1"),
-                json!({"name":"OTHER", "content":"Must not apply"}),
+                json!({"version":1,"name":"OTHER", "content":"Must not apply"}),
             )
             .await,
             StatusCode::CONFLICT,
@@ -912,13 +920,18 @@ async fn delete_knowledge_entry_hides_entry_from_agents() {
     )
     .await;
     for method in [Method::PATCH, Method::DELETE] {
+        let target = if method == Method::DELETE {
+            format!("{}?version=1", by_key("KN-1"))
+        } else {
+            by_key("KN-1")
+        };
         assert_problem(
             request(
                 &server,
                 &owner,
                 method,
-                &by_key("KN-1"),
-                json!({"content":"No"}),
+                &target,
+                json!({"version":1,"content":"No"}),
             )
             .await,
             StatusCode::NOT_FOUND,
@@ -988,13 +1001,18 @@ async fn read_knowledge_entry_fails_when_caller_is_not_in_space() {
     seed(&server, &owner, "Guide").await;
     let bob = login(&server, "bob").await;
     for method in [Method::GET, Method::PATCH, Method::DELETE] {
+        let target = if method == Method::DELETE {
+            format!("{}?version=1", by_key("KN-1"))
+        } else {
+            by_key("KN-1")
+        };
         assert_problem(
             request(
                 &server,
                 &bob,
                 method,
-                &by_key("KN-1"),
-                json!({"content":"Denied"}),
+                &target,
+                json!({"version":1,"content":"Denied"}),
             )
             .await,
             StatusCode::NOT_FOUND,

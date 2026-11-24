@@ -20,7 +20,8 @@ pub(super) async fn run(
         PersonRequestCommand::Approve {
             space,
             person_request,
-        } => decide(store, &space, &person_request, "approve", None).await,
+            revision,
+        } => approve(store, &space, &person_request, revision).await,
         PersonRequestCommand::Change {
             space,
             entry,
@@ -57,16 +58,13 @@ pub(super) async fn run(
             space,
             person_request,
             reason,
-        } => {
-            decide(
-                store,
-                &space,
-                &person_request,
-                "reject",
-                Some(&json!({"reason": reason})),
-            )
-            .await
-        }
+            revision,
+        } => reject(store, &space, &person_request, reason, revision).await,
+        PersonRequestCommand::Revise {
+            space,
+            person_request,
+            changes,
+        } => revise(store, &space, &person_request, changes).await,
         PersonRequestCommand::Show {
             space,
             person_request,
@@ -94,6 +92,31 @@ async fn change(
         }
     }
     submit(store, space, &body).await
+}
+
+async fn revise(
+    store: &Store,
+    space: &str,
+    key: &str,
+    changes: KnowledgeChanges,
+) -> Result<Outcome> {
+    let mut body = json!({});
+    for (field, value) in [
+        ("name", changes.name),
+        ("summary", changes.summary),
+        ("content", content::read(changes.content)?),
+    ] {
+        if let Some(value) = value {
+            body[field] = json!(value);
+        }
+    }
+    request(
+        store,
+        Method::PATCH,
+        &api_path(&[SPACES, space, PERSON_REQUESTS, key])?,
+        Some(&body),
+    )
+    .await
 }
 
 async fn create(
@@ -199,7 +222,12 @@ async fn request(
         ("Source task", "from_task_key"),
         ("Created at", "created_at"),
         ("Base version", "base_version"),
-        ("Changed since requested", "changed_since_requested"),
+        ("Base name", "base_name"),
+        ("Revision", "revision"),
+        ("Outdated", "outdated"),
+        ("Last revising agent", "reviser_agent_name"),
+        ("Revised by", "revised_by"),
+        ("Revised at", "revised_at"),
         ("Decided by", "decided_by"),
         ("Decided at", "decided_at"),
         ("Rejection reason", "reject_reason"),
@@ -244,4 +272,32 @@ fn target(action: &str, entry: &str) -> Value {
         "target_name"
     };
     json!({"action": action, (field): entry})
+}
+
+async fn approve(store: &Store, space: &str, key: &str, revision: i64) -> Result<Outcome> {
+    decide(
+        store,
+        space,
+        key,
+        "approve",
+        Some(&json!({"revision":revision})),
+    )
+    .await
+}
+
+async fn reject(
+    store: &Store,
+    space: &str,
+    key: &str,
+    reason: String,
+    revision: i64,
+) -> Result<Outcome> {
+    decide(
+        store,
+        space,
+        key,
+        "reject",
+        Some(&json!({"revision":revision,"reason":reason})),
+    )
+    .await
 }

@@ -29,6 +29,9 @@ pub async fn contributor(server: &Server, space: &str) {
 pub async fn person_request_json(server: &Server, arguments: &[&str]) -> Value {
     let mut command = vec!["request"];
     command.extend_from_slice(arguments);
+    if matches!(arguments[0], "approve" | "reject") && !command.contains(&"--revision") {
+        command.extend(["--revision", "1"]);
+    }
     command.extend(["--output", "json"]);
     let output = server.run(&command).await;
     assert_success(&output);
@@ -111,7 +114,12 @@ pub fn assert_person_request_fields(output: &Output, person_request: &Value, tar
         ("Source task", "from_task_key"),
         ("Created at", "created_at"),
         ("Base version", "base_version"),
-        ("Changed since requested", "changed_since_requested"),
+        ("Base name", "base_name"),
+        ("Revision", "revision"),
+        ("Outdated", "outdated"),
+        ("Last revising agent", "reviser_agent_name"),
+        ("Revised by", "revised_by"),
+        ("Revised at", "revised_at"),
         ("Decided by", "decided_by"),
         ("Decided at", "decided_at"),
         ("Rejection reason", "reject_reason"),
@@ -498,4 +506,19 @@ async fn assert_invalid_person_request_files(server: &Server, space: &str, path:
             assert_usage(&server.run(&arguments).await);
         }
     }
+}
+
+pub async fn assert_withdrawn_request(
+    server: &Server,
+    space: &str,
+    key: &str,
+    person_request: &Value,
+) {
+    let shown = server.run(&["request", "show", space, key]).await;
+    assert_person_request_fields(&shown, person_request, "guide.md");
+    assert!(
+        String::from_utf8(shown.stdout)
+            .unwrap()
+            .contains("Rejection reason: Superseded\\n\\t\\u{1b}[31m\n")
+    );
 }

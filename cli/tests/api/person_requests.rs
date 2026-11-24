@@ -6,10 +6,10 @@ use serde_json::{Value, json};
 use crate::helpers::{
     SECOND_USERNAME, assert_empty_person_request_search, assert_person_request_error,
     assert_person_request_fields, assert_person_request_pages, assert_person_request_sources,
-    assert_person_request_usage, assert_success, assert_usage, body, contributor, create_entry,
-    create_person_request, create_task, knowledge_context, knowledge_json, person_request_json,
-    propose_rollback, read_entry_version, show_entry, show_person_request,
-    submit_agent_person_request,
+    assert_person_request_usage, assert_success, assert_usage, assert_withdrawn_request, body,
+    contributor, create_entry, create_person_request, create_task, knowledge_context,
+    knowledge_json, person_request_json, propose_rollback, read_entry_version, show_entry,
+    show_person_request, submit_agent_person_request,
 };
 
 #[tokio::test]
@@ -37,7 +37,7 @@ async fn person_request_create_submits_pending_person_request() {
         assert_eq!(person_request[field], Value::Null, "{field}");
     }
     assert!(person_request["created_at"].is_i64());
-    assert_eq!(person_request["changed_since_requested"], false);
+    assert_eq!(person_request["outdated"], false);
     assert_eq!(
         show_person_request(&server, &space, "RQ-1").await,
         person_request
@@ -309,7 +309,7 @@ async fn person_request_create_reads_content_from_file() {
 }
 
 #[tokio::test]
-async fn person_request_show_marks_changed_since_requested() {
+async fn person_request_show_marks_outdated() {
     let (server, space) = knowledge_context().await;
     create_entry(
         &server,
@@ -332,7 +332,7 @@ async fn person_request_show_marks_changed_since_requested() {
         ],
     )
     .await;
-    assert_eq!(person_request["changed_since_requested"], false);
+    assert_eq!(person_request["outdated"], false);
     assert_eq!(person_request["new_summary"], Value::Null);
     assert_eq!(person_request["target"]["key"], "KN-1");
     knowledge_json(
@@ -341,21 +341,24 @@ async fn person_request_show_marks_changed_since_requested() {
     )
     .await;
     let shown = show_person_request(&server, &space, "RQ-1").await;
-    assert_eq!(shown["changed_since_requested"], true);
+    assert_eq!(shown["outdated"], true);
     let human = server.run(&["request", "show", &space, "RQ-1"]).await;
     assert_person_request_fields(&human, &shown, r#"KN-1 guides/a "quoted"\path ?#%+.md"#);
     assert!(
         String::from_utf8(human.stdout)
             .unwrap()
-            .contains("Changed since requested: true\n")
+            .contains("Outdated: true\n")
     );
-    let approved = server.run(&["request", "approve", &space, "RQ-1"]).await;
+    person_request_json(&server, &["revise", &space, "RQ-1"]).await;
+    let approved = server
+        .run(&["request", "approve", &space, "RQ-1", "--revision", "2"])
+        .await;
     let decided = show_person_request(&server, &space, "RQ-1").await;
     assert_person_request_fields(&approved, &decided, "KN-1 renamed.md");
     assert_eq!(decided["status"], "approved");
     assert_eq!(decided["decided_by"], server.username);
     assert!(decided["decided_at"].is_i64());
-    assert!(decided.get("changed_since_requested").is_none());
+    assert!(decided.get("outdated").is_none());
     let entry = show_entry(&server, &space, "KN-1").await;
     assert_eq!(entry["name"], "renamed.md");
     assert_eq!(entry["summary"], "Intervening");
@@ -416,20 +419,43 @@ async fn person_request_reject_requires_reason() {
         create_person_request(&server, &space, "guide.md", "Summary", "Content").await;
     assert_usage(
         &server
-            .run(&["request", "reject", &space, "RQ-1", "--output", "json"])
+            .run(&[
+                "request",
+                "reject",
+                &space,
+                "RQ-1",
+                "--output",
+                "json",
+                "--revision",
+                "1",
+            ])
             .await,
     );
     for mode in ["human", "json"] {
         for reason in ["", " "] {
             let output = server
                 .run(&[
-                    "request", "reject", &space, "RQ-1", "--reason", reason, "--output", mode,
+                    "request",
+                    "reject",
+                    &space,
+                    "RQ-1",
+                    "--reason",
+                    reason,
+                    "--output",
+                    mode,
+                    "--revision",
+                    "1",
                 ])
                 .await;
             assert_person_request_error(
                 &server,
                 &output,
-                (&space, "RQ-1", "reject", json!({"reason": reason})),
+                (
+                    &space,
+                    "RQ-1",
+                    "reject",
+                    json!({"revision":1,"reason": reason}),
+                ),
                 mode,
             )
             .await;
@@ -471,7 +497,16 @@ async fn person_request_reject_withdraws_own_person_request() {
             .run_as(
                 SECOND_USERNAME,
                 &[
-                    "request", "reject", &space, &key, "--reason", reason, "--output", mode,
+                    "request",
+                    "reject",
+                    &space,
+                    &key,
+                    "--reason",
+                    reason,
+                    "--output",
+                    mode,
+                    "--revision",
+                    "1",
                 ],
             )
             .await;
@@ -488,13 +523,7 @@ async fn person_request_reject_withdraws_own_person_request() {
         } else {
             assert_person_request_fields(&output, &person_request, "guide.md");
         }
-        let shown = server.run(&["request", "show", &space, &key]).await;
-        assert_person_request_fields(&shown, &person_request, "guide.md");
-        assert!(
-            String::from_utf8(shown.stdout)
-                .unwrap()
-                .contains("Rejection reason: Superseded\\n\\t\\u{1b}[31m\n")
-        );
+        assert_withdrawn_request(&server, &space, &key, &person_request).await;
     }
     assert_eq!(knowledge_json(&server, &["list", &space]).await, json!([]));
 }
@@ -529,13 +558,22 @@ async fn person_request_approve_fails_with_server_error_when_contributor_approve
             let output = server
                 .run_as(
                     SECOND_USERNAME,
-                    &["request", "approve", &space, key, "--output", mode],
+                    &[
+                        "request",
+                        "approve",
+                        &space,
+                        key,
+                        "--output",
+                        mode,
+                        "--revision",
+                        "1",
+                    ],
                 )
                 .await;
             assert_person_request_error(
                 &server,
                 &output,
-                (&space, key, "approve", Value::Null),
+                (&space, key, "approve", json!({"revision":1})),
                 mode,
             )
             .await;

@@ -29,6 +29,8 @@ pub enum KnowledgeInputError {
     TooManyBytes(&'static str, usize),
     #[error("Must be at most {1} characters.")]
     TooManyCharacters(&'static str, usize),
+    #[error("Provide a positive version.")]
+    Version,
 }
 
 impl KnowledgeInputError {
@@ -40,7 +42,7 @@ impl KnowledgeInputError {
             Self::InvalidTarget => "target",
             Self::Name => "name",
             Self::NoChanges => "body",
-            Self::RollbackVersion => "version",
+            Self::RollbackVersion | Self::Version => "version",
         }
     }
 }
@@ -64,6 +66,21 @@ impl KnowledgeTarget {
 
     pub(crate) fn number(&self) -> Option<i64> {
         self.key.as_deref().and_then(|key| parse_key("KN", key))
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct VersionedKnowledgeTarget {
+    pub(crate) target: KnowledgeTarget,
+    pub(crate) version: i64,
+}
+
+impl VersionedKnowledgeTarget {
+    pub fn new(target: KnowledgeTarget, version: i64) -> Result<Self, KnowledgeInputError> {
+        if version < 1 {
+            return Err(KnowledgeInputError::Version);
+        }
+        Ok(Self { target, version })
     }
 }
 

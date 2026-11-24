@@ -358,8 +358,8 @@ methods:
 
 - **The product opens, commits and rolls back.** The library writes inside
   the transaction it is handed and never commits or rolls back that
-  transaction. It may commit or roll back a savepoint it opens inside it,
-  as approving a request that creates an entry does when the name is taken.
+  transaction. A refused create request leaves the outer write to roll back
+  its counter allocation with the rest of the operation.
 - **On SQLite the product enables foreign key checks** on every
   connection it hands to the library. Task deletion relies on the cascade
   to its checkpoints and on clearing the source task from requests.
@@ -631,8 +631,8 @@ to a product's table.
 - **People are IDs.** The library has no table of people. It stores a
   person only as the product's ID, without foreign keys: a task's person,
   planner and state changer, a result version's writer, a request's requester
-  and decider, and the person who applied a Knowledge version. Removing or
-  deleting a person writes nothing in the library.
+  and last reviser and decider, and the person who applied a Knowledge version.
+  Removing or deleting a person writes nothing in the library.
 - **The tenant ID** of a space is text with no foreign key.
 - **Two groups of migrations share one database.** The library's migrator
   records its history in its own table, `space_migration`, and a product's
@@ -693,9 +693,10 @@ both.
 | Delete a file | None | One statement deletes the row only if complete and returns its location |
 | Remove abandoned registrations | Each deleted row | One statement deletes only rows neither completed nor refused when it deletes them and returns their locations; only their content is deleted |
 | Remove orphaned files | None | A record commits before any URL for its location exists, and locations are never reused, so a file old enough with no record never gets one; a refused registration never completes, so its content is never needed |
-| Change Knowledge directly | Entry, then space counter for a new entry | The next version is computed from the locked entry; the unique name refuses a second entry of one name |
+| Change, delete or roll back Knowledge directly | Entry; space counter for creation | The replaced version is checked on the locked row before applying anything; the next version comes from that row and the unique name guards creation |
 | Submit a request | Task, when it names one; then space counter | The source cannot disappear; an optional wait is stored under that task lock in the same commit |
-| Approve or reject a request | Source task, when present; then request, then entry, then space counter for a new entry | The request is decided once; only its matching waiting task resumes |
+| Revise a request | Request, then target entry when present | The requesting party and pending status are checked under the request lock; replacement fields, current target version and name, revision number and copied writer attribution update together |
+| Approve or reject a request | Source task, when present; then request, then entry for approval; space counter for creation | The seen revision is checked on the locked request; approval compares the locked entry with the snapshot or requires a free create name. Refusals write nothing; only a successful decision resumes its matching waiting task |
 
 The oversize refusal uses the size read before taking the locks, and is
 final once it commits. A deletion delayed after that commit can remove only

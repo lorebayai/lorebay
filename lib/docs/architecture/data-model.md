@@ -356,8 +356,13 @@ One row per knowledge entry; its content is in `space_knowledge_version`.
 | `space_id` | TEXT | Not null, foreign key to `space` | |
 | `number` | INTEGER | Not null | The `RQ` number; `(space_id, number)` is unique |
 | `action` | TEXT | Not null | `create`, `change` or `delete` |
-| `knowledge_id` | TEXT | Nullable, foreign key to `space_knowledge` | Set on submission for a change or a delete; for a create, set on approval to the entry it created or restored |
-| `base_version` | INTEGER | Nullable | For a change or a delete, the entry's latest version on submission |
+| `knowledge_id` | TEXT | Nullable, foreign key to `space_knowledge` | Set on submission for a change or a delete; for a create, set on approval to the entry it created |
+| `base_version` | INTEGER | Nullable | For a change or a delete, the entry's latest version on submission or revision |
+| `base_name` | TEXT | Nullable | The target's name as written on submission or revision; empty for a create |
+| `revision` | INTEGER | Not null, default 1, at least 1 | The current revision number; earlier forms are not stored |
+| `reviser_agent_name` | TEXT | Nullable | The last revising agent's copied name; empty before revision or when a person revises |
+| `revised_by` | TEXT | Nullable | The last revising person's product ID; no foreign key; empty before revision |
+| `revised_at` | INTEGER | Nullable | The last revision time; empty before revision |
 | `new_name` | TEXT | Nullable | Required for a create; for a change, set only to rename |
 | `new_summary` | TEXT | Nullable | Required for a create; for a change, set only to change it |
 | `new_content` | TEXT | Nullable | The same |
@@ -371,15 +376,20 @@ One row per knowledge entry; its content is in `space_knowledge_version`.
 | `created_at` | INTEGER | Not null | |
 
 - **A CHECK per action.** A create carries a name, a summary and content, and
-  no `base_version`. A change carries `knowledge_id` and `base_version`, and
+  neither `base_version` nor `base_name`. A change carries `knowledge_id`,
+  `base_version` and `base_name`, and
   at least one of name, summary and content. A delete carries `knowledge_id`
-  and `base_version`, and none of the three.
+  and both snapshot fields, and none of the three.
 - **A CHECK on status.** A `pending` request has neither `decided_by` nor
   `decided_at`; any other has both; a `rejected` one has a `reject_reason`.
-- **Changed since requested.** While a request is `pending`, a
-  `base_version` that differs from the entry's `latest_version` marks the
-  request, so a product can show the difference; so does a create whose name
-  already belongs to an entry. A rename adds no version, so it goes undetected.
+- **Revision updates replace the same row.** Under its lock, the library
+  increments `revision`, copies the reviser's agent name and person ID, sets
+  `revised_at` and refreshes `base_version` and `base_name` from the locked
+  target. The submitting attribution and `created_at` stay.
+- **Outdated is derived on reads.** Pending targeted requests compare both
+  snapshot fields with the joined entry. Pending creates look up occupied
+  names in one batch, including deleted entries. Approval checks the same
+  snapshot under the entry lock; the unique name constraint guards creates.
 - **Approving** changes the status and writes `space_knowledge` and
   `space_knowledge_version` in one transaction. Content or summary that a
   change leaves out is copied from the entry's current version; when the
@@ -515,6 +525,11 @@ CREATE TABLE space_person_request (
   action                 TEXT    NOT NULL CHECK (action IN ('create', 'change', 'delete')),
   knowledge_id         TEXT    REFERENCES space_knowledge (id),
   base_version         INTEGER,
+  base_name            TEXT,
+  revision             INTEGER NOT NULL DEFAULT 1 CHECK (revision >= 1),
+  reviser_agent_name   TEXT,
+  revised_by           TEXT,
+  revised_at           INTEGER,
   new_name             TEXT,
   new_summary          TEXT,
   new_content          TEXT,
@@ -528,11 +543,13 @@ CREATE TABLE space_person_request (
   created_at           INTEGER NOT NULL,
   UNIQUE (space_id, number),
   CHECK (
-    (action = 'create' AND base_version IS NULL
+    (action = 'create' AND base_version IS NULL AND base_name IS NULL
       AND new_name IS NOT NULL AND new_summary IS NOT NULL AND new_content IS NOT NULL)
     OR (action = 'change' AND knowledge_id IS NOT NULL AND base_version IS NOT NULL
+      AND base_name IS NOT NULL
       AND (new_name IS NOT NULL OR new_summary IS NOT NULL OR new_content IS NOT NULL))
     OR (action = 'delete' AND knowledge_id IS NOT NULL AND base_version IS NOT NULL
+      AND base_name IS NOT NULL
       AND new_name IS NULL AND new_summary IS NULL AND new_content IS NULL)
   ),
   CHECK (
