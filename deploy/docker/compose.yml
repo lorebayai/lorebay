@@ -1,6 +1,7 @@
 services:
   lorebayd:
     image: ghcr.io/lorebayai/lorebayd:0.1.2
+    restart: unless-stopped
     environment:
       LOREBAYD__PUBLIC_URL: https://${DOMAIN:?Set DOMAIN}${HTTPS_SUFFIX:-}
       LOREBAYD__LISTEN_ADDRESS: 0.0.0.0:8080
@@ -24,6 +25,7 @@ services:
           create_host_path: false
   nginx:
     image: nginx:1.28-alpine@sha256:a8b39bd9cf0f83869a2162827a0caf6137ddf759d50a171451b335cecc87d236
+    restart: unless-stopped
     depends_on:
       lorebayd:
         condition: service_healthy

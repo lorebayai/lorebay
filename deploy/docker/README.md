@@ -59,6 +59,8 @@ curl "https://$DOMAIN/readyz"
 ```
 
 Per-caller limits require Docker to preserve client source addresses.
+Both services restart after crashes or host reboots unless explicitly stopped.
+nginx follows the backend's DNS address when only the application is recreated.
 Use `docker compose` with the same env/file flags for `logs`, `restart` and `down`;
 `down` retains the supplied data. Only nginx publishes HTTPS. To replace certificates:
 
