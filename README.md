@@ -17,6 +17,8 @@ x86_64 Debian 12 and Ubuntu 24.04; Linux musl archives are also available for
 manual use on x86_64 and aarch64. Supply the users file, domain, certificate,
 key and a private local data path. The installer checks the selected archive
 against the release's `SHA256SUMS`.
+Back up the data directory only while stopped
+([Storage](docs/architecture/storage.md#3-layers)).
 
 On each person's machine, get `lorebay` from the same release on Linux, using
 `lorebay-$(uname -m)-unknown-linux-musl.tar.gz`, check it against `SHA256SUMS`,

@@ -26,6 +26,7 @@ from common import (
     output,
     render,
     run,
+    served_certificate,
     without_comments,
 )
 
@@ -79,6 +80,18 @@ def data_directory(path):
             fail(
                 "Data directory must be outside /tmp and /var/tmp; the service uses private temporary directories"
             )
+    for ancestor in path.parents:
+        if not ancestor.exists():
+            continue
+        metadata = ancestor.stat()
+        if metadata.st_uid != 0 or metadata.st_mode & 0o022:
+            fail(
+                f"Data directory parent must be owned by root and not writable by group or others: {ancestor}"
+            )
+        if not stat.S_ISDIR(metadata.st_mode) or not metadata.st_mode & stat.S_IXOTH:
+            fail(
+                f"Data directory parent is not traversable by the service user: {ancestor}"
+            )
     if path.exists():
         if not path.is_dir():
             fail("Data path is not a directory")
@@ -86,18 +99,16 @@ def data_directory(path):
             fail(
                 "Data directory is not empty; databases this installer did not create are refused"
             )
+        metadata = path.stat()
+        if metadata.st_uid != 0 or metadata.st_mode & 0o022:
+            fail(
+                f"Empty data directory must be owned by root and not writable by group or others: {path}"
+            )
     parent = path
     while not parent.exists():
         parent = parent.parent
     if not parent.is_dir() or os.statvfs(parent).f_flag & os.ST_RDONLY:
         fail("Data directory cannot be created on a writable filesystem")
-    if parent == path:
-        parent = parent.parent
-    for ancestor in [parent, *parent.parents]:
-        if not ancestor.stat().st_mode & stat.S_IXOTH:
-            fail(
-                f"Data directory parent is not traversable by the service user: {ancestor}"
-            )
     for process in Path("/proc").glob("[0-9]*"):
         try:
             if Path(os.readlink(process / "exe")).name != "lorebayd":
@@ -171,8 +182,10 @@ def nginx_preflight(domain):
     clean = without_comments(text)
     if not re.search(r"include\s+/etc/nginx/conf.d/\*\.conf\s*;", clean):
         fail("nginx must include /etc/nginx/conf.d/*.conf inside http")
-    if "lorebay_" in clean or re.search(
-        rf"\bserver_name\s+[^;]*\b{re.escape(domain)}\b", clean
+    names = re.findall(r"\bserver_name\s+([^;]+);", clean)
+    if "lorebay_" in clean or any(
+        domain in [token.strip("\"'") for token in directive.split()]
+        for directive in names
     ):
         fail("nginx already contains a conflicting Lorebay zone or domain")
     defaults = set()
@@ -244,6 +257,8 @@ def install(args):
         reject = nginx_preflight(args.domain)
         activated = False
         user_created = False
+        created_data = []
+        original_data = args.data.stat() if args.data.exists() else None
         try:
             CONFIG.mkdir(mode=0o700)
             INSTALL_DIRECTORY.mkdir(mode=0o755)
@@ -274,10 +289,16 @@ def install(args):
             for parent in reversed(args.data.parents):
                 if not parent.exists():
                     parent.mkdir(mode=0o755)
+                    created_data.append(parent)
+                    os.chown(parent, 0, 0)
                     parent.chmod(0o755)
-            args.data.mkdir(exist_ok=True, mode=0o700)
+            if original_data is None:
+                args.data.mkdir(mode=0o700)
+                created_data.append(args.data)
             args.data.chmod(0o700)
             os.chown(args.data, account.pw_uid, account.pw_gid)
+            if any(args.data.iterdir()):
+                fail("Data directory is not empty; refusing an existing database")
             config = {
                 "public_url": f"https://{args.domain}",
                 "data_directory": str(args.data),
@@ -305,6 +326,7 @@ def install(args):
             run("systemctl", "daemon-reload")
             run("systemctl", "enable", "--now", "lorebay.service", "nginx.service")
             run("systemctl", "reload", "nginx.service")
+            served_certificate(TLS / "live/certificate.pem", args.domain)
             run(
                 "curl",
                 "--fail",
@@ -328,6 +350,18 @@ def install(args):
                 run("systemctl", "disable", "--now", "lorebay.service", check=False)
                 for path in (SITE, REJECT, UNIT):
                     path.unlink(missing_ok=True)
+                if args.data in created_data:
+                    shutil.rmtree(args.data)
+                    created_data.pop()
+                elif original_data is not None:
+                    os.chown(args.data, original_data.st_uid, original_data.st_gid)
+                    args.data.chmod(stat.S_IMODE(original_data.st_mode))
+                    if any(args.data.iterdir()):
+                        print(
+                            f"Data directory retained; clear it before retrying: {args.data}"
+                        )
+                for parent in reversed(created_data):
+                    parent.rmdir()
                 if user_created:
                     run("userdel", "lorebay")
                 for path in (CONFIG, INSTALL_DIRECTORY, TLS):
@@ -361,13 +395,15 @@ def uninstall():
             path.write_bytes(content)
         raise
     run("systemctl", "disable", "--now", "lorebay.service")
+    installed = json.loads((CONFIG / "install.json").read_text())
+    run("chown", "--recursive", "--no-dereference", "root:root", installed["data"])
+    run("userdel", "lorebay")
     UNIT.unlink()
     run("systemctl", "daemon-reload")
     for path in (CONFIG, TLS, INSTALL_DIRECTORY):
         shutil.rmtree(path)
-    # Retain the account so preserved data keeps its numeric owner across uninstall.
     print(
-        "Lorebay removed; nginx, its other sites, the service account, data and supplied files remain"
+        "Lorebay removed; nginx, its other sites, root-owned data and supplied files remain"
     )
 
 

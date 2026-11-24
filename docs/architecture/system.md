@@ -58,11 +58,13 @@ flowchart TD
     impls --> store
 ```
 
-**nginx owns HTTPS and per-caller limits.** The native deployment runs
-`lorebayd` under systemd on loopback. nginx consumes the operator's certificate,
-streams uploads and downloads, and limits callers by IPv4 address or IPv6 /64.
-The application's limits cover the team's shared proxy peer; it continues to
-key them on the TCP peer without reading forwarded headers.
+**nginx owns HTTPS and per-caller limits.** This keeps TLS and per-caller
+policy out of `lorebayd`, with one policy for both deployment methods. The
+native deployment runs `lorebayd` under systemd on loopback. nginx consumes
+the operator's certificate, streams uploads and downloads, and limits callers
+by IPv4 address or IPv6 /64.
+The application's limits cover the team's shared proxy peer, keyed on the
+TCP peer without reading forwarded headers.
 
 `v0.1.1` keeps file content in a local directory; the S3 backend is
 designed but not built ([Storage](storage.md)).

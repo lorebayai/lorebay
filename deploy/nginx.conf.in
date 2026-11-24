@@ -21,6 +21,7 @@ map "$request_method:$uri" $lorebay_verification {
     "POST:/api/v1/device-sign-in-decision" $lorebay_caller;
 }
 limit_req_zone $lorebay_login zone=lorebay_login:10m rate=10r/m;
+# nginx's minimum rate is 1r/m; lorebayd's default registration budget is 10r/h.
 limit_req_zone $lorebay_registration zone=lorebay_registration:10m rate=1r/m;
 limit_req_zone $lorebay_device zone=lorebay_device:10m rate=10r/m;
 limit_req_zone $lorebay_verification zone=lorebay_verification:10m rate=10r/m;

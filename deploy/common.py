@@ -3,7 +3,10 @@ import fcntl
 import fnmatch
 import re
 import shutil
+import socket
+import ssl
 import subprocess
+import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -91,6 +94,28 @@ def copy_pair(cert, key, directory):
         destination = directory / name
         shutil.copyfile(source, destination)
         destination.chmod(0o600)
+
+
+def served_certificate(cert, domain, connect="127.0.0.1"):
+    leaf = re.search(
+        r"-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----",
+        cert.read_text(),
+        re.S,
+    ).group()
+    expected = ssl.PEM_cert_to_DER_cert(leaf)
+    context = ssl._create_unverified_context()
+    last_error = None
+    # Reload returns before nginx's master accepts the new configuration.
+    for _ in range(50):
+        try:
+            with socket.create_connection((connect, 443), timeout=2) as connection:
+                with context.wrap_socket(connection, server_hostname=domain) as client:
+                    if client.getpeercert(binary_form=True) == expected:
+                        return
+        except OSError as error:
+            last_error = error
+        time.sleep(0.1)
+    fail(f"nginx did not serve the staged certificate: {last_error}")
 
 
 def render(domain, tls=TLS, upstream="127.0.0.1:8080", upload_limit=5000000000):

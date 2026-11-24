@@ -1,97 +1,99 @@
 # Deployment
 
-Install one Lorebay server on an x86_64 Debian 12 or Ubuntu 24.04 host with
-systemd as PID 1. nginx serves HTTPS and caller limits; `lorebayd` listens on
-loopback. Linux musl archives also exist for aarch64 for manual use; the
-installer qualifies only these two x86_64 hosts. Fresh installs only.
+Install one Lorebay server on x86_64 Debian 12 or Ubuntu 24.04 with systemd as
+PID 1. nginx serves HTTPS and caller limits; `lorebayd` listens on loopback.
 
 ## Usage
 
-Install prerequisites, prepare the users file as
-[lorebayd/README.md](../lorebayd/README.md#usage) describes, and obtain a
-certificate and its unencrypted private key for the domain. Run from a checkout:
+As root, install prerequisites (distribution Python 3.11 or later), fetch the
+named release's source and executable over HTTPS, and verify the executable.
+Supply a root-only `/srv/inputs/password.txt` before hashing.
 
 ```bash
-sudo apt-get update
-sudo apt-get install -y python3 curl openssl ca-certificates
-sudo python3 -B deploy/install.py install --version v0.1.1 \
+apt-get update
+apt-get install -y python3 curl openssl ca-certificates tar gzip coreutils
+VERSION=v0.1.2
+curl -fL --proto '=https' --proto-redir '=https' -o source.tar.gz \
+  "https://github.com/lorebayai/lorebay/archive/refs/tags/$VERSION.tar.gz"
+tar -xzf source.tar.gz
+cd "lorebay-${VERSION#v}"
+RELEASE="https://github.com/lorebayai/lorebay/releases/download/$VERSION"
+ARCHIVE=lorebayd-x86_64-unknown-linux-musl.tar.gz
+curl -fL --proto '=https' --proto-redir '=https' -O "$RELEASE/$ARCHIVE"
+curl -fL --proto '=https' --proto-redir '=https' -O "$RELEASE/SHA256SUMS"
+grep -E "^[a-fA-F0-9]{64} [ *]$ARCHIVE$" SHA256SUMS | sha256sum -c -
+mkdir release
+tar -xzf "$ARCHIVE" -C release lorebayd
+./release/lorebayd hash-password < /srv/inputs/password.txt
+```
+
+Create `/srv/inputs/users.yaml` using that hash and the users-file format in
+[lorebayd/README.md](../lorebayd/README.md#usage). `hash-password` needs no users
+file and starts no server. Protect and remove the password input when done.
+Obtain a certificate and its unencrypted private key for the domain, then run:
+
+```bash
+python3 -B deploy/install.py install --version "$VERSION" \
   --domain lorebay.example.com --users /srv/inputs/users.yaml \
   --certificate /srv/inputs/certificate.pem --key /srv/inputs/key.pem \
   --data /srv/lorebay-data
-sudo systemctl status lorebay nginx
-sudo journalctl -u lorebay
+systemctl status lorebay nginx
+journalctl -u lorebay
 curl https://lorebay.example.com/readyz
 ```
 
-The selected release downloads over HTTPS and is checked against `SHA256SUMS`.
-For local archives, append `--archives /srv/releases`, containing
-`lorebayd-x86_64-unknown-linux-musl.tar.gz` and `SHA256SUMS`. `--release-url`
-selects an HTTPS mirror directory instead. An identical repeated install does
-nothing; another version or changed inputs are refused.
+The installer checks its HTTPS download against `SHA256SUMS`. To reuse the
+verified archive above, append `--archives "$PWD"`; `--release-url` selects an
+HTTPS mirror. An identical repeated install does nothing; changed inputs or
+another version are refused. nginx is installed if absent without upgrades.
 
-Use an empty data directory on a local writable filesystem outside `/tmp` and
-`/var/tmp`, or a missing path whose parent the service user can traverse. The
-installer checks for another writer and unrecognized data, then makes the
-directory owned by `lorebay` with mode `0700`; `lorebayd` creates its
-database `0600`. Stop other writers before installing. The users file passes
-through systemd `LoadCredential=`; supplied files retain their contents,
-owner and permissions. Only nginx's root master reads the copied key under
-`/etc/nginx/lorebay-tls` (directory `0700`, key `0600`). nginx is installed
-if absent, without upgrading an existing package. Its configuration must
-include `/etc/nginx/conf.d/*.conf`; address-specific 443 listeners require
-manual configuration. Other sites keep their files.
+Use an empty root-owned data directory or a missing path on a writable local
+filesystem outside `/tmp` and `/var/tmp`. Every existing ancestor must be
+root-owned, traversable by the service user, and not group- or other-writable.
+Missing ancestors become root-owned `0755`; data becomes `lorebay`-owned `0700`,
+with database `0600`. Existing databases are refused; stop other writers first.
+The users file passes through systemd `LoadCredential=`. Supplied files keep
+contents, owner and mode. Only nginx's root master reads the copied key under
+`/etc/nginx/lorebay-tls` (directory `0700`, key `0600`). nginx must include
+`/etc/nginx/conf.d/*.conf`; address-specific 443 listeners need manual setup.
+Other sites keep their files. Without an explicit 443 `default_server`, the
+installer adds a rejecting default; unknown names stop reaching the implicit
+site. Installation checks that nginx serves the supplied certificate.
 
 Replace the certificate, or uninstall while keeping data and supplied inputs:
 
 ```bash
-sudo python3 -B /opt/lorebay/deploy/replace-certificate.py \
+python3 -B /opt/lorebay/deploy/replace-certificate.py \
   --domain lorebay.example.com --certificate /srv/inputs/new.pem \
   --key /srv/inputs/new-key.pem
-sudo python3 -B deploy/install.py uninstall
+python3 -B deploy/install.py uninstall
 ```
 
-Replacement validates a staged pair and nginx configuration, then reloads and
-checks the served certificate. Failure restores the previous pair. For a
-container, use the same script with `--directory` naming its host-mounted
-certificate directory, `--container` naming nginx and `--connect` naming its
-reachable address on port 443. `--nginx-directory` defaults to
-`/etc/nginx/lorebay-tls`; mount the directory, including its `live` symlink.
-Uninstall retains nginx and the service account so preserved data keeps its
-owner; it reloads a running nginx without stopping it.
+Replacement validates the staged pair and nginx configuration, reloads, checks
+the served certificate, then deletes the previous pair. Failure restores it.
+For a container, use `--directory` for the host-mounted certificate directory,
+`--container` for nginx and `--connect` for its reachable address on port 443.
+`--nginx-directory` defaults to `/etc/nginx/lorebay-tls`; mount the whole directory.
+Uninstall retains nginx, transfers kept data and its contents to root, removes
+the service account, and reloads running nginx. Reinstall with a new empty path.
 
-For single-host use or tests, edit `/etc/lorebay/lorebayd.json` and set
-`public_url` to the exact loopback origin clients use, such as
-`http://127.0.0.1:8080`, then `sudo systemctl restart lorebay`. An SSH forward
-must use the same local port (`ssh -L 8080:127.0.0.1:8080 server`). While set,
-new sign-ins at the domain are refused. Changing `public_url` invalidates issued
-access tokens but does not end sign-ins; `lorebay logout` ends one. Restore the
-HTTPS origin and restart when finished.
+For single-host use, set `public_url` in `/etc/lorebay/lorebayd.json` to the exact
+loopback origin, e.g. `http://127.0.0.1:8080`, then `systemctl restart lorebay`.
+SSH forwarding needs the same local port (`ssh -L 8080:127.0.0.1:8080 server`).
+Domain sign-ins are refused while set. Changing the origin invalidates access
+tokens but keeps sign-ins; `lorebay logout` ends one. Restore HTTPS and restart.
 
-Run static syntax and nginx checks from the repository root with Docker,
-OpenSSL and Python 3.11 or later:
-
-```bash
-moon run deploy:check
-```
+Run `moon run deploy:check` from the repo root with Docker, OpenSSL and Python 3.11+.
 
 ## Configuration
 
-| Input | Flag / default |
-| --- | --- |
-| Host | x86_64 Debian 12 or Ubuntu 24.04, systemd |
-| DNS domain | `--domain`, required; lowercase, no port or scheme |
-| Users file | `--users`, required |
-| Certificate chain / key | `--certificate` / `--key`, required |
-| Empty local data path | `--data`, required |
-| Release | `--version v0.1.1`; HTTPS, or `--archives` |
-
-Paths must be absolute, using letters, digits, `/`, `.`, `_` and `-`.
-Service keys live in `/etc/lorebay/lorebayd.json`; their reference is
-[lorebayd/README.md](../lorebayd/README.md#configuration). The four application
-rate limits are team budgets of 1000; per-caller policy and upload limits live
+Paths must be absolute, using letters, digits, `/`, `.`, `_` and `-`. Required:
+`--domain` (lowercase DNS name), `--users`, `--certificate`, `--key` and `--data`.
+Select the release explicitly with `--version`. Service keys are in
+`/etc/lorebay/lorebayd.json`; see [the reference](../lorebayd/README.md#configuration).
+The four application rate limits are team budgets of 1000; per-caller policy is
 in [nginx.conf.in](nginx.conf.in). Match `client_max_body_size` to
-`upload_size_limit_bytes` when changing that key; validate with `nginx -t`
-before reloading nginx.
+`upload_size_limit_bytes`; run `nginx -t` before reloading.
 
 ## Docs
 
