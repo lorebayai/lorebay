@@ -9,6 +9,7 @@ import re
 import shutil
 import socket
 import stat
+import subprocess
 import tarfile
 import tempfile
 from pathlib import Path
@@ -24,7 +25,6 @@ from common import (
     input_path,
     lock,
     nginx_files,
-    output,
     render,
     run,
     served_certificate,
@@ -62,16 +62,23 @@ def digest(path):
         return hashlib.file_digest(handle, "sha256").hexdigest()
 
 
+def trusted_metadata(metadata, label, path):
+    if metadata.st_uid != 0 or metadata.st_mode & 0o022:
+        fail(
+            f"{label} must be owned by root and not writable by group or others: {path}"
+        )
+
+
+def trusted_path(path, label):
+    for part in (path, *path.parents):
+        trusted_metadata(part.stat(), label, part)
+
+
 def inputs(args):
     for path in (args.users, args.certificate, args.key):
         if not path.is_file():
             fail(f"Required input file is missing: {path}")
-    for path in (args.users, *args.users.parents):
-        metadata = path.stat()
-        if metadata.st_uid != 0 or metadata.st_mode & 0o022:
-            fail(
-                f"Users file and its ancestors must be owned by root and not writable by group or others: {path}"
-            )
+    trusted_path(args.users, "Users file and its ancestors")
     certificate(args.certificate, args.key, args.domain)
     return {
         "version": args.version,
@@ -131,10 +138,27 @@ def data_directory(path):
 
 
 def release(args, directory):
+    if args.archives:
+        trusted_path(args.archives, "Local archives directory and its ancestors")
     for name in (ARCHIVE, "SHA256SUMS"):
         destination = directory / name
         if args.archives:
-            shutil.copyfile(args.archives / name, destination)
+            source = args.archives / name
+            try:
+                descriptor = os.open(
+                    source, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
+                )
+            except OSError:
+                fail(
+                    f"Local release input must be a readable regular file without symlinks: {source}"
+                )
+            with os.fdopen(descriptor, "rb") as handle:
+                metadata = os.fstat(handle.fileno())
+                if not stat.S_ISREG(metadata.st_mode):
+                    fail(f"Local release input must be a regular file: {source}")
+                trusted_metadata(metadata, "Local release input", source)
+                with destination.open("wb") as target:
+                    shutil.copyfileobj(handle, target)
         else:
             base = (
                 args.release_url
@@ -176,10 +200,23 @@ def release(args, directory):
             ):
                 shutil.copyfileobj(source, target)
     (directory / "lorebayd").chmod(0o755)
-    if (
-        output(directory / "lorebayd", "--version")
-        != f"lorebayd {args.version.removeprefix('v')}"
-    ):
+    account = pwd.getpwnam("nobody")
+    # The private release directory must stay inaccessible to the version-check user.
+    with (directory / "lorebayd").open("rb") as executable:
+        version = run(
+            f"/proc/self/fd/{executable.fileno()}",
+            "--version",
+            user=account.pw_uid,
+            group=account.pw_gid,
+            extra_groups=(),
+            pass_fds=(executable.fileno(),),
+            cwd="/",
+            env={},
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    if version != f"lorebayd {args.version.removeprefix('v')}":
         fail("Archive executable does not match the selected version")
 
 

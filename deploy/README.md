@@ -5,8 +5,7 @@ PID 1. nginx serves HTTPS and caller limits; `lorebayd` listens on loopback.
 
 ## Usage
 
-As root, use distribution Python 3.11+ and fetch the named release over HTTPS.
-Supply a root-only `/srv/inputs/password.txt` before hashing.
+As root, use Python 3.11+ and supply `/srv/inputs/password.txt` with mode `0600`.
 
 ```bash
 apt-get update
@@ -41,10 +40,11 @@ journalctl -u lorebay
 curl https://lorebay.example.com/readyz
 ```
 
-The installer checks its HTTPS download against `SHA256SUMS`. To reuse the
-verified archive above, append `--archives "$PWD"`; `--release-url` selects an
-HTTPS mirror. An identical repeated install does nothing; changed inputs or
-another version are refused. nginx is installed if absent without upgrades.
+HTTPS downloads are checked against `SHA256SUMS`. `--archives "$PWD"` reuses
+root-owned regular archives/sums files without group/other write access; the
+directory and ancestors must also be root-owned without group/other write.
+`--release-url` selects an HTTPS mirror. Identical repeats do nothing; changed
+inputs or versions are refused. nginx installs if absent without upgrades.
 
 Use an empty root-owned data directory or a missing path on a writable local
 filesystem outside `/tmp` and `/var/tmp`. Every existing ancestor must be
