@@ -11,7 +11,7 @@ pages, the Web API and the MCP server that people and agents use.
 `lorebay` CLI and an agent harness, Claude Code or Codex, on their own machine,
 and both reach the server over HTTPS.
 
-On the server host, follow [deploy/README.md](deploy/README.md) to install
+On the server host, follow [the native guide](deploy/native/README.md) to install
 `lorebayd` as a systemd service behind nginx HTTPS. The installer qualifies
 x86_64 Debian 12 and Ubuntu 24.04; Linux musl archives are also available for
 manual use on x86_64 and aarch64. Supply the users file, domain, certificate,
@@ -45,7 +45,7 @@ To change Lorebay, set up the tools as
 
 - `base/`: the Rust library for configuration, logging and clocks.
 - `cli/`: the Rust crate that builds the `lorebay` command-line client.
-- `deploy/`: native installation, nginx policy and certificate replacement.
+- `deploy/`: installation guides, shared nginx policy and certificate tools.
 - `docs/`: product and system design docs.
 - `lib/`: the library crates and design for features every product shares.
 - `lorebayd/`: the Rust crate that builds the `lorebayd` executable and

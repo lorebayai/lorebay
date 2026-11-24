@@ -33,7 +33,8 @@ rustup toolchain install
 ```
 
 Install Python 3.11 or later for the library boundary check, entity generation
-and deployment syntax checks. Deployment checks also need OpenSSL and Docker;
+and deployment syntax checks. Deployment checks cover every `deploy/` subfolder
+and need OpenSSL and Docker;
 they run `nginx -t` in a pinned nginx image with a throwaway certificate.
 
 Install moon, then add `~/.moon/bin` to `PATH`:

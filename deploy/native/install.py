@@ -10,12 +10,14 @@ import shutil
 import socket
 import stat
 import subprocess
+import sys
 import tarfile
 import tempfile
 from pathlib import Path
 
-from common import (
-    HERE,
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "common"))
+
+from helpers import (
     TLS,
     atomic_write,
     certificate,
@@ -31,6 +33,7 @@ from common import (
     without_comments,
 )
 
+HERE = Path(__file__).resolve().parent
 CONFIG = Path("/etc/lorebay")
 INSTALL_DIRECTORY = Path("/opt/lorebay")
 UNIT = Path("/etc/systemd/system/lorebay.service")
@@ -313,7 +316,7 @@ def install(args):
             for name in ("lorebayd", "LICENSE", "THIRD-PARTY-NOTICES.txt"):
                 shutil.copy2(directory / name, INSTALL_DIRECTORY / name)
             shutil.copytree(
-                HERE,
+                HERE.parent,
                 INSTALL_DIRECTORY / "deploy",
                 ignore=shutil.ignore_patterns("__pycache__"),
             )

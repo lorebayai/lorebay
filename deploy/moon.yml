@@ -3,7 +3,7 @@ layer: 'tool'
 
 tasks:
   check:
-    command: 'python3 -B deploy/check.py'
+    command: 'python3 -B deploy/common/check.py'
     inputs:
       - '**/*'
     options:

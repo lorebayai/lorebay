@@ -2,12 +2,12 @@
 import tempfile
 from pathlib import Path
 
-from common import HERE, render, run
+from helpers import HERE, render, run
 
 IMAGE = "nginx:1.28-alpine@sha256:a8b39bd9cf0f83869a2162827a0caf6137ddf759d50a171451b335cecc87d236"
 
 
-for source in HERE.glob("*.py"):
+for source in HERE.parent.rglob("*.py"):
     compile(source.read_bytes(), str(source), "exec")
 with tempfile.TemporaryDirectory(prefix="lorebay-nginx-") as temporary:
     directory = Path(temporary)
