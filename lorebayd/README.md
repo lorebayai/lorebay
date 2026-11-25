@@ -20,8 +20,8 @@ lorebayd readiness --config /path/to/lorebayd.json --dotenv /path/to/lorebayd.en
 ```
 
 The second command regenerates Lorebay's entities. Startup applies the
-library's migrations, then Lorebay's. Data directories from `v0.1.1` or later
-are upgraded in place; those from before `v0.1.1` are refused: delete them
+library's migrations, then Lorebay's. Data directories from `v0.1.3` or later
+are upgraded in place; those from before `v0.1.3` are refused: delete them
 and start empty, and the users file recreates the accounts. Open the
 metadata's `/oauth/authorize` endpoint with the client's authorization
 parameters to sign in and consent. The CLI's client ID is `lorebay-cli`; it

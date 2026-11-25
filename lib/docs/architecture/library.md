@@ -12,9 +12,8 @@
 > identity, teams, its entry points and its deployment, and reaches the
 > library only through the library's public API and five interfaces.
 >
-> The library never commits or rolls back the transaction it is handed,
-> only a savepoint it opens inside it; it never issues or verifies a
-> credential, and names nothing of one product.
+> The library never commits or rolls back the transaction it is handed; it
+> never issues or verifies a credential, and names nothing of one product.
 
 ## 1. Purpose
 
@@ -358,8 +357,7 @@ methods:
 
 - **The product opens, commits and rolls back.** The library writes inside
   the transaction it is handed and never commits or rolls back that
-  transaction. A refused create request leaves the outer write to roll back
-  its counter allocation with the rest of the operation.
+  transaction.
 - **On SQLite the product enables foreign key checks** on every
   connection it hands to the library. Task deletion relies on the cascade
   to its checkpoints and on clearing the source task from requests.

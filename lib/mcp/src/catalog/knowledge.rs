@@ -76,7 +76,7 @@ pub(super) fn get_person_request() -> (ToolName, Tool) {
 pub(super) fn revise_person_request() -> (ToolName, Tool) {
     tool(
         ToolName::RevisePersonRequest,
-        "Revise your party's pending request by space and key. Replace any provided name, summary or content; omit all three to refresh its target version and name. A delete request takes no replacement fields. Keeps the key, raises the revision and records your agent name. No earlier revision is kept. Read and reconcile the current Knowledge before revising an outdated request.",
+        "Revise your party's pending request by space and key. Replace any provided name, summary or content; omit all three to refresh its target version and name. A delete request takes no replacement fields. Keeps the key, raises the revision and records your agent name. No earlier revision is kept.",
         json!({"space":space(), "key":{"type":"string"}, "name":name(),
             "summary":{"type":"string", "minLength":1, "maxLength":KNOWLEDGE_SUMMARY_MAX_CHARACTERS},
             "content":{"type":"string", "minLength":1, "maxLength":KNOWLEDGE_CONTENT_MAX_BYTES}}),

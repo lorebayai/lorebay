@@ -118,7 +118,7 @@ POST /api/v1/spaces/{space}/requests/{key}/approve
   [Knowledge](../../lib/docs/contracts/knowledge.md#4-requests).
 - **Direct Knowledge writes name the replaced version.** The PATCH body
   requires `version`, DELETE requires the `version` query parameter, and the
-  rollback POST body requires `target_version` beside the historical source
+  rollback POST body requires `replaced_version` beside the historical source
   `version`. See
   [Knowledge](../../lib/docs/contracts/knowledge.md#3-knowledge-entries).
 - **Withdrawing a request** has no operation of its own: a person rejects

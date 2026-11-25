@@ -102,7 +102,7 @@ pub(crate) struct VersionPath {
 #[serde(deny_unknown_fields)]
 pub(crate) struct RollbackRequest {
     version: i64,
-    target_version: i64,
+    replaced_version: i64,
 }
 
 #[derive(Clone, Debug, Deserialize, TypedBuilder)]
@@ -325,7 +325,7 @@ pub(crate) async fn roll_back(
     let Path(path) = path.map_err(|_| invalid_query("path"))?;
     let Query(query) = query.map_err(|_| invalid_query("query"))?;
     let Json(request) = request.map_err(invalid_json)?;
-    let target = VersionedKnowledgeTarget::new(path.target(query)?, request.target_version)?;
+    let target = VersionedKnowledgeTarget::new(path.target(query)?, request.replaced_version)?;
     let caller = caller.library_caller();
     let result = state
         .library

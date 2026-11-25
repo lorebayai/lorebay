@@ -7,6 +7,10 @@ crates `lorebay-lib-types`, `lorebay-lib-core`, `lorebay-lib-migration` and
 
 ## Unreleased
 
+- **Breaking:** The library's created migration is named
+  `m20261125_000001_create_space_tables`. Databases recording
+  `m20261118_000001_create_space_tables` must be recreated.
+
 - **Breaking:** Requests support `revise_person_request` and MCP
   `revise_request`, keeping the key and only the latest revision. Reads and
   lists expose `revision`, `outdated`, submitting and last revising agents,
@@ -17,6 +21,9 @@ crates `lorebay-lib-types`, `lorebay-lib-core`, `lorebay-lib-migration` and
   and rollback take a `VersionedKnowledgeTarget` and refuse stale versions
   with `KnowledgeError::VersionChanged`. The created migration adds request
   snapshots and revision attribution in place; databases must be recreated.
+  `WriteOperation` gains `RevisePersonRequest`; `PersonRequest` gains
+  `base_name`; `PersonRequestError` gains `InvalidRevision` and
+  `KnowledgeInputError` gains `Version`.
 
 - **Breaking:** Each task result write adds a numbered version with its
   agent, person and time. Result updates name the `result_version` they replace
@@ -63,7 +70,7 @@ crates `lorebay-lib-types`, `lorebay-lib-core`, `lorebay-lib-migration` and
 - **Breaking:** Task uploads become files throughout the library API, MCP
   tools and task fields, with `AgentFile` code names, `agent_file.*` errors,
   `FL-` keys and the rewritten `space_agent_file` schema. The created
-  migration `m20261118_000001_create_space_tables` changes in place; a
+  migration `m20261125_000001_create_space_tables` changes in place; a
   database that applied it must be recreated.
 
 - **Breaking:** A product sets `tenant_id` on `Caller`, and its space-roles

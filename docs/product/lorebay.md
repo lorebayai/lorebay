@@ -41,11 +41,8 @@ It does not cover:
 - **`v0.1.1` serves only the authorization and device sign-in pages.** The
   [`lorebay` CLI](../contracts/cli.md) and the skill's
   [README](../../skill/README.md) cover what the other pages will, and those
-  pages come in a later release. The CLI prints as plain text two things
-  the library leaves to a product to show: a request marked "changed since
-  requested", without its difference from the current content
-  ([Knowledge](../../lib/docs/contracts/knowledge.md#4-requests)), and
-  references, without links
+  pages come in a later release. The CLI prints references as plain text,
+  without links
   ([Keys and references](../../lib/docs/contracts/keys-and-references.md#5-references)).
 - **Skill.** Lorebay writes and ships its own skill, which states the
   library's [agent practices](../../lib/docs/contracts/agent-practices.md) and

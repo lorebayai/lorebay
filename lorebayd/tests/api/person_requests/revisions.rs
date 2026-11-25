@@ -201,7 +201,7 @@ async fn direct_knowledge_writes_refuse_old_version_and_apply_nothing() {
         (
             Method::POST,
             "/rollback",
-            json!({"version":1,"target_version":1}),
+            json!({"version":1,"replaced_version":1}),
         ),
     ] {
         assert_problem(
@@ -227,7 +227,7 @@ async fn direct_knowledge_writes_refuse_old_version_and_apply_nothing() {
             &person,
             Method::POST,
             &format!("{path}/rollback"),
-            json!({"version":1,"target_version":2}),
+            json!({"version":1,"replaced_version":2}),
         )
         .await,
         StatusCode::OK,

@@ -27,7 +27,7 @@ by the `AGENTS.md` of every Rust project that uses SeaORM.
   Each crate exports its `Migrator`. Its `src/migration/mod.rs` lists its
   migrations in order. Each migration is one file named
   `mYYYYMMDD_NNNNNN_<verb>_<table>.rs`, such as
-  `m20261118_000001_create_space_tables.rs`.
+  `m20261125_000001_create_space_tables.rs`.
 - `src/entity/` holds the generated entities, one file per table.
 - `src/repository/<table>.rs` holds one table's repository, named for the
   table without the library's `space_` prefix, such as
@@ -52,10 +52,10 @@ by the `AGENTS.md` of every Rust project that uses SeaORM.
   or database default, as
   [Data model](../../lib/docs/architecture/data-model.md#3-conventions)
   requires.
-- `v0.1.1` is the first release whose data must be kept. A migration
+- `v0.1.3` is the first release whose data must be kept. A migration
   merged before its tag may still be rewritten instead of followed by a new
   one; a database made by an earlier release or build is refused, not upgraded.
-  A migration in `v0.1.1` or merged after it is never edited, renamed or
+  A migration in `v0.1.3` or merged after it is never edited, renamed or
   reordered, and a schema change is a new migration.
 - `down` reverses `up` and runs only against disposable databases.
 - `run` applies the library migrations first and the product migrations

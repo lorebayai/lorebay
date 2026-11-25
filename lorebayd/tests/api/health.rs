@@ -1,6 +1,7 @@
+use std::collections::BTreeMap;
 use std::fs::{self, Permissions};
 use std::os::unix::fs::PermissionsExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::{Duration, Instant};
 
@@ -177,22 +178,10 @@ async fn shut_down_finishes_when_client_stalls() {
 #[tokio::test]
 async fn startup_creates_data_directory_private_to_its_user() {
     let directory = TempDir::new().unwrap();
-    let users = directory.path().join("users.json");
-    write_users(&users, &[(TEST_USERNAME, TEST_PASSWORD)]).await;
     let data = directory.path().join("missing-parent/data");
     let database = data.join("lorebay.sqlite3");
-    let config = directory.path().join("server.json");
-    fs::write(
-        &config,
-        json!({
-            "listen_address": "127.0.0.1:0",
-            "public_url": "http://127.0.0.1:8080",
-            "users_file": users,
-            "data_directory": data,
-        })
-        .to_string(),
-    )
-    .unwrap();
+    let config = executable_config(directory.path(), &data).await;
+    let mut keys = None;
     assert!(!data.exists());
     for (directory_mode, database_mode) in [(0o700, 0o600), (0o755, 0o644)] {
         if data.exists() {
@@ -210,52 +199,37 @@ async fn startup_creates_data_directory_private_to_its_user() {
             assert_eq!(mode, expected, "{}", path.display());
         }
         stop_executable(&mut child).await;
+        let written =
+            ["signing.key", "file-url-signing.key"].map(|name| fs::read(data.join(name)).unwrap());
+        if let Some(previous) = &keys {
+            assert_eq!(&written, previous);
+        }
+        keys = Some(written);
     }
 }
 
 #[tokio::test]
 async fn startup_refuses_earlier_data_directory_without_changing_database() {
     let directory = TempDir::new().unwrap();
-    let data = directory.path().join("data");
-    fs::create_dir(&data).unwrap();
-    let path = data.join("lorebay.sqlite3");
-    let filename = path.clone();
-    let mut options = ConnectOptions::new("sqlite://");
-    options.map_sqlx_sqlite_opts(move |sqlite| sqlite.filename(&filename).create_if_missing(true));
-    let database = Database::connect(options).await.unwrap();
-    let history = Alias::new("seaql_migrations");
-    let version = Alias::new("version");
-    let applied_at = Alias::new("applied_at");
-    let table = Table::create()
-        .table(history.clone())
-        .col(
-            ColumnDef::new(version.clone())
-                .text()
-                .not_null()
-                .primary_key(),
-        )
-        .col(ColumnDef::new(applied_at.clone()).big_integer().not_null())
-        .to_owned();
-    database.execute(&table).await.unwrap();
-    let row = Query::insert()
-        .into_table(history)
-        .columns([version, applied_at])
-        .values_panic(["m20261116_000001_create_tables".into(), 0_i64.into()])
-        .to_owned();
-    database.execute(&row).await.unwrap();
-    database.close().await.unwrap();
-    let bytes = fs::read(&path).unwrap();
-    let error = Server::startup_error(directory.path()).await;
-    assert!(error.contains(data.to_str().unwrap()), "{error}");
-    assert!(
-        error.contains("was written by an earlier release"),
-        "{error}"
-    );
-    assert!(
-        error.contains("Delete it and restart with an empty data directory; the users file recreates the accounts"),
-        "{error}"
-    );
-    assert_eq!(fs::read(path).unwrap(), bytes);
+    write_migration_histories(
+        directory.path(),
+        &[("seaql_migrations", "m20261116_000001_create_tables")],
+    )
+    .await;
+    assert_refused_directory_unchanged(directory.path()).await;
+}
+
+#[tokio::test]
+async fn startup_refuses_v01_data_directory_without_changing_database() {
+    let histories = [
+        ("space_migration", "m20261118_000001_create_space_tables"),
+        ("seaql_migrations", "m20261118_000001_create_product_tables"),
+    ];
+    for recorded in [&histories[..], &histories[..1], &histories[1..]] {
+        let directory = TempDir::new().unwrap();
+        write_migration_histories(directory.path(), recorded).await;
+        assert_refused_directory_unchanged(directory.path()).await;
+    }
 }
 
 #[tokio::test]
@@ -273,8 +247,68 @@ async fn startup_refuses_data_directory_from_earlier_release() {
         .await
         .unwrap();
     database.close().await.unwrap();
-    let bytes = fs::read(&path).unwrap();
-    let error = Server::startup_error(directory.path()).await;
+    assert_refused_directory_unchanged(directory.path()).await;
+}
+
+async fn write_migration_histories(directory: &Path, histories: &[(&str, &str)]) {
+    let data = directory.join("data");
+    fs::create_dir(&data).unwrap();
+    let filename = data.join("lorebay.sqlite3");
+    let mut options = ConnectOptions::new("sqlite://");
+    options.map_sqlx_sqlite_opts(move |sqlite| sqlite.filename(&filename).create_if_missing(true));
+    let database = Database::connect(options).await.unwrap();
+    for (history, migration) in histories {
+        let history = Alias::new(*history);
+        let version = Alias::new("version");
+        let applied_at = Alias::new("applied_at");
+        database
+            .execute(
+                &Table::create()
+                    .table(history.clone())
+                    .col(
+                        ColumnDef::new(version.clone())
+                            .text()
+                            .not_null()
+                            .primary_key(),
+                    )
+                    .col(ColumnDef::new(applied_at.clone()).big_integer().not_null())
+                    .to_owned(),
+            )
+            .await
+            .unwrap();
+        database
+            .execute(
+                &Query::insert()
+                    .into_table(history)
+                    .columns([version, applied_at])
+                    .values_panic([(*migration).into(), 0_i64.into()])
+                    .to_owned(),
+            )
+            .await
+            .unwrap();
+    }
+    database.close().await.unwrap();
+}
+
+async fn assert_refused_directory_unchanged(directory: &Path) {
+    let data = directory.join("data");
+    let before = directory_contents(&data);
+    let config = executable_config(directory, &data).await;
+    let output = timeout(
+        TEST_TIMEOUT,
+        Command::new(env!("CARGO_BIN_EXE_lorebayd"))
+            .arg("--config")
+            .arg(&config)
+            .env_clear()
+            .env("TOKIO_WORKER_THREADS", "2")
+            .kill_on_drop(true)
+            .output(),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    let error = String::from_utf8(output.stderr).unwrap();
     assert!(error.contains(data.to_str().unwrap()), "{error}");
     assert!(
         error.contains("was written by an earlier release"),
@@ -284,7 +318,49 @@ async fn startup_refuses_data_directory_from_earlier_release() {
         error.contains("Delete it and restart with an empty data directory; the users file recreates the accounts"),
         "{error}"
     );
-    assert_eq!(fs::read(path).unwrap(), bytes);
+    let after = directory_contents(&data);
+    assert_eq!(
+        after.keys().collect::<Vec<_>>(),
+        before.keys().collect::<Vec<_>>()
+    );
+    for (path, bytes) in before {
+        assert!(after[&path] == bytes, "{} changed", path.display());
+    }
+}
+
+fn directory_contents(directory: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
+    let mut contents = BTreeMap::new();
+    for entry in fs::read_dir(directory).unwrap() {
+        let entry = entry.unwrap();
+        let name = PathBuf::from(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            contents.insert(name.clone(), Vec::new());
+            for (child, bytes) in directory_contents(&entry.path()) {
+                contents.insert(name.join(child), bytes);
+            }
+        } else {
+            contents.insert(name, fs::read(entry.path()).unwrap());
+        }
+    }
+    contents
+}
+
+async fn executable_config(directory: &Path, data: &Path) -> PathBuf {
+    let users = directory.join("users.json");
+    write_users(&users, &[(TEST_USERNAME, TEST_PASSWORD)]).await;
+    let config = directory.join("server.json");
+    fs::write(
+        &config,
+        json!({
+            "listen_address": "127.0.0.1:0",
+            "public_url": "http://127.0.0.1:8080",
+            "users_file": users,
+            "data_directory": data,
+        })
+        .to_string(),
+    )
+    .unwrap();
+    config
 }
 
 async fn start_executable(config: &Path) -> Child {

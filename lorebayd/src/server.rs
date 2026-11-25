@@ -20,8 +20,9 @@ use lorebay_base::{RateLimiter, SystemClock};
 use lorebay_lib_core::LibraryState;
 use lorebay_lib_migration::Migrator as LibraryMigrator;
 use lorebayd_migration::Migrator as ProductMigrator;
+use sea_orm::sea_query::{DynIden, Expr, ExprTrait, Query};
 use sea_orm::{
-    ConnectOptions, Database, DatabaseConnection, DatabaseTransaction, EntityName, EntityTrait,
+    ConnectOptions, ConnectionTrait, Database, DatabaseConnection, DatabaseTransaction,
     SqliteTransactionMode, TransactionOptions, TransactionTrait,
 };
 use sea_orm_migration::{MigratorTrait, SchemaManager, seaql_migrations};
@@ -111,7 +112,11 @@ const ACCEPT_RETRY_DELAY: Duration = Duration::from_millis(100);
 const DATABASE_FILE: &str = "lorebay.sqlite3";
 const DATA_DIRECTORY_MODE: u32 = 0o700;
 const DATABASE_MODE: u32 = 0o600;
-const EARLIER_SCHEMA_MIGRATION: &str = "m20261116_000001_create_tables";
+const EARLIER_LIBRARY_MIGRATIONS: &[&str] = &["m20261118_000001_create_space_tables"];
+const EARLIER_PRODUCT_MIGRATIONS: &[&str] = &[
+    "m20261116_000001_create_tables",
+    "m20261118_000001_create_product_tables",
+];
 const EARLIER_FILE_TABLE: &str = "space_artifact";
 const SQLITE_BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -227,7 +232,18 @@ async fn reject_earlier_data_directory(
     transaction: &DatabaseTransaction,
     directory: &Path,
 ) -> Result<()> {
-    if has_earlier_schema_migration(transaction).await?
+    if has_earlier_schema_migration(
+        transaction,
+        LibraryMigrator::migration_table_name(),
+        EARLIER_LIBRARY_MIGRATIONS,
+    )
+    .await?
+        || has_earlier_schema_migration(
+            transaction,
+            ProductMigrator::migration_table_name(),
+            EARLIER_PRODUCT_MIGRATIONS,
+        )
+        .await?
         || SchemaManager::new(transaction)
             .has_table(EARLIER_FILE_TABLE)
             .await?
@@ -240,15 +256,29 @@ async fn reject_earlier_data_directory(
     Ok(())
 }
 
-async fn has_earlier_schema_migration(transaction: &DatabaseTransaction) -> Result<bool> {
-    let schema = SchemaManager::new(transaction);
-    Ok(schema
-        .has_table(seaql_migrations::Entity.table_name())
+async fn has_earlier_schema_migration(
+    transaction: &DatabaseTransaction,
+    history: DynIden,
+    migrations: &[&str],
+) -> Result<bool> {
+    if !SchemaManager::new(transaction)
+        .has_table(history.to_string())
         .await?
-        && seaql_migrations::Entity::find_by_id(EARLIER_SCHEMA_MIGRATION)
-            .one(transaction)
-            .await?
-            .is_some())
+    {
+        return Ok(false);
+    }
+    Ok(transaction
+        .query_one(
+            Query::select()
+                .column(seaql_migrations::Column::Version)
+                .from(history)
+                .and_where(
+                    Expr::col(seaql_migrations::Column::Version).is_in(migrations.iter().copied()),
+                )
+                .limit(1),
+        )
+        .await?
+        .is_some())
 }
 
 async fn serve_until_shutdown(
