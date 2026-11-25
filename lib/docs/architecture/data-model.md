@@ -390,6 +390,9 @@ One row per knowledge entry; its content is in `space_knowledge_version`.
   snapshot fields with the joined entry. Pending creates look up occupied
   names in one batch, including deleted entries. Approval checks the same
   snapshot under the entry lock; the unique name constraint guards creates.
+  A revision derives `was_outdated` under its request lock, and its target's
+  entry lock when present, before refreshing the snapshot or replacing the
+  proposed name. The value is returned with the revision and is not stored.
 - **Approving** changes the status and writes `space_knowledge` and
   `space_knowledge_version` in one transaction. Content or summary that a
   change leaves out is copied from the entry's current version; when the

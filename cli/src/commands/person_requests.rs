@@ -2,7 +2,7 @@ use reqwest::Method;
 use serde_json::{Value, json};
 
 use crate::args::{ContentOptions, KnowledgeChanges, OutputMode, Page, PersonRequestCommand};
-use crate::constants::DATA;
+use crate::constants::{CODE, DATA};
 use crate::credentials::Store;
 use crate::error::Result;
 use crate::http::Http;
@@ -176,10 +176,18 @@ async fn list(
                 "Key",
                 "Action",
                 "Status",
+                "Outdated",
                 "Target",
                 "Proposed summary",
             ])
-            .fields(vec!["key", "action", "status", "target", "new_summary"])
+            .fields(vec![
+                "key",
+                "action",
+                "status",
+                "outdated",
+                "target",
+                "new_summary",
+            ])
             .display_field(person_request_field as fn(&Value, &str) -> String)
             .build(),
     )
@@ -209,7 +217,7 @@ async fn request(
     body: Option<&Value>,
 ) -> Result<Outcome> {
     let body = Http::new()?.authorized(store, method, path, body).await?;
-    let values = [
+    let mut values = [
         ("Key", "key"),
         ("Action", "action"),
         ("Status", "status"),
@@ -242,6 +250,12 @@ async fn request(
         }
     })
     .collect::<Vec<_>>();
+    if let Some(was_outdated) = body[DATA].get("was_outdated") {
+        values.push(Field::SingleLine(
+            "Was outdated",
+            display_value(was_outdated),
+        ));
+    }
     Ok(Outcome::new(body, Fields::builder().values(values).build()))
 }
 
@@ -283,6 +297,16 @@ async fn approve(store: &Store, space: &str, key: &str, revision: i64) -> Result
         Some(&json!({"revision":revision})),
     )
     .await
+    .map_err(|failure| {
+        if failure.body()[CODE] == "person_request.outdated" {
+            failure.context(&format!(
+                "Ask the requester or their agent to revise the request against the current entry, then run `lorebay request show {} {}` and approve the revision it returns.",
+                output::shell_word(space), output::shell_word(key),
+            ))
+        } else {
+            failure
+        }
+    })
 }
 
 async fn reject(

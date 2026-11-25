@@ -17,24 +17,22 @@ async fn revise_request_keeps_key_and_records_person_and_each_agent() {
         "task_id":task["task_id"],"action":"create","name":"Guide","summary":"Summary","content":"Original"
     })).await;
     assert_eq!(first["revision"], 1);
+    assert!(first.get("was_outdated").is_none());
     assert_eq!(first["reviser_agent_name"], Value::Null);
-    let second = data(
-        request(
-            &server,
-            &person,
-            Method::PATCH,
-            &by_key("RQ-1"),
-            json!({"summary":"Person revision"}),
-        )
-        .await,
-        StatusCode::OK,
+    let second = revise(
+        &server,
+        &person,
+        "RQ-1",
+        json!({"summary":"Person revision"}),
     )
     .await;
     assert_eq!(second["revision"], 2);
+    assert_eq!(second["was_outdated"], false);
+    assert_eq!(second["outdated"], false);
     assert_eq!(second["revised_by"], "alice");
     assert_eq!(second["reviser_agent_name"], Value::Null);
     assert!(second["revised_at"].as_i64().unwrap() > 0);
-    let third = call(
+    let mut third = call(
         &server,
         &peer,
         "revise_request",
@@ -48,6 +46,8 @@ async fn revise_request_keeps_key_and_records_person_and_each_agent() {
     assert_eq!(third["requester_agent_name"], "Submitting agent");
     assert_eq!(third["reviser_agent_name"], "Revising agent");
     assert_eq!(third["new_summary"], "Person revision");
+    assert_eq!(third["was_outdated"], false);
+    third.as_object_mut().unwrap().remove("was_outdated");
     assert_eq!(read(&server, &person, "RQ-1").await, third);
     assert_list_attribution(&server, &peer, &third).await;
     refuse_other_decisions(&server, &person, &third).await;
@@ -115,6 +115,7 @@ async fn approve_request_refuses_changed_content_summary_and_name_until_revised(
         assert_eq!(revised["base_version"], current["version"]);
         assert_eq!(revised["base_name"], current["name"]);
         assert_eq!(revised["outdated"], false);
+        assert_eq!(revised["was_outdated"], true);
         assert_eq!(revised["key"], initial["key"]);
         let approved = approve_revision(&server, &person, &key, 2).await;
         assert_eq!(approved["status"], "approved");
@@ -145,19 +146,13 @@ async fn approve_create_refuses_taken_name_and_revise_delete_refreshes_snapshot(
     )
     .await;
     assert_eq!(entry(&server, &person, "KN-1").await, original);
-    data(
-        request(
-            &server,
-            &person,
-            Method::PATCH,
-            &by_key("RQ-1"),
-            json!({"name":"Available"}),
-        )
-        .await,
-        StatusCode::OK,
-    )
-    .await;
-    approve_revision(&server, &person, "RQ-1", 2).await;
+    let unchanged = revise(&server, &person, "RQ-1", json!({})).await;
+    assert_eq!(unchanged["was_outdated"], true);
+    assert_eq!(unchanged["outdated"], true);
+    let renamed = revise(&server, &person, "RQ-1", json!({"name":"Available"})).await;
+    assert_eq!(renamed["was_outdated"], true);
+    assert_eq!(renamed["outdated"], false);
+    approve_revision(&server, &person, "RQ-1", 3).await;
     submit(
         &server,
         &person,
@@ -179,9 +174,82 @@ async fn approve_create_refuses_taken_name_and_revise_delete_refreshes_snapshot(
     )
     .await;
     let refreshed = revise(&server, &person, "RQ-2", json!({})).await;
+    assert_eq!(refreshed["was_outdated"], true);
     assert_eq!(refreshed["outdated"], false);
     approve_revision(&server, &person, "RQ-2", 2).await;
     assert_eq!(entry(&server, &person, "KN-1").await["kind"], "deletion");
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn revise_request_reports_outdated_change_through_web_api() {
+    let (server, person) = setup().await;
+    seed(&server, &person, "Guide").await;
+    submit(
+        &server,
+        &person,
+        json!({"action":"change","target_key":"KN-1","content":"Proposal"}),
+    )
+    .await;
+    let current = change_entry(&server, &person, "KN-1", json!({"content":"Person's edit"})).await;
+    let mut revised = revise(
+        &server,
+        &person,
+        "RQ-1",
+        json!({"content":"Reconciled edit"}),
+    )
+    .await;
+    assert_eq!(
+        revised.as_object_mut().unwrap().remove("was_outdated"),
+        Some(json!(true))
+    );
+    assert_eq!(revised["outdated"], false);
+    assert_eq!(revised["base_version"], current["version"]);
+    assert_eq!(read(&server, &person, "RQ-1").await, revised);
+    let refreshed = revise(&server, &person, "RQ-1", json!({})).await;
+    assert_eq!(refreshed["was_outdated"], false);
+    assert_eq!(refreshed["outdated"], false);
+    approve_revision(&server, &person, "RQ-1", 3).await;
+    assert_eq!(
+        entry(&server, &person, "KN-1").await["content"],
+        "Reconciled edit"
+    );
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn revise_request_reports_taken_create_name_through_mcp() {
+    let (server, person) = setup().await;
+    let agent = authorize_for(&server, &person, "Reconciler").await;
+    submit(&server, &person, creation("Guide")).await;
+    let original = seed(&server, &person, "GUIDE").await;
+    let unchanged = call(
+        &server,
+        &agent,
+        "revise_request",
+        json!({"space":"SPACE-1","key":"RQ-1"}),
+    )
+    .await;
+    assert_eq!(unchanged["was_outdated"], true);
+    assert_eq!(unchanged["outdated"], true);
+    let mut renamed = call(
+        &server,
+        &agent,
+        "revise_request",
+        json!({
+            "space":"SPACE-1","key":"RQ-1","name":"Available"
+        }),
+    )
+    .await;
+    assert_eq!(
+        renamed.as_object_mut().unwrap().remove("was_outdated"),
+        Some(json!(true))
+    );
+    assert_eq!(renamed["outdated"], false);
+    assert_eq!(read(&server, &person, "RQ-1").await, renamed);
+    assert_eq!(entry(&server, &person, "KN-1").await, original);
+    approve_revision(&server, &person, "RQ-1", 3).await;
+    assert_eq!(entry(&server, &person, "KN-2").await["name"], "Available");
     server.stop().await;
 }
 
@@ -313,6 +381,7 @@ async fn refuse_missing_versions(server: &Server, person: &Value, path: &str) {
 
 async fn assert_list_attribution(server: &Server, peer: &Value, third: &Value) {
     let listed = call(server, peer, "list_requests", json!({"space":"SPACE-1"})).await;
+    assert!(listed["data"][0].get("was_outdated").is_none());
     for field in [
         "revision",
         "outdated",

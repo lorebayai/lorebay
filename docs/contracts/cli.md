@@ -109,12 +109,12 @@ contains spaces. Optional arguments appear in brackets. List rows follow
 | `knowledge change <space> <entry> --version <version> [--name <name>] [--summary <summary>] [--content <content> \| --content-file <path\|->]` | Change a knowledge entry directly | Updated entry |
 | `knowledge delete <space> <entry> --version <version>` | Delete a knowledge entry directly | Deletion result |
 | `knowledge rollback <space> <entry> <source-version> --version <version>` | Roll back a knowledge entry directly | Entry with the new version |
-| `request list <space> [--status <status>] [--keyword <text>]` | List requests | Request keys, actions, statuses, target entries and proposed summaries |
+| `request list <space> [--status <status>] [--keyword <text>]` | List requests | Request keys, actions, statuses, outdated marks, target entries and proposed summaries |
 | `request show <space> <request>` | Read a request | Its fields, content, status, revision, outdated mark, submitting and last revising agents and rejection reason, when present |
 | `request create <space> <name> --summary <summary> (--content <content> \| --content-file <path\|->)` | Submit a create request | Submitted request |
 | `request change <space> <entry> [--name <name>] [--summary <summary>] [--content <content> \| --content-file <path\|->]` | Submit a change request | Submitted request |
 | `request delete <space> <entry>` | Submit a delete request | Submitted request |
-| `request revise <space> <request> [--name <name>] [--summary <summary>] [--content <content> \| --content-file <path\|->]` | Revise a pending request | Revised request, with the same key and new revision |
+| `request revise <space> <request> [--name <name>] [--summary <summary>] [--content <content> \| --content-file <path\|->]` | Revise a pending request | Revised request, with the same key, new revision and whether it was outdated |
 | `request approve <space> <request> --revision <revision>` | Approve a request | Decided request |
 | `request reject <space> <request> --revision <revision> --reason <reason>` | Reject a request, including withdrawing one's own party's | Decided request |
 
@@ -123,6 +123,14 @@ contains spaces. Optional arguments appear in brackets. List rows follow
   sends those values without fetching a newer one. Refusals follow
   [Knowledge](../../lib/docs/contracts/knowledge.md). `request revise` may
   omit all replacement fields to refresh its target snapshot.
+- **Request state is visible in the CLI.** `request list` shows an `Outdated`
+  column beside `Status`: `true` or `false` for a pending request, empty for
+  a decided one. Its JSON output follows the Web API. `request revise` shows
+  `Was outdated` for the state before revision; its JSON field is
+  `was_outdated`. An outdated approval refusal tells the person to ask the
+  requester or their agent to revise against the current entry, then read
+  `request show` and approve the revision it returns. The error code is
+  `person_request.outdated`, with exit code 1.
 - **An update requires a field to change.** `space change`, `knowledge
   change` and `request change` require at least one of their optional
   fields; omitted fields are unchanged. Request inputs and version behavior

@@ -110,8 +110,10 @@ POST /api/v1/spaces/{space}/requests/{key}/approve
   call it and sees every username.
 - **Revising a request** uses
   `PATCH /api/v1/spaces/{space}/requests/{key}` with optional `name`, `summary`
-  and `content`; `{}` refreshes its snapshot. Reads and lists include
-  `revision`, `outdated` while pending, `requester_agent_name`,
+  and `content`; `{}` refreshes its snapshot. The response includes
+  `was_outdated`, the request's outdated mark just before revision, alongside
+  `outdated` for the revised request. Reads and lists omit `was_outdated` and
+  include `revision`, `outdated` while pending, `requester_agent_name`,
   `reviser_agent_name`, `revised_by` and `revised_at`. Request reads also show
   `base_version` and `base_name`. Both decision POST bodies require `revision`;
   rejection also requires `reason`. See

@@ -241,12 +241,17 @@ def revise_request_reconciles_outdated_entry_before_approval(journey):
     client.cli("knowledge", "change", space, entry["key"], "--version", entry["version"], "--content", "Person's guide")
     outdated = client.cli("request", "show", space, request["key"])
     require(outdated["outdated"] is True, "Direct change did not mark the pending request outdated")
+    listed = client.cli("request", "list", space)
+    require(any(row["key"] == request["key"] and row["outdated"] is True for row in listed),
+            "Person's request list did not mark the pending request outdated")
     refused = client.cli("request", "approve", space, request["key"], "--revision", outdated["revision"], failure={409})
     require(refused["code"] == "person_request.outdated", "Outdated approval was not refused")
     current = writer.call("read_knowledge", space=space, key=entry["key"])
     require(current["content"] == "Person's guide", "Outdated approval changed Knowledge")
     reconciled = "Person's guide with the reviewed addition"
-    reviser.call("revise_request", space=space, key=request["key"], content=reconciled)
+    revised = reviser.call("revise_request", space=space, key=request["key"], content=reconciled)
+    require(revised["was_outdated"] is True and revised["outdated"] is False,
+            "Agent's revision did not report the outdated state it reconciled")
     seen = client.cli("request", "show", space, request["key"])
     require(seen["outdated"] is False and seen["revision"] > outdated["revision"],
             "Reconciled revision did not refresh the target snapshot")

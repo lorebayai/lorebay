@@ -5,9 +5,9 @@ use axum::http::StatusCode;
 use lorebay_lib_core::{
     KnowledgeChanges, KnowledgeTarget, NewKnowledgeEntry, PageOptions, PersonRequest,
     PersonRequestContent, PersonRequestFilters, PersonRequestListItem, PersonRequestRejection,
-    PersonRequestSource, PersonRequestStatus, SubmittedPersonRequest, TaskTarget,
-    approve_person_request, list_person_requests, read_person_request, reject_person_request,
-    revise_person_request, submit_person_request,
+    PersonRequestSource, PersonRequestStatus, RevisedPersonRequest, SubmittedPersonRequest,
+    TaskTarget, approve_person_request, list_person_requests, read_person_request,
+    reject_person_request, revise_person_request, submit_person_request,
 };
 use lorebay_lib_types::Secret;
 use serde::Deserialize;
@@ -101,7 +101,7 @@ pub(crate) async fn revise(
     caller: VerifiedCaller,
     path: Result<Path<PersonRequestPath>, PathRejection>,
     request: Result<Json<ReviseRequest>, JsonRejection>,
-) -> Result<Envelope<PersonRequest>, ApiError> {
+) -> Result<Envelope<RevisedPersonRequest>, ApiError> {
     let Path(path) = path.map_err(|_| invalid_query("path"))?;
     let Json(request) = request.map_err(invalid_json)?;
     let changes =
