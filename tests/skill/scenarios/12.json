@@ -1,0 +1,197 @@
+{
+  "number": 12,
+  "name": "Read approved Knowledge unprompted and after rollback",
+  "harnesses": [
+    "claude",
+    "codex"
+  ],
+  "roles": {
+    "primary": "Selected harness acting for the owner",
+    "fixture": "Other person's agent proposes the approved entry"
+  },
+  "starting_state": [
+    {
+      "tool": "create_task",
+      "agent": "other",
+      "arguments": {
+        "space": "{space}",
+        "title": "Propose the team review policy",
+        "planned": false
+      },
+      "save": {
+        "task": [
+          "key"
+        ],
+        "task_id": [
+          "task_id"
+        ]
+      }
+    },
+    {
+      "tool": "create_request",
+      "agent": "other",
+      "arguments": {
+        "task_id": "{task_id}",
+        "action": "create",
+        "name": "review.md",
+        "summary": "Team review policy",
+        "content": "Use asynchronous reviews. The response deadline is two days."
+      },
+      "save": {
+        "request": [
+          "key"
+        ],
+        "revision": [
+          "revision"
+        ]
+      }
+    },
+    {
+      "cli": [
+        "request",
+        "approve",
+        "{space}",
+        "{request}",
+        "--revision",
+        "{revision}"
+      ]
+    },
+    {
+      "cli": [
+        "knowledge",
+        "show",
+        "{space}",
+        "review.md"
+      ],
+      "save": {
+        "entry": [
+          "key"
+        ],
+        "version": [
+          "version"
+        ]
+      }
+    },
+    {
+      "cli": [
+        "knowledge",
+        "change",
+        "{space}",
+        "{entry}",
+        "--version",
+        "{version}",
+        "--content",
+        "Use asynchronous reviews. The response deadline is five days."
+      ],
+      "save": {
+        "version": [
+          "version"
+        ]
+      }
+    }
+  ],
+  "steps": [
+    {
+      "turn": "Write a reminder for colleagues about our team review approach and the response deadline. Title the work Explain the team deadline, and ask me who should receive it before sending.",
+      "expect": [
+        {
+          "label": "first read uses current approved policy",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ],
+            "path": [
+              "result"
+            ],
+            "select": {
+              "title": "Explain the team deadline"
+            }
+          },
+          "op": "matches",
+          "value": "\\b(?:five|5)\\b.{0,20}\\bdays?\\b"
+        }
+      ]
+    },
+    {
+      "action": {
+        "query": {
+          "cli": [
+            "task",
+            "list",
+            "{space}"
+          ],
+          "path": [],
+          "select": {
+            "title": "Explain the team deadline"
+          }
+        },
+        "save": {
+          "task": [
+            "key"
+          ],
+          "task_id": [
+            "task_id"
+          ]
+        }
+      },
+      "expect": []
+    },
+    {
+      "action": {
+        "cli": [
+          "knowledge",
+          "rollback",
+          "{space}",
+          "{entry}",
+          "1",
+          "--version",
+          "{version}"
+        ]
+      },
+      "expect": []
+    },
+    {
+      "turn": "The team policy has been rolled back. Read it again and correct the reminder for the current deadline; the recipients are all reviewers. Just give me the text and finish.",
+      "expect": [
+        {
+          "label": "rollback changes the reminder",
+          "query": {
+            "cli": [
+              "task",
+              "show",
+              "{space}",
+              "{task}"
+            ],
+            "path": [
+              "result"
+            ]
+          },
+          "op": "matches",
+          "value": "\\b(?:two|2)\\b.{0,20}\\bdays?\\b"
+        },
+        {
+          "label": "rollback restores approved content",
+          "query": {
+            "cli": [
+              "knowledge",
+              "show",
+              "{space}",
+              "{entry}"
+            ],
+            "path": [
+              "content"
+            ]
+          },
+          "op": "equals",
+          "value": "Use asynchronous reviews. The response deadline is two days."
+        }
+      ]
+    }
+  ],
+  "questions": [
+    "Did the first session discover and read the other party's approved entry without being told where it was?",
+    "Did the continuing session reread the rolled-back content instead of using its earlier context?"
+  ]
+}

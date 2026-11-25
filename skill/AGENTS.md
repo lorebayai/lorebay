@@ -1,6 +1,7 @@
-Folder orientation:
+Follow these playbook fragments:
 
 - @README.md
+- @../playbook/topics/testing.md
 
 ## Skill conventions
 

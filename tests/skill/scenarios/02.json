@@ -1,0 +1,203 @@
+{
+  "number": 2,
+  "name": "Claim another party's planned task",
+  "harnesses": [
+    "claude",
+    "codex"
+  ],
+  "roles": {
+    "primary": "Selected harness acting for the owner claims and finishes the work",
+    "other_person": "Codex home acting for the other person plans the work"
+  },
+  "starting_state": [
+    "An empty space owned by the primary person; the other person is a contributor."
+  ],
+  "steps": [
+    {
+      "turn": "Queue a task titled Draft a release checklist for another agent to pick up later. Do not start it yet.",
+      "expect": [
+        {
+          "label": "first harness leaves planned work",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ],
+            "select": {
+              "title": "Draft a release checklist"
+            },
+            "path": [
+              "state"
+            ]
+          },
+          "op": "equals",
+          "value": "planned"
+        },
+        {
+          "label": "first harness records person planner",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ],
+            "select": {
+              "title": "Draft a release checklist"
+            },
+            "path": [
+              "planner"
+            ]
+          },
+          "op": "equals",
+          "value": "{other}"
+        },
+        {
+          "label": "first harness records agent planner",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ],
+            "select": {
+              "title": "Draft a release checklist"
+            },
+            "path": [
+              "planner_agent_name"
+            ]
+          },
+          "op": "equals",
+          "value": "{other_agent}"
+        }
+      ],
+      "role": "other_person"
+    },
+    {
+      "action": {
+        "query": {
+          "cli": [
+            "task",
+            "list",
+            "{space}"
+          ],
+          "select": {
+            "title": "Draft a release checklist"
+          }
+        },
+        "save": {
+          "task": [
+            "key"
+          ],
+          "task_id": [
+            "task_id"
+          ]
+        }
+      }
+    },
+    {
+      "turn": "Pick up {task} and draft a brief release checklist, then finish it.",
+      "expect": [
+        {
+          "label": "cross-party claim finishes",
+          "query": {
+            "cli": [
+              "task",
+              "show",
+              "{space}",
+              "{task}"
+            ],
+            "path": [
+              "state"
+            ]
+          },
+          "op": "equals",
+          "value": "done"
+        },
+        {
+          "label": "claim changes responsible person",
+          "query": {
+            "cli": [
+              "task",
+              "show",
+              "{space}",
+              "{task}"
+            ],
+            "path": [
+              "person"
+            ]
+          },
+          "op": "equals",
+          "value": "{owner}"
+        },
+        {
+          "label": "other party planner is preserved",
+          "query": {
+            "cli": [
+              "task",
+              "show",
+              "{space}",
+              "{task}"
+            ],
+            "path": [
+              "planner"
+            ]
+          },
+          "op": "equals",
+          "value": "{other}"
+        },
+        {
+          "label": "agent planner is preserved",
+          "query": {
+            "cli": [
+              "task",
+              "show",
+              "{space}",
+              "{task}"
+            ],
+            "path": [
+              "planner_agent_name"
+            ]
+          },
+          "op": "equals",
+          "value": "{other_agent}"
+        },
+        {
+          "label": "claim uses original task",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ]
+          },
+          "op": "count",
+          "value": 1
+        },
+        {
+          "label": "result belongs to the selected claiming agent",
+          "query": {
+            "cli": [
+              "task",
+              "results",
+              "{space}",
+              "{task}"
+            ],
+            "path": [
+              0,
+              "agent_name"
+            ]
+          },
+          "op": "equals",
+          "value": "{primary_agent}"
+        }
+      ],
+      "role": "primary"
+    }
+  ],
+  "questions": [
+    "Did the other person's Codex leave the work queued for a different party?",
+    "Did the selected harness discover and claim the named planned task before writing?",
+    "Does the result answer the request on the original task, preserving the other party's planner attribution?"
+  ]
+}

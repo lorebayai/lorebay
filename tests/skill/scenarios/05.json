@@ -1,0 +1,327 @@
+{
+  "number": 5,
+  "name": "End tasks and reopen completed work",
+  "harnesses": [
+    "claude",
+    "codex"
+  ],
+  "roles": {
+    "primary": "Selected harness acting for the owner"
+  },
+  "starting_state": [
+    "An empty space owned by the primary person; the other person is a contributor."
+  ],
+  "steps": [
+    {
+      "turn": "Write two launch checks titled Draft launch checks. That is all the work.",
+      "expect": [
+        {
+          "label": "finished task is done",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ],
+            "path": [
+              "state"
+            ],
+            "select": {
+              "title": "Draft launch checks"
+            }
+          },
+          "op": "equals",
+          "value": "done"
+        },
+        {
+          "label": "ended task has no holder: Draft launch checks",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ],
+            "select": {
+              "title": "Draft launch checks"
+            },
+            "path": [
+              "holder"
+            ]
+          },
+          "op": "equals",
+          "value": null
+        },
+        {
+          "label": "ended task has an end time: Draft launch checks",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ],
+            "select": {
+              "title": "Draft launch checks"
+            },
+            "path": [
+              "ended_at"
+            ]
+          },
+          "op": "nonempty",
+          "value": true
+        }
+      ]
+    },
+    {
+      "action": {
+        "query": {
+          "cli": [
+            "task",
+            "list",
+            "{space}"
+          ],
+          "path": [],
+          "select": {
+            "title": "Draft launch checks"
+          }
+        },
+        "save": {
+          "task": [
+            "key"
+          ],
+          "task_id": [
+            "task_id"
+          ]
+        }
+      },
+      "expect": []
+    },
+    {
+      "turn": "One check was missed in that work: add rollback verification and finish the same checklist.",
+      "expect": [
+        {
+          "label": "completed task is reused",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ]
+          },
+          "op": "count",
+          "value": 1
+        },
+        {
+          "label": "reopened task is done again",
+          "query": {
+            "cli": [
+              "task",
+              "show",
+              "{space}",
+              "{task}"
+            ],
+            "path": [
+              "state"
+            ]
+          },
+          "op": "equals",
+          "value": "done"
+        },
+        {
+          "label": "reopening adds a plan and step",
+          "query": {
+            "cli": [
+              "task",
+              "scratchpad",
+              "{space}",
+              "{task}"
+            ]
+          },
+          "op": "at_least",
+          "value": 4
+        }
+      ]
+    },
+    {
+      "turn": "Switch to a different task titled Inspect the missing input. Read missing-input.txt from this empty project; if absent the work cannot be done. Do not invent or create it.",
+      "expect": [
+        {
+          "label": "unavailable input ends failed",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ],
+            "path": [
+              "state"
+            ],
+            "select": {
+              "title": "Inspect the missing input"
+            }
+          },
+          "op": "equals",
+          "value": "failed"
+        },
+        {
+          "label": "failure names its reason",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ],
+            "path": [
+              "state_reason"
+            ],
+            "select": {
+              "title": "Inspect the missing input"
+            }
+          },
+          "op": "nonempty",
+          "value": true
+        },
+        {
+          "label": "ended task has no holder: Inspect the missing input",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ],
+            "select": {
+              "title": "Inspect the missing input"
+            },
+            "path": [
+              "holder"
+            ]
+          },
+          "op": "equals",
+          "value": null
+        },
+        {
+          "label": "ended task has an end time: Inspect the missing input",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ],
+            "select": {
+              "title": "Inspect the missing input"
+            },
+            "path": [
+              "ended_at"
+            ]
+          },
+          "op": "nonempty",
+          "value": true
+        }
+      ]
+    },
+    {
+      "turn": "Start another task titled Plan the workshop. Ask me its date before planning anything.",
+      "expect": [
+        {
+          "label": "workshop awaits an answer",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ],
+            "path": [
+              "state"
+            ],
+            "select": {
+              "title": "Plan the workshop"
+            }
+          },
+          "op": "equals",
+          "value": "waiting"
+        }
+      ]
+    },
+    {
+      "turn": "Cancel the workshop; it is no longer needed.",
+      "expect": [
+        {
+          "label": "dropped task ends canceled",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ],
+            "path": [
+              "state"
+            ],
+            "select": {
+              "title": "Plan the workshop"
+            }
+          },
+          "op": "equals",
+          "value": "canceled"
+        },
+        {
+          "label": "cancellation names its reason",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ],
+            "path": [
+              "state_reason"
+            ],
+            "select": {
+              "title": "Plan the workshop"
+            }
+          },
+          "op": "nonempty",
+          "value": true
+        },
+        {
+          "label": "ended task has no holder: Plan the workshop",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ],
+            "select": {
+              "title": "Plan the workshop"
+            },
+            "path": [
+              "holder"
+            ]
+          },
+          "op": "equals",
+          "value": null
+        },
+        {
+          "label": "ended task has an end time: Plan the workshop",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ],
+            "select": {
+              "title": "Plan the workshop"
+            },
+            "path": [
+              "ended_at"
+            ]
+          },
+          "op": "nonempty",
+          "value": true
+        }
+      ]
+    }
+  ],
+  "questions": [
+    "Did reopening preserve the task ID and add a new plan before the correction?",
+    "Did failed and canceled tasks remain final, with no holder and a visible end time?",
+    "Are the failed and canceled results candid about what remains undone?"
+  ]
+}

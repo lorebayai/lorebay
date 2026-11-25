@@ -235,7 +235,6 @@ class Clients:
                 "grant_type": "authorization_code", "client_id": registered["client_id"],
                 "redirect_uri": redirect, "code": codes[0]["code"][0], "code_verifier": verifier,
             }, form=True)["access_token"]
-            self.secrets.append(token)
             return token
         finally:
             if context:

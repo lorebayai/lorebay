@@ -4,4 +4,4 @@ Follow these playbook fragments:
 
 ## Shared client conventions
 
-- Keep caller mechanics shared here; journey assertions belong in the suites.
+- Journey assertions belong in the suites, not here.

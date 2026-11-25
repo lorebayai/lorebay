@@ -1,0 +1,247 @@
+{
+  "number": 4,
+  "name": "Wait on a question and a request, then resume",
+  "harnesses": [
+    "claude",
+    "codex"
+  ],
+  "roles": {
+    "primary": "Selected harness acting for the owner"
+  },
+  "starting_state": [
+    "An empty space owned by the primary person; the other person is a contributor."
+  ],
+  "steps": [
+    {
+      "turn": "Prepare a short team-wide review policy titled Agree on review timing. Ask whether reviews should be synchronous or asynchronous before choosing.",
+      "expect": [
+        {
+          "label": "question leaves task waiting",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ],
+            "path": [
+              "state"
+            ],
+            "select": {
+              "title": "Agree on review timing"
+            }
+          },
+          "op": "equals",
+          "value": "waiting"
+        },
+        {
+          "label": "question has a waiting reason",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ],
+            "path": [
+              "state_reason"
+            ],
+            "select": {
+              "title": "Agree on review timing"
+            }
+          },
+          "op": "nonempty",
+          "value": true
+        }
+      ]
+    },
+    {
+      "action": {
+        "query": {
+          "cli": [
+            "task",
+            "list",
+            "{space}"
+          ],
+          "path": [],
+          "select": {
+            "title": "Agree on review timing"
+          }
+        },
+        "save": {
+          "task": [
+            "key"
+          ],
+          "task_id": [
+            "task_id"
+          ]
+        }
+      },
+      "expect": []
+    },
+    {
+      "turn": "Use asynchronous reviews. Propose a new shared entry review.md with summary Team review policy and content Teams review changes asynchronously. Wait for its approval before finishing.",
+      "expect": [
+        {
+          "label": "request leaves task waiting",
+          "query": {
+            "cli": [
+              "task",
+              "show",
+              "{space}",
+              "{task}"
+            ],
+            "path": [
+              "state"
+            ]
+          },
+          "op": "equals",
+          "value": "waiting"
+        },
+        {
+          "label": "waiting reason names request",
+          "query": {
+            "cli": [
+              "task",
+              "show",
+              "{space}",
+              "{task}"
+            ],
+            "path": [
+              "state_reason"
+            ]
+          },
+          "op": "contains",
+          "value": "RQ-"
+        },
+        {
+          "label": "one request awaits decision",
+          "query": {
+            "cli": [
+              "request",
+              "list",
+              "{space}",
+              "--status",
+              "pending"
+            ]
+          },
+          "op": "count",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "action": {
+        "cli": [
+          "request",
+          "list",
+          "{space}"
+        ],
+        "save": {
+          "request": [
+            0,
+            "key"
+          ]
+        }
+      },
+      "expect": []
+    },
+    {
+      "action": {
+        "cli": [
+          "request",
+          "show",
+          "{space}",
+          "{request}"
+        ],
+        "save": {
+          "revision": [
+            "revision"
+          ]
+        }
+      },
+      "expect": []
+    },
+    {
+      "action": {
+        "cli": [
+          "request",
+          "approve",
+          "{space}",
+          "{request}",
+          "--revision",
+          "{revision}"
+        ]
+      },
+      "expect": []
+    },
+    {
+      "turn": "The policy is approved. Check the decision and finish the checklist.",
+      "expect": [
+        {
+          "label": "approval leads to finished task",
+          "query": {
+            "cli": [
+              "task",
+              "show",
+              "{space}",
+              "{task}"
+            ],
+            "path": [
+              "state"
+            ]
+          },
+          "op": "equals",
+          "value": "done"
+        },
+        {
+          "label": "waiting reason clears",
+          "query": {
+            "cli": [
+              "task",
+              "show",
+              "{space}",
+              "{task}"
+            ],
+            "path": [
+              "state_reason"
+            ]
+          },
+          "op": "equals",
+          "value": null
+        },
+        {
+          "label": "approved request is visible",
+          "query": {
+            "cli": [
+              "request",
+              "show",
+              "{space}",
+              "{request}"
+            ],
+            "path": [
+              "status"
+            ]
+          },
+          "op": "equals",
+          "value": "approved"
+        },
+        {
+          "label": "approved entry is readable",
+          "query": {
+            "cli": [
+              "knowledge",
+              "show",
+              "{space}",
+              "review.md"
+            ]
+          },
+          "op": "contains",
+          "value": "asynchronously"
+        }
+      ]
+    }
+  ],
+  "questions": [
+    "Did the agent resume only after the answer and, separately, the request decision?",
+    "Did it read the approved request and Knowledge before reporting completion?"
+  ]
+}

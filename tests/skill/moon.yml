@@ -1,0 +1,20 @@
+language: 'python'
+layer: 'automation'
+
+dependsOn:
+  - cli
+
+tasks:
+  check:
+    command: 'python3 -B tests/skill/check.py'
+    inputs:
+      - '**/*'
+      - '/tests/common/**/*'
+    options:
+      runFromWorkspaceRoot: true
+  skill:
+    command: 'python3 -B tests/skill/run.py'
+    options:
+      cache: false
+      runInCI: false
+      runFromWorkspaceRoot: true
