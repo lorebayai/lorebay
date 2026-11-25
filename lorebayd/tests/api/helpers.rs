@@ -60,6 +60,10 @@ impl Server {
     }
 
     pub async fn executable() -> Self {
+        Self::executable_with_umask(None).await
+    }
+
+    pub async fn executable_with_umask(umask: Option<u32>) -> Self {
         let directory = TempDir::new().unwrap();
         let users = directory.path().join("users.json");
         write_users(
@@ -81,7 +85,7 @@ impl Server {
             .unwrap(),
         )
         .unwrap();
-        let task = ServerTask::executable(&config);
+        let task = ServerTask::executable(&config, umask);
         let mut server = Self {
             client: Client::builder()
                 .timeout(TEST_TIMEOUT)
