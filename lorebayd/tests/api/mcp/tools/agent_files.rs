@@ -1,3 +1,6 @@
+use std::fs;
+use std::os::unix::fs::PermissionsExt;
+
 use reqwest::{Method, Response, StatusCode};
 use serde_json::{Value, json};
 
@@ -6,6 +9,65 @@ use crate::helpers::{Server, authorize_for, create_space, list_response, login};
 use crate::tasks::helpers::{self as tasks, SPACE};
 
 use super::{NEWEST_VERSION, call, call_error, call_version, initialize};
+
+#[tokio::test]
+async fn upload_agent_file_completes_with_private_directories_under_any_umask() {
+    for umask in [0o277, 0o000, 0o022, 0o077, 0o777] {
+        let server = Server::executable_with_umask(Some(umask)).await;
+        let person = server.tokens().await;
+        create_space(&server, &person, "Team", "Shared work").await;
+        let agent = authorize_for(&server, &person, "Upload agent").await;
+        let task = call(
+            &server,
+            &agent,
+            "create_task",
+            json!({"space":SPACE, "title":"Private upload"}),
+        )
+        .await;
+        let registered = register(&server, &agent, &task).await;
+        let modes = ["uploads", "agent_files"].map(|name| {
+            fs::metadata(server.directory.path().join("data").join(name))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777
+        });
+        assert_eq!(
+            upload(&server, &registered, "The file").await.status(),
+            StatusCode::CREATED,
+            "umask {umask:03o}, directory modes {:03o}/{:03o}",
+            modes[0],
+            modes[1]
+        );
+        let completed = call(
+            &server,
+            &agent,
+            "complete_file",
+            json!({"task_id":task["task_id"], "key":registered["key"]}),
+        )
+        .await;
+        assert_eq!(completed["size"], 8);
+        assert_completed(&server, &person, &agent, &task, &completed).await;
+        assert_eq!(modes, [0o700, 0o700], "umask {umask:03o}");
+        let download = call(
+            &server,
+            &agent,
+            "get_file_url",
+            json!({"space":SPACE, "key":completed["key"]}),
+        )
+        .await;
+        let response = server
+            .client
+            .get(download["url"].as_str().unwrap())
+            .send()
+            .await
+            .map_err(|_| "download request failed")
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK, "umask {umask:03o}");
+        assert_eq!(response.bytes().await.unwrap(), "The file");
+        server.stop().await;
+    }
+}
 
 #[tokio::test]
 async fn call_create_agent_file_then_upload_then_complete_lists_agent_file() {

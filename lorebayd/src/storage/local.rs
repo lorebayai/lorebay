@@ -1,5 +1,7 @@
 use std::collections::BTreeMap;
-use std::io::{Error, ErrorKind};
+use std::fs::Permissions;
+use std::io::{Error, ErrorKind, Result as IoResult};
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
@@ -65,8 +67,8 @@ impl LocalDirectory {
     pub async fn open(config: &Config, size_limit: u64) -> Result<Self> {
         let files = config.data_directory.join("agent_files");
         let temporary = config.data_directory.join("uploads");
-        fs::create_dir_all(&files).await?;
-        fs::create_dir_all(&temporary).await?;
+        create_storage_directory(&files).await?;
+        create_storage_directory(&temporary).await?;
         storage_directory(&files).await?;
         storage_directory(&temporary).await?;
         File::open(&config.data_directory).await?.sync_all().await?;
@@ -142,6 +144,8 @@ impl LocalDirectory {
             .tempfile_in(&self.temporary)?;
         let (file, path) = temporary.into_parts();
         let mut file = File::from_std(file);
+        file.set_permissions(Permissions::from_mode(STORED_FILE_MODE))
+            .await?;
         let mut size = 0u64;
         while let Some(chunk) = timeout(self.idle_timeout, stream.next())
             .await
@@ -333,6 +337,24 @@ impl LocalDirectory {
             Err(error) => return Err(error.into()),
         }
         Ok(true)
+    }
+}
+
+const STORAGE_DIRECTORY_MODE: u32 = 0o700;
+const STORED_FILE_MODE: u32 = 0o600;
+
+async fn create_storage_directory(directory: &Path) -> IoResult<()> {
+    match fs::DirBuilder::new()
+        .mode(STORAGE_DIRECTORY_MODE)
+        .create(directory)
+        .await
+    {
+        // The umask can clear owner bits, so set the exact mode after creation.
+        Ok(()) => {
+            fs::set_permissions(directory, Permissions::from_mode(STORAGE_DIRECTORY_MODE)).await
+        }
+        Err(error) if error.kind() == ErrorKind::AlreadyExists => Ok(()),
+        Err(error) => Err(error),
     }
 }
 

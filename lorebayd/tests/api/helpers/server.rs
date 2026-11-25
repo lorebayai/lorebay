@@ -33,14 +33,22 @@ impl ServerTask {
         }
     }
 
-    pub fn executable(config: &Path) -> Self {
+    pub fn executable(config: &Path, umask: Option<u32>) -> Self {
         let config = config.to_owned();
         let (shutdown, stopped) = oneshot::channel();
         let (abort, aborted) = oneshot::channel();
         let thread = thread::spawn(move || {
             Builder::new_current_thread().enable_all().build()?.block_on(async {
-                let mut child = Command::new(env!("CARGO_BIN_EXE_lorebayd"))
-                    .arg("--config").arg(config).stdout(Stdio::null()).stderr(Stdio::null())
+                let mut command = Command::new(env!("CARGO_BIN_EXE_lorebayd"));
+                if let Some(umask) = umask {
+                    command = Command::new("/bin/sh");
+                    command.args(["-c", "umask \"$2\"; exec \"$0\" --config \"$1\""])
+                        .arg(env!("CARGO_BIN_EXE_lorebayd")).arg(&config).arg(format!("{umask:03o}"));
+                } else {
+                    command.arg("--config").arg(&config);
+                }
+                let mut child = command
+                    .stdout(Stdio::null()).stderr(Stdio::null())
                     .kill_on_drop(true).spawn()?;
                 tokio::select! {
                     _ = aborted => { child.kill().await?; }
