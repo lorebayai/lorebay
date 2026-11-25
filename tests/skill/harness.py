@@ -77,8 +77,9 @@ class Harness:
             command += ["--no-daemon", "exec"]
             if self.session:
                 command += ["resume", self.session]
-            else:
-                command += ["--sandbox", "workspace-write"]
+            command += ["-c", 'sandbox_mode="workspace-write"',
+                        "-c", "sandbox_workspace_write.network_access=true",
+                        "-c", 'mcp_servers.lorebay.default_tools_approval_mode="approve"']
             command += ["--skip-git-repo-check", "--json", "-"]
         child = subprocess.Popen(command, cwd=self.project, env=self.environment(), start_new_session=True,
                                  stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,

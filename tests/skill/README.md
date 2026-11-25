@@ -33,9 +33,10 @@ the E2E and deployment suites, rather than this runner.
 
 A run reserves every configured home with its shared lock before doing work.
 CLI commands, script-agent commands and harness processes inherit their home
-lock, including refreshes. A busy home refuses the run. Parallel runs need
-different homes. Authorizing, resetting and interactive harness sessions must
-use the same locks. Locks live beside the profiles, outside reset contents.
+lock through `LOREBAY_TEST_HOME_LOCK_FD`, including refreshes. A busy home
+refuses the run. Parallel runs need different homes. Authorizing, resetting
+and interactive harness sessions must use the same locks. Locks live beside
+the profiles, outside reset contents.
 
 Each attempt creates a fresh space and project, adds the other person and
 admin, and records that space in the project's instructions. It assumes no
@@ -86,6 +87,10 @@ paths may point at an installation or checkout. Values below are placeholders.
 
 Each role needs a distinct home. Its lock is `<parent>/.locks/<name>.lock`;
 external commands must honor that lock and validate inherited ownership.
+Each script-agent command reads one MCP JSON-RPC request on stdin and writes
+its response on stdout. It validates and holds the inherited lock descriptor
+in `LOREBAY_TEST_HOME_LOCK_FD` and refuses an origin other than
+`LOREBAY_TEST_EXPECTED_ORIGIN`.
 The configured installed `SKILL.md` must match this checkout. The suite reads
 only that public file from a home; credential files stay opaque to it.
 

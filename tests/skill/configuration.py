@@ -79,7 +79,7 @@ def load_configuration(path):
 def validate_configuration(config):
     required = {"origin", "authority", "people", "script_agents", "homes", "cli", "output", "scenarios", "harnesses"}
     require(required <= set(config), "Missing configuration keys")
-    require(set(config) <= required | {"chromium", "timeout"}, "Unknown configuration key")
+    require(set(config) <= required | {"timeout"}, "Unknown configuration key")
     origin = urllib.parse.urlsplit(config["origin"])
     require(origin.scheme in {"http", "https"} and origin.netloc and not origin.username and not origin.password
             and origin.path in {"", "/"} and not origin.query and not origin.fragment, "Invalid origin")
