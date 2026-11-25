@@ -61,7 +61,7 @@ A task uses `state` and `state_reason`; a request uses `status`. Task tools acce
 | `create_request` | Task ID | Proposes a Knowledge change; `wait=true` sets its `working` task to `waiting` until the request is decided | Submit a request |
 | `list_requests` | Space | Lists requests with revisions, outdated marks and submitting and last revising agents, filtered by status and keyword | List requests |
 | `get_request` | Space | Reads content, status, revision, outdated mark, submitting and last revising agents, rejection reason | Read a request |
-| `revise_request` | Space | Revises a pending request by key; returns its new revision and target snapshot | Revise a request |
+| `revise_request` | Space | Revises a pending request by key; returns its new revision, target snapshot and `was_outdated` | Revise a request |
 
 - **Lists are paginated.** `list_spaces`, `list_tasks`, `list_knowledge`,
   `list_requests` and the Scratchpad or result history in `get_task` return
@@ -73,7 +73,9 @@ A task uses `state` and `state_reason`; a request uses `status`. Task tools acce
 - **Request revisions follow [Knowledge](knowledge.md#4-requests).**
   `revise_request` takes `space`, `key` and optional `name`, `summary` and
   `content`; an empty revision refreshes the target snapshot. The key, action
-  and target stay the same. Request reads and lists expose `revision`,
+  and target stay the same. The result includes `was_outdated` for the state
+  just before revision and `outdated` for the revised request. Reads and
+  lists omit `was_outdated`. Request reads and lists expose `revision`,
   `outdated` while pending, `requester_agent_name`, `reviser_agent_name`,
   `revised_by` and `revised_at`.
 - **`get_task` includes at most one history.** `include_scratchpad` and

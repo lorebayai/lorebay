@@ -178,10 +178,12 @@ pub async fn assert_person_request_pages(
             } else {
                 let text = String::from_utf8_lossy(&output.stdout);
                 assert_eq!(text.lines().count(), 2);
-                assert!(text.starts_with("Key\tAction\tStatus\tTarget\tProposed summary\n"));
+                assert!(
+                    text.starts_with("Key\tAction\tStatus\tOutdated\tTarget\tProposed summary\n")
+                );
                 assert_eq!(text.lines().nth(1).unwrap().split('\t').next(), Some(*key));
                 assert_eq!(
-                    text.lines().nth(1).unwrap().split('\t').nth(3),
+                    text.lines().nth(1).unwrap().split('\t').nth(4),
                     Some(*target)
                 );
             }
@@ -350,7 +352,7 @@ pub async fn assert_empty_person_request_search(server: &Server, space: &str) {
         } else {
             assert_eq!(
                 empty.stdout,
-                b"Key\tAction\tStatus\tTarget\tProposed summary\n"
+                b"Key\tAction\tStatus\tOutdated\tTarget\tProposed summary\n"
             );
         }
     }

@@ -217,9 +217,9 @@ async fn person_request_list_filters_by_status() {
         .await;
     assert_success(&list);
     let text = String::from_utf8(list.stdout).unwrap();
-    assert!(text.starts_with("Key\tAction\tStatus\tTarget\tProposed summary\n"));
+    assert!(text.starts_with("Key\tAction\tStatus\tOutdated\tTarget\tProposed summary\n"));
     assert!(text.contains(r#"KN-1 guide "quoted"\path.md"#));
-    assert!(text.contains("RQ-7\tcreate\tpending\tdraft \"quoted\"\\new.md\tDraft"));
+    assert!(text.contains("RQ-7\tcreate\tpending\tfalse\tdraft \"quoted\"\\new.md\tDraft"));
     assert!(text.contains("New\\n\\t\\u{1b}[31m"));
     assert_person_request_usage(&mut server, &space).await;
 }

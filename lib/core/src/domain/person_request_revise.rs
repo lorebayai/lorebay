@@ -1,5 +1,8 @@
 use sea_orm::{ActiveModelTrait, IntoActiveModel};
+use serde::Serialize;
+use typed_builder::TypedBuilder;
 
+use crate::entity::space_person_request;
 use crate::repository::{KnowledgeRepository, PersonRequestRepository};
 use crate::{Caller, Write, WriteOperation};
 
@@ -9,13 +12,21 @@ use super::space_access::{WRITE_ROLES, check_space};
 use super::time::now_millis;
 use super::{KnowledgeChanges, PersonRequest, PersonRequestError, SpaceAccessError};
 
+#[derive(Clone, Debug, Serialize, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+pub struct RevisedPersonRequest {
+    #[serde(flatten)]
+    pub person_request: PersonRequest,
+    pub was_outdated: bool,
+}
+
 pub async fn revise_person_request(
     write: &mut Write<'_>,
     caller: &Caller,
     space: &str,
     key: &str,
     changes: Option<KnowledgeChanges>,
-) -> Result<PersonRequest, PersonRequestError> {
+) -> Result<RevisedPersonRequest, PersonRequestError> {
     write.begin_operation(Some(caller))?;
     let space = check_space(write.state(), write.handle(), caller, space, WRITE_ROLES).await?;
     let number = parse_key("RQ", key).ok_or(PersonRequestError::NotFound)?;
@@ -35,16 +46,7 @@ pub async fn revise_person_request(
     if model.action == "delete" && changes.is_some() {
         return Err(super::KnowledgeInputError::NoChanges.into());
     }
-    if let Some(id) = &model.knowledge_id {
-        let entry = KnowledgeRepository::builder()
-            .connection(write.transaction())
-            .build()
-            .lock_by_id(id)
-            .await?
-            .ok_or(super::KnowledgeError::NotFound)?;
-        model.base_version = Some(entry.latest_version);
-        model.base_name = Some(entry.name);
-    }
+    let was_outdated = refresh_snapshot(write, &mut model).await?;
     if let Some(changes) = changes {
         model.new_name = changes.name.or(model.new_name);
         model.new_summary = changes.summary.or(model.new_summary);
@@ -63,5 +65,35 @@ pub async fn revise_person_request(
     let result =
         person_request_result(write.state(), write.handle(), &space.space.id, number).await?;
     write.record(WriteOperation::RevisePersonRequest, Some(space.space.id));
-    Ok(result)
+    Ok(RevisedPersonRequest {
+        person_request: result,
+        was_outdated,
+    })
+}
+
+async fn refresh_snapshot(
+    write: &Write<'_>,
+    model: &mut space_person_request::Model,
+) -> Result<bool, PersonRequestError> {
+    let knowledge = KnowledgeRepository::builder()
+        .connection(write.transaction())
+        .build();
+    if let Some(id) = &model.knowledge_id {
+        let entry = knowledge
+            .lock_by_id(id)
+            .await?
+            .ok_or(super::KnowledgeError::NotFound)?;
+        let outdated = model.base_version != Some(entry.latest_version)
+            || model.base_name.as_ref() != Some(&entry.name);
+        model.base_version = Some(entry.latest_version);
+        model.base_name = Some(entry.name);
+        return Ok(outdated);
+    }
+    let Some(name) = &model.new_name else {
+        return Ok(false);
+    };
+    Ok(knowledge
+        .by_name(&model.space_id, &name.to_lowercase())
+        .await?
+        .is_some())
 }

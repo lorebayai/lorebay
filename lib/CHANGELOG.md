@@ -12,7 +12,10 @@ crates `lorebay-lib-types`, `lorebay-lib-core`, `lorebay-lib-migration` and
   `m20261118_000001_create_space_tables` must be recreated.
 
 - **Breaking:** Requests support `revise_person_request` and MCP
-  `revise_request`, keeping the key and only the latest revision. Reads and
+  `revise_request`, keeping the key and only the latest revision.
+  `revise_person_request` returns `RevisedPersonRequest`, containing the
+  revised `PersonRequest` and `was_outdated` for its state before revision;
+  MCP revision results also expose `was_outdated`. Reads and
   lists expose `revision`, `outdated`, submitting and last revising agents,
   and revision attribution; `outdated` replaces `changed_since_requested`.
   Approval takes the revision read; `PersonRequestRejection` also requires

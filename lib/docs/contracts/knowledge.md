@@ -131,7 +131,11 @@ flowchart TD
   Reads and lists show `outdated` while pending. Approval refuses it with
   `person_request.outdated`, applying nothing. After reading and reconciling
   the current entry, revise the request to refresh its snapshot; a create
-  needs an available name. Outdated is a mark, not a status.
+  needs an available name. A revision returns `was_outdated`, the mark just
+  before revision, checked under the same lock as the revision. Its
+  `outdated` describes the revised request; a create whose name stays taken
+  remains outdated. Reads and lists omit `was_outdated`. Outdated is a mark,
+  not a status.
 - **A change targeting a deleted entry restores it** when approved against
   that deletion's version and name. Content or summary it omits comes from the
   last content version. A create never replaces an existing entry.
