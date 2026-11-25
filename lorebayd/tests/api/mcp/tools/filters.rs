@@ -1,10 +1,60 @@
 use reqwest::{Method, StatusCode};
 use serde_json::{Value, json};
 
-use crate::helpers::{Server, authorize_for, list_page, list_response, login};
+use crate::helpers::{Server, authorize_for, create_space, list_page, list_response, login};
 use crate::tasks::helpers::{self as tasks, SPACE, TASKS};
 
 use super::{call, call_error};
+
+#[tokio::test]
+async fn call_list_tasks_returns_only_planned_tasks_when_claimable() {
+    let server = Server::executable().await;
+    let person = server.tokens().await;
+    create_space(&server, &person, "Team", "Shared work").await;
+    let agent = authorize_for(&server, &person, "Planning agent").await;
+    let other = add_bob_agent(&server, &person).await;
+    let mut planned = Vec::new();
+    for party in [&agent, &other] {
+        for state in [
+            "planned", "working", "waiting", "done", "failed", "canceled",
+        ] {
+            let task = call(
+                &server,
+                party,
+                "create_task",
+                json!({"space":SPACE,"title":format!("Work as {state}"),"planned":state == "planned"}),
+            )
+            .await;
+            let mut changes = json!({"task_id":task["task_id"],"state":state});
+            if matches!(state, "waiting" | "failed" | "canceled") {
+                changes["state_reason"] = json!("Work needs an answer or stops");
+            }
+            if state == "planned" {
+                planned.push(task["task_id"].clone());
+            } else if state != "working" {
+                call(&server, party, "update_task", changes).await;
+            }
+            assert_eq!(
+                tasks::read(&server, &person, task["key"].as_str().unwrap()).await["state"],
+                state
+            );
+        }
+    }
+    let arguments = json!({"space":SPACE,"claimable":true});
+    let page = call(&server, &agent, "list_tasks", arguments.clone()).await;
+    let rows = page["data"].as_array().unwrap();
+    let mut ids = rows
+        .iter()
+        .map(|row| row["task_id"].clone())
+        .collect::<Vec<_>>();
+    ids.sort_by_key(Value::to_string);
+    planned.sort_by_key(Value::to_string);
+    assert_eq!(ids, planned);
+    assert!(rows.iter().all(|row| row["state"] == "planned"));
+    assert!(page["meta"]["next_cursor"].is_null());
+    assert_api_page(&server, &agent, &arguments, &page).await;
+    server.stop().await;
+}
 
 #[tokio::test]
 async fn call_list_tasks_returns_own_party_tasks_not_ended() {

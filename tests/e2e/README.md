@@ -37,11 +37,13 @@ moon run tests/e2e:check tests/deploy:check
 ```
 
 The syntax check runs in CI; journeys run by hand for milestone acceptance
-and before releases. Journeys cover planning and claims across parties,
-takeover, waiting and resuming, final states and reopening, result history,
-recording and file readback with revocation, and sign-in and space roles.
-They also cover request revisions after a direct Knowledge change, approval
-by another party, rejection, direct changes and rollback.
+and before releases. Journeys cover planning, claims and release across
+parties, files across a takeover, waiting and resuming, final states and
+reopening, result history, recording and file readback with revocation,
+and sign-in and space roles. They also cover request revisions after a
+direct Knowledge change, approval by another party, rejection, direct
+changes and rollback, refused stale decisions and direct changes, and
+refusals of a viewer's claim and another party's writes into a claimed task.
 
 ## Configuration
 

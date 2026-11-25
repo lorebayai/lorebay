@@ -33,6 +33,7 @@ def plan_tasks_records_planners_and_claims_across_parties(journey):
     worker = journey.agent("Worker", person=1)
     person_task = client.cli("task", "plan", space, "--title", "Prepare a report")
     agent_task = planner.call("create_task", space=space, title="Check the report", planned=True)
+    planner.call("create_task", space=space, title="Collect report inputs")
     claimable = worker.call("list_tasks", space=space, claimable=True)["data"]
     require({row["task_id"] for row in claimable} == {person_task["task_id"], agent_task["task_id"]},
             "Worker did not find both planned tasks")
@@ -46,7 +47,24 @@ def plan_tasks_records_planners_and_claims_across_parties(journey):
                 and shown["planner_agent_name"] == planner_name, "Claim lost the holder, party or planner")
         refused = planner.call("claim_task", task_id=task["task_id"], failure="task.held")
         require(worker.name in refused["message"], "Second claimant was not told the holder")
-        require(journey.show(task, person=1) == shown, "Refused claim changed the task")
+        scratchpad = client.cli("task", "scratchpad", space, task["key"])
+        planner.call("add_checkpoint", task_id=task["task_id"], content="Obsolete write",
+                     failure="space.permission_required")
+        planner.call("update_task", task_id=task["task_id"], result="Obsolete result",
+                     failure="space.permission_required")
+        require(journey.show(task, person=1) == shown, "Refused writes or claim changed the task")
+        require(client.cli("task", "scratchpad", space, task["key"]) == scratchpad,
+                "Another party changed the Scratchpad")
+    worker.call("release_task", task_id=agent_task["task_id"])
+    released = journey.show(agent_task)
+    require(released["state"] == "planned" and released["person"] == journey.username(0)
+            and released["holder"] is None and released["planner"] == journey.username(0)
+            and released["planner_agent_name"] == planner.name, "Release lost the party or planner")
+    planner.call("claim_task", task_id=agent_task["task_id"])
+    planner.call("add_checkpoint", task_id=agent_task["task_id"], content="Started the review")
+    shown = journey.show(agent_task)
+    planner.call("release_task", task_id=agent_task["task_id"], failure="task.has_work")
+    require(journey.show(agent_task) == shown, "Refused release changed the task")
 
 
 def take_over_task_preserves_checkpoints_and_refuses_previous_holder(journey):
@@ -54,13 +72,23 @@ def take_over_task_preserves_checkpoints_and_refuses_previous_holder(journey):
     first, second = journey.agent("First worker"), journey.agent("Continuing worker")
     task = first.call("create_task", space=journey.space, title="Continue a report")
     first.call("add_checkpoint", task_id=task["task_id"], content="Collected the inputs")
+    first_file = first.call("create_file", task_id=task["task_id"], file_name="inputs.txt", summary="Report inputs")
     second.call("claim_task", task_id=task["task_id"])
     first.call("add_checkpoint", task_id=task["task_id"], content="Obsolete write", failure="task.not_holder")
     first.call("update_task", task_id=task["task_id"], result="Obsolete result", failure="task.not_holder")
+    first.call("create_file", task_id=task["task_id"], file_name="obsolete.txt", summary="Obsolete file",
+               failure="task.not_holder")
+    second_file = second.call("create_file", task_id=task["task_id"], file_name="review.txt", summary="Reviewed inputs")
+    for agent, file, payload in ((first, first_file, b"Collected inputs"), (second, second_file, b"Checked inputs")):
+        journey.clients.upload(file, payload)
+        agent.call("complete_file", task_id=task["task_id"], key=file["key"])
     second.call("add_checkpoint", task_id=task["task_id"], content="Checked the inputs")
     second.call("update_task", task_id=task["task_id"], result="Report checked")
     shown = journey.show(task)
     require(shown["holder"] == second.name and shown["result"] == "Report checked", "Takeover did not persist")
+    require({(row["key"], row["agent_name"]) for row in shown["files"]} == {
+        (first_file["key"], first.name), (second_file["key"], second.name),
+    } and len(shown["files"]) == 2, "Takeover lost a file or its registering agent")
     scratchpad = journey.clients.cli("task", "scratchpad", journey.space, task["key"])
     require([(row["agent_name"], row["content"]) for row in scratchpad] == [
         (first.name, "Collected the inputs"), (second.name, "Checked the inputs"),
@@ -75,6 +103,8 @@ def wait_for_person_resumes_after_request_approval(journey):
     waiting = journey.show(task)
     require(waiting["state"] == "waiting" and waiting["state_reason"] == "Awaiting a person's answer",
             "Waiting reason was not visible to the person")
+    require(waiting["state_changed_by"] == journey.username(0) and waiting["state_changed_agent_name"] == agent.name,
+            "Waiting state did not name the person and agent who set it")
     agent.call("update_task", task_id=task["task_id"], state="working")
     require(journey.show(task)["state"] == "working", "Agent did not resume")
     request = agent.call("create_request", task_id=task["task_id"], action="create", name="guide.md",
@@ -89,8 +119,19 @@ def wait_for_person_resumes_after_request_approval(journey):
             and resumed["state_reason"] is None, "Approval did not resume the held task")
     require(agent.call("get_request", space=journey.space, key=request["key"])["status"] == "approved",
             "Agent did not see the approval")
-    require(agent.call("read_knowledge", space=journey.space, name="guide.md")["content"] == "Use the reviewed guide",
-            "Approved guide was not readable")
+    guide = agent.call("read_knowledge", space=journey.space, name="guide.md")
+    require(guide["content"] == "Use the reviewed guide", "Approved guide was not readable")
+    withdrawn = agent.call("create_request", task_id=task["task_id"], action="change", target_key=guide["key"],
+                           content="Unneeded addition", wait=True)
+    require(journey.show(task)["state"] == "waiting", "Second request did not wait")
+    seen = journey.clients.cli("request", "show", journey.space, withdrawn["key"])
+    journey.clients.cli("request", "reject", journey.space, withdrawn["key"], "--revision", seen["revision"],
+                        "--reason", "Withdraw the unneeded addition")
+    resumed = journey.show(task)
+    require(resumed["state"] == "working" and resumed["holder"] == agent.name and resumed["state_reason"] is None,
+            "Withdrawal did not resume the held task")
+    require(agent.call("get_request", space=journey.space, key=withdrawn["key"])["status"] == "rejected",
+            "Agent did not see the withdrawal")
 
 
 def end_tasks_preserves_outcomes_and_reopens_done(journey):
@@ -178,13 +219,25 @@ def revise_request_reconciles_outdated_entry_before_approval(journey):
     client, space = journey.clients, journey.space
     entry = client.cli("knowledge", "create", space, "guide.md", "--summary", "Guide", "--content", "Initial guide")
     writer, reader = journey.agent("Guide writer"), journey.agent("Guide reader", person=1)
+    reviser = journey.agent("Guide reviser")
     task = writer.call("create_task", space=space, title="Revise the team guide")
     request = writer.call("create_request", task_id=task["task_id"], action="change", target_key=entry["key"],
                           content="Proposed guide")
-    revised = writer.call("revise_request", space=space, key=request["key"], content="Reviewed guide")
+    revised = client.cli("request", "revise", space, request["key"], "--content", "Person's proposal")
+    seen = client.cli("request", "show", space, request["key"])
+    require(seen["revision"] == revised["revision"] and seen["new_content"] == "Person's proposal"
+            and seen["revised_by"] == journey.username(0) and seen["reviser_agent_name"] is None,
+            "Person's revision was not visible")
+    reader.call("revise_request", space=space, key=request["key"], content="Other party's proposal",
+                failure="space.permission_required")
+    require(client.cli("request", "show", space, request["key"]) == seen,
+            "Another party changed the request")
+    revised = reviser.call("revise_request", space=space, key=request["key"], content="Reviewed guide")
     seen = client.cli("request", "show", space, request["key"])
     require(seen["revision"] == revised["revision"] and seen["new_content"] == "Reviewed guide",
             "Person did not see the agent's revision")
+    require(seen["requester_agent_name"] == writer.name and seen["reviser_agent_name"] == reviser.name,
+            "Request did not name its submitting and last revising agents")
     client.cli("knowledge", "change", space, entry["key"], "--version", entry["version"], "--content", "Person's guide")
     outdated = client.cli("request", "show", space, request["key"])
     require(outdated["outdated"] is True, "Direct change did not mark the pending request outdated")
@@ -193,10 +246,15 @@ def revise_request_reconciles_outdated_entry_before_approval(journey):
     current = writer.call("read_knowledge", space=space, key=entry["key"])
     require(current["content"] == "Person's guide", "Outdated approval changed Knowledge")
     reconciled = "Person's guide with the reviewed addition"
-    writer.call("revise_request", space=space, key=request["key"], content=reconciled)
+    reviser.call("revise_request", space=space, key=request["key"], content=reconciled)
     seen = client.cli("request", "show", space, request["key"])
     require(seen["outdated"] is False and seen["revision"] > outdated["revision"],
             "Reconciled revision did not refresh the target snapshot")
+    refused = client.cli("request", "approve", space, request["key"], "--revision", outdated["revision"], failure={409})
+    require(refused["code"] == "person_request.revision_changed", "Stale decision was not refused")
+    require(writer.call("read_knowledge", space=space, key=entry["key"]) == current,
+            "Stale decision changed Knowledge")
+    require(client.cli("request", "show", space, request["key"]) == seen, "Stale decision changed the request")
     client.cli("request", "approve", space, request["key"], "--revision", seen["revision"])
     require(reader.call("read_knowledge", space=space, key=entry["key"])["content"] == reconciled,
             "Another party's agent did not read the approved guide")
@@ -234,8 +292,15 @@ def request_knowledge_requires_other_party_and_preserves_decisions(journey):
     entry = client.cli("knowledge", "show", space, entry["key"], person=2)
     changed = client.cli("knowledge", "change", space, entry["key"], "--version", entry["version"],
                          "--content", "Admin's guide", person=2)
-    require(reader.call("read_knowledge", space=space, key=entry["key"])["content"] == "Admin's guide",
-            "Agent did not read the direct change")
+    current = reader.call("read_knowledge", space=space, key=entry["key"])
+    require(current["content"] == "Admin's guide", "Agent did not read the direct change")
+    for operation in (("change", "--content", "Obsolete guide"), ("delete", "--yes"),
+                      ("rollback", entry["version"])):
+        refused = client.cli("knowledge", operation[0], space, entry["key"], *operation[1:],
+                             "--version", entry["version"], person=2, failure={409})
+        require(refused["code"] == "knowledge.version_changed", "Stale direct write was not refused")
+        require(reader.call("read_knowledge", space=space, key=entry["key"]) == current,
+                "Stale direct write changed Knowledge")
     client.cli("knowledge", "rollback", space, entry["key"], entry["version"],
                "--version", changed["version"], person=2)
     require(reader.call("read_knowledge", space=space, key=entry["key"])["content"] == "Approved guide",
@@ -245,6 +310,7 @@ def request_knowledge_requires_other_party_and_preserves_decisions(journey):
 def sign_in_enforces_space_roles_and_removal(journey):
     journey.setup(second=True, device=True, wrong=True)
     client, space = journey.clients, journey.space
+    planned = client.cli("task", "plan", space, "--title", "Work awaiting a contributor")
     for role in ("viewer", "contributor", "admin"):
         client.cli("member", "set-role", space, journey.username(1), "--role", role)
         require(any(row["username"] == journey.username(1) and row["role"] == role
@@ -254,6 +320,11 @@ def sign_in_enforces_space_roles_and_removal(journey):
         knowledge = ("knowledge", "create", space, f"{role}.md", "--summary", "Role guide", "--content", "Team guide")
         if role == "viewer":
             client.cli(*plan, person=1, failure={403})
+            viewer = journey.agent("Viewing worker", person=1)
+            before = journey.show(planned)
+            viewer.call("claim_task", task_id=planned["task_id"], failure="space.permission_required")
+            require(journey.show(planned) == before and before["state"] == "planned",
+                    "Viewer's claim changed the planned task")
         else:
             task = client.cli(*plan, person=1)
             require(journey.show(task)["planner"] == journey.username(1), "Contributor could not plan work")
