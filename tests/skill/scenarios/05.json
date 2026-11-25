@@ -16,6 +16,18 @@
       "turn": "Write two launch checks titled Draft launch checks. That is all the work.",
       "expect": [
         {
+          "label": "one task for this work",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ]
+          },
+          "op": "count",
+          "value": 1
+        },
+        {
           "label": "finished task is done",
           "query": {
             "cli": [
@@ -24,11 +36,9 @@
               "{space}"
             ],
             "path": [
+              0,
               "state"
-            ],
-            "select": {
-              "title": "Draft launch checks"
-            }
+            ]
           },
           "op": "equals",
           "value": "done"
@@ -41,10 +51,8 @@
               "list",
               "{space}"
             ],
-            "select": {
-              "title": "Draft launch checks"
-            },
             "path": [
+              0,
               "holder"
             ]
           },
@@ -59,10 +67,8 @@
               "list",
               "{space}"
             ],
-            "select": {
-              "title": "Draft launch checks"
-            },
             "path": [
+              0,
               "ended_at"
             ]
           },
@@ -79,10 +85,9 @@
             "list",
             "{space}"
           ],
-          "path": [],
-          "select": {
-            "title": "Draft launch checks"
-          }
+          "path": [
+            0
+          ]
         },
         "save": {
           "task": [

@@ -16,22 +16,16 @@
       "turn": "Compare two team review options under the title Compare review options. Use asynchronous and live reviews, and ask me which I prefer. Keep the choice open.",
       "expect": [
         {
-          "label": "first result is recorded",
+          "label": "one task for this work",
           "query": {
             "cli": [
               "task",
               "list",
               "{space}"
-            ],
-            "path": [
-              "result"
-            ],
-            "select": {
-              "title": "Compare review options"
-            }
+            ]
           },
-          "op": "nonempty",
-          "value": true
+          "op": "count",
+          "value": 1
         }
       ]
     },
@@ -43,10 +37,9 @@
             "list",
             "{space}"
           ],
-          "path": [],
-          "select": {
-            "title": "Compare review options"
-          }
+          "path": [
+            0
+          ]
         },
         "save": {
           "task": [
@@ -57,7 +50,24 @@
           ]
         }
       },
-      "expect": []
+      "expect": [
+        {
+          "label": "first result is recorded",
+          "query": {
+            "cli": [
+              "task",
+              "show",
+              "{space}",
+              "{task}"
+            ],
+            "path": [
+              "result"
+            ]
+          },
+          "op": "nonempty",
+          "value": true
+        }
+      ]
     },
     {
       "action": {

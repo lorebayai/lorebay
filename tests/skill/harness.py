@@ -78,8 +78,8 @@ class Harness:
             if self.session:
                 command += ["resume", self.session]
             else:
-                command += ["--skip-git-repo-check", "--sandbox", "workspace-write"]
-            command += ["--json", "-"]
+                command += ["--sandbox", "workspace-write"]
+            command += ["--skip-git-repo-check", "--json", "-"]
         child = subprocess.Popen(command, cwd=self.project, env=self.environment(), start_new_session=True,
                                  stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                                  pass_fds=self.inherited_fds())
@@ -99,8 +99,8 @@ class Harness:
                         event = {"diagnostic": line}
                     if not isinstance(event, dict):
                         event = {"diagnostic": line}
-                    self.inspect(event)
                     self.events.append(scrub(event, self.clean))
+                    self.inspect(event)
             require(child.returncode == 0, "Harness failed: " + self.clean(stderr))
             require(self.session, "Harness did not identify its continuing session")
         finally:
@@ -118,12 +118,19 @@ class Harness:
             prefix = "mcp__lorebay__"
             self.tools.update(name.removeprefix(prefix) for name in event.get("tools", []) if name.startswith(prefix))
         raw = json.dumps(event)
-        item = event.get("item", {})
+        item = event.get("item")
+        if not isinstance(item, dict):
+            item = {}
         if (event.get("type") == "item.completed" and item.get("type") == "command_execution"
                 and item.get("exit_code") == 0 and self.skill in item.get("command", "")
                 and "# Lorebay" in item.get("aggregated_output", "")):
             self.loaded = True
-        for block in event.get("message", {}).get("content", []):
+        message = event.get("message")
+        if not isinstance(message, dict) or not isinstance(message.get("content"), list):
+            return
+        for block in message["content"]:
+            if not isinstance(block, dict):
+                continue
             if block.get("type") == "tool_use":
                 if (block.get("name") == "Skill" and block.get("input", {}).get("skill") == "lorebay:lorebay"
                         or self.skill in json.dumps(block.get("input", {}))):
