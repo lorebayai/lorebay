@@ -54,7 +54,7 @@ To change Lorebay, set up the tools as
   files.
 - `skill/`: the agent skill Lorebay ships, which tells agents how to record
   their work in a space.
-- `tests/`: team journeys against a running server and deployment tests
+- `tests/`: end-to-end team journeys, reused by the deployment tests
   that qualify complete releases.
 - `web/`: the TypeScript web pages embedded by `lorebayd`.
 

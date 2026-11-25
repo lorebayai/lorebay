@@ -18,6 +18,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "common"))
 from clients import redact, require
 from journeys import JOURNEYS, run_journeys
+from people import create_journey_people
 
 
 WORKSPACE = Path(__file__).resolve().parents[2]
@@ -39,13 +40,10 @@ def write_private(path: Path, content: str):
 
 
 def create_people(server, numbers, credentials):
-    people = {}
+    people = create_journey_people("team-" + secrets.token_hex(6), numbers)
     users = []
-    prefix = secrets.token_hex(6)
-    for number in numbers:
-        people[number] = []
-        for index in range(2):
-            person = {"username": f"team-{prefix}-{number}-{index}", "password": secrets.token_urlsafe(32)}
+    for group in people.values():
+        for person in group:
             credentials.append(person["password"])
             result = subprocess.run(
                 [str(server), "hash-password"], input=person["password"] + "\n",
@@ -55,7 +53,6 @@ def create_people(server, numbers, credentials):
             hashed = result.stdout.strip()
             credentials.append(hashed)
             users.append({"username": person["username"], "password_hash": hashed})
-            people[number].append(person)
     return people, users
 
 

@@ -272,10 +272,11 @@ class Clients:
 
 
 class Agent:
-    def __init__(self, clients, person, name):
+    def __init__(self, clients, person, name, *, token=None):
         self.clients = clients
         self.name = name
-        self.token = clients.agent_sign_in(person, name)
+        self.token = token if token is not None else clients.agent_sign_in(person, name)
+        clients.secrets.append(self.token)
 
     def call(self, tool, *, failure=None, http_status=200, **arguments):
         response = self.clients.api("POST", "/mcp", {

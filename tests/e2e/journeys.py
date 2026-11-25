@@ -82,7 +82,8 @@ def wait_for_person_resumes_after_request_approval(journey):
     waiting = journey.show(task)
     require(waiting["state"] == "waiting" and request["key"] in waiting["state_reason"],
             "Task did not wait on its request")
-    journey.clients.cli("request", "approve", journey.space, request["key"])
+    seen = journey.clients.cli("request", "show", journey.space, request["key"])
+    journey.clients.cli("request", "approve", journey.space, request["key"], "--revision", seen["revision"])
     resumed = journey.show(task)
     require(resumed["state"] == "working" and resumed["holder"] == agent.name
             and resumed["state_reason"] is None, "Approval did not resume the held task")
@@ -172,6 +173,75 @@ def record_work_reads_back_files_and_revokes_agent(journey):
     require(agent.name not in [row["name"] for row in client.cli("agent", "list")], "Revoked sign-in remains")
 
 
+def revise_request_reconciles_outdated_entry_before_approval(journey):
+    journey.setup(second=True)
+    client, space = journey.clients, journey.space
+    entry = client.cli("knowledge", "create", space, "guide.md", "--summary", "Guide", "--content", "Initial guide")
+    writer, reader = journey.agent("Guide writer"), journey.agent("Guide reader", person=1)
+    task = writer.call("create_task", space=space, title="Revise the team guide")
+    request = writer.call("create_request", task_id=task["task_id"], action="change", target_key=entry["key"],
+                          content="Proposed guide")
+    revised = writer.call("revise_request", space=space, key=request["key"], content="Reviewed guide")
+    seen = client.cli("request", "show", space, request["key"])
+    require(seen["revision"] == revised["revision"] and seen["new_content"] == "Reviewed guide",
+            "Person did not see the agent's revision")
+    client.cli("knowledge", "change", space, entry["key"], "--version", entry["version"], "--content", "Person's guide")
+    outdated = client.cli("request", "show", space, request["key"])
+    require(outdated["outdated"] is True, "Direct change did not mark the pending request outdated")
+    refused = client.cli("request", "approve", space, request["key"], "--revision", outdated["revision"], failure={409})
+    require(refused["code"] == "person_request.outdated", "Outdated approval was not refused")
+    current = writer.call("read_knowledge", space=space, key=entry["key"])
+    require(current["content"] == "Person's guide", "Outdated approval changed Knowledge")
+    reconciled = "Person's guide with the reviewed addition"
+    writer.call("revise_request", space=space, key=request["key"], content=reconciled)
+    seen = client.cli("request", "show", space, request["key"])
+    require(seen["outdated"] is False and seen["revision"] > outdated["revision"],
+            "Reconciled revision did not refresh the target snapshot")
+    client.cli("request", "approve", space, request["key"], "--revision", seen["revision"])
+    require(reader.call("read_knowledge", space=space, key=entry["key"])["content"] == reconciled,
+            "Another party's agent did not read the approved guide")
+    require(writer.call("get_request", space=space, key=request["key"])["status"] == "approved",
+            "Writer did not see the final approval")
+
+
+def request_knowledge_requires_other_party_and_preserves_decisions(journey):
+    journey.setup(second=True)
+    client, space = journey.clients, journey.space
+    client.login(2)
+    client.cli("member", "add", space, journey.username(2), "--role", "viewer")
+    client.cli("member", "set-role", space, journey.username(2), "--role", "admin")
+    client.cli("space", "show", space, person=2)
+    writer, reader = journey.agent("Proposing worker", person=1), journey.agent("Knowledge reader")
+    task = writer.call("create_task", space=space, title="Share a reviewed guide")
+    proposed = writer.call("create_request", task_id=task["task_id"], action="create", name="guide.md",
+                           summary="Team guide", content="Approved guide")
+    own = client.cli("request", "show", space, proposed["key"], person=1)
+    refused = client.cli("request", "approve", space, proposed["key"], "--revision", own["revision"],
+                         person=1, failure={403})
+    require(refused["code"] == "person_request.own_party", "Contributor approved their own agent's request")
+    seen = client.cli("request", "show", space, proposed["key"], person=2)
+    client.cli("request", "approve", space, proposed["key"], "--revision", seen["revision"], person=2)
+    entry = reader.call("read_knowledge", space=space, name="guide.md")
+    require(entry["content"] == "Approved guide", "Third party did not read the approved entry")
+    rejected = writer.call("create_request", task_id=task["task_id"], action="change", target_key=entry["key"],
+                           content="Unreviewed guide")
+    seen = client.cli("request", "show", space, rejected["key"], person=2)
+    client.cli("request", "reject", space, rejected["key"], "--revision", seen["revision"],
+               "--reason", "Keep the reviewed guide", person=2)
+    decision = writer.call("get_request", space=space, key=rejected["key"])
+    require(decision["status"] == "rejected" and decision["reject_reason"] == "Keep the reviewed guide",
+            "Proposing agent did not read the rejection and its reason")
+    entry = client.cli("knowledge", "show", space, entry["key"], person=2)
+    changed = client.cli("knowledge", "change", space, entry["key"], "--version", entry["version"],
+                         "--content", "Admin's guide", person=2)
+    require(reader.call("read_knowledge", space=space, key=entry["key"])["content"] == "Admin's guide",
+            "Agent did not read the direct change")
+    client.cli("knowledge", "rollback", space, entry["key"], entry["version"],
+               "--version", changed["version"], person=2)
+    require(reader.call("read_knowledge", space=space, key=entry["key"])["content"] == "Approved guide",
+            "Agent did not read the rollback")
+
+
 def sign_in_enforces_space_roles_and_removal(journey):
     journey.setup(second=True, device=True, wrong=True)
     client, space = journey.clients, journey.space
@@ -206,14 +276,16 @@ JOURNEYS = {
     3: wait_for_person_resumes_after_request_approval,
     4: end_tasks_preserves_outcomes_and_reopens_done,
     5: update_result_preserves_history_and_refuses_stale_version,
+    6: revise_request_reconciles_outdated_entry_before_approval,
     7: record_work_reads_back_files_and_revokes_agent,
+    8: request_knowledge_requires_other_party_and_preserves_decisions,
     9: sign_in_enforces_space_roles_and_removal,
 }
 
 
 def run_journeys(origin, people, root, *, executable="lorebay", authority=None, chromium=None,
                  numbers=None, credentials=None):
-    for number in numbers or JOURNEYS:
+    for number in numbers or people:
         started = time.monotonic()
         clients = Clients(origin, people[number], root / str(number), executable, authority, chromium)
         try:

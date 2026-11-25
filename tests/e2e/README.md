@@ -2,7 +2,8 @@
 
 Drive Lorebay as a team through the compiled CLI, Chromium authorization and
 device pages, MCP and file URLs. Each journey creates its own space and
-data; the local runner supplies a separate pair of test people per journey.
+data; the runner supplies separate test people, including three parties for
+the Knowledge approval journey.
 
 ## Usage
 
@@ -39,6 +40,8 @@ The syntax check runs in CI; journeys run by hand for milestone acceptance
 and before releases. Journeys cover planning and claims across parties,
 takeover, waiting and resuming, final states and reopening, result history,
 recording and file readback with revocation, and sign-in and space roles.
+They also cover request revisions after a direct Knowledge change, approval
+by another party, rejection, direct changes and rollback.
 
 ## Configuration
 
@@ -54,6 +57,7 @@ client directory, plus optional CLI, authority and Chromium paths. Journeys
 use no local server state, so the same callers can reach a running HTTPS
 deployment with its supplied authority. Browser trust must also be installed
 in that environment; certificate verification stays enabled.
+Deployment tests run these same nine journeys after each install.
 
 ## Docs
 

@@ -12,7 +12,8 @@ from playwright.sync_api import sync_playwright
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "common"))
-from clients import Clients, require
+from clients import Agent, Clients, require
+from journeys import run_journeys
 
 
 SETTINGS = json.load(sys.stdin)
@@ -24,7 +25,6 @@ CLIENTS = Clients(ORIGIN, PEOPLE, "/work", authority=CA, chromium="/usr/bin/chro
 CONTEXT = CLIENTS.context
 api = CLIENTS.api
 cli = CLIENTS.cli
-agent_sign_in = CLIENTS.agent_sign_in
 
 
 def login(person, device=False, wrong=False, origin=None, home=None, refused=False):
@@ -34,177 +34,22 @@ def login(person, device=False, wrong=False, origin=None, home=None, refused=Fal
     return CLIENTS.login(person, device, wrong, origin, home, refused)
 
 
-def upload(space, task, agent, name, payload):
-    path = f"/api/v1/spaces/{space}/tasks/{task}/files"
-    registered = api("POST", path, {"file_name": name, "summary": "Deployment file"}, agent, expected=201)["data"]
-    CLIENTS.upload(registered, payload)
-    return api("POST", path + "/" + registered["key"] + "/complete", token=agent)["data"]
-
-
 def download(space, key):
     return CLIENTS.download(cli("file", "url", space, key)["url"])
 
 
-def product():
-    login(0, wrong=True)
-    login(1, device=True)
-    cli("logout")
-    result = subprocess.run(
-        ["lorebay", "space", "list"], env=os.environ | {"LOREBAY_HOME": "/work/person-0"}, capture_output=True
-    )
-    require(result.returncode == 4, "Logged-out CLI retained access")
-    login(0)
-    print("PASS sign_in_accepts_authorization_and_device_and_refuses_wrong_password_and_logout", flush=True)
-    space = cli("space", "create", "--name", "Deployment", "--summary", "Functional check")["key"]
-    require(cli("space", "show", space)["name"] == "Deployment", "Space was not created")
-    cli("space", "change", space, "--name", "Deployment checked", "--summary", "Changed summary")
-    shown = cli("space", "show", space)
-    require(
-        shown["name"] == "Deployment checked" and shown["summary"] == "Changed summary", "Space changes did not persist"
-    )
-    require(PEOPLE[1]["username"] in json.dumps(cli("user", "list")), "Second person is missing")
-    second = PEOPLE[1]["username"]
-    for role in ("viewer", "contributor", "admin"):
-        cli("member", "add" if role == "viewer" else "set-role", space, second, "--role", role)
-        members = cli("member", "list", space)
-        require(any(m["username"] == second and m["role"] == role for m in members), "Space role did not change")
-        require(cli("space", "show", space, person=1)["key"] == space, "Member cannot read space")
-        create_request = ("request", "create", space, f"roles/{role}.md", "--summary", role, "--content", role)
-        create_knowledge = ("knowledge", "create", space, f"roles/{role}.md", "--summary", role, "--content", role)
-        if role == "viewer":
-            cli(*create_request, person=1, failure={403})
-        else:
-            request = cli(*create_request, person=1)
-            cli(
-                "request", "reject", space, request["key"], "--revision", request["revision"],
-                "--reason", "Role verified"
-            )
-        if role == "admin":
-            entry = cli(*create_knowledge, person=1)
-            cli("knowledge", "delete", space, entry["key"], "--version", entry["version"], "--yes")
-        else:
-            cli(*create_knowledge, person=1, failure={403})
-    cli("member", "remove", space, second)
-    require(not any(m["username"] == second for m in cli("member", "list", space)), "Removed person remains a member")
-    cli("space", "show", space, person=1, failure={403, 404})
-    cli(
-        "request",
-        "create",
-        space,
-        "removed.md",
-        "--summary",
-        "Removed",
-        "--content",
-        "Removed",
-        person=1,
-        failure={403, 404},
-    )
-    cli(
-        "knowledge",
-        "create",
-        space,
-        "removed.md",
-        "--summary",
-        "Removed",
-        "--content",
-        "Removed",
-        person=1,
-        failure={403, 404},
-    )
-    cli("logout", person=1)
-    print("PASS spaces_preserve_changes_and_members_follow_each_role", flush=True)
-    agent = agent_sign_in()
-    prefix = f"/api/v1/spaces/{space}/tasks"
-    task = api("POST", prefix, {"title": "Deployment work"}, agent, expected=201)["data"]
-    path = prefix + "/" + task["task_id"]
-    checkpoint = api(
-        "POST", path + "/checkpoints", {"content": "Plan: verify deployment, then record results"}, agent, expected=201
-    )["data"]
-    content = b"name,result\nrelease,passed\n\x00\xff"
-    small = upload(space, task["task_id"], agent, "report.csv", content)
-    require(download(space, small["key"]) == (len(content), hashlib.sha256(content).hexdigest()), "File bytes changed")
-    entry = cli("knowledge", "create", space, "ops/release.md", "--summary", "Release", "--content", "First revision")
-    entry = cli(
-        "knowledge", "change", space, entry["key"], "--version", entry["version"], "--content", "Second revision"
-    )
-    history = cli("knowledge", "history", space, entry["key"])
-    require(len(history) == 2, "Knowledge history is incomplete")
-    require(
-        cli("knowledge", "show", space, entry["key"], "--version", 1)["content"] == "First revision",
-        "Old Knowledge version changed",
-    )
-    entry = cli("knowledge", "rollback", space, entry["key"], 1, "--version", entry["version"])
-    require(cli("knowledge", "show", space, entry["key"])["content"] == "First revision", "Knowledge rollback failed")
-    cli("knowledge", "delete", space, entry["key"], "--version", entry["version"], "--yes")
-    require(any(e["key"] == entry["key"] for e in cli("knowledge", "deleted", space)), "Deleted Knowledge is missing")
-    require(len(cli("knowledge", "history", space, entry["key"])) == 4, "Rollback or deletion history is missing")
-    for decision in ("approve", "reject"):
-        request = api(
-            "POST",
-            path + "/requests",
-            {
-                "action": "create",
-                "name": f"ops/{decision}.md",
-                "summary": decision,
-                "content": decision,
-            },
-            agent,
-            expected=201,
-        )["data"]
-        require(any(r["key"] == request["key"] for r in cli("request", "list", space)), "Request is absent from list")
-        require(cli("request", "show", space, request["key"])["status"] == "pending", "Request is not pending")
-        before = cli("knowledge", "list", space)
-        extra = ["--reason", "Deployment rejection"] if decision == "reject" else []
-        cli("request", decision, space, request["key"], "--revision", request["revision"], *extra)
-        shown = cli("request", "show", space, request["key"])
-        require(
-            shown["status"] == ("approved" if decision == "approve" else "rejected"), "Request decision did not persist"
-        )
-        if decision == "approve":
-            require(
-                cli("knowledge", "show", space, "ops/approve.md")["content"] == "approve",
-                "Approved request did not change Knowledge",
-            )
-        else:
-            require(
-                shown["reject_reason"] == "Deployment rejection" and cli("knowledge", "list", space) == before,
-                "Rejected request changed Knowledge or lost its reason",
-            )
-    print("PASS knowledge_preserves_history_and_rollback_and_request_decisions", flush=True)
-    api("PATCH", path, {"state": "done", "result": "Deployment checked"}, agent)
-    require(any(t["task_id"] == task["task_id"] for t in cli("task", "list", space)), "Task list is missing the task")
-    shown = cli("task", "show", space, task["key"])
-    require(shown["state"] == "done" and shown["result"] == "Deployment checked", "Task result is missing")
-    require(
-        cli("task", "scratchpad", space, task["key"])
-        == [
-            {
-                "time": checkpoint["time"],
-                "agent_name": "Deployment probe",
-                "content": "Plan: verify deployment, then record results",
-            }
-        ],
-        "Scratchpad differs from checkpoint",
-    )
-    cli("checkpoint", "delete", space, task["task_id"], checkpoint["time"], "--yes")
-    require(cli("task", "scratchpad", space, task["key"]) == [], "Deleted checkpoint remains")
-    cli("file", "delete", space, task["task_id"], small["key"], "--yes")
-    require(cli("task", "show", space, task["key"])["files"] == [], "Deleted file remains")
-    cli("file", "url", space, small["key"], failure={404})
-    cli("task", "delete", space, task["task_id"], "--yes")
-    require(cli("task", "list", space) == [], "Deleted task remains")
-    cli("task", "show", space, task["key"], failure={404})
-    STATE.write_text(json.dumps({"space": space, "agent": agent}))
-    STATE.chmod(0o600)
-    print("PASS tasks_preserve_results_and_files_and_delete_checkpoints_files_and_tasks", flush=True)
+def journeys():
+    people = {int(number): group for number, group in SETTINGS["journey_people"].items()}
+    run_journeys(ORIGIN, people, Path("/work/journeys"), authority=CA, chromium="/usr/bin/chromium",
+                 credentials=CLIENTS.secrets)
 
 
 def large():
-    state = json.loads(STATE.read_text())
-    space, agent = state["space"], state["agent"]
-    task = api("POST", f"/api/v1/spaces/{space}/tasks", {"title": "Large file persistence"}, agent, expected=201)[
-        "data"
-    ]
+    login(0)
+    space = cli("space", "create", "--name", "Streaming and persistence", "--summary", "Deployment operation")["key"]
+    agent = Agent(CLIENTS, 0, "Deployment probe")
+    state = {"space": space, "agent": agent.token}
+    task = agent.call("create_task", space=space, title="Large file persistence")
     size = 1073741825
     payload = Path("/work/large.bin")
     try:
@@ -213,11 +58,15 @@ def large():
             stream.truncate(size)
         with payload.open("rb") as stream:
             digest = hashlib.file_digest(stream, "sha256").hexdigest()
+        registered = agent.call("create_file", task_id=task["task_id"], file_name="large.bin",
+                                summary="Streaming probe")
         with payload.open("rb") as stream:
-            file = upload(space, task["task_id"], agent, "large.bin", stream)
+            CLIENTS.upload(registered, stream)
+        file = agent.call("complete_file", task_id=task["task_id"], key=registered["key"])
         require(file["size"] == size, "Large file size changed")
         require(download(space, file["key"]) == (size, digest), "Large file bytes changed")
         STATE.write_text(json.dumps(state | {"file": file["key"], "size": size, "sha256": digest}))
+        STATE.chmod(0o600)
         print(f"PASS large_file_round_trips {size} bytes SHA256 {digest}", flush=True)
     finally:
         payload.unlink(missing_ok=True)
@@ -237,7 +86,7 @@ def revoke():
     name = "Deployment probe"
     require(name in json.dumps(cli("agent", "list")), "Agent sign-in is missing")
     cli("agent", "revoke", name, "--yes")
-    api("GET", "/api/v1/spaces", token=state["agent"], expected=401)
+    Agent(CLIENTS, 0, name, token=state["agent"]).call("list_spaces", http_status=401)
     cli("logout")
     print("PASS revoked_agent_is_refused_and_person_logs_out", flush=True)
 
