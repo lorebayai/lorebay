@@ -144,6 +144,8 @@ impl LocalDirectory {
             .tempfile_in(&self.temporary)?;
         let (file, path) = temporary.into_parts();
         let mut file = File::from_std(file);
+        file.set_permissions(Permissions::from_mode(STORED_FILE_MODE))
+            .await?;
         let mut size = 0u64;
         while let Some(chunk) = timeout(self.idle_timeout, stream.next())
             .await
@@ -339,6 +341,7 @@ impl LocalDirectory {
 }
 
 const STORAGE_DIRECTORY_MODE: u32 = 0o700;
+const STORED_FILE_MODE: u32 = 0o600;
 
 async fn create_storage_directory(directory: &Path) -> IoResult<()> {
     match fs::DirBuilder::new()

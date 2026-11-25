@@ -89,11 +89,11 @@ port forward. Use HTTPS for harness connections outside loopback. The rate
 limits group peers by IPv4 address or IPv6 /64. Behind a reverse proxy every
 caller shares one rate limit; limits per caller belong on the proxy. Logs are
 JSON on stderr and exclude configuration dumps and credentials. Startup creates
-the data directory, `uploads/` and `agent_files/` with mode `0700`, and
-`lorebay.sqlite3` with mode `0600`; existing modes are unchanged. Two keys use
-mode `0600`: `signing.key` for tokens and `file-url-signing.key` for file URLs.
-Losing them ends every sign-in, agent sign-in and file URL; anyone who reads
-them can forge those. Back up the data directory only while `lorebayd` is stopped.
+the data directory and, in it, `uploads/` and `agent_files/` with mode `0700`
+and `lorebay.sqlite3` with mode `0600`; existing modes are unchanged. Its keys,
+`signing.key` for tokens and `file-url-signing.key` for file URLs, use mode
+`0600`. Losing them ends every sign-in, agent sign-in and file URL; anyone who
+reads them can forge those. Back up the data directory only while stopped.
 
 ## Docs
 

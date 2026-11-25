@@ -49,6 +49,22 @@ async fn upload_agent_file_completes_with_private_directories_under_any_umask() 
         assert_eq!(completed["size"], 8);
         assert_completed(&server, &person, &agent, &task, &completed).await;
         assert_eq!(modes, [0o700, 0o700], "umask {umask:03o}");
+        let download = call(
+            &server,
+            &agent,
+            "get_file_url",
+            json!({"space":SPACE, "key":completed["key"]}),
+        )
+        .await;
+        let response = server
+            .client
+            .get(download["url"].as_str().unwrap())
+            .send()
+            .await
+            .map_err(|_| "download request failed")
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK, "umask {umask:03o}");
+        assert_eq!(response.bytes().await.unwrap(), "The file");
         server.stop().await;
     }
 }
