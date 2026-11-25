@@ -114,15 +114,6 @@ impl Server {
         Self::start_with(directory, users, |_| {}).await
     }
 
-    pub async fn startup_error(directory: &Path) -> String {
-        let (config, listener) = start_config(directory, &[(TEST_USERNAME, TEST_PASSWORD)]).await;
-        ServerTask::start(config, listener)
-            .wait_for_exit(TEST_TIMEOUT)
-            .await
-            .unwrap_err()
-            .to_string()
-    }
-
     pub async fn start_with_settings(settings: Settings) -> Self {
         Self::configured(|config| {
             config.access_token_lifetime_seconds = settings.access_seconds;

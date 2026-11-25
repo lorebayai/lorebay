@@ -43,8 +43,8 @@ It does not cover:
 
 - **No external dependencies by default.** `lorebayd` starts with a data
   directory that holds the SQLite file and the file content.
-- **A data directory from `v0.1.1` or later is upgraded in place at
-  startup**, by the migrations it lacks. One from before `v0.1.1` is
+- **A data directory from `v0.1.3` or later is upgraded in place at
+  startup**, by the migrations it lacks. One from before `v0.1.3` is
   refused: delete it and start with an empty one; the users file recreates
   the accounts.
 - **One database holds the library's tables and Lorebay's.** On SQLite,

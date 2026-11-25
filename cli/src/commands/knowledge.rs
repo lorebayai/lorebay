@@ -239,7 +239,7 @@ async fn rollback(
         store,
         Method::POST,
         &entry_path(space, entry, &["rollback"])?,
-        Some(&json!({"version": source_version, "target_version": version})),
+        Some(&json!({"version": source_version, "replaced_version": version})),
     )
     .await
 }

@@ -81,7 +81,7 @@ pub async fn roll_back(server: &Server, caller: &Value, path: &str, version: i64
             caller,
             Method::POST,
             &resource(path, "rollback"),
-            json!({"version": version, "target_version":read(server, caller, path).await["version"]}),
+            json!({"version": version, "replaced_version":read(server, caller, path).await["version"]}),
         )
         .await,
         StatusCode::OK,
@@ -107,7 +107,7 @@ pub async fn assert_history_target_error(
                 caller,
                 method,
                 &resource(target, suffix),
-                json!({"version":1,"target_version":1}),
+                json!({"version":1,"replaced_version":1}),
             )
             .await,
             status,

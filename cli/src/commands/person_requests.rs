@@ -218,7 +218,7 @@ async fn request(
         ("Proposed summary", "new_summary"),
         ("Content", "new_content"),
         ("Requested by", "requested_by"),
-        ("Agent name", "requester_agent_name"),
+        ("Submitting agent", "requester_agent_name"),
         ("Source task", "from_task_key"),
         ("Created at", "created_at"),
         ("Base version", "base_version"),

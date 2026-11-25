@@ -139,7 +139,7 @@ async fn list_knowledge_versions_fails_when_caller_is_agent() {
                 &agent,
                 Method::POST,
                 &resource(&target, "rollback"),
-                json!({"version":1,"target_version":1}),
+                json!({"version":1,"replaced_version":1}),
             )
             .await,
             StatusCode::FORBIDDEN,
@@ -495,7 +495,7 @@ async fn roll_back_knowledge_entry_fails_when_caller_is_contributor() {
                 &bob,
                 Method::POST,
                 &resource(&by_name("Guide"), "rollback"),
-                json!({"version":1,"target_version":1}),
+                json!({"version":1,"replaced_version":1}),
             )
             .await,
             StatusCode::FORBIDDEN,

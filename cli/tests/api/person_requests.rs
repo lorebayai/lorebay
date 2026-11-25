@@ -388,7 +388,7 @@ async fn person_request_approve_makes_agent_person_request_readable_as_knowledge
     assert!(
         String::from_utf8(human.stdout)
             .unwrap()
-            .contains("Agent name: Writer\\n\\t\\u{1b}[31m\n")
+            .contains("Submitting agent: Writer\\n\\t\\u{1b}[31m\n")
     );
     let approved = person_request_json(&server, &["approve", &space, "RQ-1"]).await;
     assert_eq!(approved["status"], "approved");
