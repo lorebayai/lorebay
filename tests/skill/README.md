@@ -74,6 +74,7 @@ only `skill/README.md` to install stays entirely by hand, outside this suite.
 The external JSON file is the only input. Paths are absolute. Home, lock,
 installed skill and output paths stay outside the checkout. CLI and authority
 paths may point at an installation or checkout. Values below are placeholders.
+Each harness home must name its Lorebay MCP server `lorebay`.
 
 | Key | Value |
 | --- | --- |
@@ -88,8 +89,7 @@ paths may point at an installation or checkout. Values below are placeholders.
 Each role needs a distinct home. Its lock is `<parent>/.locks/<name>.lock`;
 external commands must honor that lock and validate inherited ownership.
 Each script-agent command reads one MCP JSON-RPC request on stdin and writes
-its response on stdout. It validates and holds the inherited lock descriptor
-in `LOREBAY_TEST_HOME_LOCK_FD` and refuses an origin other than
+its response on stdout, holds the inherited lock and refuses an origin other than
 `LOREBAY_TEST_EXPECTED_ORIGIN`.
 The configured installed `SKILL.md` must match this checkout. The suite reads
 only that public file from a home; credential files stay opaque to it.

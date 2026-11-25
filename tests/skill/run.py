@@ -6,7 +6,7 @@ import tempfile
 import uuid
 from pathlib import Path
 
-from configuration import RunInterrupted, load_configuration, load_scenarios
+from configuration import ConfigurationError, RunInterrupted, load_configuration, load_scenarios
 from harness import Harness, sanitize, scrub
 
 
@@ -176,8 +176,14 @@ def main():
     try:
         try:
             config = load_configuration(sys.argv[1])
-        except ValueError as error:
+        except ConfigurationError as error:
             print("FAIL " + str(error))
+            return 1
+        except OSError:
+            print("FAIL Cannot read configuration file")
+            return 1
+        except (TypeError, AttributeError, ValueError):
+            print("FAIL Invalid configuration value or format")
             return 1
         return run(config)
     except HomeInUse as error:
