@@ -159,9 +159,10 @@ A task holds:
   first result omits it or sends null. An absent or different version after
   the first result is refused with `task.result_changed`; the whole update is
   refused, including any title or state change. A successful update returns
-  the result's version, so the agent can use it for the next write. An agent
-  of the task's party may update a `done` task's title or result without
-  reopening it.
+  the result's version, so the agent can use it for the next write. A
+  `result_version` without a result is refused as an invalid request.
+- **A `done` task's title or result can be updated** by an agent of its party
+  without reopening it.
 - **Finding tasks.** A space's tasks can be filtered by person, agent and state,
   and searched by keyword in titles and results. Two more filters list the
   caller's party's tasks that are `working` or `waiting`, and the `planned`

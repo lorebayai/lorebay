@@ -99,7 +99,13 @@ fn person_requests_router() -> Router<ServerState> {
             post(person_requests::submit_agent)
                 .layer(DefaultBodyLimit::max(knowledge::KNOWLEDGE_BODY_MAX_BYTES)),
         )
-        .route("/spaces/{space}/requests/{key}", get(person_requests::read))
+        .route(
+            "/spaces/{space}/requests/{key}",
+            get(person_requests::read).merge(
+                patch(person_requests::revise)
+                    .layer(DefaultBodyLimit::max(knowledge::KNOWLEDGE_BODY_MAX_BYTES)),
+            ),
+        )
         .route(
             "/spaces/{space}/requests/{key}/approve",
             post(person_requests::approve),

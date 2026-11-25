@@ -5,9 +5,9 @@ use axum::http::StatusCode;
 use lorebay_lib_core::{
     DeletedKnowledgeEntry, KNOWLEDGE_FIELDS_MAX_JSON_BYTES, KNOWLEDGE_NAME_MAX_CHARACTERS,
     KnowledgeChanges, KnowledgeEntry, KnowledgeFilters, KnowledgeInputError, KnowledgeListItem,
-    KnowledgeTarget, KnowledgeVersion, NewKnowledgeEntry, PageOptions, change_knowledge_entry,
-    create_knowledge_entry, delete_knowledge_entry, list_deleted_knowledge, list_knowledge,
-    list_knowledge_versions, read_knowledge_entry, read_knowledge_version,
+    KnowledgeTarget, KnowledgeVersion, NewKnowledgeEntry, PageOptions, VersionedKnowledgeTarget,
+    change_knowledge_entry, create_knowledge_entry, delete_knowledge_entry, list_deleted_knowledge,
+    list_knowledge, list_knowledge_versions, read_knowledge_entry, read_knowledge_version,
     roll_back_knowledge_entry,
 };
 use serde::{Deserialize, Deserializer};
@@ -36,6 +36,7 @@ pub(crate) struct CreateRequest {
 #[builder(field_defaults(setter(into)))]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ChangeRequest {
+    version: i64,
     #[serde(default, deserialize_with = "present_string")]
     name: Option<String>,
     #[serde(default, deserialize_with = "present_string")]
@@ -57,6 +58,15 @@ pub(crate) struct EntryPath {
 pub(crate) struct TargetQuery {
     name: Option<String>,
     key: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+#[serde(deny_unknown_fields)]
+pub(crate) struct DeleteQuery {
+    name: Option<String>,
+    key: Option<String>,
+    version: i64,
 }
 
 #[derive(Clone, Debug, Deserialize, TypedBuilder)]
@@ -92,6 +102,7 @@ pub(crate) struct VersionPath {
 #[serde(deny_unknown_fields)]
 pub(crate) struct RollbackRequest {
     version: i64,
+    target_version: i64,
 }
 
 #[derive(Clone, Debug, Deserialize, TypedBuilder)]
@@ -157,7 +168,7 @@ pub(crate) async fn change(
     let Path(path) = path.map_err(|_| invalid_query("path"))?;
     let Query(query) = query.map_err(|_| invalid_query("query"))?;
     let Json(request) = request.map_err(invalid_json)?;
-    let target = path.target(query)?;
+    let target = VersionedKnowledgeTarget::new(path.target(query)?, request.version)?;
     let changes = request.try_into()?;
     let caller = caller.library_caller();
     let result = state
@@ -173,11 +184,17 @@ pub(crate) async fn delete(
     State(state): State<ServerState>,
     caller: VerifiedCaller,
     path: Result<Path<EntryPath>, PathRejection>,
-    query: Result<Query<TargetQuery>, QueryRejection>,
+    query: Result<Query<DeleteQuery>, QueryRejection>,
 ) -> Result<Envelope<KnowledgeEntry>, ApiError> {
     let Path(path) = path.map_err(|_| invalid_query("path"))?;
     let Query(query) = query.map_err(|_| invalid_query("query"))?;
-    let target = path.target(query)?;
+    let target = VersionedKnowledgeTarget::new(
+        path.target(TargetQuery {
+            name: query.name,
+            key: query.key,
+        })?,
+        query.version,
+    )?;
     let caller = caller.library_caller();
     let result = state
         .library
@@ -308,7 +325,7 @@ pub(crate) async fn roll_back(
     let Path(path) = path.map_err(|_| invalid_query("path"))?;
     let Query(query) = query.map_err(|_| invalid_query("query"))?;
     let Json(request) = request.map_err(invalid_json)?;
-    let target = path.target(query)?;
+    let target = VersionedKnowledgeTarget::new(path.target(query)?, request.target_version)?;
     let caller = caller.library_caller();
     let result = state
         .library

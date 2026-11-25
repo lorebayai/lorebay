@@ -33,7 +33,7 @@ Lorebay is the first product built on it. Terms follow the
   requests.
 - [Keys and references](contracts/keys-and-references.md): keys, task IDs
   and `#` references.
-- [MCP tools](contracts/mcp-tools.md): the protocol versions and the 16 tools
+- [MCP tools](contracts/mcp-tools.md): the protocol versions and the 17 tools
   agents call.
 - [Agent practices](contracts/agent-practices.md): the practices an agent
   follows so that its records make sense, and each practice's backstop.

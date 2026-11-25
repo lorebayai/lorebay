@@ -5,9 +5,9 @@ use lorebay_lib_core::{
     Caller, KnowledgeChanges, KnowledgeEntry, KnowledgeError, KnowledgeInputError, KnowledgeTarget,
     LibraryState, NewKnowledgeEntry, PageOptions, PersonRequest, PersonRequestContent,
     PersonRequestError, PersonRequestFilters, PersonRequestSource, SubmittedPersonRequest,
-    TaskTarget, WriteOperation, approve_person_request, change_knowledge_entry,
-    create_knowledge_entry, list_person_requests, read_knowledge_entry, read_person_request,
-    submit_person_request,
+    TaskTarget, VersionedKnowledgeTarget, WriteOperation, approve_person_request,
+    change_knowledge_entry, create_knowledge_entry, list_person_requests, read_knowledge_entry,
+    read_person_request, submit_person_request,
 };
 use tokio::sync::{Barrier, mpsc};
 
@@ -76,7 +76,7 @@ async fn approve_person_request_decides_once_when_approved_concurrently() {
 }
 
 #[tokio::test]
-async fn approve_person_request_keeps_versions_consecutive_when_entry_changes_concurrently() {
+async fn approve_person_request_refuses_outdated_request_when_entry_changes_concurrently() {
     with_postgres(async |fixture| {
         fixture.space().await;
         prepare_change(&fixture.state, &fixture.person)
@@ -109,14 +109,14 @@ async fn approve_person_request_keeps_versions_consecutive_when_entry_changes_co
         held.release();
         assert_eq!(changing.await.unwrap().unwrap().version, 2);
         assert_eq!(
-            approval.await.unwrap().unwrap().details.status.as_str(),
-            "approved"
+            approval.await.unwrap().unwrap_err().code(),
+            "person_request.outdated"
         );
         let entry = read_knowledge_entry(&fixture.state, &fixture.person, SPACE, target().unwrap())
             .await
             .unwrap();
-        assert_eq!(entry.version, 3);
-        assert_eq!(entry.content.as_deref(), Some("Proposed"));
+        assert_eq!(entry.version, 2);
+        assert_eq!(entry.content.as_deref(), Some("Intervening"));
         assert_eq!(entry.summary.as_deref(), Some("Concurrent"));
         assert_eq!(
             records.lock().unwrap()[0].as_ref().unwrap().operation,
@@ -213,7 +213,7 @@ async fn approve(
     caller: &Caller,
 ) -> Result<PersonRequest, PersonRequestError> {
     state
-        .run_write(async |write| approve_person_request(write, caller, SPACE, "RQ-1").await)
+        .run_write(async |write| approve_person_request(write, caller, SPACE, "RQ-1", 1).await)
         .await
 }
 
@@ -250,7 +250,14 @@ async fn change(state: &LibraryState, caller: &Caller) -> Result<KnowledgeEntry,
     )?;
     state
         .run_write(async |write| {
-            change_knowledge_entry(write, caller, SPACE, target()?, changes).await
+            change_knowledge_entry(
+                write,
+                caller,
+                SPACE,
+                VersionedKnowledgeTarget::new(target()?, 1)?,
+                changes,
+            )
+            .await
         })
         .await
 }

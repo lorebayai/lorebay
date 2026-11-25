@@ -21,23 +21,20 @@ pub(super) async fn run(
             space,
             entry,
             changes,
-        } => change(store, &space, &entry, changes).await,
+            version,
+        } => change(store, &space, &entry, changes, version).await,
         KnowledgeCommand::Create {
             space,
             name,
             summary,
             content: source,
         } => create(store, &space, name, summary, source).await,
-        KnowledgeCommand::Delete { space, entry, yes } => {
-            delete(
-                store,
-                &entry_path(&space, &entry, &[])?,
-                &format!("knowledge entry {entry} in {space}"),
-                yes,
-                "Knowledge entry deleted.",
-            )
-            .await
-        }
+        KnowledgeCommand::Delete {
+            space,
+            entry,
+            yes,
+            version,
+        } => delete_entry(store, &space, &entry, version, yes).await,
         KnowledgeCommand::Deleted { space, page } => deleted(store, &space, page, mode).await,
         KnowledgeCommand::History { space, entry, page } => {
             history(store, &space, &entry, page, mode).await
@@ -61,7 +58,8 @@ pub(super) async fn run(
             space,
             entry,
             version,
-        } => rollback(store, &space, &entry, version).await,
+            source_version,
+        } => rollback(store, &space, &entry, source_version, version).await,
         KnowledgeCommand::Show {
             space,
             entry,
@@ -85,16 +83,18 @@ async fn change(
     space: &str,
     entry: &str,
     changes: KnowledgeChanges,
+    version: i64,
 ) -> Result<Outcome> {
     let fields = [
         ("name", changes.name),
         ("summary", changes.summary),
         ("content", content::read(changes.content)?),
     ];
-    let body = fields
+    let mut body: serde_json::Map<String, Value> = fields
         .into_iter()
         .filter_map(|(field, value)| value.map(|value| (field.to_owned(), json!(value))))
         .collect();
+    body.insert("version".to_owned(), json!(version));
     request(
         store,
         Method::PATCH,
@@ -222,12 +222,24 @@ fn entry_path(space: &str, entry: &str, suffix: &[&str]) -> Result<String> {
     Ok(format!("{path}?{query}"))
 }
 
-async fn rollback(store: &Store, space: &str, entry: &str, version: i64) -> Result<Outcome> {
+fn versioned_path(space: &str, entry: &str, version: i64) -> Result<String> {
+    let path = entry_path(space, entry, &[])?;
+    let separator = if path.contains('?') { '&' } else { '?' };
+    Ok(format!("{path}{separator}version={version}"))
+}
+
+async fn rollback(
+    store: &Store,
+    space: &str,
+    entry: &str,
+    source_version: i64,
+    version: i64,
+) -> Result<Outcome> {
     request(
         store,
         Method::POST,
         &entry_path(space, entry, &["rollback"])?,
-        Some(&json!({"version": version})),
+        Some(&json!({"version": source_version, "target_version": version})),
     )
     .await
 }
@@ -268,4 +280,21 @@ async fn request(
     })
     .collect::<Vec<_>>();
     Ok(Outcome::new(body, Fields::builder().values(values).build()))
+}
+
+async fn delete_entry(
+    store: &Store,
+    space: &str,
+    entry: &str,
+    version: i64,
+    yes: bool,
+) -> Result<Outcome> {
+    delete(
+        store,
+        &versioned_path(space, entry, version)?,
+        &format!("knowledge entry {entry} in {space}"),
+        yes,
+        "Knowledge entry deleted.",
+    )
+    .await
 }

@@ -197,10 +197,8 @@ would be empty:
 
 Update the result each time you finish a stretch and stop to wait for the
 person, not only when the session ends. Describe the whole piece of work so
-far, not just the last stretch. Name the result version you replace; the first
-result names none. Use the returned version for the next update. On
-`task.result_changed`, read the latest result and reconcile it before writing
-again.
+far, not just the last stretch. On `task.result_changed`, read the latest
+result and reconcile it before writing again.
 
 When continuing someone else's `done` task, reference it in the result, such
 as `#TK-12`. Carry over what is still unresolved in its Open, so a reader
@@ -213,10 +211,13 @@ Knowledge (practice 8), propose it after the result is written. Before you say
 anything to the person about a request, or submit one they asked for by name,
 look for a `pending` or `rejected` request about the same thing with
 `list_requests` by keyword, and read a likely match with `get_request`. For a
-`pending` match, tell the person it already awaits approval and offer nothing;
-for a `rejected` one, tell the person its reason and let them decide whether to
-propose again. Otherwise, tell the person in the harness what you intend to
-propose, and submit it with `create_request` only after the person confirms.
+`pending` match, tell the person it already awaits approval and offer nothing
+unless they ask to revise it. Revise a pending or outdated request instead of
+withdrawing and resubmitting; read and reconcile the current entry before
+revising an outdated one. For a `rejected` one, tell the person its reason and
+let them decide whether to propose again. Otherwise, tell the person in the
+harness what you intend to propose, and submit it with `create_request` only
+after the person confirms.
 A change the person asks for by name counts as confirmed.
 
 The task may be `done` by then: the confirmation answers your question and is

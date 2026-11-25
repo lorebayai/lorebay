@@ -52,7 +52,7 @@ pub(super) fn create_person_request() -> (ToolName, Tool) {
 pub(super) fn list_person_requests() -> (ToolName, Tool) {
     tool(
         ToolName::ListPersonRequests,
-        "List a space's requests, newest first, with action, status, requester, target and proposed name and summary. Filter by status and keyword; a keyword matches the proposed name, proposed summary or target name. Repeat the same filters with cursor to read the next page.",
+        "List a space's requests, newest first, with action, status, revision, outdated mark, submitting and last revising agents, requester, target and proposed name and summary. Filter by status and keyword; a keyword matches the proposed name, proposed summary or target name. Repeat the same filters with cursor to read the next page.",
         paged(json!({
             "space":space(), "keyword":keyword(),
             "status":{"type":"string", "enum":[PersonRequestStatus::Pending.as_str(),
@@ -66,10 +66,22 @@ pub(super) fn list_person_requests() -> (ToolName, Tool) {
 pub(super) fn get_person_request() -> (ToolName, Tool) {
     tool(
         ToolName::GetPersonRequest,
-        "Read one request in a space by key, such as RQ-1, including proposed content, status, rejection reason and, while pending, whether its target changed since it was requested.",
+        "Read one request in a space by key, such as RQ-1, including proposed content, status, revision, rejection reason, submitting and last revising agents and, while pending, whether it is outdated.",
         json!({"space":space(), "key":{"type":"string"}}),
         &["space", "key"],
         true,
+    )
+}
+
+pub(super) fn revise_person_request() -> (ToolName, Tool) {
+    tool(
+        ToolName::RevisePersonRequest,
+        "Revise your party's pending request by space and key. Replace any provided name, summary or content; omit all three to refresh its target version and name. A delete request takes no replacement fields. Keeps the key, raises the revision and records your agent name. No earlier revision is kept. Read and reconcile the current Knowledge before revising an outdated request.",
+        json!({"space":space(), "key":{"type":"string"}, "name":name(),
+            "summary":{"type":"string", "minLength":1, "maxLength":KNOWLEDGE_SUMMARY_MAX_CHARACTERS},
+            "content":{"type":"string", "minLength":1, "maxLength":KNOWLEDGE_CONTENT_MAX_BYTES}}),
+        &["space", "key"],
+        false,
     )
 }
 

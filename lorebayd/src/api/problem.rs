@@ -274,7 +274,9 @@ impl From<KnowledgeError> for ApiError {
             KnowledgeError::InvalidCursor => return invalid_query("cursor"),
             KnowledgeError::InvalidFilter => StatusCode::BAD_REQUEST,
             KnowledgeError::InvalidPageSize(_) => return invalid_query("page_size"),
-            KnowledgeError::NameTaken { .. } => StatusCode::CONFLICT,
+            KnowledgeError::NameTaken { .. } | KnowledgeError::VersionChanged => {
+                StatusCode::CONFLICT
+            }
             KnowledgeError::NotFound | KnowledgeError::VersionNotFound => StatusCode::NOT_FOUND,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
@@ -300,7 +302,10 @@ impl From<PersonRequestError> for ApiError {
                     message: error.to_string(),
                 }]);
             }
-            PersonRequestError::Decided => StatusCode::CONFLICT,
+            PersonRequestError::Decided
+            | PersonRequestError::Outdated
+            | PersonRequestError::RevisionChanged => StatusCode::CONFLICT,
+            PersonRequestError::InvalidRevision => StatusCode::BAD_REQUEST,
             PersonRequestError::NameTaken => StatusCode::CONFLICT,
             PersonRequestError::NotFound => StatusCode::NOT_FOUND,
             PersonRequestError::OwnParty => StatusCode::FORBIDDEN,

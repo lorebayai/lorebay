@@ -1,14 +1,14 @@
 use reqwest::{Method, Response, StatusCode};
 use serde_json::{Value, json};
 
-use crate::helpers::{Server, create_space, list_page, request, two_people};
+use crate::helpers::{Server, create_space, list_page, request};
 
 pub const PATH: &str = "/api/v1/spaces/SPACE-1/requests";
 pub const KNOWLEDGE: &str = "/api/v1/spaces/SPACE-1/knowledge";
 pub const BODY_LIMIT: usize = 6 * 1024 * 1024 + 12 * (200 + 500 + 200) + 6 + 1024;
 
 pub async fn setup() -> (Server, Value) {
-    let server = two_people().await;
+    let server = Server::executable().await;
     let owner = server.tokens().await;
     create_space(&server, &owner, "Team", "Shared").await;
     (server, owner)
@@ -48,7 +48,7 @@ pub async fn approve(server: &Server, caller: &Value, key: &str) -> Value {
             caller,
             Method::POST,
             &format!("{}/approve", by_key(key)),
-            Value::Null,
+            json!({"revision":1}),
         )
         .await,
         StatusCode::OK,
@@ -63,7 +63,7 @@ pub async fn reject(server: &Server, caller: &Value, key: &str) -> Value {
             caller,
             Method::POST,
             &format!("{}/reject", by_key(key)),
-            json!({"reason":"Superseded"}),
+            json!({"reason":"Superseded","revision":1}),
         )
         .await,
         StatusCode::OK,
@@ -126,7 +126,7 @@ pub async fn submit_deleted_targets(server: &Server, owner: &Value, agent: &Valu
             server,
             owner,
             Method::DELETE,
-            &format!("{KNOWLEDGE}/by-key/KN-1"),
+            &format!("{KNOWLEDGE}/by-key/KN-1?version=1"),
             Value::Null,
         )
         .await,
@@ -188,7 +188,8 @@ pub async fn old_entry(server: &Server, caller: &Value, key: &str, version: i64)
         .clone()
 }
 
-pub async fn change_entry(server: &Server, owner: &Value, key: &str, changes: Value) -> Value {
+pub async fn change_entry(server: &Server, owner: &Value, key: &str, mut changes: Value) -> Value {
+    changes["version"] = entry(server, owner, key).await["version"].clone();
     data(
         request(
             server,
@@ -204,12 +205,13 @@ pub async fn change_entry(server: &Server, owner: &Value, key: &str, changes: Va
 }
 
 pub async fn delete_entry(server: &Server, owner: &Value, key: &str) -> Value {
+    let version = entry(server, owner, key).await["version"].as_i64().unwrap();
     data(
         request(
             server,
             owner,
             Method::DELETE,
-            &format!("{KNOWLEDGE}/by-key/{key}"),
+            &format!("{KNOWLEDGE}/by-key/{key}?version={version}"),
             Value::Null,
         )
         .await,
@@ -230,4 +232,27 @@ pub fn assert_version(
     assert_eq!(version["applied_by"], person);
     assert!(version["applied_at"].as_i64().unwrap() > 0);
     assert_eq!(version["request_key"], json!(person_request));
+}
+
+pub async fn revise(server: &Server, caller: &Value, key: &str, body: Value) -> Value {
+    data(
+        request(server, caller, Method::PATCH, &by_key(key), body).await,
+        StatusCode::OK,
+    )
+    .await
+}
+
+pub async fn approve_revision(server: &Server, caller: &Value, key: &str, revision: i64) -> Value {
+    data(
+        request(
+            server,
+            caller,
+            Method::POST,
+            &format!("{}/approve", by_key(key)),
+            json!({"revision":revision}),
+        )
+        .await,
+        StatusCode::OK,
+    )
+    .await
 }

@@ -56,6 +56,7 @@ pub(super) async fn call(
         ToolName::ReadKnowledge => knowledge::read(state, caller, &arguments).await,
         ToolName::CreatePersonRequest => knowledge::propose(state, caller, &arguments).await,
         ToolName::ListPersonRequests => knowledge::person_requests(state, caller, &arguments).await,
+        ToolName::RevisePersonRequest => knowledge::revise(state, caller, &arguments).await,
         ToolName::GetPersonRequest => knowledge::person_request(state, caller, &arguments).await,
     }
 }

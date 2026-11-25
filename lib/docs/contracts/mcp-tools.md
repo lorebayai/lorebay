@@ -7,7 +7,7 @@
   [Keys and references](keys-and-references.md),
   [Library architecture](../architecture/library.md)
 
-> Each of the 16 tools maps to one library operation and adds no logic of
+> Each of the 17 tools maps to one library operation and adds no logic of
 > its own.
 >
 > Calls that write into a task carry `task_id`; other calls carry the space;
@@ -59,14 +59,23 @@ A task uses `state` and `state_reason`; a request uses `status`. Task tools acce
 | `list_knowledge` | Space | Lists one level by name prefix: its entries, with names, keys and summaries, and the next level's prefixes; no prefix lists the top level; a keyword searches names, summaries and content across the space | List Knowledge |
 | `read_knowledge` | Space | Reads one entry by name or key, latest version only | Read a knowledge entry |
 | `create_request` | Task ID | Proposes a Knowledge change; `wait=true` sets its `working` task to `waiting` until the request is decided | Submit a request |
-| `list_requests` | Space | Lists requests, filtered by status and keyword | List requests |
-| `get_request` | Space | Reads one request: content, status, the 'changed since requested' mark, rejection reason | Read a request |
+| `list_requests` | Space | Lists requests with revisions, outdated marks and submitting and last revising agents, filtered by status and keyword | List requests |
+| `get_request` | Space | Reads content, status, revision, outdated mark, submitting and last revising agents, rejection reason | Read a request |
+| `revise_request` | Space | Revises a pending request by key; returns its new revision and target snapshot | Revise a request |
 
 - **Lists are paginated.** `list_spaces`, `list_tasks`, `list_knowledge`,
   `list_requests` and the Scratchpad or result history in `get_task` return
   pages, so no call puts an unbounded result into the model's context. Each
-  page follows a cursor, in a fixed order, with a default page size the caller may change, up to
-  the library's limit.
+  page follows a cursor, in a fixed order, with a default page size the caller
+  may change, up to the library's limit.
+- **Result writes follow [Tasks](tasks.md#33-fields)**, including refusal
+  of `result_version` without a result as an invalid request.
+- **Request revisions follow [Knowledge](knowledge.md#4-requests).**
+  `revise_request` takes `space`, `key` and optional `name`, `summary` and
+  `content`; an empty revision refreshes the target snapshot. The key, action
+  and target stay the same. Request reads and lists expose `revision`,
+  `outdated` while pending, `requester_agent_name`, `reviser_agent_name`,
+  `revised_by` and `revised_at`.
 - **`get_task` includes at most one history.** `include_scratchpad` and
   `include_results` cannot both be true. `page_size` and `cursor` apply to the
   selected history; neither is accepted without one. Result history is in

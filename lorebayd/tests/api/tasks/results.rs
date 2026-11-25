@@ -39,6 +39,7 @@ async fn update_task_keeps_result_versions_and_refuses_stale_replacements() {
     .await;
     assert_eq!(second["result_version"], 2);
     refuse_stale(&server, &peer, &task, &second).await;
+    refuse_version_without_result(&server, &peer, &task, &second).await;
     let third = call(&server, &peer, "update_task", json!({
         "task_id":task["task_id"], "result":"", "result_version":second["result_version"], "state":"done"
     })).await;
@@ -297,4 +298,36 @@ async fn check_history_queries(server: &Server, agent: &Value) {
         "request.invalid_query",
     )
     .await;
+}
+
+async fn refuse_version_without_result(
+    server: &Server,
+    agent: &Value,
+    task: &Value,
+    expected: &Value,
+) {
+    assert_problem(
+        request(
+            server,
+            agent,
+            Method::PATCH,
+            &format!("{TASKS}/{}", task["task_id"].as_str().unwrap()),
+            json!({"title":"Must not apply", "result_version":2}),
+        )
+        .await,
+        StatusCode::BAD_REQUEST,
+        "request.invalid_body",
+    )
+    .await;
+    assert_eq!(
+        call_error(
+            server,
+            agent,
+            "update_task",
+            json!({"task_id":task["task_id"],"title":"Must not apply","result_version":2})
+        )
+        .await["code"],
+        "request.invalid_body"
+    );
+    assert_eq!(&read(server, agent, "TK-1").await, expected);
 }

@@ -1,7 +1,8 @@
 use lorebay_lib_core::{
     Caller, KnowledgeChanges, KnowledgeEntry, KnowledgeError, KnowledgeFilters,
-    KnowledgeInputError, KnowledgeTarget, LibraryState, NewKnowledgeEntry, WriteOperation,
-    change_knowledge_entry, create_knowledge_entry, list_knowledge, read_knowledge_entry,
+    KnowledgeInputError, KnowledgeTarget, LibraryState, NewKnowledgeEntry,
+    VersionedKnowledgeTarget, WriteOperation, change_knowledge_entry, create_knowledge_entry,
+    list_knowledge, read_knowledge_entry,
 };
 use tokio::sync::mpsc;
 
@@ -83,7 +84,7 @@ async fn change_knowledge_entry_numbers_versions_consecutively_when_changed_conc
         );
         let person = fixture.person.clone();
         let changing =
-            tokio::spawn(async move { change(&first, &person, None, Some("First")).await });
+            tokio::spawn(async move { change(&first, &person, None, Some("First"), 1).await });
         held.reached().await;
         let (report_pid, mut pid) = mpsc::unbounded_channel();
         let second = fixture.state_with(
@@ -95,7 +96,7 @@ async fn change_knowledge_entry_numbers_versions_consecutively_when_changed_conc
         );
         let person = fixture.person.clone();
         let concurrent =
-            tokio::spawn(async move { change(&second, &person, Some("Latest"), None).await });
+            tokio::spawn(async move { change(&second, &person, Some("Latest"), None, 2).await });
         fixture.wait_for_lock(next_pid(&mut pid).await).await;
         held.release();
         assert_eq!(changing.await.unwrap().unwrap().version, 2);
@@ -204,12 +205,20 @@ async fn change(
     caller: &Caller,
     content: Option<&str>,
     summary: Option<&str>,
+    version: i64,
 ) -> Result<KnowledgeEntry, KnowledgeError> {
     let changes =
         KnowledgeChanges::new(None, summary.map(str::to_owned), content.map(str::to_owned))?;
     state
         .run_write(async |write| {
-            change_knowledge_entry(write, caller, SPACE, target()?, changes).await
+            change_knowledge_entry(
+                write,
+                caller,
+                SPACE,
+                VersionedKnowledgeTarget::new(target()?, version)?,
+                changes,
+            )
+            .await
         })
         .await
 }

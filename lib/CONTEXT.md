@@ -155,7 +155,15 @@ summary, or its deletion.
 
 **Request**: A record of a change that waits on a person's decision. The
 library has one kind, the Knowledge-change request, to create, change or
-delete a knowledge entry; it takes effect only when a person approves it.
+delete a knowledge entry; it takes effect only when a person approves the
+revision they read. Its party may revise it while pending, keeping its key.
+
+**Request revision**: The current form of a request, numbered from 1. Revising
+replaces that form and its target snapshot; no earlier revision is kept.
+
+**Outdated request**: A pending request whose target version or name differs
+from its snapshot, or whose create name is taken. It cannot be approved until
+revised against current Knowledge.
 
 **Cleanup round**: A library function with no caller that a product runs on
 its own schedule to remove what interrupted writes leave behind. There are

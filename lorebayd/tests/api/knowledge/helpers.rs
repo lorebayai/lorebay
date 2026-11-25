@@ -9,7 +9,7 @@ pub const CONTENT_LIMIT: usize = 1024 * 1024;
 pub const ENTRY_BODY_LIMIT: usize = 6 * CONTENT_LIMIT + 12 * (200 + 500 + 200) + 6 + 1024;
 
 pub async fn setup() -> (Server, Value) {
-    let server = Server::start().await;
+    let server = Server::executable().await;
     let owner = server.tokens().await;
     create_space(&server, &owner, "Team", "Shared work").await;
     (server, owner)
@@ -81,7 +81,7 @@ pub async fn roll_back(server: &Server, caller: &Value, path: &str, version: i64
             caller,
             Method::POST,
             &resource(path, "rollback"),
-            json!({"version": version}),
+            json!({"version": version, "target_version":read(server, caller, path).await["version"]}),
         )
         .await,
         StatusCode::OK,
@@ -107,7 +107,7 @@ pub async fn assert_history_target_error(
                 caller,
                 method,
                 &resource(target, suffix),
-                json!({"version":1}),
+                json!({"version":1,"target_version":1}),
             )
             .await,
             status,
@@ -130,7 +130,8 @@ pub async fn read(server: &Server, caller: &Value, path: &str) -> Value {
     .await
 }
 
-pub async fn change(server: &Server, owner: &Value, path: &str, changes: Value) -> Value {
+pub async fn change(server: &Server, owner: &Value, path: &str, mut changes: Value) -> Value {
+    changes["version"] = read(server, owner, path).await["version"].clone();
     data(
         request(server, owner, Method::PATCH, path, changes).await,
         StatusCode::OK,
@@ -139,8 +140,11 @@ pub async fn change(server: &Server, owner: &Value, path: &str, changes: Value) 
 }
 
 pub async fn delete(server: &Server, owner: &Value, path: &str) -> Value {
+    let version = read(server, owner, path).await["version"].as_i64().unwrap();
+    let separator = if path.contains('?') { '&' } else { '?' };
+    let path = format!("{path}{separator}version={version}");
     data(
-        request(server, owner, Method::DELETE, path, Value::Null).await,
+        request(server, owner, Method::DELETE, &path, Value::Null).await,
         StatusCode::OK,
     )
     .await

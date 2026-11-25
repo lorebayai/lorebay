@@ -59,6 +59,46 @@ impl Server {
         Self::restart(TempDir::new().unwrap()).await
     }
 
+    pub async fn executable() -> Self {
+        let directory = TempDir::new().unwrap();
+        let users = directory.path().join("users.json");
+        write_users(
+            &users,
+            &[(TEST_USERNAME, TEST_PASSWORD), ("bob", TEST_PASSWORD)],
+        )
+        .await;
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        drop(listener);
+        let public_url = format!("http://{address}");
+        let config = directory.path().join("server.json");
+        fs::write(
+            &config,
+            serde_json::to_vec(&json!({
+                "listen_address":address.to_string(), "public_url":public_url,
+                "users_file":users, "data_directory":directory.path().join("data")
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        let task = ServerTask::executable(&config);
+        let mut server = Self {
+            client: Client::builder()
+                .timeout(TEST_TIMEOUT)
+                .no_proxy()
+                .build()
+                .unwrap(),
+            address,
+            public_url,
+            directory,
+            task,
+        };
+        server
+            .wait_for_status_with_budget("/readyz", StatusCode::OK, STARTUP_TIMEOUT)
+            .await;
+        server
+    }
+
     pub async fn restart(directory: TempDir) -> Self {
         Self::restart_with_users(directory, &[(TEST_USERNAME, TEST_PASSWORD)]).await
     }

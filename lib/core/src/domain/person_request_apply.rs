@@ -1,4 +1,4 @@
-use sea_orm::{ActiveModelTrait, DatabaseTransaction, IntoActiveModel, Set, TransactionTrait};
+use sea_orm::{ActiveModelTrait, DatabaseTransaction, IntoActiveModel, Set};
 
 use crate::entity::{space_knowledge as entry, space_person_request as person_request};
 use crate::repository::{KnowledgeRepository, PersonRequestRepository, TaskRepository};
@@ -12,8 +12,8 @@ use super::person_requests::person_request_result;
 use super::space_access::{READ_ROLES, SpaceRole, check_space};
 use super::time::now_millis;
 use super::{
-    KnowledgeChanges, KnowledgeError, KnowledgeTarget, PersonRequest, PersonRequestError,
-    PersonRequestRejection, SpaceAccessError,
+    KnowledgeChanges, KnowledgeError, PersonRequest, PersonRequestError, PersonRequestRejection,
+    SpaceAccessError,
 };
 
 pub async fn approve_person_request(
@@ -21,12 +21,14 @@ pub async fn approve_person_request(
     caller: &Caller,
     space: &str,
     key: &str,
+    revision: i64,
 ) -> Result<PersonRequest, PersonRequestError> {
     write.begin_operation(Some(caller))?;
     let (model, role) = decision_person_request(write, caller, space, key).await?;
     if role == SpaceRole::Contributor && model.requested_by == caller.person_id {
         return Err(PersonRequestError::OwnParty);
     }
+    check_revision(&model, revision)?;
     let entry = apply_person_request(write.transaction(), caller, &model).await?;
     resume_waiting_task(write.transaction(), caller, &model).await?;
     let number = model.number;
@@ -55,6 +57,7 @@ pub async fn reject_person_request(
 ) -> Result<PersonRequest, PersonRequestError> {
     write.begin_operation(Some(caller))?;
     let (model, _) = decision_person_request(write, caller, space, key).await?;
+    check_revision(&model, rejection.revision)?;
     resume_waiting_task(write.transaction(), caller, &model).await?;
     let number = model.number;
     let space_id = model.space_id.clone();
@@ -126,7 +129,12 @@ async fn apply_person_request(
         .build()
         .lock_by_id(id)
         .await?
-        .ok_or(KnowledgeError::NotFound)?;
+        .ok_or(PersonRequestError::Outdated)?;
+    if Some(entry.latest_version) != person_request.base_version
+        || Some(&entry.name) != person_request.base_name.as_ref()
+    {
+        return Err(PersonRequestError::Outdated);
+    }
     if person_request.action == "delete" {
         return apply_delete(transaction, caller, entry, &person_request.id).await;
     }
@@ -160,55 +168,39 @@ async fn apply_create(
         .new_name
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("Create request has no name"))?;
-    let target = KnowledgeTarget::new(Some(name.clone()), None)?;
-    loop {
-        if let Some(entry) = KnowledgeRepository::builder()
-            .connection(transaction)
-            .build()
-            .target(&person_request.space_id, &target, true)
-            .await?
-        {
-            let changes = KnowledgeChanges::new(
-                None,
-                person_request.new_summary.clone(),
-                person_request.new_content.clone(),
-            )?;
-            return Ok(apply_changes(
-                transaction,
-                caller,
-                entry,
-                changes,
-                Some(&person_request.id),
-            )
-            .await?);
-        }
-        // A name conflict rolls back the counter lock before locking the existing entry.
-        let attempt = transaction.begin().await?;
-        match insert_entry(&attempt, &person_request.space_id, name).await {
-            Ok(entry) => {
-                let summary = person_request
-                    .new_summary
-                    .clone()
-                    .ok_or_else(|| anyhow::anyhow!("Create request has no summary"))?;
-                let content = person_request
-                    .new_content
-                    .clone()
-                    .ok_or_else(|| anyhow::anyhow!("Create request has no content"))?;
-                append_version(
-                    &attempt,
-                    caller,
-                    &entry,
-                    Some((summary, content)),
-                    Some(&person_request.id),
-                )
-                .await?;
-                attempt.commit().await?;
-                return Ok(entry);
-            }
-            Err(KnowledgeError::NameTaken { .. }) => attempt.rollback().await?,
-            Err(error) => return Err(error.into()),
-        }
+    let entry = insert_entry(transaction, &person_request.space_id, name)
+        .await
+        .map_err(|error| match error {
+            KnowledgeError::NameTaken { .. } => PersonRequestError::Outdated,
+            other => other.into(),
+        })?;
+    let summary = person_request
+        .new_summary
+        .clone()
+        .ok_or_else(|| anyhow::anyhow!("Create request has no summary"))?;
+    let content = person_request
+        .new_content
+        .clone()
+        .ok_or_else(|| anyhow::anyhow!("Create request has no content"))?;
+    append_version(
+        transaction,
+        caller,
+        &entry,
+        Some((summary, content)),
+        Some(&person_request.id),
+    )
+    .await?;
+    Ok(entry)
+}
+
+fn check_revision(model: &person_request::Model, revision: i64) -> Result<(), PersonRequestError> {
+    if revision < 1 {
+        return Err(PersonRequestError::InvalidRevision);
     }
+    if model.revision != revision {
+        return Err(PersonRequestError::RevisionChanged);
+    }
+    Ok(())
 }
 
 async fn apply_delete(

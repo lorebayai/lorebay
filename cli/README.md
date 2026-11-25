@@ -52,10 +52,10 @@ cargo run -p lorebay-cli -- knowledge history SPACE-1 KN-1 --page-size 20
 cargo run -p lorebay-cli -- knowledge deleted SPACE-1 --page-size 20
 cargo run -p lorebay-cli -- knowledge create SPACE-1 deploy/staging.md --summary 'Staging steps' --content '# Staging'
 cargo run -p lorebay-cli -- knowledge create SPACE-1 deploy/production.md --summary 'Production steps' --content-file guide.md
-cargo run -p lorebay-cli -- knowledge change SPACE-1 KN-1 --name deploy/test.md --summary 'Test steps' --content '# Test'
-cargo run -p lorebay-cli -- knowledge change SPACE-1 deploy/test.md --content-file - < guide.md
-cargo run -p lorebay-cli -- knowledge delete SPACE-1 KN-1 --yes
-cargo run -p lorebay-cli -- knowledge rollback SPACE-1 KN-1 1
+cargo run -p lorebay-cli -- knowledge change SPACE-1 KN-1 --name deploy/test.md --summary 'Test steps' --content '# Test' --version 1
+cargo run -p lorebay-cli -- knowledge change SPACE-1 deploy/test.md --content-file - < guide.md --version 1
+cargo run -p lorebay-cli -- knowledge delete SPACE-1 KN-1 --yes --version 1
+cargo run -p lorebay-cli -- knowledge rollback SPACE-1 KN-1 1 --version 1
 cargo run -p lorebay-cli -- request list SPACE-1 --status pending --keyword staging --page-size 20
 cargo run -p lorebay-cli -- request show SPACE-1 RQ-1
 cargo run -p lorebay-cli -- request create SPACE-1 deploy/staging.md --summary 'Staging steps' --content '# Staging'
@@ -63,8 +63,9 @@ cargo run -p lorebay-cli -- request create SPACE-1 deploy/production.md --summar
 cargo run -p lorebay-cli -- request change SPACE-1 KN-1 --name deploy/test.md --summary 'Test steps' --content '# Test'
 cargo run -p lorebay-cli -- request change SPACE-1 deploy/test.md --content-file - < guide.md
 cargo run -p lorebay-cli -- request delete SPACE-1 KN-1
-cargo run -p lorebay-cli -- request approve SPACE-1 RQ-1
-cargo run -p lorebay-cli -- request reject SPACE-1 RQ-1 --reason 'Superseded'
+cargo run -p lorebay-cli -- request revise SPACE-1 RQ-1 --summary 'Revised'
+cargo run -p lorebay-cli -- request approve SPACE-1 RQ-1 --revision 1
+cargo run -p lorebay-cli -- request reject SPACE-1 RQ-1 --reason 'Superseded' --revision 1
 cargo run -p lorebay-cli -- logout
 cargo run -p lorebay-cli -- --help
 ```

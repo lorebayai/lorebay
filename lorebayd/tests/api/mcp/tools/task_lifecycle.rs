@@ -254,9 +254,9 @@ async fn create_request_waits_until_approved_or_withdrawn() {
             proposed["key"].as_str().unwrap()
         );
         let body = if decision == "reject" {
-            json!({"reason":"Withdrawn by sponsor"})
+            json!({"reason":"Withdrawn by sponsor","revision":1})
         } else {
-            Value::Null
+            json!({"revision":1})
         };
         let decider = if index == 0 { &bob } else { &person };
         let response = request(&server, decider, Method::POST, &path, body).await;

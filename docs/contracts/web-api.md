@@ -77,8 +77,9 @@ POST /api/v1/spaces/{space}/requests/{key}/approve
   library's error code, such as `task.not_found`, with an HTTP status Lorebay
   chooses in one place; `task.state_invalid`, `task.held`, `task.not_holder`,
   `task.has_work`, `task.result_changed`, `agent_file.not_uploaded`,
-  `agent_file.refused`, `agent_file.too_large`, `space.number_taken`, `knowledge.name_taken` and
-  `person_request.decided` answer 409.
+  `agent_file.refused`, `agent_file.too_large`, `space.number_taken`,
+  `knowledge.name_taken`, `knowledge.version_changed`, `person_request.decided`,
+  `person_request.outdated` and `person_request.revision_changed` answer 409.
 - **Writes don't check references**; see [Keys and
   references](../../lib/docs/contracts/keys-and-references.md#5-references).
 - **Only the holder of a `working` or `waiting` task writes checkpoints and file
@@ -107,6 +108,19 @@ POST /api/v1/spaces/{space}/requests/{key}/approve
 
 - **Listing users** exists for adding space members. Everyone signed in may
   call it and sees every username.
+- **Revising a request** uses
+  `PATCH /api/v1/spaces/{space}/requests/{key}` with optional `name`, `summary`
+  and `content`; `{}` refreshes its snapshot. Reads and lists include
+  `revision`, `outdated` while pending, `requester_agent_name`,
+  `reviser_agent_name`, `revised_by` and `revised_at`. Request reads also show
+  `base_version` and `base_name`. Both decision POST bodies require `revision`;
+  rejection also requires `reason`. See
+  [Knowledge](../../lib/docs/contracts/knowledge.md#4-requests).
+- **Direct Knowledge writes name the replaced version.** The PATCH body
+  requires `version`, DELETE requires the `version` query parameter, and the
+  rollback POST body requires `target_version` beside the historical source
+  `version`. See
+  [Knowledge](../../lib/docs/contracts/knowledge.md#3-knowledge-entries).
 - **Withdrawing a request** has no operation of its own: a person rejects
   their own party's request; see
   [Knowledge](../../lib/docs/contracts/knowledge.md#4-requests).

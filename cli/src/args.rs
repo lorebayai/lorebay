@@ -100,6 +100,8 @@ pub(crate) enum KnowledgeCommand {
     Change {
         space: String,
         entry: String,
+        #[arg(long, help = "Current version being replaced")]
+        version: i64,
         #[command(flatten)]
         changes: KnowledgeChanges,
     },
@@ -118,6 +120,8 @@ pub(crate) enum KnowledgeCommand {
     Delete {
         space: String,
         entry: String,
+        #[arg(long, help = "Current version being deleted")]
+        version: i64,
         #[arg(long)]
         yes: bool,
     },
@@ -149,6 +153,8 @@ pub(crate) enum KnowledgeCommand {
         space: String,
         entry: String,
         #[arg(allow_negative_numbers = true)]
+        source_version: i64,
+        #[arg(long, help = "Current version being replaced")]
         version: i64,
     },
     /// Show an entry's latest or chosen version by name or key.
@@ -219,6 +225,8 @@ pub(crate) enum PersonRequestCommand {
         space: String,
         #[arg(value_name = "REQUEST")]
         person_request: String,
+        #[arg(long, help = "Request revision you read")]
+        revision: i64,
     },
     /// Propose changes to an entry's name, summary or content.
     #[command(group(ArgGroup::new("changes").required(true).multiple(true)
@@ -259,6 +267,17 @@ pub(crate) enum PersonRequestCommand {
         person_request: String,
         #[arg(long)]
         reason: String,
+        #[arg(long, help = "Request revision you read")]
+        revision: i64,
+    },
+    /// Revise your party's pending request, keeping its key.
+    Revise {
+        #[arg(help = "Space containing the request")]
+        space: String,
+        #[arg(value_name = "REQUEST", help = "Request key, such as RQ-1")]
+        person_request: String,
+        #[command(flatten)]
+        changes: KnowledgeChanges,
     },
     /// Show a request's fields, content and decision.
     Show {

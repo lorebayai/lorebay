@@ -1,6 +1,7 @@
 use lorebay_lib_core::{
-    Caller, LibraryState, PersonRequestSource, list_knowledge, list_person_requests,
-    read_knowledge_entry, read_person_request, submit_person_request,
+    Caller, KnowledgeChanges, LibraryState, PersonRequestSource, list_knowledge,
+    list_person_requests, read_knowledge_entry, read_person_request, revise_person_request,
+    submit_person_request,
 };
 use serde_json::Value;
 
@@ -95,5 +96,29 @@ pub(super) async fn person_request(
             &arguments.string("key")?,
         )
         .await?,
+    )
+}
+
+pub(super) async fn revise(
+    state: &LibraryState,
+    caller: &Caller,
+    arguments: &Arguments,
+) -> Result<Value, ToolError> {
+    let space = arguments.string("space")?;
+    let key = arguments.string("key")?;
+    let name = arguments.optional_string("name");
+    let summary = arguments.optional_string("summary");
+    let content = arguments.optional_string("content");
+    let changes = if name.is_none() && summary.is_none() && content.is_none() {
+        None
+    } else {
+        Some(KnowledgeChanges::new(name, summary, content)?)
+    };
+    value(
+        state
+            .run_write(async |write| {
+                revise_person_request(write, caller, &space, &key, changes).await
+            })
+            .await?,
     )
 }

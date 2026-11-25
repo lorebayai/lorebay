@@ -255,11 +255,76 @@ pub async fn assert_other_content_sources(server: &Server, space: &str) {
                 "guide.md",
                 "--content-file",
                 path.to_str().unwrap(),
+                "--version",
+                "2",
             ])
             .await,
     );
     assert_eq!(
         show_entry(server, space, "KN-1").await["content"],
         "File change\r\n"
+    );
+}
+
+pub async fn confirm_deletion(server: &Server, space: &str, mode: &str, entry: &Value) {
+    let key = entry["key"].as_str().unwrap();
+    let deleted = server
+        .run(&[
+            "knowledge",
+            "delete",
+            space,
+            key,
+            "--yes",
+            "--output",
+            mode,
+            "--version",
+            "1",
+        ])
+        .await;
+    assert_success(&deleted);
+    assert!(deleted.stderr.is_empty());
+    let latest = show_entry(server, space, key).await;
+    assert_eq!(latest["kind"], "deletion");
+    assert_eq!(latest["version"], 2);
+    assert_eq!(latest["content"], json!(null));
+    assert_eq!(latest["summary"], json!(null));
+    assert_eq!(latest["applied_by"], server.username);
+    if mode == "json" {
+        assert_eq!(body(&deleted), json!({"data": latest, "meta": {}}));
+    } else {
+        assert_eq!(deleted.stdout, b"Knowledge entry deleted.\n");
+    }
+    let shown = server.run(&["knowledge", "show", space, key]).await;
+    assert_success(&shown);
+    assert!(
+        String::from_utf8(shown.stdout)
+            .unwrap()
+            .contains("Kind: deletion\n")
+    );
+    let list = server
+        .run(&["knowledge", "list", space, "--output", "json"])
+        .await;
+    assert_success(&list);
+    assert_eq!(body(&list), json!({"data": [], "meta": {}}));
+}
+
+pub async fn rollback_second_version(server: &Server, space: &str) {
+    let human = server
+        .run(&[
+            "knowledge",
+            "rollback",
+            space,
+            "KN-1",
+            "2",
+            "--version",
+            "4",
+        ])
+        .await;
+    assert_success(&human);
+    assert!(human.stderr.is_empty());
+    assert!(
+        String::from_utf8(human.stdout)
+            .unwrap()
+            .contains("Content: # Second\n\ttext\n")
     );
 }

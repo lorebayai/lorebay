@@ -1,6 +1,9 @@
 use std::net::TcpListener as BoundListener;
+use std::path::Path;
+use std::process::Stdio;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
+use tokio::process::Command;
 
 use anyhow::Result;
 use lorebayd::{Config, run};
@@ -23,6 +26,35 @@ impl ServerTask {
         let (shutdown, stopped) = oneshot::channel();
         let (abort, aborted) = oneshot::channel();
         let thread = thread::spawn(move || serve(config, listener, stopped, aborted));
+        Self {
+            abort: Some(abort),
+            shutdown: Some(shutdown),
+            thread: Some(thread),
+        }
+    }
+
+    pub fn executable(config: &Path) -> Self {
+        let config = config.to_owned();
+        let (shutdown, stopped) = oneshot::channel();
+        let (abort, aborted) = oneshot::channel();
+        let thread = thread::spawn(move || {
+            Builder::new_current_thread().enable_all().build()?.block_on(async {
+                let mut child = Command::new(env!("CARGO_BIN_EXE_lorebayd"))
+                    .arg("--config").arg(config).stdout(Stdio::null()).stderr(Stdio::null())
+                    .kill_on_drop(true).spawn()?;
+                tokio::select! {
+                    _ = aborted => { child.kill().await?; }
+                    _ = stopped => {
+                        let pid = child.id().ok_or_else(|| anyhow::anyhow!("Server has no process ID"))?;
+                        let status = Command::new("kill").args(["-TERM", &pid.to_string()]).status().await?;
+                        anyhow::ensure!(status.success(), "Server signal failed");
+                        anyhow::ensure!(child.wait().await?.success(), "Server shutdown failed");
+                    }
+                    status = child.wait() => { anyhow::ensure!(status?.success(), "Server exited early"); }
+                }
+                Ok(())
+            })
+        });
         Self {
             abort: Some(abort),
             shutdown: Some(shutdown),

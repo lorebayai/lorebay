@@ -299,10 +299,13 @@ def product():
             cli(*create_request, person=1, failure={403})
         else:
             request = cli(*create_request, person=1)
-            cli("request", "reject", space, request["key"], "--reason", "Role verified")
+            cli(
+                "request", "reject", space, request["key"], "--revision", request["revision"],
+                "--reason", "Role verified"
+            )
         if role == "admin":
             entry = cli(*create_knowledge, person=1)
-            cli("knowledge", "delete", space, entry["key"], "--yes")
+            cli("knowledge", "delete", space, entry["key"], "--version", entry["version"], "--yes")
         else:
             cli(*create_knowledge, person=1, failure={403})
     cli("member", "remove", space, second)
@@ -345,16 +348,18 @@ def product():
     small = upload(space, task["task_id"], agent, "report.csv", content)
     require(download(space, small["key"]) == (len(content), hashlib.sha256(content).hexdigest()), "File bytes changed")
     entry = cli("knowledge", "create", space, "ops/release.md", "--summary", "Release", "--content", "First revision")
-    cli("knowledge", "change", space, entry["key"], "--content", "Second revision")
+    entry = cli(
+        "knowledge", "change", space, entry["key"], "--version", entry["version"], "--content", "Second revision"
+    )
     history = cli("knowledge", "history", space, entry["key"])
     require(len(history) == 2, "Knowledge history is incomplete")
     require(
         cli("knowledge", "show", space, entry["key"], "--version", 1)["content"] == "First revision",
         "Old Knowledge version changed",
     )
-    cli("knowledge", "rollback", space, entry["key"], 1)
+    entry = cli("knowledge", "rollback", space, entry["key"], 1, "--version", entry["version"])
     require(cli("knowledge", "show", space, entry["key"])["content"] == "First revision", "Knowledge rollback failed")
-    cli("knowledge", "delete", space, entry["key"], "--yes")
+    cli("knowledge", "delete", space, entry["key"], "--version", entry["version"], "--yes")
     require(any(e["key"] == entry["key"] for e in cli("knowledge", "deleted", space)), "Deleted Knowledge is missing")
     require(len(cli("knowledge", "history", space, entry["key"])) == 4, "Rollback or deletion history is missing")
     for decision in ("approve", "reject"):
@@ -374,7 +379,7 @@ def product():
         require(cli("request", "show", space, request["key"])["status"] == "pending", "Request is not pending")
         before = cli("knowledge", "list", space)
         extra = ["--reason", "Deployment rejection"] if decision == "reject" else []
-        cli("request", decision, space, request["key"], *extra)
+        cli("request", decision, space, request["key"], "--revision", request["revision"], *extra)
         shown = cli("request", "show", space, request["key"])
         require(
             shown["status"] == ("approved" if decision == "approve" else "rejected"), "Request decision did not persist"
@@ -396,7 +401,13 @@ def product():
     require(shown["state"] == "done" and shown["result"] == "Deployment checked", "Task result is missing")
     require(
         cli("task", "scratchpad", space, task["key"])
-        == [{"time": checkpoint["time"], "content": "Plan: verify deployment, then record results"}],
+        == [
+            {
+                "time": checkpoint["time"],
+                "agent_name": "Deployment probe",
+                "content": "Plan: verify deployment, then record results",
+            }
+        ],
         "Scratchpad differs from checkpoint",
     )
     cli("checkpoint", "delete", space, task["task_id"], checkpoint["time"], "--yes")

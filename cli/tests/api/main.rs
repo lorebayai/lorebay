@@ -13,6 +13,7 @@ mod knowledge;
 mod login;
 mod network;
 mod person_requests;
+mod revisions;
 mod spaces;
 mod task_filters;
 mod task_results;
