@@ -174,7 +174,11 @@ def main():
         print("Usage: python3 -B tests/skill/run.py CONFIG.json")
         return 1
     try:
-        config = load_configuration(sys.argv[1])
+        try:
+            config = load_configuration(sys.argv[1])
+        except ValueError as error:
+            print("FAIL " + str(error))
+            return 1
         return run(config)
     except HomeInUse as error:
         print("FAIL " + str(error))
