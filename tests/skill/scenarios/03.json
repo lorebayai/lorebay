@@ -25,11 +25,9 @@
               "{space}"
             ],
             "path": [
+              0,
               "state"
-            ],
-            "select": {
-              "title": "Prepare a launch checklist"
-            }
+            ]
           },
           "op": "equals",
           "value": "waiting"
@@ -44,10 +42,9 @@
             "list",
             "{space}"
           ],
-          "path": [],
-          "select": {
-            "title": "Prepare a launch checklist"
-          }
+          "path": [
+            0
+          ]
         },
         "save": {
           "task": [

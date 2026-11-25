@@ -37,11 +37,9 @@
               "{space}"
             ],
             "path": [
+              0,
               "state"
-            ],
-            "select": {
-              "title": "Review the team checklist"
-            }
+            ]
           },
           "op": "equals",
           "value": "done"
@@ -56,10 +54,9 @@
             "list",
             "{space}"
           ],
-          "path": [],
-          "select": {
-            "title": "Review the team checklist"
-          }
+          "path": [
+            0
+          ]
         },
         "save": {
           "task": [

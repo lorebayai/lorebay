@@ -95,22 +95,18 @@
       "turn": "Write a reminder for colleagues about our team review approach and the response deadline. Title the work Explain the team deadline, and ask me who should receive it before sending.",
       "expect": [
         {
-          "label": "first read uses current approved policy",
+          "label": "one task for this work",
           "query": {
             "cli": [
               "task",
               "list",
-              "{space}"
-            ],
-            "path": [
-              "result"
-            ],
-            "select": {
-              "title": "Explain the team deadline"
-            }
+              "{space}",
+              "--person",
+              "{owner}"
+            ]
           },
-          "op": "matches",
-          "value": "\\b(?:five|5)\\b.{0,20}\\bdays?\\b"
+          "op": "count",
+          "value": 1
         }
       ]
     },
@@ -120,12 +116,13 @@
           "cli": [
             "task",
             "list",
-            "{space}"
+            "{space}",
+            "--person",
+            "{owner}"
           ],
-          "path": [],
-          "select": {
-            "title": "Explain the team deadline"
-          }
+          "path": [
+            0
+          ]
         },
         "save": {
           "task": [
@@ -136,7 +133,24 @@
           ]
         }
       },
-      "expect": []
+      "expect": [
+        {
+          "label": "first read uses current approved policy",
+          "query": {
+            "cli": [
+              "task",
+              "show",
+              "{space}",
+              "{task}"
+            ],
+            "path": [
+              "result"
+            ]
+          },
+          "op": "matches",
+          "value": "\\b(?:five|5)\\b.{0,20}\\bdays?\\b"
+        }
+      ]
     },
     {
       "action": {

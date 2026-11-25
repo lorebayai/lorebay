@@ -58,22 +58,6 @@
           },
           "op": "equals",
           "value": null
-        },
-        {
-          "label": "ended task has an end time: Draft launch checks",
-          "query": {
-            "cli": [
-              "task",
-              "list",
-              "{space}"
-            ],
-            "path": [
-              0,
-              "ended_at"
-            ]
-          },
-          "op": "nonempty",
-          "value": true
         }
       ]
     },
@@ -98,7 +82,24 @@
           ]
         }
       },
-      "expect": []
+      "expect": [
+        {
+          "label": "ended task has an end time: Draft launch checks",
+          "query": {
+            "cli": [
+              "task",
+              "show",
+              "{space}",
+              "{task}"
+            ],
+            "path": [
+              "ended_at"
+            ]
+          },
+          "op": "nonempty",
+          "value": true
+        }
+      ]
     },
     {
       "turn": "One check was missed in that work: add rollback verification and finish the same checklist.",
@@ -202,18 +203,38 @@
           },
           "op": "equals",
           "value": null
+        }
+      ]
+    },
+    {
+      "action": {
+        "query": {
+          "cli": [
+            "task",
+            "list",
+            "{space}"
+          ],
+          "select": {
+            "title": "Inspect the missing input"
+          },
+          "path": []
         },
+        "save": {
+          "failed_task": [
+            "key"
+          ]
+        }
+      },
+      "expect": [
         {
           "label": "ended task has an end time: Inspect the missing input",
           "query": {
             "cli": [
               "task",
-              "list",
-              "{space}"
+              "show",
+              "{space}",
+              "{failed_task}"
             ],
-            "select": {
-              "title": "Inspect the missing input"
-            },
             "path": [
               "ended_at"
             ]
@@ -308,12 +329,10 @@
           "query": {
             "cli": [
               "task",
-              "list",
-              "{space}"
+              "show",
+              "{space}",
+              "{canceled_task}"
             ],
-            "select": {
-              "title": "Plan the workshop"
-            },
             "path": [
               "ended_at"
             ]
@@ -321,7 +340,25 @@
           "op": "nonempty",
           "value": true
         }
-      ]
+      ],
+      "action": {
+        "query": {
+          "cli": [
+            "task",
+            "list",
+            "{space}"
+          ],
+          "select": {
+            "title": "Plan the workshop"
+          },
+          "path": []
+        },
+        "save": {
+          "canceled_task": [
+            "key"
+          ]
+        }
+      }
     }
   ],
   "questions": [
