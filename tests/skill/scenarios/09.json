@@ -1,0 +1,118 @@
+{
+  "number": 9,
+  "name": "Keep subagent work on the parent task",
+  "harnesses": [
+    "claude",
+    "codex"
+  ],
+  "roles": {
+    "primary": "Selected harness with subagent support, acting for the owner",
+    "subagent": "Harness-native child of the primary; no separate home or task"
+  },
+  "starting_state": [
+    "An empty space owned by the primary person; the other person is a contributor."
+  ],
+  "steps": [
+    {
+      "turn": "Draft a team review checklist titled Review the team checklist. Ask a subagent to identify two risks while you draft two mitigations, then combine both into your answer. Finish that work.",
+      "expect": [
+        {
+          "label": "subagent creates no second task",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ]
+          },
+          "op": "count",
+          "value": 1
+        },
+        {
+          "label": "parent task completes",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ],
+            "path": [
+              0,
+              "state"
+            ]
+          },
+          "op": "equals",
+          "value": "done"
+        }
+      ]
+    },
+    {
+      "action": {
+        "query": {
+          "cli": [
+            "task",
+            "list",
+            "{space}"
+          ],
+          "path": [
+            0
+          ]
+        },
+        "save": {
+          "task": [
+            "key"
+          ],
+          "task_id": [
+            "task_id"
+          ]
+        }
+      },
+      "expect": []
+    },
+    {
+      "action": {
+        "cli": [
+          "task",
+          "show",
+          "{space}",
+          "{task}"
+        ]
+      },
+      "expect": [
+        {
+          "label": "parent records delegated work",
+          "query": {
+            "cli": [
+              "task",
+              "scratchpad",
+              "{space}",
+              "{task}"
+            ]
+          },
+          "op": "at_least",
+          "value": 3
+        },
+        {
+          "label": "combined result is present",
+          "query": {
+            "cli": [
+              "task",
+              "show",
+              "{space}",
+              "{task}"
+            ],
+            "path": [
+              "result"
+            ]
+          },
+          "op": "nonempty",
+          "value": true
+        }
+      ]
+    }
+  ],
+  "questions": [
+    "Did the harness actually start a subagent, and does its output contain the requested risk analysis?",
+    "Did the parent record that work in its own task checkpoints, without a subagent task?"
+  ]
+}

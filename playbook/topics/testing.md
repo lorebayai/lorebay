@@ -1,9 +1,9 @@
 # Testing
 
-How `lorebayd` and the product are tested: the four test levels, what each
+How `lorebayd` and the product are tested: the test levels, what each
 one verifies, where its tests live, and how milestone acceptance checks are
-kept. Imported by the `AGENTS.md` of every Rust crate and test suite, and of
-`deploy/`.
+kept. Imported by the `AGENTS.md` of every Rust crate and test suite, of
+`tests/common/`, of `skill/` and of `deploy/`.
 
 ## Levels
 
@@ -12,6 +12,7 @@ kept. Imported by the `AGENTS.md` of every Rust crate and test suite, and of
 | Integration | `lorebayd`'s contract through the Web API, MCP and file URLs, or one crate's contract through its public API | The crate's `tests/` folder | Pull request CI, when the crate is affected |
 | E2E | Team goals across people, agents and parties through the CLI, web pages, MCP and file URLs | `tests/e2e/` | Milestone acceptance and before releases, outside pull request CI |
 | Deployment | Release installation, operation and removal, with the E2E journeys after each install | `tests/deploy/` | By hand, outside pull request CI; see [Deployment tests](#deployment-tests) |
+| Skill acceptance | The shipped skill's practices in real harnesses with real models | `tests/skill/` | Milestone acceptance, before releases and before skill changes land; outside CI |
 | Unit | One intricate pure function | A `#[cfg(test)] mod tests`, see [Unit tests](#unit-tests) | Pull request CI, when affected |
 
 - Integration tests are the level for backend behavior. Unit tests are a rare
@@ -99,8 +100,8 @@ across callers and parties, against one running `lorebayd`. Contract details
 stay in integration scenarios.
 
 - The Python/Playwright suite lives in `tests/e2e/`. Run it with
-  `moon run tests/e2e:e2e`; see its [README](../../tests/e2e/README.md) for tools
-  and executable inputs. The command must use checkout-built executables,
+  `moon run tests/e2e:e2e`; see its [README](../../tests/e2e/README.md) for
+  tools and executable inputs. The command must use checkout-built executables,
   start a fresh server with its own data directory and users file, and stop it.
 - Each journey must set up its own people, space and data, depend on no
   other journey, and pass independently and in either execution order.
@@ -140,8 +141,51 @@ and must not import a crate or substitute source builds for release files.
   trust the supplied authority without disabling certificate verification.
 - The deployment task sets `runInCI: false`. Run it with
   `moon run tests/deploy:deploy -- /absolute/path/to/config.json`.
-- A pull request that changes `deploy/` or `tests/deploy/` must run the
-  suite, and the run must pass before the pull request lands.
+- A pull request that changes `deploy/`, `tests/deploy/` or `tests/common/`
+  must run the suite, and the run must pass before the pull request lands.
+
+## Skill acceptance tests
+
+A skill acceptance scenario verifies the shipped skill's practices through
+real Claude Code and Codex sessions. The Python suite lives in
+`tests/skill/`; its [README](../../tests/skill/README.md) describes the
+configuration, evidence and person's verdict.
+
+- Each scenario file must name its harnesses, agent roles, starting state,
+  person's natural turns, expected end state and transcript questions.
+  Turns must name Lorebay only when naming it is the subject of the scenario.
+- One command, `moon run tests/skill:skill -- CONFIG.json`, must run the
+  configured scenarios against a running origin. The external configuration
+  must select people, authority and three homes: Claude Code and Codex for
+  one person, and Codex for another. It must contain no credential values.
+  People must use persistent CLI homes; script agents must use external
+  commands that own their authorizations. Passwords must not enter the
+  suite's environment. Runtime artifacts must stay outside the checkout.
+- Each run must reserve every home with its shared lock, including CLI and
+  script-agent refresh. Child processes must inherit the same lock. Parallel
+  scenarios must use different homes. Authorize once and reuse until the
+  sign-in ends; after a server wipe, restore it through the external scripts.
+- The suite must never sign in to a model or read a credential file. People
+  must sign in the homes to their models and authorize their agents before
+  a run. Starting state and checks must reuse `tests/common/` callers.
+- Each role's turns must continue one non-interactive harness session.
+  Each session must keep a redacted transcript and record the installed
+  `SKILL.md` path, checksum and evidence of loading; installation alone must
+  not count as loading. A read-only check must compare the harness's Lorebay
+  tool names with the running server's paginated tool list.
+- Checkers must read state through the compiled CLI, or the Web API only
+  where the CLI exposes nothing, and print pass or fail per expectation.
+  Transcript questions must cover behavior state alone cannot establish.
+- A failed scenario must rerun once with fresh state and the same turns.
+  Both attempts must remain as evidence. Success on the second attempt must
+  say "pass on rerun", never plain "pass". An interruption must stop the run.
+- A scenario passes only when all automated checks pass and the person
+  confirms every question. Pending human answers must never count as a pass.
+- Run the suite at milestone acceptance, before each release and before a
+  pull request changing `skill/lorebay/SKILL.md` lands. The suite task must
+  set `runInCI: false`; its syntax and scenario `check` task must run in CI.
+- Newcomer installation using only `skill/README.md` must stay by hand,
+  outside this suite.
 
 ## Unit tests
 
@@ -173,5 +217,6 @@ and releases can rerun them.
   the milestone closes: an integration scenario for a contract, an E2E
   journey for a team's workflow, or a deployment check for a release's
   installation and operation.
-- A check that depends on a real agent harness and model stays by hand, with
-  its evidence on the acceptance issue.
+- A check that depends on a real agent harness and model must live in the
+  skill acceptance suite, with its evidence on the acceptance issue. Only
+  checks explicitly excluded by that suite stay entirely by hand.

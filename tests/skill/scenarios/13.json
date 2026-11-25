@@ -1,0 +1,117 @@
+{
+  "number": 13,
+  "name": "Read a prior rejection before proposing again",
+  "harnesses": [
+    "claude",
+    "codex"
+  ],
+  "roles": {
+    "primary": "Fresh selected-harness session acting for the owner",
+    "fixture": "Other person's agent proposes the earlier request; the owner rejects it"
+  },
+  "starting_state": [
+    {
+      "tool": "create_task",
+      "agent": "other",
+      "arguments": {
+        "space": "{space}",
+        "title": "Propose automatic approval",
+        "planned": false
+      },
+      "save": {
+        "task": [
+          "key"
+        ],
+        "task_id": [
+          "task_id"
+        ]
+      }
+    },
+    {
+      "tool": "create_request",
+      "agent": "other",
+      "arguments": {
+        "task_id": "{task_id}",
+        "action": "create",
+        "name": "review.md",
+        "summary": "Team review policy",
+        "content": "Approve all team reviews automatically."
+      },
+      "save": {
+        "request": [
+          "key"
+        ],
+        "revision": [
+          "revision"
+        ]
+      }
+    },
+    {
+      "cli": [
+        "request",
+        "reject",
+        "{space}",
+        "{request}",
+        "--revision",
+        "{revision}",
+        "--reason",
+        "Automatic approval removes independent review; retain a second reviewer."
+      ]
+    }
+  ],
+  "steps": [
+    {
+      "turn": "Consider automatic approval of team reviews across our projects. Tell me whether we should propose it and wait for my decision before making any proposal.",
+      "expect": [
+        {
+          "label": "earlier rejection stays rejected",
+          "query": {
+            "cli": [
+              "request",
+              "show",
+              "{space}",
+              "{request}"
+            ],
+            "path": [
+              "status"
+            ]
+          },
+          "op": "equals",
+          "value": "rejected"
+        },
+        {
+          "label": "earlier rejection reason remains visible",
+          "query": {
+            "cli": [
+              "request",
+              "show",
+              "{space}",
+              "{request}"
+            ],
+            "path": [
+              "reject_reason"
+            ]
+          },
+          "op": "contains",
+          "value": "independent review"
+        },
+        {
+          "label": "no replacement request before decision",
+          "query": {
+            "cli": [
+              "request",
+              "list",
+              "{space}"
+            ]
+          },
+          "op": "count",
+          "value": 1
+        }
+      ]
+    }
+  ],
+  "questions": [
+    "Did this fresh session search for and read the earlier rejected request on the same topic?",
+    "Did it tell the person the independent-review rejection reason before offering another proposal?"
+  ]
+}

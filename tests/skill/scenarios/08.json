@@ -1,0 +1,164 @@
+{
+  "number": 8,
+  "name": "Record a natural first ask without a reminder",
+  "harnesses": [
+    "claude",
+    "codex"
+  ],
+  "roles": {
+    "primary": "Selected harness acting for the owner"
+  },
+  "starting_state": [
+    {
+      "cli": [
+        "knowledge",
+        "create",
+        "{space}",
+        "review.md",
+        "--summary",
+        "Team review policy",
+        "--content",
+        "Teams review changes asynchronously."
+      ],
+      "save": {
+        "entry": [
+          "key"
+        ],
+        "version": [
+          "version"
+        ]
+      }
+    }
+  ],
+  "steps": [
+    {
+      "turn": "Write a short team review guide for colleagues across our projects. Use the team's existing review policy, compare two approaches, choose one, and save a standalone guide.md I can take away. Tell me any reusable team lesson you would propose, and wait for my confirmation before submitting it.",
+      "expect": [
+        {
+          "label": "natural ask records one task",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ]
+          },
+          "op": "count",
+          "value": 1
+        },
+        {
+          "label": "proposal waits for confirmation",
+          "query": {
+            "cli": [
+              "request",
+              "list",
+              "{space}"
+            ]
+          },
+          "op": "count",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "action": {
+        "cli": [
+          "task",
+          "list",
+          "{space}"
+        ],
+        "save": {
+          "task": [
+            0,
+            "key"
+          ]
+        }
+      },
+      "expect": []
+    },
+    {
+      "turn": "Yes, submit the reusable team lesson you described.",
+      "expect": [
+        {
+          "label": "task has a plan and work checkpoints",
+          "query": {
+            "cli": [
+              "task",
+              "scratchpad",
+              "{space}",
+              "{task}"
+            ]
+          },
+          "op": "at_least",
+          "value": 3
+        },
+        {
+          "label": "standalone file can be downloaded",
+          "query": {
+            "cli": [
+              "task",
+              "show",
+              "{space}",
+              "{task}"
+            ],
+            "path": [
+              "files"
+            ],
+            "download": true
+          },
+          "op": "at_least",
+          "value": 1
+        },
+        {
+          "label": "confirmation produces one request",
+          "query": {
+            "cli": [
+              "request",
+              "list",
+              "{space}"
+            ]
+          },
+          "op": "count",
+          "value": 1
+        },
+        {
+          "label": "result references the file",
+          "query": {
+            "cli": [
+              "task",
+              "show",
+              "{space}",
+              "{task}"
+            ],
+            "path": [
+              "result"
+            ]
+          },
+          "op": "contains",
+          "value": "#FL-"
+        },
+        {
+          "label": "result references the proposal",
+          "query": {
+            "cli": [
+              "task",
+              "show",
+              "{space}",
+              "{task}"
+            ],
+            "path": [
+              "result"
+            ]
+          },
+          "op": "contains",
+          "value": "#RQ-"
+        }
+      ]
+    }
+  ],
+  "questions": [
+    "Did the first ask create a task and plan checkpoint before doing the planned work, without a reminder?",
+    "Did later steps receive checkpoints and did the agent read and use the team policy without a reminder?",
+    "Do the downloaded bytes match the final local guide.md, and is the result complete?"
+  ]
+}

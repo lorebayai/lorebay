@@ -1,0 +1,175 @@
+{
+  "number": 1,
+  "name": "Plan by chat and pick up a person-planned task",
+  "harnesses": [
+    "claude",
+    "codex"
+  ],
+  "roles": {
+    "primary": "Selected harness acting for the owner"
+  },
+  "starting_state": [
+    {
+      "cli": [
+        "task",
+        "plan",
+        "{space}",
+        "--title",
+        "Summarize the review checklist"
+      ],
+      "save": {
+        "task": [
+          "key"
+        ]
+      }
+    }
+  ],
+  "steps": [
+    {
+      "turn": "Queue a task titled Compare review approaches for later; do not start it yet.",
+      "expect": [
+        {
+          "label": "chat task is planned",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ],
+            "path": [
+              "state"
+            ],
+            "select": {
+              "title": "Compare review approaches"
+            }
+          },
+          "op": "equals",
+          "value": "planned"
+        },
+        {
+          "label": "chat task has no holder",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ],
+            "path": [
+              "holder"
+            ],
+            "select": {
+              "title": "Compare review approaches"
+            }
+          },
+          "op": "equals",
+          "value": null
+        }
+      ]
+    },
+    {
+      "turn": "Pick up {task} and write a short review checklist in your answer. Finish that work.",
+      "expect": [
+        {
+          "label": "person-planned task finishes",
+          "query": {
+            "cli": [
+              "task",
+              "show",
+              "{space}",
+              "{task}"
+            ],
+            "path": [
+              "state"
+            ]
+          },
+          "op": "equals",
+          "value": "done"
+        },
+        {
+          "label": "person planner survives claim",
+          "query": {
+            "cli": [
+              "task",
+              "show",
+              "{space}",
+              "{task}"
+            ],
+            "path": [
+              "planner"
+            ]
+          },
+          "op": "equals",
+          "value": "{owner}"
+        },
+        {
+          "label": "person planner has no agent",
+          "query": {
+            "cli": [
+              "task",
+              "show",
+              "{space}",
+              "{task}"
+            ],
+            "path": [
+              "planner_agent_name"
+            ]
+          },
+          "op": "equals",
+          "value": null
+        },
+        {
+          "label": "planned work remains queued",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ],
+            "path": [
+              "state"
+            ],
+            "select": {
+              "title": "Compare review approaches"
+            }
+          },
+          "op": "equals",
+          "value": "planned"
+        },
+        {
+          "label": "no duplicate pickup task",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ]
+          },
+          "op": "count",
+          "value": 2
+        },
+        {
+          "label": "chat planner is the selected agent",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ],
+            "path": [
+              "planner_agent_name"
+            ],
+            "select": {
+              "title": "Compare review approaches"
+            }
+          },
+          "op": "equals",
+          "value": "{primary_agent}"
+        }
+      ]
+    }
+  ],
+  "questions": [
+    "Did chat planning leave the work queued rather than beginning it?",
+    "Did the agent read and claim the named planned task, without creating a replacement?"
+  ]
+}

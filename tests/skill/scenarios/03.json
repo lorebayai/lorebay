@@ -1,0 +1,168 @@
+{
+  "number": 3,
+  "name": "Take over within one party",
+  "harnesses": [
+    "claude",
+    "codex"
+  ],
+  "roles": {
+    "primary": "Selected harness acting for the owner",
+    "same_person": "Other harness acting for that same person"
+  },
+  "starting_state": [
+    "An empty space owned by the primary person; the other person is a contributor."
+  ],
+  "steps": [
+    {
+      "turn": "Draft a two-item launch checklist titled Prepare a launch checklist. Ask me which audience it serves; leave that decision open.",
+      "expect": [
+        {
+          "label": "first agent waits",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ],
+            "path": [
+              0,
+              "state"
+            ]
+          },
+          "op": "equals",
+          "value": "waiting"
+        }
+      ]
+    },
+    {
+      "action": {
+        "query": {
+          "cli": [
+            "task",
+            "list",
+            "{space}"
+          ],
+          "path": [
+            0
+          ]
+        },
+        "save": {
+          "task": [
+            "key"
+          ],
+          "task_id": [
+            "task_id"
+          ]
+        }
+      },
+      "expect": []
+    },
+    {
+      "turn": "Continue {task}. The audience is internal reviewers. Read the existing work, complete the checklist and finish.",
+      "expect": [
+        {
+          "label": "takeover completes original task",
+          "query": {
+            "cli": [
+              "task",
+              "show",
+              "{space}",
+              "{task}"
+            ],
+            "path": [
+              "state"
+            ]
+          },
+          "op": "equals",
+          "value": "done"
+        },
+        {
+          "label": "one task across both agents",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ]
+          },
+          "op": "count",
+          "value": 1
+        },
+        {
+          "label": "both stretches have checkpoints",
+          "query": {
+            "cli": [
+              "task",
+              "scratchpad",
+              "{space}",
+              "{task}"
+            ]
+          },
+          "op": "at_least",
+          "value": 4
+        },
+        {
+          "label": "both result versions survive",
+          "query": {
+            "cli": [
+              "task",
+              "results",
+              "{space}",
+              "{task}"
+            ]
+          },
+          "op": "at_least",
+          "value": 2
+        },
+        {
+          "label": "takeover result belongs to second agent",
+          "query": {
+            "cli": [
+              "task",
+              "results",
+              "{space}",
+              "{task}"
+            ],
+            "path": [
+              0,
+              "agent_name"
+            ]
+          },
+          "op": "equals",
+          "value": "{same_agent}"
+        },
+        {
+          "label": "Scratchpad retains first agent",
+          "query": {
+            "cli": [
+              "task",
+              "scratchpad",
+              "{space}",
+              "{task}"
+            ]
+          },
+          "op": "contains",
+          "value": "{primary_agent}"
+        },
+        {
+          "label": "Scratchpad retains second agent",
+          "query": {
+            "cli": [
+              "task",
+              "scratchpad",
+              "{space}",
+              "{task}"
+            ]
+          },
+          "op": "contains",
+          "value": "{same_agent}"
+        }
+      ],
+      "role": "same_person"
+    }
+  ],
+  "questions": [
+    "Did the second agent read the first result and checkpoints and claim the original task before writing?",
+    "Do the Scratchpad and result history attribute both stretches to their respective agents?"
+  ]
+}

@@ -1,0 +1,108 @@
+{
+  "origin": "https://lorebay.example.com",
+  "authority": "/path/to/authority.pem",
+  "cli": "/path/to/lorebay",
+  "output": "/path/to/evidence",
+  "timeout": 600,
+  "scenarios": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13
+  ],
+  "harnesses": [
+    "claude",
+    "codex"
+  ],
+  "people": {
+    "owner": {
+      "username": "<owner-person>",
+      "home": "/path/to/homes/cli-owner",
+      "lock": "/path/to/homes/.locks/cli-owner.lock"
+    },
+    "other": {
+      "username": "<other-person>",
+      "home": "/path/to/homes/cli-other",
+      "lock": "/path/to/homes/.locks/cli-other.lock"
+    },
+    "admin": {
+      "username": "<admin-person>",
+      "home": "/path/to/homes/cli-admin",
+      "lock": "/path/to/homes/.locks/cli-admin.lock"
+    }
+  },
+  "homes": {
+    "claude": {
+      "harness": "claude",
+      "person": "owner",
+      "agent": "<agent-name>",
+      "command": [
+        "/path/to/claude"
+      ],
+      "environment": {
+        "HOME": "/path/to/homes/harness-claude",
+        "CLAUDE_CONFIG_DIR": "/path/to/homes/harness-claude/.claude",
+        "NODE_EXTRA_CA_CERTS": "/path/to/authority.pem"
+      },
+      "skill": "/path/to/homes/harness-claude/installed/lorebay/SKILL.md",
+      "lock": "/path/to/homes/.locks/harness-claude.lock"
+    },
+    "codex": {
+      "harness": "codex",
+      "person": "owner",
+      "agent": "<agent-name>",
+      "command": [
+        "/path/to/codex"
+      ],
+      "environment": {
+        "HOME": "/path/to/homes/harness-codex",
+        "CODEX_HOME": "/path/to/homes/harness-codex/.codex",
+        "CODEX_CA_CERTIFICATE": "/path/to/authority.pem"
+      },
+      "skill": "/path/to/homes/harness-codex/installed/lorebay/SKILL.md",
+      "lock": "/path/to/homes/.locks/harness-codex.lock"
+    },
+    "other": {
+      "harness": "codex",
+      "person": "other",
+      "agent": "<agent-name>",
+      "command": [
+        "/path/to/codex"
+      ],
+      "environment": {
+        "HOME": "/path/to/homes/harness-other",
+        "CODEX_HOME": "/path/to/homes/harness-other/.codex",
+        "CODEX_CA_CERTIFICATE": "/path/to/authority.pem"
+      },
+      "skill": "/path/to/homes/harness-other/installed/lorebay/SKILL.md",
+      "lock": "/path/to/homes/.locks/harness-other.lock"
+    }
+  },
+  "script_agents": {
+    "owner": {
+      "command": [
+        "/path/to/mcp",
+        "mcp-owner"
+      ],
+      "home": "/path/to/homes/mcp-owner",
+      "lock": "/path/to/homes/.locks/mcp-owner.lock"
+    },
+    "other": {
+      "command": [
+        "/path/to/mcp",
+        "mcp-other"
+      ],
+      "home": "/path/to/homes/mcp-other",
+      "lock": "/path/to/homes/.locks/mcp-other.lock"
+    }
+  }
+}

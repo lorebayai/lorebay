@@ -1,0 +1,306 @@
+{
+  "number": 7,
+  "name": "Revise, reconcile an outdated request and approve",
+  "harnesses": [
+    "claude",
+    "codex"
+  ],
+  "roles": {
+    "primary": "Selected harness acting for the owner"
+  },
+  "starting_state": [
+    {
+      "cli": [
+        "knowledge",
+        "create",
+        "{space}",
+        "review.md",
+        "--summary",
+        "Team review policy",
+        "--content",
+        "Use asynchronous reviews."
+      ],
+      "save": {
+        "entry": [
+          "key"
+        ],
+        "version": [
+          "version"
+        ]
+      }
+    }
+  ],
+  "steps": [
+    {
+      "turn": "Update the shared review.md policy to add a two-day response deadline. Propose the named change for my approval and leave the decision open.",
+      "expect": [
+        {
+          "label": "initial change is pending",
+          "query": {
+            "cli": [
+              "request",
+              "list",
+              "{space}",
+              "--status",
+              "pending"
+            ]
+          },
+          "op": "count",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "action": {
+        "cli": [
+          "request",
+          "list",
+          "{space}"
+        ],
+        "save": {
+          "request": [
+            0,
+            "key"
+          ]
+        }
+      },
+      "expect": []
+    },
+    {
+      "turn": "Revise that same proposal: use a three-day response deadline instead.",
+      "expect": [
+        {
+          "label": "request is revised in place",
+          "query": {
+            "cli": [
+              "request",
+              "show",
+              "{space}",
+              "{request}"
+            ],
+            "path": [
+              "revision"
+            ]
+          },
+          "op": "equals",
+          "value": 2
+        },
+        {
+          "label": "revision does not add a request",
+          "query": {
+            "cli": [
+              "request",
+              "list",
+              "{space}"
+            ]
+          },
+          "op": "count",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "action": {
+        "cli": [
+          "knowledge",
+          "change",
+          "{space}",
+          "{entry}",
+          "--version",
+          "{version}",
+          "--content",
+          "Use asynchronous reviews. Escalate urgent issues to the duty reviewer."
+        ],
+        "save": {
+          "version": [
+            "version"
+          ]
+        }
+      },
+      "expect": [
+        {
+          "label": "direct edit makes request outdated",
+          "query": {
+            "cli": [
+              "request",
+              "show",
+              "{space}",
+              "{request}"
+            ],
+            "path": [
+              "outdated"
+            ]
+          },
+          "op": "equals",
+          "value": true
+        }
+      ]
+    },
+    {
+      "action": {
+        "cli": [
+          "request",
+          "show",
+          "{space}",
+          "{request}"
+        ],
+        "save": {
+          "revision": [
+            "revision"
+          ]
+        }
+      },
+      "expect": []
+    },
+    {
+      "action": {
+        "cli": [
+          "request",
+          "approve",
+          "{space}",
+          "{request}",
+          "--revision",
+          "{revision}"
+        ],
+        "failure": [
+          409
+        ],
+        "save": {
+          "refusal": [
+            "code"
+          ]
+        }
+      },
+      "expect": [
+        {
+          "label": "outdated approval has the documented refusal",
+          "query": {
+            "variable": "refusal"
+          },
+          "op": "equals",
+          "value": "person_request.outdated"
+        }
+      ]
+    },
+    {
+      "turn": "I changed the current policy to include escalation for urgent issues. Reconcile your proposal with the current entry, preserving that clause and the three-day deadline. Keep it awaiting my decision.",
+      "expect": [
+        {
+          "label": "reconciliation revises same request",
+          "query": {
+            "cli": [
+              "request",
+              "show",
+              "{space}",
+              "{request}"
+            ],
+            "path": [
+              "revision"
+            ]
+          },
+          "op": "equals",
+          "value": 3
+        },
+        {
+          "label": "reconciled request is current",
+          "query": {
+            "cli": [
+              "request",
+              "show",
+              "{space}",
+              "{request}"
+            ],
+            "path": [
+              "outdated"
+            ]
+          },
+          "op": "equals",
+          "value": false
+        },
+        {
+          "label": "reconciliation preserves person edit",
+          "query": {
+            "cli": [
+              "request",
+              "show",
+              "{space}",
+              "{request}"
+            ],
+            "path": [
+              "new_content"
+            ]
+          },
+          "op": "contains",
+          "value": "duty reviewer"
+        }
+      ]
+    },
+    {
+      "action": {
+        "cli": [
+          "request",
+          "show",
+          "{space}",
+          "{request}"
+        ],
+        "save": {
+          "revision": [
+            "revision"
+          ]
+        }
+      },
+      "expect": []
+    },
+    {
+      "action": {
+        "cli": [
+          "request",
+          "approve",
+          "{space}",
+          "{request}",
+          "--revision",
+          "{revision}"
+        ]
+      },
+      "expect": []
+    },
+    {
+      "turn": "I approved the reconciled version. Check it and finish.",
+      "expect": [
+        {
+          "label": "request reaches approval",
+          "query": {
+            "cli": [
+              "request",
+              "show",
+              "{space}",
+              "{request}"
+            ],
+            "path": [
+              "status"
+            ]
+          },
+          "op": "equals",
+          "value": "approved"
+        },
+        {
+          "label": "approved content preserves escalation",
+          "query": {
+            "cli": [
+              "knowledge",
+              "show",
+              "{space}",
+              "{entry}"
+            ]
+          },
+          "op": "contains",
+          "value": "duty reviewer"
+        }
+      ]
+    }
+  ],
+  "questions": [
+    "Did the agent read the current entry in full before reconciling and preserve both agreed changes?",
+    "Did it keep one request, and tell the person it had been outdated and is now based on the current entry and can be approved?"
+  ]
+}

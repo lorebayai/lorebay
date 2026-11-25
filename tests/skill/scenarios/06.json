@@ -1,0 +1,165 @@
+{
+  "number": 6,
+  "name": "Update the result and read its history",
+  "harnesses": [
+    "claude",
+    "codex"
+  ],
+  "roles": {
+    "primary": "Selected harness acting for the owner"
+  },
+  "starting_state": [
+    "An empty space owned by the primary person; the other person is a contributor."
+  ],
+  "steps": [
+    {
+      "turn": "Compare two team review options under the title Compare review options. Use asynchronous and live reviews, and ask me which I prefer. Keep the choice open.",
+      "expect": [
+        {
+          "label": "one task for this work",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ]
+          },
+          "op": "count",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "action": {
+        "query": {
+          "cli": [
+            "task",
+            "list",
+            "{space}"
+          ],
+          "path": [
+            0
+          ]
+        },
+        "save": {
+          "task": [
+            "key"
+          ],
+          "task_id": [
+            "task_id"
+          ]
+        }
+      },
+      "expect": [
+        {
+          "label": "first result is recorded",
+          "query": {
+            "cli": [
+              "task",
+              "show",
+              "{space}",
+              "{task}"
+            ],
+            "path": [
+              "result"
+            ]
+          },
+          "op": "nonempty",
+          "value": true
+        }
+      ]
+    },
+    {
+      "action": {
+        "cli": [
+          "task",
+          "show",
+          "{space}",
+          "{task}"
+        ],
+        "save": {
+          "first_result": [
+            "result"
+          ],
+          "first_version": [
+            "result_version"
+          ]
+        }
+      }
+    },
+    {
+      "turn": "Prefer asynchronous reviews. Add the literal decision ASYNC-CHOICE to your result, but ask me who should own follow-up; that remains open.",
+      "expect": [
+        {
+          "label": "second result records decision",
+          "query": {
+            "cli": [
+              "task",
+              "show",
+              "{space}",
+              "{task}"
+            ],
+            "path": [
+              "result"
+            ]
+          },
+          "op": "contains",
+          "value": "ASYNC-CHOICE"
+        },
+        {
+          "label": "result history retains both writes",
+          "query": {
+            "cli": [
+              "task",
+              "results",
+              "{space}",
+              "{task}"
+            ]
+          },
+          "op": "at_least",
+          "value": 2
+        },
+        {
+          "label": "latest version is the revised result",
+          "query": {
+            "cli": [
+              "task",
+              "results",
+              "{space}",
+              "{task}"
+            ],
+            "path": [
+              0,
+              "result"
+            ]
+          },
+          "op": "contains",
+          "value": "ASYNC-CHOICE"
+        },
+        {
+          "label": "the earlier version stays byte-for-byte unchanged",
+          "query": {
+            "cli": [
+              "task",
+              "results",
+              "{space}",
+              "{task}"
+            ],
+            "select": {
+              "version": "{first_version}"
+            },
+            "path": [
+              "result"
+            ]
+          },
+          "op": "equals",
+          "value": "{first_result}"
+        }
+      ]
+    }
+  ],
+  "questions": [
+    "Does the history preserve the first result verbatim, with ordered versions and writer attribution?",
+    "Does the latest result describe the whole work so far, including the remaining open item?"
+  ]
+}

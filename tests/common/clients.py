@@ -42,7 +42,7 @@ class Clients:
         self.authority = str(authority) if authority else None
         self.chromium = chromium
         self.context = ssl.create_default_context(cafile=self.authority)
-        self.secrets = [person["password"] for person in people]
+        self.secrets = [person["password"] for person in people if "password" in person]
         self.driver = None
         self.browser = None
 
@@ -86,10 +86,14 @@ class Clients:
             require(response.status == expected, f"{method} {path}: HTTP {response.status}, expected {expected}")
             return json.loads(raw) if raw else None
 
+    def process_options(self, person=0, home=None):
+        return {}
+
     def cli(self, *args, person=0, home=None, failure=None) -> Any:
         child = subprocess.run(
             [self.executable, *map(str, args), "--output", "json"],
             env=self.environment(person, home), capture_output=True, text=True, timeout=60, check=False,
+            **self.process_options(person, home),
         )
         if failure is not None:
             require(child.returncode != 0, f"CLI {args[:2]} unexpectedly succeeded")
@@ -235,7 +239,6 @@ class Clients:
                 "grant_type": "authorization_code", "client_id": registered["client_id"],
                 "redirect_uri": redirect, "code": codes[0]["code"][0], "code_verifier": verifier,
             }, form=True)["access_token"]
-            self.secrets.append(token)
             return token
         finally:
             if context:
