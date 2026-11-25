@@ -18,8 +18,10 @@ skill, tagged `v<version>`. The library's changes are in
   tasks, take over within their party and release tasks before work is
   recorded. Requests can wait for a decision and resume their task.
   MCP adds `claim_task` and `release_task`; task fields and filters use
-  `state`. The CLI replaces `task close` with `task plan` and `task cancel`,
-  and adds `--state`, `--own-open` and `--claimable` filters.
+  `state`. The CLI replaces `task close` with `task plan` and `task cancel`
+  (with required `--reason`), and replaces `task list --status` with
+  `--state`. Passing `--status` to `task list` is a usage error (exit 2).
+  It adds `--claimable`; `--own-open` lists `working` and `waiting` tasks.
 - **Results:** each write keeps a numbered result version with its agent,
   person and time. Updates name the `result_version` they replace; stale
   writes are refused with `task.result_changed`. The CLI adds `task results`
@@ -41,10 +43,11 @@ skill, tagged `v<version>`. The library's changes are in
   name. Tasks show the person, agent and time of the current state change;
   requests show their submitting and last revising agents.
 - A reusable `tests/e2e` suite drives team journeys through the compiled
-  CLI, web pages and MCP. Its nine journeys reach every M8 task,
-  attribution, result-version and request-revision behavior, including
-  refused operations. A functional MCP scenario checks `claimable` task
-  filtering. Deployment tests run the same journeys after each install.
+  CLI, web pages and MCP. Its nine journeys reach M8's team workflows,
+  including refused operations; contract details stay in integration
+  scenarios. A functional MCP scenario checks `claimable` task filtering.
+- A new `tests/deploy` suite qualifies release files and native and Docker
+  installations, running the same journeys after each install.
 - The CLI's `request list` shows `Outdated`, and an outdated approval
   refusal names the steps to reconcile, revise and approve the request.
   Revision results expose `was_outdated` through MCP, the Web API and the
