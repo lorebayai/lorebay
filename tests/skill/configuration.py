@@ -1,5 +1,4 @@
 import json
-import os
 import urllib.parse
 from pathlib import Path
 
@@ -10,6 +9,10 @@ OPERATORS = {"equals", "contains", "at_least", "nonempty", "count", "absent", "m
 
 
 class RunInterrupted(Exception):
+    pass
+
+
+class SignInPending(Exception):
     pass
 
 
@@ -71,13 +74,13 @@ def load_scenarios():
     return scenarios
 
 
-def load_configuration(path, *, runtime=True):
+def load_configuration(path):
     path = outside(path)
     config = json.loads(path.read_text())
-    return validate_configuration(config, runtime=runtime)
+    return validate_configuration(config)
 
 
-def validate_configuration(config, *, runtime=False):
+def validate_configuration(config):
     required = {"origin", "authority", "people", "homes", "cli", "output", "scenarios", "harnesses"}
     require(required <= set(config), "Missing configuration keys")
     require(set(config) <= required | {"chromium", "timeout"}, "Unknown configuration key")
@@ -90,10 +93,7 @@ def validate_configuration(config, *, runtime=False):
     require(config["harnesses"] and set(config["harnesses"]) <= {"claude", "codex"}, "Invalid harness selection")
     require(set(config["people"]) == {"owner", "other"}, "Configure owner and other people")
     for person in config["people"].values():
-        require(set(person) == {"username", "password_env"}, "People contain a username and password_env only")
-        require(person["username"] and person["password_env"].isidentifier(), "Invalid person configuration")
-        if runtime:
-            require(os.environ.get(person["password_env"]), "A configured person password environment is missing")
+        require(set(person) == {"username"} and person["username"], "People contain only a username")
     require(config["people"]["owner"]["username"] != config["people"]["other"]["username"],
             "The two people must differ")
     require(set(config["homes"]) == {"claude", "codex", "other"}, "Configure three harness homes")

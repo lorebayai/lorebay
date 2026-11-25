@@ -40,7 +40,7 @@ def scrub(value, clean):
 
 
 class Harness:
-    def __init__(self, home, project, timeout, clean, password_variables=()):
+    def __init__(self, home, project, timeout, clean, private_environment=()):
         self.home, self.project, self.timeout, self.clean = home, project, timeout, clean
         self.session = None
         self.events = []
@@ -49,12 +49,12 @@ class Harness:
         self.skill_reads = {}
         self.skill = home["skill"]
         self.digest = None
-        self.password_variables = password_variables
+        self.private_environment = private_environment
 
     def environment(self):
         environment = {key: value for key, value in os.environ.items()
                        if not key.startswith(("CLAUDE", "CODEX", "ANTHROPIC", "OPENAI", "LOREBAY"))
-                       and key not in self.password_variables}
+                       and key not in self.private_environment}
         environment.update(self.home["environment"])
         return environment
 

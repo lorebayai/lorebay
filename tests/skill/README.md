@@ -13,9 +13,8 @@ another. The person signs each home in to its model and authorizes its agent
 beforehand. Trust the configured authority in Chromium as well as the CLI
 and harness processes; never disable certificate verification.
 
-Copy `example.json` outside the checkout, replace every placeholder, and
-supply both passwords in the process environment named by `password_env`.
-Use disposable test people; never put passwords in the configuration. Run:
+Copy `example.json` outside the checkout and replace every placeholder.
+Use disposable test people; keep credentials out of the configuration. Run:
 
 ```bash
 moon run tests/skill:check
@@ -23,6 +22,15 @@ moon run tests/skill:skill -- /path/to/config.json
 ```
 
 The direct equivalent is `python3 -B tests/skill/run.py CONFIG.json`.
+The sign-in input is awaiting the person's decision. The command currently
+exits 3 before creating runtime files or contacting a deployment. Password
+input and existing authorizations are both unselected.
+
+The runner's `callers_for_attempt` seam accepts a factory returning `Callers`:
+prepared shared clients, `owner` and `other` scripted agents, and any private
+environment names to exclude from model processes. Model-free verification
+injects callers for generated fixtures; no production factory is selected.
+
 The suite creates a space and local project per attempt, uses the configured
 home without resetting it, and continues each role's non-interactive session
 by its explicit session ID. Use a home for only one run at a time. Each new
@@ -69,7 +77,7 @@ installed skill paths and output directories must be outside the checkout.
 | `cli`, `chromium` | CLI and Chromium executables; omit Chromium to use Playwright's |
 | `output`, `timeout` | External evidence directory and seconds per model turn (default 600) |
 | `scenarios`, `harnesses` | Scenario numbers 1 to 13 and `claude` and/or `codex` |
-| `people.owner`, `people.other` | Distinct usernames and `password_env` names for scripted OAuth consent |
+| `people.owner`, `people.other` | Distinct test usernames; sign-in input is pending |
 | `homes.claude`, `homes.codex` | Homes acting as `owner`, one per harness |
 | `homes.other` | Codex home acting as `other` |
 | Each home | `harness`, `person`, authorized `agent` name, executable `command` array, `environment`, installed `skill` path |
@@ -77,8 +85,9 @@ installed skill paths and output directories must be outside the checkout.
 
 The suite reads only the configured installed `SKILL.md` from a home. Its
 checksum must match this checkout. No credential file is read and no model
-sign-in is attempted. The fixture passwords are removed from model-process
-environments. Configurations and transcripts must stay outside the checkout.
+sign-in is attempted. Private environment names supplied by the caller
+factory are excluded from model processes. Configurations and transcripts
+must stay outside the checkout.
 
 ## Docs
 

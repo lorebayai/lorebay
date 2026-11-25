@@ -157,9 +157,9 @@ configuration, evidence and person's verdict.
 - One command, `moon run tests/skill:skill -- CONFIG.json`, must run the
   configured scenarios against a running origin. The external configuration
   must select people, authority and three homes: Claude Code and Codex for
-  one person, and Codex for another. It must contain no credential values;
-  passwords for scripted browser consent must come from named process
-  environment variables. Runtime artifacts must stay outside the checkout.
+  one person, and Codex for another. It must contain no credential values.
+  Sign-in input must stay separate from scenario and harness execution.
+  Runtime artifacts must stay outside the checkout.
 - The suite must never sign in to a model or read a credential file. People
   must sign in the homes to their models and authorize their agents before
   a run. Starting state and checks must reuse `tests/common/` callers.

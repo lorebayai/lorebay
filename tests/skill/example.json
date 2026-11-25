@@ -26,12 +26,10 @@
   ],
   "people": {
     "owner": {
-      "username": "<first-person>",
-      "password_env": "SKILL_FIRST_PASSWORD"
+      "username": "<first-person>"
     },
     "other": {
-      "username": "<second-person>",
-      "password_env": "SKILL_SECOND_PASSWORD"
+      "username": "<second-person>"
     }
   },
   "homes": {

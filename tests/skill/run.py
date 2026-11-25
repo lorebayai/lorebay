@@ -4,9 +4,10 @@ import signal
 import sys
 import tempfile
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 
-from configuration import RunInterrupted, load_configuration, load_scenarios
+from configuration import RunInterrupted, SignInPending, load_configuration, load_scenarios
 from harness import Harness, sanitize, scrub
 
 
@@ -15,24 +16,28 @@ from clients import Agent, Clients
 from checks import Checks, expand, server_tools
 
 
+@dataclass
+class Callers:
+    clients: Clients
+    agents: dict[str, Agent]
+    private_environment: tuple[str, ...] = ()
+
+
 def write(path, value, clean):
     content = json.dumps(scrub(value, clean), indent=2) + "\n"
     with open(path, "x", opener=lambda name, flags: os.open(name, flags, 0o600)) as output:
         output.write(content)
 
 
-def attempt(config, scenario, selected, directory, evidence):
-    people = [dict(username=config["people"][name]["username"],
-                   password=os.environ[config["people"][name]["password_env"]]) for name in ("owner", "other")]
-    clients = Clients(config["origin"], people, directory / "clients", config["cli"],
-                      config["authority"], config.get("chromium"))
+def attempt(config, scenario, selected, directory, evidence, callers_for_attempt):
+    callers = callers_for_attempt(config, directory / "clients")
+    clients, agents = callers.clients, callers.agents
+    people = [config["people"][name] for name in ("owner", "other")]
     def clean(text):
         return sanitize(text, clients.secrets)
 
     sessions, result, checks = {}, {"expectations": [], "sessions": {}, "error": None}, None
     try:
-        for number in range(len(people)):
-            clients.login(number)
         space = clients.cli("space", "create", "--name", "Skill acceptance " + uuid.uuid4().hex[:12],
                             "--summary", scenario["name"])["key"]
         clients.cli("member", "add", space, people[1]["username"], "--role", "contributor")
@@ -45,8 +50,6 @@ def attempt(config, scenario, selected, directory, evidence):
                      "primary_agent": config["homes"][selected]["agent"],
                      "same_agent": config["homes"][same_home]["agent"],
                      "other_agent": config["homes"]["other"]["agent"]}
-        agents = {name: Agent(clients, index, "Acceptance fixture " + uuid.uuid4().hex[:12])
-                  for index, name in enumerate(("owner", "other"))}
         checks = Checks(clients, space, variables, agents, project)
         expected_tools = server_tools(clients, agents["owner"])
         for action in scenario["starting_state"]:
@@ -62,7 +65,7 @@ def attempt(config, scenario, selected, directory, evidence):
                 if role not in sessions or step.get("new_session"):
                     key = role + "-" + str(len(sessions))
                     sessions[key] = Harness(config["homes"][home_name], project, config.get("timeout", 600), clean,
-                                            [person["password_env"] for person in config["people"].values()])
+                                            callers.private_environment)
                     sessions[role] = sessions[key]
                 sessions[role].turn(expand(step["turn"], variables))
             for expectation in step.get("expect", []):
@@ -102,13 +105,15 @@ def attempt(config, scenario, selected, directory, evidence):
     return result
 
 
-def run(config):
+def run(config, *, callers_for_attempt=None):
+    if callers_for_attempt is None:
+        raise SignInPending("Sign-in input is awaiting the user's decision")
     root = Path(config["output"]) / ("run-" + uuid.uuid4().hex[:12])
     root.mkdir(mode=0o700, parents=True)
     report = {"scenarios": []}
     questions = []
     def clean(text):
-        return sanitize(text, [os.environ[person["password_env"]] for person in config["people"].values()])
+        return sanitize(text, ())
 
     for scenario in load_scenarios():
         if scenario["number"] not in config["scenarios"]:
@@ -123,7 +128,7 @@ def run(config):
                 directory.mkdir(mode=0o700)
                 with tempfile.TemporaryDirectory(prefix="runtime-", dir=directory) as temporary:
                     runtime = Path(temporary)
-                    result = attempt(config, scenario, selected, runtime, directory)
+                    result = attempt(config, scenario, selected, runtime, directory, callers_for_attempt)
                 attempts.append({"passed": result["passed"], "transcript": str(directory / "transcript.json")})
                 if result["passed"]:
                     break
@@ -169,6 +174,9 @@ def main():
     try:
         config = load_configuration(sys.argv[1])
         return run(config)
+    except SignInPending as error:
+        print("WAIT " + str(error))
+        return 3
     except Exception:
         print("FAIL configuration or run interrupted; no raw diagnostic retained")
         return 1
