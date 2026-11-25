@@ -12,9 +12,13 @@ class RunInterrupted(Exception):
     pass
 
 
+class ConfigurationError(ValueError):
+    pass
+
+
 def require(condition, message):
     if not condition:
-        raise ValueError(message)
+        raise ConfigurationError(message)
 
 
 def outside(path):
