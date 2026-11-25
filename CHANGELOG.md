@@ -4,6 +4,58 @@ Lorebay's releases: the `lorebayd` server, the `lorebay` CLI and the agent
 skill, tagged `v<version>`. The library's changes are in
 [lib/CHANGELOG.md](lib/CHANGELOG.md).
 
+## 0.1.3
+
+### Breaking
+
+- **Data directories:** directories written by `v0.1.0` through `v0.1.2`
+  are refused at startup without changes. Delete the old data directory
+  and restart with an empty one; the users file recreates the accounts.
+  Old data is not migrated. `v0.1.3` is the first release whose data is kept.
+- **Task lifecycle:** six states replace `in progress` and `ended`:
+  `planned`, `working`, `waiting`, `done`, `failed` and `canceled`, with
+  reasons and one holder. Only the holder writes; agents claim planned
+  tasks, take over within their party and release tasks before work is
+  recorded. Requests can wait for a decision and resume their task.
+  MCP adds `claim_task` and `release_task`; task fields and filters use
+  `state`. The CLI replaces `task close` with `task plan` and `task cancel`,
+  and adds `--state`, `--own-open` and `--claimable` filters.
+- **Results:** each write keeps a numbered result version with its agent,
+  person and time. Updates name the `result_version` they replace; stale
+  writes are refused with `task.result_changed`. The CLI adds `task results`
+  to read the history; MCP and the Web API expose versions and history.
+- **Requests and Knowledge:** requests can be revised while pending,
+  keeping their key and latest revision. `outdated` replaces
+  `changed_since_requested`; outdated requests cannot be approved.
+  Decisions name the revision read, and direct Knowledge changes, deletion
+  and rollback name the version replaced. Stale writes are refused.
+  MCP adds `revise_request`; the CLI adds `request revise`, `--revision`
+  for decisions and `--version` for direct Knowledge writes.
+- **Skill:** agent practices cover planning, claims, takeover, waiting,
+  ending and reopening, result versions and request revisions. Install
+  the skill and CLI at the server's release.
+
+### Added
+
+- Checkpoints and files show the writing or registering agent's copied
+  name. Tasks show the person, agent and time of the current state change;
+  requests show their submitting and last revising agents.
+- A reusable `tests/e2e` suite drives team journeys through the compiled
+  CLI, web pages and MCP. Its nine journeys reach every M8 task,
+  attribution, result-version and request-revision behavior, including
+  refused operations. A functional MCP scenario checks `claimable` task
+  filtering. Deployment tests run the same journeys after each install.
+- The CLI's `request list` shows `Outdated`, and an outdated approval
+  refusal names the steps to reconcile, revise and approve the request.
+  Revision results expose `was_outdated` through MCP, the Web API and the
+  CLI, reporting the request's state before revision.
+- A `tests/skill` suite runs 13 M8 and earlier scenarios in real agent
+  harnesses. It records skill-loading evidence and sanitized transcripts,
+  checks end state and tool lists, preserves explicit rerun results, and
+  requires the person's verdict.
+- Testing rules keep deterministic milestone acceptance checks automated
+  and require a full deployment-suite pass before deployment changes land.
+
 ## 0.1.2
 
 ### Added

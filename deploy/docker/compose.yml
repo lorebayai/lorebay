@@ -2,7 +2,7 @@ name: lorebay
 
 services:
   lorebayd:
-    image: ghcr.io/lorebayai/lorebayd:0.1.2
+    image: ghcr.io/lorebayai/lorebayd:0.1.3
     restart: unless-stopped
     environment:
       LOREBAYD__PUBLIC_URL: https://${DOMAIN:?Set DOMAIN}${HTTPS_SUFFIX:-}
