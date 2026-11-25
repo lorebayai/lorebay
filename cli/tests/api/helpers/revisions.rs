@@ -1,5 +1,43 @@
-use super::{Server, assert_usage, knowledge_json};
+use super::{Server, assert_usage, knowledge_json, show_entry};
 use serde_json::{Value, from_slice};
+
+pub async fn assert_outdated_approval(
+    server: &Server,
+    space: &str,
+    approver: Option<&str>,
+    guidance: &str,
+) {
+    let current = show_entry(server, space, "KN-1").await;
+    for mode in ["human", "json"] {
+        let arguments = [
+            "request",
+            "approve",
+            space,
+            "RQ-1",
+            "--revision",
+            "1",
+            "--output",
+            mode,
+        ];
+        let output = match approver {
+            Some(username) => server.run_as(username, &arguments).await,
+            None => server.run(&arguments).await,
+        };
+        assert_eq!(output.status.code(), Some(1));
+        assert!(output.stdout.is_empty());
+        let text = String::from_utf8(output.stderr).unwrap();
+        let message = if mode == "json" {
+            let problem = from_slice::<Value>(text.as_bytes()).unwrap();
+            assert_eq!(problem["code"], "person_request.outdated");
+            assert_eq!(problem["status"], 409);
+            problem["message"].as_str().unwrap().to_owned()
+        } else {
+            text.trim_end().to_owned()
+        };
+        assert!(message.ends_with(guidance), "{message}");
+        assert_eq!(show_entry(server, space, "KN-1").await, current);
+    }
+}
 
 pub async fn require_seen_versions(server: &Server, space: &str) {
     for args in [

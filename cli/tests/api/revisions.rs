@@ -1,9 +1,9 @@
 use serde_json::{Value, from_slice};
 
 use crate::helpers::{
-    Server, assert_success, body, create_entry, create_person_request, knowledge_context,
-    knowledge_json, person_request_json, refuse_stale_knowledge, require_seen_versions, show_entry,
-    show_person_request,
+    SECOND_USERNAME, Server, assert_outdated_approval, assert_success, body, contributor,
+    create_entry, create_person_request, knowledge_context, knowledge_json, person_request_json,
+    refuse_stale_knowledge, require_seen_versions, show_entry, show_person_request,
 };
 
 #[tokio::test]
@@ -126,34 +126,15 @@ async fn request_approve_guides_reconciliation_and_revise_reports_prior_state() 
         &["change", &space, "KN-1", "--content", "Person's edit"],
     )
     .await;
-    let current = show_entry(&server, &space, "KN-1").await;
-    for mode in ["human", "json"] {
-        let output = server
-            .run(&[
-                "request",
-                "approve",
-                &space,
-                "RQ-1",
-                "--revision",
-                "1",
-                "--output",
-                mode,
-            ])
-            .await;
-        assert_eq!(output.status.code(), Some(1));
-        assert!(output.stdout.is_empty());
-        let text = String::from_utf8(output.stderr).unwrap();
-        if mode == "json" {
-            let problem = from_slice::<Value>(text.as_bytes()).unwrap();
-            assert_eq!(problem["code"], "person_request.outdated");
-            assert_eq!(problem["status"], 409);
-        }
-        assert!(text.contains("requester or their agent"));
-        assert!(text.contains("current entry"));
-        assert!(text.contains("lorebay request show"));
-        assert!(text.contains("approve the revision it returns"));
-        assert_eq!(show_entry(&server, &space, "KN-1").await, current);
-    }
+    let own_guidance = format!(
+        "Read the current entry, reconcile your proposal, then run `lorebay request revise '{space}' 'RQ-1'` with the reconciled changes. Then run `lorebay request show '{space}' 'RQ-1'` and approve the revision it returns."
+    );
+    assert_outdated_approval(&server, &space, None, &own_guidance).await;
+    contributor(&server, &space).await;
+    let other_guidance = format!(
+        "Ask the requester or their agent to revise the request against the current entry. Then run `lorebay request show '{space}' 'RQ-1'` and approve the revision it returns."
+    );
+    assert_outdated_approval(&server, &space, Some(SECOND_USERNAME), &other_guidance).await;
     assert_revision_output(&server, &space, "true").await;
     assert_revision_output(&server, &space, "false").await;
     let revised = person_request_json(&server, &["revise", &space, "RQ-1"]).await;

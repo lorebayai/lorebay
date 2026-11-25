@@ -127,9 +127,12 @@ contains spaces. Optional arguments appear in brackets. List rows follow
   column beside `Status`: `true` or `false` for a pending request, empty for
   a decided one. Its JSON output follows the Web API. `request revise` shows
   `Was outdated` for the state before revision; its JSON field is
-  `was_outdated`. An outdated approval refusal tells the person to ask the
-  requester or their agent to revise against the current entry, then read
-  `request show` and approve the revision it returns. The error code is
+  `was_outdated`. An outdated approval refusal tells the requester to read
+  the current entry, reconcile the proposal and run `request revise` for
+  this space and request with those changes. Other approvers are told to
+  ask the requester or their agent to revise against the current entry.
+  Both then run `request show` for this space and request and approve the
+  revision it returns. The error code is
   `person_request.outdated`, with exit code 1.
 - **An update requires a field to change.** `space change`, `knowledge
   change` and `request change` require at least one of their optional

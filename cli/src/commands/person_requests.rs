@@ -289,7 +289,7 @@ fn target(action: &str, entry: &str) -> Value {
 }
 
 async fn approve(store: &Store, space: &str, key: &str, revision: i64) -> Result<Outcome> {
-    decide(
+    let failure = match decide(
         store,
         space,
         key,
@@ -297,16 +297,47 @@ async fn approve(store: &Store, space: &str, key: &str, revision: i64) -> Result
         Some(&json!({"revision":revision})),
     )
     .await
-    .map_err(|failure| {
-        if failure.body()[CODE] == "person_request.outdated" {
-            failure.context(&format!(
-                "Ask the requester or their agent to revise the request against the current entry, then run `lorebay request show {} {}` and approve the revision it returns.",
-                output::shell_word(space), output::shell_word(key),
-            ))
-        } else {
-            failure
-        }
-    })
+    {
+        Ok(outcome) => return Ok(outcome),
+        Err(failure) => failure,
+    };
+    if failure.body()[CODE] != "person_request.outdated" {
+        return Err(failure);
+    }
+    let arguments = format!("{} {}", output::shell_word(space), output::shell_word(key));
+    let next_step = if requester_is_caller(store, space, key)
+        .await
+        .unwrap_or(false)
+    {
+        format!(
+            "Read the current entry, reconcile your proposal, then run `lorebay request revise {arguments}` with the reconciled changes."
+        )
+    } else {
+        "Ask the requester or their agent to revise the request against the current entry."
+            .to_owned()
+    };
+    Err(failure.context(&format!(
+        "{next_step} Then run `lorebay request show {arguments}` and approve the revision it returns."
+    )))
+}
+
+async fn requester_is_caller(store: &Store, space: &str, key: &str) -> Result<bool> {
+    let http = Http::new()?;
+    let request = http
+        .authorized(
+            store,
+            Method::GET,
+            &api_path(&[SPACES, space, PERSON_REQUESTS, key])?,
+            None,
+        )
+        .await?;
+    let space = http
+        .authorized(store, Method::GET, &api_path(&[SPACES, space])?, None)
+        .await?;
+    Ok(request[DATA]["requested_by"]
+        .as_str()
+        .zip(space[DATA]["caller_person"].as_str())
+        .is_some_and(|(requester, caller)| requester == caller))
 }
 
 async fn reject(
