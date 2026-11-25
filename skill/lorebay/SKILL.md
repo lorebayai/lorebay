@@ -214,8 +214,9 @@ look for a `pending` or `rejected` request about the same thing with
 `pending` match, tell the person it already awaits approval and offer nothing
 unless they ask to revise it. Revise a pending request instead of withdrawing
 and resubmitting; read and reconcile the current entry before revising an
-outdated one. For a `rejected` one, tell the person its reason and
-let them decide whether to propose again. Otherwise, tell the person in the
+outdated one, then tell the person it was outdated and can now be approved.
+For a `rejected` one, tell the person its reason and let them decide whether
+to propose again. Otherwise, tell the person in the
 harness what you intend to propose, and submit it with `create_request` only
 after the person confirms.
 A change the person asks for by name counts as confirmed.

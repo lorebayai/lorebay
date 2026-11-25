@@ -181,6 +181,22 @@
       "expect": []
     },
     {
+      "action": {
+        "cli": [
+          "knowledge",
+          "show",
+          "{space}",
+          "review.md"
+        ],
+        "save": {
+          "entry": [
+            "key"
+          ]
+        }
+      },
+      "expect": []
+    },
+    {
       "turn": "The policy is approved. Check the decision and finish the checklist.",
       "expect": [
         {
@@ -243,12 +259,28 @@
           },
           "op": "contains",
           "value": "asynchronously"
+        },
+        {
+          "label": "result references the created entry",
+          "query": {
+            "cli": [
+              "task",
+              "show",
+              "{space}",
+              "{task}"
+            ],
+            "path": [
+              "result"
+            ]
+          },
+          "op": "matches",
+          "value": "#{entry}\\b"
         }
       ]
     }
   ],
   "questions": [
     "Did the agent resume only after the answer and, separately, the request decision?",
-    "Did it read the approved request and Knowledge before reporting completion?"
+    "Did it read the request's decision before finishing, and does the result reference the created entry?"
   ]
 }
