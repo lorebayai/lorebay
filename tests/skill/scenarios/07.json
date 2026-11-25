@@ -301,6 +301,6 @@
   ],
   "questions": [
     "Did the agent read the current entry in full before reconciling and preserve both agreed changes?",
-    "Did it keep one request, and tell the person it had been outdated and is now based on the current entry and can be approved?"
+    "Did it keep one request, and tell the person what changed and that the request awaits their decision?"
   ]
 }
