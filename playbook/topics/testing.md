@@ -158,8 +158,13 @@ configuration, evidence and person's verdict.
   configured scenarios against a running origin. The external configuration
   must select people, authority and three homes: Claude Code and Codex for
   one person, and Codex for another. It must contain no credential values.
-  Sign-in input must stay separate from scenario and harness execution.
-  Runtime artifacts must stay outside the checkout.
+  People must use persistent CLI homes; script agents must use external
+  commands that own their authorizations. Passwords must not enter the
+  suite's environment. Runtime artifacts must stay outside the checkout.
+- Each run must reserve every home with its shared lock, including CLI and
+  script-agent refresh. Child processes must inherit the same lock. Parallel
+  scenarios must use different homes. Authorize once and reuse until the
+  sign-in ends; after a server wipe, restore it through the external scripts.
 - The suite must never sign in to a model or read a credential file. People
   must sign in the homes to their models and authorize their agents before
   a run. Starting state and checks must reuse `tests/common/` callers.

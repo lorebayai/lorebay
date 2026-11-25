@@ -40,7 +40,7 @@ def scrub(value, clean):
 
 
 class Harness:
-    def __init__(self, home, project, timeout, clean, private_environment=()):
+    def __init__(self, home, project, timeout, clean, lock_fd=None):
         self.home, self.project, self.timeout, self.clean = home, project, timeout, clean
         self.session = None
         self.events = []
@@ -49,14 +49,18 @@ class Harness:
         self.skill_reads = {}
         self.skill = home["skill"]
         self.digest = None
-        self.private_environment = private_environment
+        self.lock_fd = lock_fd
 
     def environment(self):
         environment = {key: value for key, value in os.environ.items()
-                       if not key.startswith(("CLAUDE", "CODEX", "ANTHROPIC", "OPENAI", "LOREBAY"))
-                       and key not in self.private_environment}
+                       if not key.startswith(("CLAUDE", "CODEX", "ANTHROPIC", "OPENAI", "LOREBAY"))}
         environment.update(self.home["environment"])
+        if self.lock_fd is not None:
+            environment["LOREBAY_TEST_HOME_LOCK_FD"] = str(self.lock_fd)
         return environment
+
+    def inherited_fds(self):
+        return (self.lock_fd,) if self.lock_fd is not None else ()
 
     def turn(self, text):
         self.events.append({"person": self.clean(text)})
@@ -77,7 +81,8 @@ class Harness:
                 command += ["--skip-git-repo-check", "--sandbox", "workspace-write"]
             command += ["--json", "-"]
         child = subprocess.Popen(command, cwd=self.project, env=self.environment(), start_new_session=True,
-                                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                                 pass_fds=self.inherited_fds())
         stdout = stderr = ""
         try:
             try:
@@ -129,57 +134,65 @@ class Harness:
                 self.loaded = True
 
     def codex_tools(self):
-        child = subprocess.Popen([*self.home["command"], "app-server", "--stdio"], cwd=self.project,
-                                 env=self.environment(), start_new_session=True, stdin=subprocess.PIPE,
-                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
-        assert child.stdin is not None and child.stdout is not None
-        stdin, stdout = child.stdin, child.stdout
-        incoming = queue.Queue()
-
-        def read():
-            for line in stdout:
-                incoming.put(line)
-            incoming.put(None)
-
-        reader = threading.Thread(target=read, daemon=True)
-        reader.start()
-
-        def request(number, method, params):
-            stdin.write(json.dumps({"id": number, "method": method, "params": params}) + "\n")
-            stdin.flush()
-            deadline = time.monotonic() + 60
-            while True:
-                line = incoming.get(timeout=max(0, deadline - time.monotonic()))
-                require(line is not None, "Harness inventory ended before responding")
-                response = json.loads(line)
-                if response.get("id") == number:
-                    require("error" not in response, "Harness inventory request failed")
-                    return response["result"]
-
-        try:
-            request(1, "initialize", {"clientInfo": {"name": "skill-acceptance", "version": "1"}})
-            stdin.write('{"method":"initialized"}\n')
-            stdin.flush()
-            cursor, number = None, 2
-            while True:
-                result = request(number, "mcpServerStatus/list", {"cursor": cursor, "serverName": "lorebay"})
-                for server in result["data"]:
-                    if server["name"] == "lorebay":
-                        require(not server.get("toolsError"), "Harness tool discovery failed")
-                        self.tools.update(server["tools"])
-                cursor = result.get("nextCursor")
-                if not cursor:
-                    break
-                number += 1
-        finally:
-            stop(child)
-            reader.join(timeout=5)
-            stdin.close()
-            stdout.close()
+        self.tools.update(codex_inventory(self.home["command"], self.environment(), self.project,
+                                          pass_fds=self.inherited_fds()))
 
     def record(self):
         return {"session": self.session, "harness": self.home["harness"], "skill": self.skill,
                 "sha256": self.digest, "loaded": self.loaded, "tools": sorted(self.tools), "events": self.events}
+
+
+def codex_inventory(command, environment, project, *, pass_fds=()):
+    tools = set()
+    child = subprocess.Popen([*command, "app-server", "--stdio"], cwd=project,
+                             env=environment, start_new_session=True, stdin=subprocess.PIPE,
+                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, pass_fds=pass_fds)
+    assert child.stdin is not None and child.stdout is not None
+    stdin, stdout = child.stdin, child.stdout
+    incoming = queue.Queue()
+
+    def read():
+        for line in stdout:
+            incoming.put(line)
+        incoming.put(None)
+
+    reader = threading.Thread(target=read, daemon=True)
+    reader.start()
+
+    def request(number, method, params):
+        stdin.write(json.dumps({"id": number, "method": method, "params": params}) + "\n")
+        stdin.flush()
+        deadline = time.monotonic() + 60
+        while True:
+            line = incoming.get(timeout=max(0, deadline - time.monotonic()))
+            require(line is not None, "Harness inventory ended before responding")
+            response = json.loads(line)
+            if response.get("id") == number:
+                require("error" not in response, "Harness inventory request failed")
+                return response["result"]
+
+    try:
+        request(1, "initialize", {"clientInfo": {"name": "skill-acceptance", "version": "1"}})
+        stdin.write('{"method":"initialized"}\n')
+        stdin.flush()
+        cursor, number = None, 2
+        while True:
+            result = request(number, "mcpServerStatus/list", {"cursor": cursor, "serverName": "lorebay"})
+            for server in result["data"]:
+                if server["name"] == "lorebay":
+                    require(not server.get("toolsError"), "Harness tool discovery failed")
+                    tools.update(server["tools"])
+            cursor = result.get("nextCursor")
+            if not cursor:
+                break
+            number += 1
+    finally:
+        stop(child)
+        reader.join(timeout=5)
+        stdin.close()
+        stdout.close()
+    return tools
+
 
 
 def sanitize(text, credentials):

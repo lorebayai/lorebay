@@ -95,10 +95,10 @@ class Checks:
         print(f'{"PASS" if self.results[-1]["passed"] else "FAIL"} {label}', flush=True)
 
 
-def server_tools(clients, agent):
+def server_tools(agent):
     tools, cursor = set(), None
     while True:
-        response = clients.api("POST", "/mcp", {
+        response = agent.clients.api("POST", "/mcp", {
             "jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {"cursor": cursor} if cursor else {},
         }, agent.token, headers={"Accept": "application/json, text/event-stream"})
         require("error" not in response, "Server tool discovery failed")

@@ -4,23 +4,16 @@ import signal
 import sys
 import tempfile
 import uuid
-from dataclasses import dataclass
 from pathlib import Path
 
-from configuration import RunInterrupted, SignInPending, load_configuration, load_scenarios
+from configuration import RunInterrupted, load_configuration, load_scenarios
 from harness import Harness, sanitize, scrub
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "common"))
-from clients import Agent, Clients
+from callers import home_leases, prepare_callers
 from checks import Checks, expand, server_tools
-
-
-@dataclass
-class Callers:
-    clients: Clients
-    agents: dict[str, Agent]
-    private_environment: tuple[str, ...] = ()
+from leases import HomeInUse
 
 
 def write(path, value, clean):
@@ -32,7 +25,7 @@ def write(path, value, clean):
 def attempt(config, scenario, selected, directory, evidence, callers_for_attempt):
     callers = callers_for_attempt(config, directory / "clients")
     clients, agents = callers.clients, callers.agents
-    people = [config["people"][name] for name in ("owner", "other")]
+    people = [config["people"][name] for name in ("owner", "other", "admin")]
     def clean(text):
         return sanitize(text, clients.secrets)
 
@@ -41,6 +34,9 @@ def attempt(config, scenario, selected, directory, evidence, callers_for_attempt
         space = clients.cli("space", "create", "--name", "Skill acceptance " + uuid.uuid4().hex[:12],
                             "--summary", scenario["name"])["key"]
         clients.cli("member", "add", space, people[1]["username"], "--role", "contributor")
+        clients.cli("member", "add", space, people[2]["username"], "--role", "contributor")
+        clients.cli("member", "set-role", space, people[2]["username"], "--role", "admin")
+        clients.cli("space", "show", space, person=2)
         project = directory / "project"
         project.mkdir(mode=0o700)
         (project / "AGENTS.md").write_text(f'- Lorebay space: `{space}`\n')
@@ -51,7 +47,7 @@ def attempt(config, scenario, selected, directory, evidence, callers_for_attempt
                      "same_agent": config["homes"][same_home]["agent"],
                      "other_agent": config["homes"]["other"]["agent"]}
         checks = Checks(clients, space, variables, agents, project)
-        expected_tools = server_tools(clients, agents["owner"])
+        expected_tools = server_tools(agents["owner"])
         for action in scenario["starting_state"]:
             if isinstance(action, dict):
                 checks.action(action)
@@ -65,7 +61,7 @@ def attempt(config, scenario, selected, directory, evidence, callers_for_attempt
                 if role not in sessions or step.get("new_session"):
                     key = role + "-" + str(len(sessions))
                     sessions[key] = Harness(config["homes"][home_name], project, config.get("timeout", 600), clean,
-                                            callers.private_environment)
+                                            callers.locks.get(config["homes"][home_name]["lock"]))
                     sessions[role] = sessions[key]
                 sessions[role].turn(expand(step["turn"], variables))
             for expectation in step.get("expect", []):
@@ -105,9 +101,15 @@ def attempt(config, scenario, selected, directory, evidence, callers_for_attempt
     return result
 
 
-def run(config, *, callers_for_attempt=None):
-    if callers_for_attempt is None:
-        raise SignInPending("Sign-in input is awaiting the user's decision")
+def run(config):
+    with home_leases(config) as locks:
+        def configured_callers(options, directory):
+            return prepare_callers(options, directory, locks)
+
+        return execute(config, configured_callers)
+
+
+def execute(config, callers_for_attempt):
     root = Path(config["output"]) / ("run-" + uuid.uuid4().hex[:12])
     root.mkdir(mode=0o700, parents=True)
     report = {"scenarios": []}
@@ -174,9 +176,9 @@ def main():
     try:
         config = load_configuration(sys.argv[1])
         return run(config)
-    except SignInPending as error:
-        print("WAIT " + str(error))
-        return 3
+    except HomeInUse as error:
+        print("FAIL " + str(error))
+        return 1
     except Exception:
         print("FAIL configuration or run interrupted; no raw diagnostic retained")
         return 1
