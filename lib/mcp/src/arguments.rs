@@ -1,5 +1,5 @@
 use rmcp::model::{JsonObject, Tool};
-use serde_json::Value;
+use serde_json::{Value, json};
 use typed_builder::TypedBuilder;
 
 use lorebay_lib_core::{
@@ -28,39 +28,34 @@ impl Arguments {
         let properties = tool.input_schema["properties"]
             .as_object()
             .ok_or_else(ToolError::internal)?;
+        let mut errors = Vec::new();
         for (name, value) in &values {
-            let schema = properties.get(name).ok_or_else(|| {
-                if tool_name == ToolName::ListTasks {
-                    invalid_query("query")
-                } else {
-                    ToolError::invalid_body()
+            if let Some(message) = argument_error(name, value, properties.get(name)) {
+                match name.as_str() {
+                    "page_size" | "cursor" if properties.contains_key(name) => {
+                        return Err(invalid_query(name));
+                    }
+                    "include_scratchpad" | "include_results" if properties.contains_key(name) => {
+                        return Err(invalid_query("query"));
+                    }
+                    _ if tool_name == ToolName::ListTasks => {
+                        return Err(invalid_query("query"));
+                    }
+                    _ => errors.push(json!({"field":name, "code":"invalid", "message":message})),
                 }
-            })?;
-            let valid = match schema["type"].as_str() {
-                Some("string") => value.is_string(),
-                Some("boolean") => value.is_boolean(),
-                Some("integer") => value.as_u64().is_some(),
-                _ if name == "result_version" => {
-                    value.is_null() || value.as_i64().is_some_and(|version| version > 0)
-                }
-                _ => false,
-            };
-            if !valid {
-                return Err(match name.as_str() {
-                    "page_size" | "cursor" => invalid_query(name),
-                    "include_scratchpad" | "include_results" => invalid_query("query"),
-                    _ if tool_name == ToolName::ListTasks => invalid_query("query"),
-                    _ => ToolError::invalid_body(),
-                });
             }
         }
-        if let Some(required) = tool.input_schema["required"].as_array()
-            && required
-                .iter()
-                .filter_map(Value::as_str)
-                .any(|name| !values.contains_key(name))
-        {
-            return Err(ToolError::invalid_body());
+        if let Some(required) = tool.input_schema["required"].as_array() {
+            for name in required.iter().filter_map(Value::as_str) {
+                if !values.contains_key(name) {
+                    errors.push(json!({
+                        "field":name, "code":"required", "message":format!("`{name}` is required.")
+                    }));
+                }
+            }
+        }
+        if !errors.is_empty() {
+            return Err(ToolError::body_fields(errors));
         }
         Ok(Self { values })
     }
@@ -70,7 +65,9 @@ impl Arguments {
             .get(name)
             .and_then(Value::as_str)
             .map(str::to_owned)
-            .ok_or_else(ToolError::invalid_body)
+            .ok_or_else(|| {
+                ToolError::body_field(name, "required", &format!("`{name}` is required."))
+            })
     }
 
     pub fn page(&self) -> Result<PageOptions, ToolError> {
@@ -194,4 +191,21 @@ impl Arguments {
             .and_then(Value::as_str)
             .map(str::to_owned)
     }
+}
+
+fn argument_error(name: &str, value: &Value, schema: Option<&Value>) -> Option<String> {
+    let Some(schema) = schema else {
+        return Some(format!("`{name}` is not accepted."));
+    };
+    let (valid, expected) = match schema["type"].as_str() {
+        Some("string") => (value.is_string(), "a string"),
+        Some("boolean") => (value.is_boolean(), "a boolean"),
+        Some("integer") => (value.as_u64().is_some(), "an integer"),
+        _ if name == "result_version" => (
+            value.is_null() || value.as_i64().is_some_and(|version| version > 0),
+            "a positive integer or null",
+        ),
+        _ => (false, "a valid value"),
+    };
+    (!valid).then(|| format!("`{name}` must be {expected}."))
 }

@@ -84,7 +84,7 @@ impl ApiError {
             FieldError::builder()
                 .field("body")
                 .code("invalid")
-                .message("Expected a JSON object with the required string fields.")
+                .message("Expected a JSON object with the required fields.")
                 .build(),
         ])
     }

@@ -336,7 +336,10 @@ async fn change_task_fails_when_person_became_viewer() {
 
 #[tokio::test]
 async fn change_task_fails_when_no_field_is_given() {
-    let (server, person, agent) = setup().await;
+    let server = Server::executable().await;
+    let person = server.tokens().await;
+    create_space(&server, &person, "Team", "Shared work").await;
+    let agent = authorize_for(&server, &person, "Research agent").await;
     let task = create(&server, &agent, SPACE, "Original").await;
     let original = read(&server, &person, "TK-1").await;
     for (body, field, code) in [
@@ -352,9 +355,9 @@ async fn change_task_fails_when_no_field_is_given() {
             "result",
             "too_long",
         ),
-        (json!({"title":null}), "body", "invalid"),
-        (json!({"state":null}), "body", "invalid"),
-        (json!({"result":null}), "body", "invalid"),
+        (json!({"title":null}), "title", "invalid"),
+        (json!({"state":null}), "state", "invalid"),
+        (json!({"result":null}), "result", "invalid"),
     ] {
         let error = assert_problem(
             change_request(

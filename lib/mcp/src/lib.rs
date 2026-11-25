@@ -9,14 +9,16 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
 use rmcp::model::{
-    CallToolRequestParams, CallToolResponse, CallToolResult, Implementation, ListToolsResult,
-    PaginatedRequestParams, ProtocolVersion, ServerCapabilities, ServerConfig,
+    CallToolRequestParams, CallToolResponse, CallToolResult, CustomRequest, CustomResult,
+    ErrorCode, Implementation, ListToolsResult, PaginatedRequestParams, ProtocolVersion,
+    ServerCapabilities, ServerConfig,
 };
 use rmcp::service::RequestContext;
 use rmcp::transport::streamable_http_server::session::never::NeverSessionManager;
 use rmcp::transport::{StreamableHttpServerConfig, StreamableHttpService};
 use rmcp::{ErrorData, RoleServer, ServerHandler};
 use serde::Serialize;
+use serde_json::to_value;
 use typed_builder::TypedBuilder;
 use url::Url;
 
@@ -26,6 +28,7 @@ use lorebay_lib_core::{
 
 use arguments::Arguments;
 use catalog::catalog;
+use error::ToolError;
 
 pub fn router(state: LibraryState) -> Result<Router> {
     let url = Url::parse(&state.settings().public_url)?;
@@ -119,6 +122,13 @@ impl ServerHandler for McpServer {
             .and_then(|parts| parts.extensions.get::<Caller>())
             .cloned()
             .ok_or_else(|| ErrorData::internal_error("Request context unavailable", None))?;
+        if request.arguments.is_none()
+            && tool.input_schema["required"]
+                .as_array()
+                .is_some_and(|fields| !fields.is_empty())
+        {
+            return Ok(ToolError::invalid_body().into_result().into());
+        }
         let arguments = match Arguments::parse(*name, tool, request.arguments) {
             Ok(arguments) => arguments,
             Err(error) => return Ok(error.into_result().into()),
@@ -128,6 +138,43 @@ impl ServerHandler for McpServer {
             Err(error) => error.into_result(),
         };
         Ok(result.into())
+    }
+
+    async fn on_custom_request(
+        &self,
+        request: CustomRequest,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CustomResult, ErrorData> {
+        if request.method != "tools/call" {
+            return Err(ErrorData::new(
+                ErrorCode::METHOD_NOT_FOUND,
+                request.method,
+                None,
+            ));
+        }
+        let mut params = request
+            .params
+            .ok_or_else(|| ErrorData::invalid_params("Expected tool arguments", None))?;
+        let arguments = params
+            .get_mut("arguments")
+            .filter(|arguments| !arguments.is_object())
+            .ok_or_else(|| ErrorData::invalid_params("Expected tool arguments", None))?;
+        *arguments = serde_json::json!({});
+        let params: CallToolRequestParams = serde_json::from_value(params)
+            .map_err(|_| ErrorData::invalid_params("Expected a tool name", None))?;
+        if !catalog().iter().any(|(_, tool)| tool.name == params.name) {
+            return Err(ErrorData::invalid_params("Unknown tool", None));
+        }
+        let mut result = ToolError::invalid_body().into_result();
+        if context
+            .protocol_version()
+            .is_none_or(|version| version.as_str() < ProtocolVersion::V_2026_07_28.as_str())
+        {
+            result.result_type = None;
+        }
+        let value = to_value(result)
+            .map_err(|_| ErrorData::internal_error("Cannot serialize tool result", None))?;
+        Ok(CustomResult::new(value))
     }
 }
 

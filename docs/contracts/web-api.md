@@ -80,6 +80,14 @@ POST /api/v1/spaces/{space}/requests/{key}/approve
   `agent_file.refused`, `agent_file.too_large`, `space.number_taken`,
   `knowledge.name_taken`, `knowledge.version_changed`, `person_request.decided`,
   `person_request.outdated` and `person_request.revision_changed` answer 409.
+- **Body conversion errors return `request.invalid_body` with HTTP 400.**
+  When deserialization identifies a field, its `errors` entry names that
+  field, with `required` for a missing field and `invalid` for a wrong type,
+  invalid value or an unknown field that the route refuses. The message
+  names the field and what is expected. Deserialization reports the first
+  offending field. An unparseable body, a non-object body or a rejection
+  without an identifiable field has one `body` entry. Query and path errors
+  keep their own codes.
 - **Writes don't check references**; see [Keys and
   references](../../lib/docs/contracts/keys-and-references.md#5-references).
 - **Only the holder of a `working` or `waiting` task writes checkpoints and file
