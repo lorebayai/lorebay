@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 directory = Path(__file__).parent
-for path in [*directory.glob("*.py"), *directory.glob("Dockerfile.*")]:
+for path in [*directory.glob("*.py"), *directory.glob("Dockerfile.*"), *directory.parent.glob("common/*.py")]:
     source = path.read_text()
     if path.suffix == ".py":
         compile(source, str(path), "exec")

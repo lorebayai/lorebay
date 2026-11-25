@@ -390,10 +390,11 @@ class Suite:
                 "--add-host",
                 f"{self.domain}:{address}",
             )
-            self.execute(name, "mkdir", "-p", "/inputs", "/work", "/root/.pki/nssdb", "/untrusted")
+            self.execute(name, "mkdir", "-p", "/inputs", "/work", "/common", "/root/.pki/nssdb", "/untrusted")
             self.copy(self.root / "authority.pem", name, "/inputs/authority.pem")
             self.copy(self.root / "lorebay/lorebay", name, "/usr/local/bin/lorebay")
             self.copy(HERE / "fixtures.py", name, "/fixtures.py")
+            self.copy(HERE.parent / "common/clients.py", name, "/common/clients.py")
             self.execute(name, "certutil", "-N", "--empty-password", "-d", "sql:/root/.pki/nssdb")
             self.execute(
                 name,
