@@ -1,0 +1,22 @@
+language: 'python'
+layer: 'automation'
+
+dependsOn:
+  - cli
+  - lorebayd
+
+tasks:
+  check:
+    command: 'python3 -B tests/e2e/check.py'
+    inputs:
+      - '**/*'
+      - '/tests/common/**/*'
+    options:
+      runFromWorkspaceRoot: true
+  e2e:
+    command: 'python3 -B tests/e2e/run.py'
+    deps: ['cli:build', 'lorebayd:build']
+    options:
+      cache: false
+      runInCI: false
+      runFromWorkspaceRoot: true

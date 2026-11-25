@@ -6,6 +6,8 @@ tasks:
     command: 'python3 -B tests/deploy/check.py'
     inputs:
       - '**/*'
+      - '/tests/common/**/*'
+      - '/tests/e2e/journeys.py'
     options:
       runFromWorkspaceRoot: true
   deploy:

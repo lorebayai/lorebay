@@ -3,6 +3,11 @@
 Qualify release files as an operator, a person and an agent through native
 Debian 12, native Ubuntu 24.04, Compose and the Alpine archive recipe.
 The suite drives executables, deployment tools, the CLI, HTTP and Chromium.
+Each install runs the same nine [team journeys](../e2e/README.md): HTTPS for
+native and Compose installations, loopback HTTP for the Alpine archive.
+Journeys have independent people, spaces and data. Separate journey clients
+preserve the proxy's per-caller limits; streaming, restart and revocation
+qualification stays in this suite.
 
 ## Usage
 
@@ -76,7 +81,7 @@ resolve from the command's working directory; `~` is supported.
 | `domain` | Lowercase DNS name covered by the certificate |
 | `certificate`, `key` | PEM certificate chain and unencrypted private key |
 | `authority` | PEM authority trusted by clients and browser NSS databases |
-| `people` | Two distinct usernames; passwords are generated per run |
+| `people` | Two distinct operation-check usernames; journey people and all passwords are generated per run |
 | `registry.github_account` | Existing GitHub CLI account with package access |
 
 ## Docs

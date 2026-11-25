@@ -1,6 +1,6 @@
 # Testing
 
-How `lorebayd` and the product are tested: the three test levels, what each
+How `lorebayd` and the product are tested: the four test levels, what each
 one verifies, where its tests live, and how milestone acceptance checks are
 kept. Imported by the `AGENTS.md` of every Rust crate and test suite, and of
 `deploy/`.
@@ -10,7 +10,8 @@ kept. Imported by the `AGENTS.md` of every Rust crate and test suite, and of
 | Level | Verifies | Lives in | Runs |
 | --- | --- | --- | --- |
 | Integration | `lorebayd`'s contract through the Web API, MCP and file URLs, or one crate's contract through its public API | The crate's `tests/` folder | Pull request CI, when the crate is affected |
-| Deployment | A release's native installation and Compose deployment, operation, removal and product workflows through HTTPS, the browser and CLI | `tests/deploy/` | By hand, outside pull request CI; see [Deployment tests](#deployment-tests) |
+| E2E | Team goals across people, agents and parties through the CLI, web pages, MCP and file URLs | `tests/e2e/` | Milestone acceptance and before releases, outside pull request CI |
+| Deployment | Release installation, operation and removal, with the E2E journeys after each install | `tests/deploy/` | By hand, outside pull request CI; see [Deployment tests](#deployment-tests) |
 | Unit | One intricate pure function | A `#[cfg(test)] mod tests`, see [Unit tests](#unit-tests) | Pull request CI, when affected |
 
 - Integration tests are the level for backend behavior. Unit tests are a rare
@@ -91,6 +92,33 @@ The CLI's scenarios instead run the compiled `lorebay` against a compiled
 
 Run them with `moon run <project>:integration`.
 
+## E2E tests
+
+An E2E test is one **journey**: a goal that people and agents reach together
+across callers and parties, against one running `lorebayd`. Contract details
+stay in integration scenarios.
+
+- The Python/Playwright suite lives in `tests/e2e/`. Run it with
+  `moon run tests/e2e:e2e`; see its [README](../../tests/e2e/README.md) for tools
+  and executable inputs. The command must use checkout-built executables,
+  start a fresh server with its own data directory and users file, and stop it.
+- Each journey must set up its own people, space and data, depend on no
+  other journey, and pass independently and in either execution order.
+- People must act through the compiled CLI or the authorization and device
+  pages in Chromium. Each agent must register and obtain its own sign-in
+  through real OAuth browser consent, then use MCP for product operations.
+- File content must use the upload and download URLs returned to callers.
+  Journeys must import no crate, write nothing to the database and use no
+  Web API shortcut for a person's or agent's product operation.
+- Journeys must take the origin as their only target, so deployments can
+  run the same journeys. CLI, browser, OAuth and file transfer mechanics
+  must stay shared in `tests/common/`, with no suite-specific copies.
+- A run must remove its runtime files and stop its server on success,
+  failure and interruption. Credentials must stay out of output and logs;
+  required private credential files must be removed with the run directory.
+- Run all journeys for milestone acceptance and before each release. The
+  E2E task must set `runInCI: false`; its syntax `check` task must run in CI.
+
 ## Deployment tests
 
 A deployment test qualifies release files and complete installations as a
@@ -98,13 +126,16 @@ black box. It runs the executables and deployment tools as their users do,
 and must not import a crate or substitute source builds for release files.
 
 - The Python suite lives in `tests/deploy/`. One configuration file selects
-  a release or local release directory, TLS inputs and two test people.
+  a release or local release directory, TLS inputs and two operation-check
+  usernames. The suite generates separate people for each E2E journey.
 - Every run creates a fresh environment with a unique prefix and removes
   its containers, networks, volumes, images and paths, including on failure.
   It must not change unrelated host resources or existing credentials.
 - Check file integrity, install refusals, HTTPS, caller limits, large-file
-  streaming, certificate replacement, persistence, removal and the product
-  workflows for both deployment methods.
+  streaming, certificate replacement, persistence and removal. After each
+  install, run the E2E journeys against that origin; keep no separate product
+  journey. Deployment-specific streaming, restart and revocation checks stay
+  in this suite.
 - Never print or log credentials or passwords. Clients and browsers must
   trust the supplied authority without disabling certificate verification.
 - The deployment task sets `runInCI: false`. Run it with
@@ -139,7 +170,8 @@ A milestone's acceptance checks stay in the repository, so later changes
 and releases can rerun them.
 
 - Each deterministic acceptance check must become an automated check before
-  the milestone closes: an integration scenario for a contract, or a
-  deployment check for a release's installation and operation.
+  the milestone closes: an integration scenario for a contract, an E2E
+  journey for a team's workflow, or a deployment check for a release's
+  installation and operation.
 - A check that depends on a real agent harness and model stays by hand, with
   its evidence on the acceptance issue.

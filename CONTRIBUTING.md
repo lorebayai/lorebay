@@ -39,6 +39,8 @@ they run `nginx -t` in a pinned nginx image with a throwaway certificate.
 
 For release qualification, see the [deployment suite](tests/deploy/README.md)
 for its required tools and local usage.
+For team journeys against a checkout build, the [E2E suite](tests/e2e/README.md)
+needs Python 3.12 or later, Playwright and Chromium.
 
 Install moon, then add `~/.moon/bin` to `PATH`:
 

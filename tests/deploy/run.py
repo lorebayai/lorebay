@@ -20,6 +20,10 @@ from pathlib import Path
 from artifacts import NATIVE_ARCHIVES, TARGET
 
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "common"))
+from people import create_journey_people
+
+
 HERE = Path(__file__).resolve().parent
 REPOSITORY = "lorebayai/lorebay"
 IMAGE = "ghcr.io/lorebayai/lorebayd"
@@ -53,7 +57,9 @@ class Suite:
         self.port = None
         self.stage = "configuration"
         self.people = [{"username": name, "password": secrets.token_urlsafe(32)} for name in self.config["people"]]
-        self.secrets += [person["password"] for person in self.people]
+        self.journey_people = create_journey_people(self.prefix)
+        self.all_people = self.people + [person for group in self.journey_people.values() for person in group]
+        self.secrets += [person["password"] for person in self.all_people]
         self.domain = self.config["domain"]
         require(
             len(self.people) == 2 and self.people[0]["username"] != self.people[1]["username"],
@@ -349,7 +355,7 @@ class Suite:
         self.run("sudo", "-n", "mkdir", "-m", "0755", self.data)
         self.data_owned = True
         users = []
-        for person in self.people:
+        for person in self.all_people:
             password_hash = self.run(
                 self.root / "lorebayd/lorebayd", "hash-password", input=person["password"] + "\n"
             ).stdout.strip()
@@ -378,37 +384,30 @@ class Suite:
             )
         self.say("PASS isolated_environment_built " + self.prefix)
 
-    def clients(self, network, server):
+    def client(self, suffix, network, server):
         address = self.address(server, network)
-        clients = []
-        for index in range(2):
-            name = self.container(
-                f"{self.method}-client-{index}",
-                self.client_image,
-                "--network",
-                network,
-                "--add-host",
-                f"{self.domain}:{address}",
-            )
-            self.execute(name, "mkdir", "-p", "/inputs", "/work", "/root/.pki/nssdb", "/untrusted")
-            self.copy(self.root / "authority.pem", name, "/inputs/authority.pem")
-            self.copy(self.root / "lorebay/lorebay", name, "/usr/local/bin/lorebay")
-            self.copy(HERE / "fixtures.py", name, "/fixtures.py")
-            self.execute(name, "certutil", "-N", "--empty-password", "-d", "sql:/root/.pki/nssdb")
-            self.execute(
-                name,
-                "certutil",
-                "-A",
-                "-d",
-                "sql:/root/.pki/nssdb",
-                "-t",
-                "C,,",
-                "-n",
-                "deployment-ca",
-                "-i",
-                "/inputs/authority.pem",
-            )
-            clients.append(name)
+        name = self.container(
+            suffix, self.client_image, "--network", network, "--add-host", f"{self.domain}:{address}",
+        )
+        self.prepare_client(name)
+        return name
+
+    def prepare_client(self, name):
+        self.execute(name, "mkdir", "-p", "/inputs", "/work", "/common", "/root/.pki/nssdb", "/untrusted")
+        self.copy(self.root / "authority.pem", name, "/inputs/authority.pem")
+        self.copy(self.root / "lorebay/lorebay", name, "/usr/local/bin/lorebay")
+        self.copy(HERE / "fixtures.py", name, "/fixtures.py")
+        self.copy(HERE.parent / "common/clients.py", name, "/common/clients.py")
+        self.copy(HERE.parent / "e2e/journeys.py", name, "/journeys.py")
+        self.execute(name, "certutil", "-N", "--empty-password", "-d", "sql:/root/.pki/nssdb")
+        self.execute(
+            name, "certutil", "-A", "-d", "sql:/root/.pki/nssdb", "-t", "C,,", "-n", "deployment-ca",
+            "-i", "/inputs/authority.pem",
+        )
+
+    def clients(self, network, server):
+        self.client_network, self.client_server = network, server
+        clients = [self.client(f"{self.method}-client-{index}", network, server) for index in range(2)]
         self.client_a, self.client_b = clients
         require(self.address(clients[0], network) != self.address(clients[1], network), "Clients share an address")
 
@@ -419,12 +418,12 @@ class Suite:
         return result.stdout
 
     def operation_checks(self):
-        self.stage = self.method + ": product"
+        self.stage = self.method + ": browser trust"
         self.drive("trust")
-        self.drive("product")
+        self.journey_checks()
         self.stage = self.method + ": per-caller limits"
-        first = json.loads(self.drive("rate", attempts=25, valid=False))
-        second = json.loads(self.drive("rate", client=self.client_b, attempts=1, valid=True))
+        first = json.loads(self.drive("rate", client=self.client_b, attempts=25, valid=False))
+        second = json.loads(self.drive("rate", attempts=1, valid=True))
         require(429 in first and second == [200], "Rate limits do not separate callers")
         self.say("PASS per_caller_limits_refuse_one_client_and_accept_another")
         self.stage = self.method + ": large file"
@@ -470,6 +469,13 @@ class Suite:
             f"PASS nginx_streams_without_temporary_growth baseline={baseline} maximum={maximum} samples={len(samples)}"
         )
 
+    def journey_checks(self):
+        for number, people in self.journey_people.items():
+            self.stage = f"{self.method}: journey {number}"
+            client = self.client(f"{self.method}-journey-{number}", self.client_network, self.client_server)
+            self.drive("journeys", client=client, journey_people={number: people})
+        self.say("PASS all_nine_journeys " + self.method)
+
     def diagnostics(self):
         for name in self.containers:
             if self.docker("container", "inspect", name, check=False).returncode == 0:
@@ -483,23 +489,28 @@ class Suite:
             self.say(f"Compose diagnostics:\n{result.stdout}\n{result.stderr}")
 
     def audit(self, files=False):
-        private = [p["password"].encode() for p in self.people]
+        private = [p["password"].encode() for p in self.all_people]
         if token := self.environment.get("GH_TOKEN"):
             private.append(token.encode())
+
+        def check_log(raw, message):
+            require(not any(secret.encode() in raw for secret in self.secrets), message)
+            require(re.search(rb"eyJ[A-Za-z0-9_.-]{20,}", raw) is None, message)
+
         for name in self.containers:
             if self.docker("container", "inspect", name, check=False).returncode:
                 continue
             logs = self.docker("logs", name, check=False)
             raw = (logs.stdout + logs.stderr).encode()
-            require(not any(secret in raw for secret in private), "Credential found in container logs: " + name)
+            check_log(raw, "Credential found in container logs: " + name)
         if hasattr(self, "native"):
             raw = self.execute(self.native, "journalctl", "-u", "lorebay", "--no-pager", check=False).stdout.encode()
-            require(not any(secret in raw for secret in private), "Credential found in service journal")
+            check_log(raw, "Credential found in service journal")
         if self.compose_args:
             logs = self.compose("logs", "--no-color", check=False)
             require(logs.returncode == 0, "Cannot inspect Compose service logs")
             raw = (logs.stdout + logs.stderr).encode()
-            require(not any(secret in raw for secret in private), "Credential found in Compose logs")
+            check_log(raw, "Credential found in Compose logs")
         if files:
             overlap = max(map(len, private))
             for path in self.root.rglob("*"):
@@ -1109,6 +1120,8 @@ class Suite:
             "users_file": "/work/users.yaml",
             "listen_address": "127.0.0.1:8080",
             "public_url": "http://127.0.0.1:8080",
+            "login_rate_limit": 1000,
+            "registration_rate_limit": 1000,
         }
         self.execute(name, "sh", "-c", "cat > /work/config.json", input=json.dumps(config))
         self.execute(name, "sh", "-c", "/work/lorebayd --config /work/config.json > /work/server.log 2>&1 &")
@@ -1120,10 +1133,18 @@ class Suite:
         require(result.returncode == 0, "Alpine archive readiness failed")
         result = self.execute(name, "curl", "-fsS", "http://127.0.0.1:8080/readyz")
         require(json.loads(result.stdout)["data"] == "ok", "Alpine HTTP readiness failed")
+        client = self.container("archive-journeys", self.client_image, "--network", "container:" + name)
+        self.prepare_client(client)
+        self.drive("journeys", client=client, origin="http://127.0.0.1:8080", journey_people=self.journey_people)
+        self.say("PASS all_nine_journeys alpine:3")
+        logs = self.execute(name, "cat", "/work/server.log").stdout
+        require(not any(secret in logs for secret in self.secrets), "Credential found in Alpine server log")
+        require(re.search(r"eyJ[A-Za-z0-9_.-]{20,}", logs) is None, "Access token found in Alpine server log")
         self.say(
             f"PASS archive_runs_on_alpine_{TARGET.split('-')[0]} manual executables, loopback HTTP; "
             "no nginx or service-manager qualification"
         )
+        self.docker("rm", "-f", "-v", client)
         self.docker("rm", "-f", "-v", name)
 
 
