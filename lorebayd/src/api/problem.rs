@@ -1,9 +1,13 @@
+use std::error::Error as StdError;
 use std::fmt::Display;
 
 use axum::Json;
+use axum::extract::rejection::JsonRejection;
 use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use serde::Serialize;
+use serde_json::Error as JsonError;
+use serde_path_to_error::{Error as PathError, Segment};
 use thiserror::Error;
 use typed_builder::TypedBuilder;
 
@@ -400,6 +404,81 @@ impl IntoResponse for ApiError {
         }
         response
     }
+}
+
+pub(crate) fn invalid_json(error: JsonRejection) -> ApiError {
+    if error.status() == StatusCode::PAYLOAD_TOO_LARGE {
+        return ApiError::PayloadTooLarge;
+    }
+    if let JsonRejection::JsonDataError(error) = &error {
+        let mut source: &(dyn StdError + 'static) = error;
+        loop {
+            if let Some(error) = source.downcast_ref::<PathError<JsonError>>() {
+                if let Some(field) = json_field_error(error) {
+                    return ApiError::InvalidBody(vec![field]);
+                }
+                break;
+            }
+            let Some(next) = source.source() else {
+                break;
+            };
+            source = next;
+        }
+    }
+    ApiError::invalid_body()
+}
+
+fn json_field_error(error: &PathError<JsonError>) -> Option<FieldError> {
+    let message = error.inner().to_string();
+    let named = |prefix| {
+        message
+            .strip_prefix(prefix)?
+            .split_once('`')
+            .map(|(name, _)| name)
+    };
+    let (field, code, message) = if let Some(field) = named("missing field `") {
+        (field, "required", format!("`{field}` is required."))
+    } else if message.starts_with("unknown field `") {
+        let field = error
+            .path()
+            .iter()
+            .rev()
+            .find_map(|segment| match segment {
+                Segment::Map { key } => Some(key.as_str()),
+                _ => None,
+            })?;
+        (field, "invalid", format!("`{field}` is not accepted."))
+    } else {
+        let Segment::Map { key: field } = error.path().iter().next()? else {
+            return None;
+        };
+        let expected = message
+            .rsplit_once(", expected ")
+            .map(|(_, expected)| expected)
+            .and_then(|expected| {
+                expected
+                    .rsplit_once(" at line ")
+                    .map(|(expected, _)| expected)
+            })
+            .unwrap_or("a valid value");
+        let expected = match (field.as_str(), expected) {
+            ("result_version", _) => "a positive integer or null",
+            (_, "i64" | "u64") => "an integer",
+            _ => expected,
+        };
+        (
+            field.as_str(),
+            "invalid",
+            format!("`{field}` must be {expected}."),
+        )
+    };
+    Some(
+        FieldError::builder()
+            .field(field)
+            .code(code)
+            .message(message)
+            .build(),
+    )
 }
 
 const PROBLEM_MEDIA_TYPE: &str = "application/problem+json";

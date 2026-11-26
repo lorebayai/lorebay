@@ -6,7 +6,7 @@ use lorebay_lib_types::Secret;
 use serde::{Deserialize, Deserializer, Serialize};
 use typed_builder::TypedBuilder;
 
-use crate::api::{ApiError, Envelope, FieldError, ListQuery, Meta, invalid_query};
+use crate::api::{ApiError, Envelope, FieldError, ListQuery, Meta, invalid_json, invalid_query};
 use crate::domain::caller::VerifiedCaller;
 use crate::server::ServerState;
 use lorebay_lib_core::{
@@ -20,7 +20,6 @@ use lorebay_lib_core::{
     read_task_results,
 };
 
-use super::person_sign_in::invalid_json;
 use lorebay_lib_core::AgentFile;
 
 #[derive(Clone, Debug, Deserialize, TypedBuilder)]

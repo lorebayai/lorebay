@@ -13,11 +13,9 @@ use lorebay_lib_core::{
 use serde::{Deserialize, Deserializer};
 use typed_builder::TypedBuilder;
 
-use crate::api::{ApiError, Envelope, Meta, invalid_query};
+use crate::api::{ApiError, Envelope, Meta, invalid_json, invalid_query};
 use crate::domain::caller::VerifiedCaller;
 use crate::server::ServerState;
-
-use super::person_sign_in::invalid_json;
 
 // Requests also name a target entry; the envelope allowance covers field names and metadata.
 pub(crate) const KNOWLEDGE_BODY_MAX_BYTES: usize =
