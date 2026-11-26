@@ -121,6 +121,15 @@ async fn revoke_agent_ends_agent_sign_in() {
     let access = agent.tokens["access_token"].as_str();
     assert_eq!(agent.tokens["expires_in"], 900);
     assert_person_required(list_response(AGENTS_PATH, &server, &agent.tokens, &[]).await).await;
+    assert_agent_not_found(
+        revoke(&server, "Unknown agent", person["access_token"].as_str()).await,
+        "Unknown agent",
+    )
+    .await;
+    assert_eq!(
+        names(&list_page(&server, &person, AGENTS_PATH, &[]).await),
+        json!([name])
+    );
     let response = revoke(&server, name, person["access_token"].as_str()).await;
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(
@@ -140,10 +149,9 @@ async fn revoke_agent_ends_agent_sign_in() {
         names(&list_page(&server, &person, AGENTS_PATH, &[]).await),
         json!([])
     );
-    assert_problem(
+    assert_agent_not_found(
         revoke(&server, name, person["access_token"].as_str()).await,
-        StatusCode::NOT_FOUND,
-        "http.not_found",
+        name,
     )
     .await;
     server.stop().await;
@@ -192,10 +200,9 @@ async fn revoke_agent_fails_when_agent_belongs_to_another_person() {
     let alice = server.tokens().await;
     let bob = login(&server, "bob").await;
     let agent = server.authorize_agent("Alice only").await;
-    assert_problem(
+    let other_body = assert_agent_not_found(
         revoke(&server, "Alice only", bob["access_token"].as_str()).await,
-        StatusCode::NOT_FOUND,
-        "http.not_found",
+        "Alice only",
     )
     .await;
     assert_eq!(
@@ -216,6 +223,18 @@ async fn revoke_agent_fails_when_agent_belongs_to_another_person() {
     let tokens = response.json::<Value>().await.unwrap();
     assert_ne!(tokens["refresh_token"], agent.tokens["refresh_token"]);
     assert_person_required(list_response(AGENTS_PATH, &server, &tokens, &[]).await).await;
+    assert_eq!(
+        revoke(&server, "Alice only", alice["access_token"].as_str())
+            .await
+            .status(),
+        StatusCode::OK
+    );
+    let unknown_body = assert_agent_not_found(
+        revoke(&server, "Alice only", bob["access_token"].as_str()).await,
+        "Alice only",
+    )
+    .await;
+    assert_eq!(other_body, unknown_body);
     server.stop().await;
 }
 
@@ -428,6 +447,27 @@ fn names(page: &Value) -> Value {
             .map(|agent| agent["name"].clone())
             .collect::<Vec<_>>()
     )
+}
+
+async fn assert_agent_not_found(response: Response, name: &str) -> Value {
+    let body = assert_problem(response, StatusCode::NOT_FOUND, "agent.not_found").await;
+    assert_eq!(
+        body,
+        json!({
+            "type": "about:blank",
+            "title": "Agent not found",
+            "status": 404,
+            "code": "agent.not_found",
+            "errors": [{
+                "field": "name",
+                "code": "not_found",
+                "message": format!(
+                    "No agent named '{name}'. Run `lorebay agent list` to see your agents."
+                )
+            }]
+        })
+    );
+    body
 }
 
 async fn assert_person_required(response: Response) {

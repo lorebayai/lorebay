@@ -31,7 +31,15 @@ impl From<AgentError> for ApiError {
         match error {
             AgentError::Caller(error) => error.into(),
             AgentError::InvalidCursor => invalid_query("cursor"),
-            AgentError::NotFound => Self::NotFound,
+            AgentError::NotFound(name) => Self::AgentNotFound(vec![
+                FieldError::builder()
+                    .field("name")
+                    .code("not_found")
+                    .message(format!(
+                        "No agent named '{name}'. Run `lorebay agent list` to see your agents."
+                    ))
+                    .build(),
+            ]),
             error @ AgentError::Database(_) => {
                 tracing::error!(%error, "agent operation failed");
                 Self::Internal

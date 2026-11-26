@@ -74,9 +74,17 @@ async fn agent_revoke_removes_agent_from_list() {
 async fn agent_revoke_fails_with_server_error_when_agent_is_unknown() {
     let server = Server::start().await;
     server.login().await;
+    server.agent("Keep me").await;
     for mode in ["human", "json"] {
         let output = server
-            .run(&["agent", "revoke", "Unknown", "--yes", "--output", mode])
+            .run(&[
+                "agent",
+                "revoke",
+                "Build agent (old)",
+                "--yes",
+                "--output",
+                mode,
+            ])
             .await;
         assert_eq!(output.status.code(), Some(1));
         assert!(output.stdout.is_empty());
@@ -85,13 +93,28 @@ async fn agent_revoke_fails_with_server_error_when_agent_is_unknown() {
             let error: Value = serde_json::from_slice(&output.stderr).unwrap();
             assert_eq!(
                 error,
-                json!({"type": "about:blank", "title": "Not Found", "status": 404,
-                "code": "http.not_found", "errors": []})
+                json!({
+                    "type": "about:blank",
+                    "title": "Agent not found",
+                    "status": 404,
+                    "code": "agent.not_found",
+                    "errors": [{
+                        "field": "name",
+                        "code": "not_found",
+                        "message": "No agent named 'Build agent (old)'. Run `lorebay agent list` to see your agents."
+                    }]
+                })
             );
         } else {
-            assert_eq!(output.stderr, b"Not Found\n");
+            assert_eq!(
+                output.stderr,
+                b"Agent not found: No agent named 'Build agent (old)'. Run `lorebay agent list` to see your agents.\n"
+            );
         }
     }
+    let list = server.run(&["agent", "list", "--output", "json"]).await;
+    assert_success(&list);
+    assert_eq!(body(&list)["data"][0]["name"], "Keep me");
 }
 
 #[tokio::test]

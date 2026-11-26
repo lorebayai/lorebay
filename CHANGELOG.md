@@ -4,6 +4,16 @@ Lorebay's releases: the `lorebayd` server, the `lorebay` CLI and the agent
 skill, tagged `v<version>`. The library's changes are in
 [lib/CHANGELOG.md](lib/CHANGELOG.md).
 
+## Unreleased
+
+### Fixed
+
+- Revoking an unknown agent (`DELETE /api/v1/agents/{name}` and
+  `lorebay agent revoke <name>`) returns 404 `agent.not_found` with a `name`
+  field error naming the agent and pointing to `lorebay agent list`, instead
+  of `http.not_found`. Another person's agent keeps the same answer as an
+  unknown name, and unknown paths keep `http.not_found`.
+
 ## 0.1.4
 
 ### Changed

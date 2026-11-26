@@ -116,6 +116,11 @@ POST /api/v1/spaces/{space}/requests/{key}/approve
 
 - **Listing users** exists for adding space members. Everyone signed in may
   call it and sees every username.
+- **Revoking an absent agent returns `agent.not_found` with HTTP 404.**
+  `DELETE /api/v1/agents/{name}` returns `agent.not_found` with a `name`
+  field error (`not_found`) naming `{name}` and pointing to
+  `lorebay agent list` whenever the caller has no agent under that name,
+  including another person's agent. Unknown paths keep `http.not_found`.
 - **Revising a request** uses
   `PATCH /api/v1/spaces/{space}/requests/{key}` with optional `name`, `summary`
   and `content`; `{}` refreshes its snapshot. The response includes
