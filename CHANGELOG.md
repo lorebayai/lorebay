@@ -4,6 +4,39 @@ Lorebay's releases: the `lorebayd` server, the `lorebay` CLI and the agent
 skill, tagged `v<version>`. The library's changes are in
 [lib/CHANGELOG.md](lib/CHANGELOG.md).
 
+## 0.1.4
+
+### Changed
+
+- The CLI's human output prints times as RFC 3339 in UTC, and `task show`
+  prints one row per file with its key, name, size, summary, agent name and
+  times. Scripts parsing human output see new time and file formats;
+  `--output json` is unchanged. `checkpoint delete` accepts the printed
+  time as well as Unix milliseconds.
+- CLI usage errors and command-group help span lines, as `--help` does.
+  Server-supplied text still has control characters escaped; exit codes
+  and JSON failures are unchanged.
+- The Web API request submit routes refuse `null` for `target_name` and
+  `target_key`, which were previously accepted as absent. MCP already
+  refused these values.
+
+### Fixed
+
+- New `uploads/` and `agent_files/` directories are private and writable
+  by the server user under any umask, with mode `0700`. Existing
+  directories keep their modes; stored file content remains `0600`.
+- Request body errors name the missing, wrongly typed, invalid or unknown
+  field in `request.invalid_body`, including on the request submit routes.
+  MCP reports every offending argument; the Web API reports the first
+  field deserialization identifies. Non-object or unparseable bodies keep
+  one `body` entry; messages do not repeat submitted values.
+- Compose checks nginx's configuration and HTTPS readiness through to
+  `lorebayd`, so `up --wait` waits for both services and `ps` reports both
+  health states.
+- Compose's nginx access log omits its health check's loopback
+  `GET /readyz` requests; other requests are logged as before. Native
+  installations' logging is unchanged.
+
 ## 0.1.3
 
 ### Breaking
