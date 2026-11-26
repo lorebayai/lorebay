@@ -32,7 +32,7 @@ async fn revise_request_keeps_key_and_records_person_and_each_agent() {
     assert_eq!(second["revised_by"], "alice");
     assert_eq!(second["reviser_agent_name"], Value::Null);
     assert!(second["revised_at"].as_i64().unwrap() > 0);
-    let mut third = call(
+    let third = call(
         &server,
         &peer,
         "revise_request",
@@ -46,11 +46,10 @@ async fn revise_request_keeps_key_and_records_person_and_each_agent() {
     assert_eq!(third["requester_agent_name"], "Submitting agent");
     assert_eq!(third["reviser_agent_name"], "Revising agent");
     assert_eq!(third["new_summary"], "Person revision");
-    assert_eq!(third["was_outdated"], false);
-    third.as_object_mut().unwrap().remove("was_outdated");
-    assert_eq!(read(&server, &person, "RQ-1").await, third);
+    let web_record = read(&server, &person, "RQ-1").await;
+    assert_mcp_revision_record(&web_record, &third, false);
     assert_list_attribution(&server, &peer, &third).await;
-    refuse_other_decisions(&server, &person, &third).await;
+    refuse_other_decisions(&server, &person, &web_record).await;
     let approved = approve_revision(&server, &person, "RQ-1", 3).await;
     assert_eq!(approved["status"], "approved");
     assert_eq!(
@@ -232,7 +231,7 @@ async fn revise_request_reports_taken_create_name_through_mcp() {
     .await;
     assert_eq!(unchanged["was_outdated"], true);
     assert_eq!(unchanged["outdated"], true);
-    let mut renamed = call(
+    let renamed = call(
         &server,
         &agent,
         "revise_request",
@@ -241,12 +240,9 @@ async fn revise_request_reports_taken_create_name_through_mcp() {
         }),
     )
     .await;
-    assert_eq!(
-        renamed.as_object_mut().unwrap().remove("was_outdated"),
-        Some(json!(true))
-    );
     assert_eq!(renamed["outdated"], false);
-    assert_eq!(read(&server, &person, "RQ-1").await, renamed);
+    let web_record = read(&server, &person, "RQ-1").await;
+    assert_mcp_revision_record(&web_record, &renamed, true);
     assert_eq!(entry(&server, &person, "KN-1").await, original);
     approve_revision(&server, &person, "RQ-1", 3).await;
     assert_eq!(entry(&server, &person, "KN-2").await["name"], "Available");
@@ -377,6 +373,14 @@ async fn refuse_missing_versions(server: &Server, person: &Value, path: &str) {
         )
         .await;
     }
+}
+
+fn assert_mcp_revision_record(web_record: &Value, mcp_record: &Value, was_outdated: bool) {
+    let mut expected = web_record.clone();
+    expected["space_key"] = json!("SPACE-1");
+    expected["space_name"] = json!("Team");
+    expected["was_outdated"] = json!(was_outdated);
+    assert_eq!(&expected, mcp_record);
 }
 
 async fn assert_list_attribution(server: &Server, peer: &Value, third: &Value) {

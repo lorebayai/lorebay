@@ -5,6 +5,7 @@ cd "$(dirname -- "${BASH_SOURCE[0]}")/.."
 
 python3 - <<'PY'
 import json
+from html.parser import HTMLParser
 from os.path import relpath
 from pathlib import Path
 import re
@@ -64,6 +65,17 @@ def check_link(source, destination):
     check_path(source, target, "link", source.suffix == ".md")
 
 
+class HtmlLinks(HTMLParser):
+    def __init__(self, source):
+        super().__init__()
+        self.source = source
+
+    def handle_starttag(self, _tag, attrs):
+        for name, value in attrs:
+            if name in ("href", "src", "xlink:href") and value is not None:
+                check_link(self.source, value)
+
+
 files = subprocess.check_output(
     ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "lib/"],
     text=True,
@@ -85,9 +97,12 @@ for name in sorted(set(filter(None, files))):
         content = source.read_text()
     except UnicodeDecodeError:
         continue
-    for pattern in link_patterns:
-        for match in re.finditer(pattern, content, re.MULTILINE):
-            check_link(source, match[1])
+    if source.suffix.lower() in (".htm", ".html"):
+        HtmlLinks(source).feed(content)
+    else:
+        for pattern in link_patterns:
+            for match in re.finditer(pattern, content, re.MULTILINE):
+                check_link(source, match[1])
     if source.name == "AGENTS.md":
         for match in re.finditer(r'^\s*(?:-\s+)?@([^\s]+)', content, re.MULTILINE):
             check_path(source, source.parent / match[1], "import", True)

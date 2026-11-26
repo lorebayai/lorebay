@@ -6,6 +6,11 @@ skill, tagged `v<version>`. The library's changes are in
 
 ## Unreleased
 
+### Added
+
+- `lorebayd` serves read-only Knowledge-change request cards to chat apps
+  that support MCP Apps. Pending cards label the proposed entry action.
+
 ### Fixed
 
 - Revoking an unknown agent (`DELETE /api/v1/agents/{name}` and

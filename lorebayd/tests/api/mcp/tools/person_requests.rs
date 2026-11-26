@@ -37,6 +37,8 @@ async fn call_create_person_request_returns_task_title_and_pending_person_reques
         let key = format!("RQ-{}", index + 1);
         let mut read = person_requests::read(&server, &person, &key).await;
         read["task_title"] = json!("Improve guide");
+        read["space_key"] = json!(SPACE);
+        read["space_name"] = json!("Team");
         assert_eq!(result, read);
     }
     assert_eq!(
@@ -216,20 +218,25 @@ async fn call_get_person_request_returns_rejection_reason() {
     let arguments = json!({"space":SPACE, "key":"RQ-1"});
     let pending = call(&server, &agent, "get_request", arguments.clone()).await;
     assert_eq!(pending["outdated"], false);
+    assert_eq!(pending["space_key"], SPACE);
+    assert_eq!(pending["space_name"], "Team");
+    assert_eq!(pending["target"], json!({"key":"KN-1","name":"Guide"}));
+    assert!(pending["created_at"].as_i64().unwrap() > 0);
     person_requests::change_entry(&server, &person, "KN-1", json!({"content":"Direct change"}))
         .await;
     let changed = call(&server, &agent, "get_request", arguments.clone()).await;
     assert_eq!(changed["outdated"], true);
     person_requests::reject(&server, &person, "RQ-1").await;
     let rejected = call(&server, &agent, "get_request", arguments).await;
-    assert_eq!(
-        rejected,
-        person_requests::read(&server, &person, "RQ-1").await
-    );
+    let mut read = person_requests::read(&server, &person, "RQ-1").await;
+    read["space_key"] = json!(SPACE);
+    read["space_name"] = json!("Team");
+    assert_eq!(rejected, read);
     assert_eq!(rejected["new_content"], "Proposed content");
     assert_eq!(rejected["status"], "rejected");
     assert_eq!(rejected["reject_reason"], "Superseded");
     assert_eq!(rejected["decided_by"], "alice");
+    assert!(rejected["decided_at"].as_i64().unwrap() > 0);
     assert!(rejected.get("outdated").is_none());
     assert_eq!(
         call_error(

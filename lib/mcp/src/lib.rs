@@ -9,9 +9,9 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
 use rmcp::model::{
-    CallToolRequestParams, CallToolResponse, CallToolResult, CustomRequest, CustomResult,
-    ErrorCode, Implementation, ListToolsResult, PaginatedRequestParams, ProtocolVersion,
-    ServerCapabilities, ServerConfig,
+    CallToolRequestParams, CallToolResponse, CustomRequest, CustomResult, ErrorCode,
+    Implementation, ListResourcesResult, ListToolsResult, PaginatedRequestParams, ProtocolVersion,
+    ReadResourceRequestParams, ReadResourceResponse, ServerCapabilities, ServerConfig,
 };
 use rmcp::service::RequestContext;
 use rmcp::transport::streamable_http_server::session::never::NeverSessionManager;
@@ -31,6 +31,11 @@ use catalog::catalog;
 use error::ToolError;
 
 pub fn router(state: LibraryState) -> Result<Router> {
+    let display_name = state.settings().server_name.clone();
+    router_with_display_name(state, &display_name)
+}
+
+pub fn router_with_display_name(state: LibraryState, display_name: &str) -> Result<Router> {
     let url = Url::parse(&state.settings().public_url)?;
     let origin = format!(
         "{}://{}:{}",
@@ -46,10 +51,12 @@ pub fn router(state: LibraryState) -> Result<Router> {
         .disable_allowed_hosts()
         .with_allowed_origins([origin]);
     let server_state = state.clone();
+    let request_card = Arc::<str>::from(request_card::document(display_name));
     let transport = StreamableHttpService::new(
         move || {
             Ok(McpServer {
                 state: server_state.clone(),
+                request_card: Arc::clone(&request_card),
             })
         },
         Arc::new(NeverSessionManager::default()),
@@ -81,16 +88,22 @@ const SUPPORTED_VERSIONS: &[ProtocolVersion] = &[
 #[derive(Clone, Debug)]
 struct McpServer {
     state: LibraryState,
+    request_card: Arc<str>,
 }
 
 impl ServerHandler for McpServer {
     fn get_info(&self) -> ServerConfig {
-        ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
-            .with_protocol_version(ProtocolVersion::V_2026_07_28)
-            .with_server_info(Implementation::new(
-                self.state.settings().server_name.clone(),
-                self.state.settings().server_version.clone(),
-            ))
+        ServerConfig::new(
+            ServerCapabilities::builder()
+                .enable_resources()
+                .enable_tools()
+                .build(),
+        )
+        .with_protocol_version(ProtocolVersion::V_2026_07_28)
+        .with_server_info(Implementation::new(
+            self.state.settings().server_name.clone(),
+            self.state.settings().server_version.clone(),
+        ))
     }
 
     fn supported_protocol_versions(&self) -> Cow<'static, [ProtocolVersion]> {
@@ -105,6 +118,22 @@ impl ServerHandler for McpServer {
         Ok(ListToolsResult::with_all_items(
             catalog().iter().map(|(_, tool)| tool.clone()).collect(),
         ))
+    }
+
+    async fn list_resources(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<ListResourcesResult, ErrorData> {
+        Ok(request_card::list())
+    }
+
+    async fn read_resource(
+        &self,
+        request: ReadResourceRequestParams,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<ReadResourceResponse, ErrorData> {
+        request_card::read(&request.uri, &self.request_card).map(Into::into)
     }
 
     async fn call_tool(
@@ -134,7 +163,7 @@ impl ServerHandler for McpServer {
             Err(error) => return Ok(error.into_result().into()),
         };
         let result = match tools::call(&self.state, &caller, *name, arguments).await {
-            Ok(value) => CallToolResult::structured(value),
+            Ok(result) => result,
             Err(error) => error.into_result(),
         };
         Ok(result.into())
@@ -222,6 +251,7 @@ fn challenge(state: &LibraryState) -> Response {
 mod arguments;
 mod catalog;
 mod error;
+mod request_card;
 mod tools;
 
 #[derive(Clone, Debug, Serialize, TypedBuilder)]

@@ -365,7 +365,7 @@ async fn finish_workers(workers: &mut JoinSet<()>) {
 
 fn router(state: ServerState) -> Result<Router> {
     let oauth = oauth::router(state.oauth.clone());
-    let mcp = lorebay_lib_mcp::router(state.library.clone())?;
+    let mcp = lorebay_lib_mcp::router_with_display_name(state.library.clone(), "Lorebay")?;
     Ok(Router::new()
         .route(HEALTH_PATH, get(health))
         .route(READINESS_PATH, get(readiness))
