@@ -4,7 +4,7 @@ use std::process::ExitCode;
 use clap::error::ErrorKind;
 use clap::{CommandFactory, Parser};
 
-use crate::constants::{CLI_USAGE, JSON_OUTPUT};
+use crate::constants::JSON_OUTPUT;
 
 use crate::args::{Cli, OutputMode};
 use crate::error::{Failure, Result};
@@ -18,6 +18,7 @@ mod error;
 mod http;
 mod login;
 mod output;
+mod time;
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -42,7 +43,7 @@ async fn main() -> ExitCode {
             return finish(fallback, output::help(&error.to_string()));
         }
         Err(error) => {
-            return finish(fallback, Err(Failure::local(CLI_USAGE, error.to_string())));
+            return finish(fallback, Err(Failure::Usage(error.to_string())));
         }
     };
     let result = match cli.command {

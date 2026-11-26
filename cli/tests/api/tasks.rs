@@ -1,9 +1,10 @@
 use serde_json::json;
 
 use crate::helpers::{
-    SECOND_USERNAME, Server, append_checkpoint, assert_success, assert_task_error, assert_usage,
-    assert_waiting_task_listed, body, create, create_task, read_task, take_over_task,
-    task_after_takeover, task_context, task_id_from_show, task_pages, task_with_agent_files,
+    SECOND_USERNAME, Server, append_checkpoint, assert_planned_task_output, assert_success,
+    assert_task_error, assert_usage, assert_waiting_task_listed, body, create, create_task,
+    human_files, human_time, read_task, take_over_task, task_after_takeover, task_context,
+    task_id_from_show, task_pages, task_with_agent_files,
 };
 
 #[tokio::test]
@@ -14,6 +15,7 @@ async fn task_list_returns_tasks_in_activity_order() {
     create_task(&server, &space, &agent, "Second").await;
     create_task(&server, &space, &agent, "Third").await;
     let time = append_checkpoint(&server, &space, &first, &agent, "Newest activity").await;
+    let readable_time = human_time(&json!(time));
     for mode in ["human", "json"] {
         let (first, last, cursor) = task_pages(&server, &["task", "list", &space], mode).await;
         if mode == "json" {
@@ -29,7 +31,7 @@ async fn task_list_returns_tasks_in_activity_order() {
         } else {
             let text = String::from_utf8(first.stdout).unwrap();
             assert_eq!(text.lines().count(), 3);
-            assert!(text.contains(&format!("TK-1\t**First**\\nLine\\tTab\\u{{1b}}[0m\\u{{202e}}\tworking\t{}\tTask agent\tTask agent\t\t\t\t{time}\n", server.username)));
+            assert!(text.contains(&format!("TK-1\t**First**\\nLine\\tTab\\u{{1b}}[0m\\u{{202e}}\tworking\t{}\tTask agent\tTask agent\t\t\t\t{readable_time}\n", server.username)));
             assert!(!text.contains("Second"));
             assert!(String::from_utf8_lossy(&last.stdout).contains("TK-2\tSecond\t"));
         }
@@ -60,13 +62,14 @@ async fn task_show_prints_result_task_id_and_agent_files() {
     assert_success(&human);
     assert!(human.stderr.is_empty());
     let id = expected["task_id"].as_str().unwrap();
-    let started = expected["started_at"].as_i64().unwrap();
-    let last_activity = expected["last_activity_at"].as_i64().unwrap();
+    let started = human_time(&expected["started_at"]);
+    let last_activity = human_time(&expected["last_activity_at"]);
     let agent_files = &expected["files"];
     assert_eq!(agent_files[0]["agent_name"], "Task agent");
     assert_eq!(agent_files[1]["agent_name"], "Task agent");
     assert_eq!(agent_files[2]["agent_name"], "Continuing agent");
-    let changed_at = expected["state_changed_at"].as_i64().unwrap();
+    let changed_at = human_time(&expected["state_changed_at"]);
+    let agent_files = human_files(agent_files);
     assert_eq!(
         String::from_utf8(human.stdout).unwrap(),
         format!(
@@ -117,7 +120,7 @@ async fn task_cancel_cancels_task_named_by_task_id() {
             assert_eq!(closed.stdout, shown.stdout);
             let text = String::from_utf8(closed.stdout).unwrap();
             assert!(text.contains("State: canceled\n"));
-            assert!(text.contains(&format!("Ended at: {ended}\n")));
+            assert!(text.contains(&format!("Ended at: {}\n", human_time(&json!(ended)))));
         }
     }
 }
@@ -183,14 +186,15 @@ async fn task_scratchpad_prints_checkpoints_in_time_order() {
                 String::from_utf8(first.stdout).unwrap(),
                 format!(
                     "Time\tAgent name\tContent\n{}\tTask agent\t**First**\n- detail\tcode\\u{{1b}}[31m\\r\\u{{7}}\\u{{202e}}\n{}\tContinuing agent\tSecond\n",
-                    times[0], times[1]
+                    human_time(&json!(times[0])),
+                    human_time(&json!(times[1]))
                 )
             );
             assert_eq!(
                 String::from_utf8(last.stdout).unwrap(),
                 format!(
                     "Time\tAgent name\tContent\n{}\tContinuing agent\tThird\n",
-                    times[2]
+                    human_time(&json!(times[2]))
                 )
             );
         }
@@ -279,6 +283,7 @@ async fn task_plan_lists_queue_and_cancel_requires_reason() {
         .to_owned();
     let shown = read_task(&server, &space, "TK-1").await;
     assert_eq!(shown["state"], "planned");
+    assert_planned_task_output(&server, &space, &shown).await;
     assert_eq!(shown["planner"], server.username);
     assert!(shown["holder"].is_null());
     for filters in [vec!["--state", "planned"], vec!["--claimable"]] {

@@ -4,7 +4,7 @@ use serde_json::{Value, json};
 use tokio::io::AsyncWriteExt;
 use tokio::time::timeout;
 
-use crate::helpers::{Server, WAIT, assert_success, body};
+use crate::helpers::{Server, WAIT, assert_success, body, human_time};
 
 #[tokio::test]
 async fn agent_list_returns_next_page_when_cursor_is_given() {
@@ -127,10 +127,15 @@ async fn agent_list_escapes_control_characters_in_server_text() {
     server.login().await;
     let name = "Agent\u{1b}[31m\n\t\r\u{7}";
     server.agent(name).await;
+    let saved = server.run(&["agent", "list", "--output", "json"]).await;
+    assert_success(&saved);
+    let created = body(&saved)["data"][0]["created_at"].clone();
+    assert!(created.is_i64());
     let human = server.run(&["agent", "list"]).await;
     assert_success(&human);
     let text = String::from_utf8(human.stdout).unwrap();
     assert!(text.contains("Agent\\u{1b}[31m\\n\\t\\r\\u{7}"));
+    assert!(text.contains(&human_time(&created)));
     assert_eq!(text.lines().count(), 2);
     let json = server.run(&["agent", "list", "--output", "json"]).await;
     assert_success(&json);

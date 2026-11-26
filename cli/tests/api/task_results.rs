@@ -2,8 +2,8 @@ use reqwest::Method;
 use serde_json::{Value, json};
 
 use crate::helpers::{
-    Server, assert_success, assert_task_error, body, create_task, read_task, take_over_task,
-    task_context, task_pages,
+    Server, assert_success, assert_task_error, body, create_task, human_time, read_task,
+    take_over_task, task_context, task_pages,
 };
 
 #[tokio::test]
@@ -71,14 +71,14 @@ fn assert_human_history(server: &Server, first: &[u8], last: &[u8], expected: &[
     assert!(first.starts_with("Version\tPerson\tAgent name\tCreated at\tResult\n"));
     for (index, row) in expected[..2].iter().enumerate() {
         let number = 3 - index;
-        let time = &row["created_at"];
+        let time = human_time(&row["created_at"]);
         let result = if index == 0 { "" } else { "Second" };
         assert!(first.contains(&format!(
             "{number}\t{}\tContinuing agent\t{time}\t{result}\n",
             server.username
         )));
     }
-    let time = &expected[2]["created_at"];
+    let time = human_time(&expected[2]["created_at"]);
     assert!(String::from_utf8_lossy(last).contains(&format!(
         "1\t{}\tTask agent\t{time}\tFirst\n- detail\tcode\\u{{1b}}[0m\n",
         server.username

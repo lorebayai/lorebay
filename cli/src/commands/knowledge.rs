@@ -9,7 +9,7 @@ use crate::error::Result;
 use crate::http::Http;
 use crate::output::{self, Field, Fields, Outcome};
 
-use super::{Listing, api_path, content, delete, display_value, list_page};
+use super::{Listing, api_path, content, delete, display_field, list_page};
 
 pub(super) async fn run(
     command: KnowledgeCommand,
@@ -271,7 +271,7 @@ async fn request(
     ]
     .into_iter()
     .map(|(label, field)| {
-        let value = display_value(&body[DATA][field]);
+        let value = display_field(&body[DATA], field);
         if field == "content" {
             Field::Multiline(label, value)
         } else {

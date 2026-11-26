@@ -108,7 +108,10 @@ pub(crate) fn success(mode: OutputMode, outcome: Outcome) -> Result<()> {
 
 pub(crate) fn failure(mode: OutputMode, error: &Failure) {
     let text = match mode {
-        OutputMode::Human => safe(&error.human()),
+        OutputMode::Human => match error {
+            Failure::Usage(_) => multiline(&error.human()).trim_end_matches('\n').to_owned(),
+            _ => safe(&error.human()),
+        },
         OutputMode::Json => error.body().to_string(),
     };
     let _ = writeln!(io::stderr().lock(), "{text}");

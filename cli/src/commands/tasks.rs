@@ -6,9 +6,9 @@ use crate::constants::DATA;
 use crate::credentials::Store;
 use crate::error::Result;
 use crate::http::Http;
-use crate::output::{self, Field, Fields, Outcome};
+use crate::output::{self, Field, Fields, Outcome, Render, Table};
 
-use super::{Listing, api_path, delete, display_value, list_page};
+use super::{Listing, api_path, delete, display_field, display_value, list_page};
 
 pub(super) async fn run(command: TaskCommand, store: &Store, mode: OutputMode) -> Result<Outcome> {
     match command {
@@ -242,8 +242,10 @@ fn task_output(body: Value) -> Outcome {
             ]
             .into_iter()
             .map(|(label, field)| {
-                let value = display_value(&body[DATA][field]);
-                if matches!(field, "title" | "result") {
+                let value = display_field(&body[DATA], field);
+                if field == "files" {
+                    Field::Multiline(label, task_files(&body[DATA][field]))
+                } else if matches!(field, "title" | "result") {
                     Field::Multiline(label, value.replace('\n', "\n  "))
                 } else {
                     Field::SingleLine(label, value)
@@ -253,6 +255,42 @@ fn task_output(body: Value) -> Outcome {
         )
         .build();
     Outcome::new(body, fields)
+}
+
+fn task_files(files: &Value) -> String {
+    let rows: Vec<_> = files
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|file| {
+            vec![
+                display_value(&file["key"]),
+                display_value(&file["file_name"]),
+                format!("{} bytes", display_value(&file["size"])),
+                display_value(&file["summary"]),
+                display_value(&file["agent_name"]),
+                display_field(file, "created_at"),
+                display_field(file, "completed_at"),
+            ]
+        })
+        .collect();
+    if rows.is_empty() {
+        return String::new();
+    }
+    let table = Table::builder()
+        .columns(vec![
+            "Key",
+            "Name",
+            "Size",
+            "Summary",
+            "Agent name",
+            "Created at",
+            "Completed at",
+        ])
+        .rows(rows)
+        .build()
+        .human();
+    format!("\n  {}", table.replace('\n', "\n  "))
 }
 
 async fn plan(store: &Store, space: &str, title: &str) -> Result<Outcome> {

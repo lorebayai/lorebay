@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 use url::Url;
 
 use crate::helpers::CREDENTIALS_FILE;
-use crate::helpers::{Server, SigningIn, WAIT, assert_success, body, query};
+use crate::helpers::{Server, SigningIn, WAIT, assert_success, assert_usage_lines, body, query};
 use tokio::time::timeout;
 
 #[tokio::test]
@@ -168,6 +168,10 @@ async fn help_and_usage_use_documented_exit_codes() {
     }
     for arguments in [
         vec!["login"],
+        vec!["task"],
+        vec!["request"],
+        vec!["unknown"],
+        vec!["space", "create", "--unknown"],
         vec!["agent", "missing"],
         vec!["--output=json", "invalid"],
         vec!["agent", "list", "--page-size", "-1", "--output=json"],
@@ -188,7 +192,7 @@ async fn help_and_usage_use_documented_exit_codes() {
             let error: Value = serde_json::from_slice(&output.stderr).unwrap();
             assert_eq!(error["code"], "cli.usage");
         } else {
-            assert_eq!(String::from_utf8_lossy(&output.stderr).lines().count(), 1);
+            assert_usage_lines(&server, &arguments, &output).await;
         }
     }
     assert!(!server.home().exists());
