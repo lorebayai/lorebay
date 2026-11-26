@@ -55,9 +55,16 @@ Every session has a task, even one that only answers questions, except when:
 - the MCP server is unreachable for the whole session; or
 - the person says not to record the session.
 
-In those cases, tell the person to delete a task already created with
-`lorebay task delete <space> <task-id>`, giving its space key and its task ID,
-not its key such as `TK-12`.
+When a task was already created in any of those cases:
+
+- if the person may delete it, tell them to run
+  `lorebay task delete <space> <task-id>`, giving its space key and its task ID,
+  not its key such as `TK-12`;
+- if they may no longer delete it, leave the task as it is (a viewer's agent
+  cannot change or end it) and tell them once that the rest of the session goes
+  unrecorded, they can no longer delete the task, and to ask an owner or an
+  admin of the space to delete it, naming the task by its key, with no delete
+  command.
 
 ### 3. Continue a task
 
@@ -91,7 +98,8 @@ went to the right task. When a write is refused:
   person once that the rest of this session goes unrecorded, and don't look
   for another task.
 - **Missing permission:** the task is another party's, or the person is now
-  a viewer. A viewer's agent records nothing more and tells the person once.
+  a viewer. A viewer's agent records nothing more and follows practice 2
+  (leave the task as it is and tell the person once).
 
 ### 4. Read Knowledge
 
@@ -232,7 +240,7 @@ person instead.
 
 ### 12. End the task
 
-End the task with `update_task` in three cases:
+When the session has a task (practice 2), end it with `update_task` in three cases:
 
 - the person says the work is done;
 - the work the person asked for is done and the result has no Open items; or

@@ -7,6 +7,12 @@ crates `lorebay-lib-types`, `lorebay-lib-core`, `lorebay-lib-migration` and
 
 ## Unreleased
 
+- **Breaking:** the agent practices a product's skill restates change. Practice 2
+  has the person delete an already created task only when they may, and an
+  owner or an admin of the space delete it when the person may no longer delete
+  it; until deleted, a viewer's agent cannot change or end it, so the task
+  stays as it is, and practices 3 and 12 align with that rule.
+
 - **Breaking:** `task.state_invalid` error messages name a next step that fits
   the state and caller: claim a `planned` task, reopen a `done` task for an
   own-party agent operation, report that a finished task cannot be canceled when
