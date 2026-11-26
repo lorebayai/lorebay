@@ -17,6 +17,6 @@ sed -e "s/@DOMAIN@/$DOMAIN/g" \
     -e 's|@TLS@|/etc/nginx/lorebay-tls|g' \
     -e 's/@UPSTREAM@/lorebay_backend/g' \
     -e 's/@UPLOAD_LIMIT@/5000000000/g' \
-    -e 's/@ACCESS_LOG_FORMAT@/main/g' \
+    -e 's|@ACCESS_LOG@|access_log /var/log/nginx/access.log main if=$lorebay_access_log;|g' \
     /etc/lorebay/nginx.conf.in >> /etc/nginx/conf.d/default.conf
 exec nginx -g 'daemon off;'

@@ -37,7 +37,7 @@ server {
     ssl_certificate @TLS@/live/certificate.pem;
     ssl_certificate_key @TLS@/live/key.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
-    access_log /var/log/nginx/access.log @ACCESS_LOG_FORMAT@ if=$lorebay_access_log;
+    @ACCESS_LOG@
 
     # SNI and Host must both name this deployment, even with another default site.
     if ($ssl_server_name != @DOMAIN@) { return 444; }

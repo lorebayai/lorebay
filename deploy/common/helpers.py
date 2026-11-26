@@ -146,7 +146,7 @@ def render(domain, tls=TLS, upstream="127.0.0.1:8080", upload_limit=5000000000):
         "TLS": tls,
         "UPSTREAM": upstream,
         "UPLOAD_LIMIT": upload_limit,
-        "ACCESS_LOG_FORMAT": "combined",
+        "ACCESS_LOG": "",
     }.items():
         text = text.replace(f"@{name}@", str(value))
     return text
