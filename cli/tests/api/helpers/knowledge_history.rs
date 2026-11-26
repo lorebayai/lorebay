@@ -2,7 +2,7 @@ use serde_json::{Value, json};
 
 use super::{
     SECOND_USERNAME, Server, assert_knowledge_error, assert_success, assert_usage, body,
-    run_list_hint, show_entry,
+    human_time, run_list_hint, show_entry,
 };
 
 pub async fn knowledge_json(server: &Server, arguments: &[&str]) -> Value {
@@ -64,7 +64,7 @@ pub async fn assert_history_pages(server: &Server, space: &str, entry: &str, ver
                         row["version"],
                         row["kind"].as_str().unwrap(),
                         row["applied_by"].as_str().unwrap(),
-                        row["applied_at"]
+                        human_time(&row["applied_at"])
                     ));
                 }
                 assert_eq!(String::from_utf8(output.stdout.clone()).unwrap(), text);

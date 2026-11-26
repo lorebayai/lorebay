@@ -9,6 +9,7 @@ use crate::credentials::Store;
 use crate::error::{Failure, Result};
 use crate::http::Http;
 use crate::output::{self, Outcome, Table};
+use crate::time;
 
 #[derive(Clone, Debug, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
@@ -17,7 +18,7 @@ pub(crate) struct Listing {
     pub command: String,
     pub columns: Vec<&'static str>,
     pub fields: Vec<&'static str>,
-    #[builder(default = |item, field| display_value(&item[field]))]
+    #[builder(default = display_field)]
     pub display_field: fn(&Value, &str) -> String,
     #[builder(default = Vec::new())]
     pub query: Vec<(&'static str, String)>,
@@ -93,6 +94,14 @@ pub(crate) async fn list_page(
     );
     outcome.next = next;
     Ok(outcome)
+}
+
+pub(crate) fn display_field(item: &Value, field: &str) -> String {
+    if field.ends_with("_at") || field == "time" {
+        time::display(&item[field])
+    } else {
+        display_value(&item[field])
+    }
 }
 
 pub(crate) fn display_value(value: &Value) -> String {

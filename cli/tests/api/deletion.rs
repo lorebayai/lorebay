@@ -2,8 +2,8 @@ use serde_json::json;
 
 use crate::helpers::{
     append_checkpoint, assert_cancelled, assert_deletion, assert_success, assert_task_absent,
-    assert_task_error, body, checkpoints_output, create_task, piped_yes, printed_checkpoint_time,
-    read_task, task_context, task_id_from_show,
+    assert_task_error, body, checkpoints_output, create_task, expected_time, piped_yes,
+    printed_checkpoint_time, read_task, task_context, task_id_from_show,
 };
 
 #[tokio::test]
@@ -64,7 +64,7 @@ async fn checkpoint_delete_removes_checkpoint_named_by_printed_time() {
     for (index, mode) in ["human", "json"].into_iter().enumerate() {
         let printed = checkpoints_output(&server, &space, key, mode).await;
         let time = printed_checkpoint_time(&printed, mode);
-        assert_eq!(time, checkpoints[index]["time"].to_string());
+        assert_eq!(time, expected_time(&checkpoints[index]["time"], mode));
         let wrong_key = server
             .run(&[
                 "checkpoint",

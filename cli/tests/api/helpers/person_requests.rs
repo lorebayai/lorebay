@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 
 use super::{
     SECOND_USERNAME, Server, assert_success, assert_usage, body, content_input, create_entry,
-    knowledge_json, run_list_hint,
+    human_time, knowledge_json, run_list_hint,
 };
 
 pub async fn contributor(server: &Server, space: &str) {
@@ -127,6 +127,7 @@ pub fn assert_person_request_fields(output: &Output, person_request: &Value, tar
         let value = match (field, &person_request[field]) {
             ("target", _) => target.to_owned(),
             (_, Value::Null) => String::new(),
+            (_, value) if field.ends_with("_at") => human_time(value),
             (_, Value::String(text)) => text.clone(),
             (_, value) => value.to_string(),
         };

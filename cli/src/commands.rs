@@ -13,6 +13,7 @@ use crate::error::{Failure, Result};
 use crate::http::{self, Http};
 use crate::login;
 use crate::output::{self, Outcome, Table};
+use crate::time;
 
 mod agent_files;
 mod checkpoints;
@@ -27,7 +28,7 @@ mod tasks;
 mod users;
 
 pub(super) use deletion::delete;
-pub(super) use pages::{Listing, api_path, display_value, list_page};
+pub(super) use pages::{Listing, api_path, display_field, display_value, list_page};
 
 pub(crate) async fn run(command: Command, mode: OutputMode) -> Result<Outcome> {
     let store = Store::from_environment()?;
@@ -99,7 +100,7 @@ async fn list(store: &Store, page: Page, mode: OutputMode) -> Result<Outcome> {
             vec![
                 text(&item["name"]),
                 text(&item[CLIENT_ID_FIELD]),
-                item["created_at"].to_string(),
+                time::display(&item["created_at"]),
             ]
         })
         .collect();

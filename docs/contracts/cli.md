@@ -92,7 +92,7 @@ contains spaces. Optional arguments appear in brackets. List rows follow
 | `member set-role <space> <username> --role <role>` | Change a space member's role | Updated space member |
 | `member remove <space> <username>` | Remove a space member | Removal result |
 | `task list <space> [--person <username>] [--agent <name>] [--state <state>] [--keyword <text>] [--own-open] [--claimable]` | List tasks | Task keys, titles, states, reasons, people, holders, planners and last activity times |
-| `task show <space> <task>` | Read a task | Task fields, including state, reason, who set the state and when, holder, planner and its task ID, result, result version and completed file list with each registering agent's copied name |
+| `task show <space> <task>` | Read a task | Task fields, including state, reason, who set the state and when, holder, planner and its task ID, result, result version and one line per completed file under Files, with its key, name, size in bytes, summary, registering agent's copied name, creation time and completion time |
 | `task results <space> <task>` | Read a task's result history | One page of whole result versions, newest first, with each writer's person, copied agent name and time |
 | `task scratchpad <space> <task>` | Read a task's Scratchpad | One page of checkpoints, with their times and each writing agent's copied name, in time order |
 | `task plan <space> --title <title>` | Plan a task | Planned task key, task ID and title |
@@ -147,6 +147,10 @@ contains spaces. Optional arguments appear in brackets. List rows follow
 - **File lists come from `task show`.** `file url` returns the Web
   API's URL; the person can transfer the file's content with it over HTTP as
   [Tasks](../../lib/docs/contracts/tasks.md#5-files) describes.
+- **Checkpoint deletion accepts the time printed by the Scratchpad.**
+  This includes both the readable UTC time in `human` output and Unix
+  milliseconds in `json` output. Millisecond precision identifies the
+  checkpoint in either form.
 - **`--own-open` lists only the person's own tasks that are `working` or
   `waiting`**, as `list_tasks` does for an agent's party; see [MCP
   tools](../../lib/docs/contracts/mcp-tools.md#6-wrong-task-ids).
@@ -224,12 +228,18 @@ contains spaces. Optional arguments appear in brackets. List rows follow
   text. `json` prints one object carrying the operation's `data` and
   `meta`, without a CLI-specific envelope around them. Empty success
   responses, including login and logout, use `data: null` and `meta: {}`.
+- **Human times use RFC 3339 in UTC with millisecond precision.** The
+  form is `2026-11-26T02:42:13.123Z`. An absent time leaves its field empty.
+  JSON times keep the Web API's Unix milliseconds, and a task's files remain
+  an array in JSON.
 - **Hints, prompts and failures go to standard error.** This includes
   sign-in links, the short code meant for the person, and next-page hints.
   Output mode is explicit and does not change when a stream is redirected.
-- **A failure prints one line and no success data.** In `human`, use the Web
-  API error's `title`, followed by each field error's `message`, with line
-  breaks and other control characters escaped. In `json`, print one object
+- **A failure prints no success data.** In `human`, CLI-generated argument
+  errors and help for a command group without a subcommand span lines,
+  as `--help` does. Other failures print one line: use the Web API error's
+  `title`, followed by each field error's `message`, with line breaks and
+  other control characters escaped. In `json`, print one object
   with the Web API error's fields, preserving its `code`; a login hint goes
   in an added `message` field. OAuth failures use the OAuth error code as
   `code` and its description as `message`. Local failures use `code` and

@@ -20,6 +20,8 @@ pub(crate) enum Failure {
     Local { code: &'static str, message: String },
     #[error("Server refused the operation")]
     Server { body: Value, exit: u8 },
+    #[error("{0}")]
+    Usage(String),
 }
 
 impl Failure {
@@ -59,6 +61,7 @@ impl Failure {
 
     pub fn exit_code(&self) -> u8 {
         match self {
+            Self::Usage(_) => USAGE_EXIT,
             Self::Local {
                 code: CLI_USAGE, ..
             } => USAGE_EXIT,
@@ -73,6 +76,7 @@ impl Failure {
 
     pub fn body(&self) -> Value {
         match self {
+            Self::Usage(message) => json!({(CODE): CLI_USAGE, (MESSAGE): message}),
             Self::Credentials(_) => json!({(CODE): CLI_CREDENTIALS, (MESSAGE): self.to_string()}),
             Self::Local { code, message } => json!({(CODE): code, (MESSAGE): message}),
             Self::Server { body, .. } => body.clone(),

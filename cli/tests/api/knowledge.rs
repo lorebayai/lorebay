@@ -1,6 +1,6 @@
 use std::fs;
 
-use serde_json::json;
+use serde_json::{Value, json};
 
 use crate::helpers::{
     SECOND_USERNAME, assert_cancelled, assert_content_file_limits, assert_empty_knowledge_search,
@@ -8,7 +8,7 @@ use crate::helpers::{
     assert_knowledge_prefix_pages, assert_other_content_sources, assert_rollback_content,
     assert_rollback_refusals, assert_success, assert_usage, assert_version_usage,
     assert_viewer_reads_history, assert_viewer_reads_knowledge, body, confirm_deletion,
-    content_input, create_entry, knowledge_context, knowledge_json, pages, piped_yes,
+    content_input, create_entry, human_time, knowledge_context, knowledge_json, pages, piped_yes,
     read_entry_version, rollback_second_version, show_entry,
 };
 
@@ -602,10 +602,7 @@ async fn knowledge_show_prints_old_version() {
     assert_success(&deletion);
     let text = String::from_utf8(deletion.stdout).unwrap();
     assert!(text.contains("Kind: deletion\nSummary: \nContent: \n"));
-    assert!(text.contains(&format!(
-        "Applied by: {}\nApplied at: {}\n",
-        server.username, deleted["applied_at"]
-    )));
+    assert_deletion_author(&text, &server.username, &deleted);
     assert_history_pages(&server, &space, name, &[original, changed, deleted]).await;
     assert_history_errors(&server, &space).await;
 }
@@ -635,7 +632,7 @@ async fn knowledge_deleted_lists_deleted_entry() {
             item["name"].as_str().unwrap(),
             item["key"].as_str().unwrap(),
             server.username,
-            item["deleted_at"]
+            human_time(&item["deleted_at"])
         )));
         let entry = read_entry_version(&server, &space, item["key"].as_str().unwrap(), 1).await;
         assert_eq!(entry["content"], "Old content");
@@ -796,4 +793,9 @@ async fn knowledge_reads_preserve_server_errors() {
         show_entry(&server, &space, "KN-1").await["content"],
         "Keep content"
     );
+}
+
+fn assert_deletion_author(text: &str, username: &str, deleted: &Value) {
+    let time = human_time(&deleted["applied_at"]);
+    assert!(text.contains(&format!("Applied by: {username}\nApplied at: {time}\n")));
 }

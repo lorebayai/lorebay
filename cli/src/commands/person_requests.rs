@@ -9,7 +9,7 @@ use crate::http::Http;
 use crate::output::{self, Field, Fields, Outcome};
 
 use super::knowledge::is_entry_key;
-use super::{Listing, api_path, content, display_value, list_page};
+use super::{Listing, api_path, content, display_field, display_value, list_page};
 
 pub(super) async fn run(
     command: PersonRequestCommand,
@@ -196,7 +196,7 @@ async fn list(
 
 fn person_request_field(person_request: &Value, field: &str) -> String {
     if field != "target" {
-        return display_value(&person_request[field]);
+        return display_field(person_request, field);
     }
     let target = &person_request["target"];
     if target.is_object() {
