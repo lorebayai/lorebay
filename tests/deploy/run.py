@@ -728,6 +728,9 @@ class Suite:
         installed = self.execute(name, *self.install_command())
         self.say(installed.stdout.strip())
         self.ready()
+        access = self.execute(name, "cat", "/var/log/nginx/access.log").stdout
+        require('"GET /readyz HTTP/1.1" 200' in access, "Native client request is missing from the access log")
+        self.say("PASS native_logs_client_requests " + base)
         require(
             "nothing changed" in self.execute(name, *self.install_command()).stdout,
             "Identical install was not idempotent",
