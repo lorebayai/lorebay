@@ -125,8 +125,8 @@ A call that carries a task ID is checked in this order:
    a task another party holds is refused with `task.held`.
 6. Reject the call if the person is a space viewer.
 7. Reject a checkpoint or a file registration unless the task is `working` or
-   `waiting`, with a hint to claim or reopen it, or to create a task when the
-   state is final.
+   `waiting`, with a hint to claim a `planned` task, reopen a `done` one, or
+   create a new task when the state is final.
 
 A call that carries a space is checked in this order:
 

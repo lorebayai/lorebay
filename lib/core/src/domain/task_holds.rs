@@ -4,7 +4,7 @@ use crate::entity::space_task;
 use crate::repository::TaskRepository;
 use crate::{Caller, Write, WriteOperation};
 
-use super::task_access::{TaskAccessError, TaskAction, check_task};
+use super::task_access::{TaskAction, check_task, claim_state_error};
 use super::task_state::record_state_change;
 use super::tasks::{TaskError, TaskRead, TaskTarget, full_task};
 use super::time::now_millis;
@@ -33,7 +33,7 @@ pub async fn claim_task(
             task.started_at = task.started_at.or(Some(time));
         }
         "working" | "waiting" => {}
-        _ => return Err(TaskAccessError::StateInvalid(task.state).into()),
+        _ => return Err(claim_state_error(&task, caller).into()),
     }
     task.holder = Some(agent.clone());
     task.agent_name = Some(agent);

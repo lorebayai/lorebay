@@ -198,7 +198,8 @@ impl From<TaskAccessError> for ApiError {
             TaskAccessError::Held(_)
             | TaskAccessError::HeldByAnotherParty(_)
             | TaskAccessError::NotHolder(_)
-            | TaskAccessError::StateInvalid(_) => StatusCode::CONFLICT,
+            | TaskAccessError::StateInvalid(_)
+            | TaskAccessError::StateOperationInvalid { .. } => StatusCode::CONFLICT,
             TaskAccessError::NotFound => StatusCode::NOT_FOUND,
             TaskAccessError::PermissionRequired => StatusCode::FORBIDDEN,
             TaskAccessError::Space(error) => return error.into(),

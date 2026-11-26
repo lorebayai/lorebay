@@ -165,7 +165,7 @@ async fn update_and_reopen(
     assert_eq!(error["code"], "task.state_invalid");
     assert_eq!(
         error["message"],
-        "Operation is not allowed while the task is done; claim or reopen it first"
+        "Operation is not allowed while the task is done; reopen it first"
     );
     let reopened = call_version(
         server,

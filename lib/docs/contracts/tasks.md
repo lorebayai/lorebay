@@ -186,7 +186,9 @@ The Scratchpad records how the agent did the work. It holds checkpoints only.
 - **One tool for every harness.** The library offers one MCP tool for writing
   checkpoints. The tool serves every harness.
 - **Only a `working` or `waiting` task accepts checkpoints.** Other states
-  return `task.state_invalid`, with a hint to claim or reopen first.
+  return `task.state_invalid`, naming the current state with a hint to claim
+  a `planned` task, reopen a `done` one, or create a new task after `failed`
+  or `canceled`.
 
 ## 5. Files
 

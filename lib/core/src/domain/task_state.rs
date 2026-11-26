@@ -5,7 +5,7 @@ use thiserror::Error;
 use crate::Caller;
 use crate::entity::space_task::Model;
 
-use super::task_access::TaskAccessError;
+use super::task_access::{TaskAccessError, invalid_state_hint};
 use super::tasks::TaskError;
 use super::time::now_millis;
 
@@ -85,7 +85,14 @@ pub(super) fn change_state(
             | (TaskState::Done, TaskState::Working)
     );
     if !allowed {
-        return Err(TaskAccessError::StateInvalid(task.state.clone()).into());
+        let hint = match (current, next) {
+            (TaskState::Done, TaskState::Canceled) => "a finished task cannot be canceled",
+            (TaskState::Working, TaskState::Planned) => "release it instead",
+            (TaskState::Waiting, TaskState::Planned) => "resume it first",
+            _ if current == next => "omit state_reason to keep the current state",
+            _ => invalid_state_hint(&task.state),
+        };
+        return Err(TaskAccessError::invalid_state(task.state.clone(), hint).into());
     }
     validate_reason(next, reason.as_deref())?;
     let time = now_millis()?;
