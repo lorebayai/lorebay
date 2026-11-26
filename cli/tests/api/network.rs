@@ -375,6 +375,37 @@ async fn server_failure_escapes_control_characters_in_human_output() {
     }
 }
 
+#[tokio::test]
+async fn agent_list_prints_rfc3339_times_at_calendar_boundaries() {
+    let proxy = Proxy::start().await;
+    proxy.login().await;
+    for mode in ["human", "json"] {
+        proxy.fault.store(CALENDAR_TIMES, Ordering::SeqCst);
+        let output = proxy.server.run(&["agent", "list", "--output", mode]).await;
+        assert_success(&output);
+        assert!(output.stderr.is_empty());
+        if mode == "human" {
+            let mut expected = "Name\tClient ID\tCreated at\n".to_owned();
+            for (_, time) in CALENDAR_CASES {
+                expected.push_str(&format!("Calendar agent\tcalendar-client\t{time}\n"));
+            }
+            assert_eq!(String::from_utf8_lossy(&output.stdout), expected);
+        } else {
+            assert_eq!(body(&output), calendar_body());
+        }
+    }
+}
+
+const CALENDAR_CASES: &[(u64, &str)] = &[
+    (0, "1970-01-01T00:00:00.000Z"),
+    (946_684_799_999, "1999-12-31T23:59:59.999Z"),
+    (951_782_400_001, "2000-02-29T00:00:00.001Z"),
+    (951_868_800_000, "2000-03-01T00:00:00.000Z"),
+    (4_107_542_399_999, "2100-02-28T23:59:59.999Z"),
+    (4_107_542_400_000, "2100-03-01T00:00:00.000Z"),
+    (13_574_608_496_789, "2400-02-29T12:34:56.789Z"),
+    (253_402_300_799_999, "9999-12-31T23:59:59.999Z"),
+];
 const CHANGE_METADATA: u8 = 1;
 const LOSE_REFRESH: u8 = 2;
 const REDIRECT_CALL: u8 = 3;
@@ -391,6 +422,7 @@ const DEVICE_OUTAGE_ONCE: u8 = 13;
 const DEVICE_RATE_LIMIT_DATE: u8 = 14;
 const DEVICE_RATE_LIMIT_PAST_DATE: u8 = 15;
 const CONTROL_CHARACTERS: u8 = 16;
+const CALENDAR_TIMES: u8 = 17;
 const HTTP_DEADLINE: Duration = Duration::from_secs(8);
 
 struct Proxy {
@@ -677,6 +709,10 @@ fn server_error_response(fault: &AtomicU8) -> Option<Vec<u8>> {
 }
 
 fn change_response(state: &ProxyState, headers: &str, response: Vec<u8>) -> io::Result<Vec<u8>> {
+    if headers.starts_with("GET /api/v1/agents") && take_fault(&state.fault, CALENDAR_TIMES) {
+        let body = calendar_body().to_string();
+        return Ok(format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).into_bytes());
+    }
     if headers.starts_with("GET /api/v1/agents") && take_fault(&state.fault, CONTROL_CHARACTERS) {
         let body = control_character_error().to_string();
         return Ok(format!("HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).into_bytes());
@@ -704,6 +740,13 @@ fn change_response(state: &ProxyState, headers: &str, response: Vec<u8>) -> io::
     metadata[field] = json!("http://127.0.0.1:1/oauth/device");
     let body = metadata.to_string();
     Ok(format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).into_bytes())
+}
+
+fn calendar_body() -> Value {
+    let rows: Vec<_> = CALENDAR_CASES.iter().map(|(time, _)| {
+        json!({"name":"Calendar agent", "client_id":"calendar-client", "created_at":time})
+    }).collect();
+    json!({"data":rows, "meta":{}})
 }
 
 fn control_character_error() -> Value {

@@ -228,10 +228,10 @@ contains spaces. Optional arguments appear in brackets. List rows follow
   text. `json` prints one object carrying the operation's `data` and
   `meta`, without a CLI-specific envelope around them. Empty success
   responses, including login and logout, use `data: null` and `meta: {}`.
-- **Human times use UTC with millisecond precision.** The form is
-  `Thu, 26 Nov 2026 02:42:13.123 GMT`, with English weekday and month
-  abbreviations. An absent time leaves its field empty. JSON times keep the
-  Web API's Unix milliseconds, and a task's files remain an array in JSON.
+- **Human times use RFC 3339 in UTC with millisecond precision.** The
+  form is `2026-11-26T02:42:13.123Z`. An absent time leaves its field empty.
+  JSON times keep the Web API's Unix milliseconds, and a task's files remain
+  an array in JSON.
 - **Hints, prompts and failures go to standard error.** This includes
   sign-in links, the short code meant for the person, and next-page hints.
   Output mode is explicit and does not change when a stream is redirected.

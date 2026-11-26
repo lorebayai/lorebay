@@ -9,7 +9,21 @@ use super::{Server, assert_success};
 pub fn human_time(value: &Value) -> String {
     let milliseconds = value.as_u64().unwrap();
     let date = fmt_http_date(UNIX_EPOCH + Duration::from_millis(milliseconds));
-    date.replace(" GMT", &format!(".{:03} GMT", milliseconds % 1000))
+    let parts: Vec<_> = date.split_ascii_whitespace().collect();
+    let month = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    ]
+    .iter()
+    .position(|month| *month == parts[2])
+    .unwrap()
+        + 1;
+    format!(
+        "{}-{month:02}-{}T{}.{:03}Z",
+        parts[3],
+        parts[1],
+        parts[4],
+        milliseconds % 1000
+    )
 }
 
 pub fn human_files(files: &Value) -> String {
