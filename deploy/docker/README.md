@@ -62,8 +62,8 @@ Per-caller limits require Docker to preserve client source addresses.
 `up --wait` waits for both services to be healthy; `ps` reports both health states.
 Both services restart after crashes or host reboots unless explicitly stopped.
 nginx follows the backend's DNS address when only the application is recreated.
-Use `docker compose` with the same env/file flags for `logs`, `restart` and `down`;
-`down` retains the supplied data. Only nginx publishes HTTPS. To replace certificates:
+Use the same env/file flags for `docker compose logs`, `restart` and `down`; `down` retains data.
+Only nginx publishes HTTPS; its access logs omit loopback `GET /readyz`. To replace certificates:
 
 ```bash
 python3 -B deploy/common/replace-certificate.py --domain "$DOMAIN" \

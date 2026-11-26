@@ -3,6 +3,10 @@ map $binary_remote_addr $lorebay_caller {
     default $binary_remote_addr;
     "~^(?s)(?<lorebay_ipv6_prefix>.{8}).{8}$" $lorebay_ipv6_prefix;
 }
+map "$remote_addr:$request_method:$request_uri" $lorebay_access_log {
+    default 1;
+    ~^(127[.][0-9]+[.][0-9]+[.][0-9]+|::1):GET:/readyz$ 0;
+}
 map "$request_method:$uri" $lorebay_login {
     default "";
     "POST:/api/v1/sign-in" $lorebay_caller;
@@ -33,6 +37,7 @@ server {
     ssl_certificate @TLS@/live/certificate.pem;
     ssl_certificate_key @TLS@/live/key.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
+    @ACCESS_LOG@
 
     # SNI and Host must both name this deployment, even with another default site.
     if ($ssl_server_name != @DOMAIN@) { return 444; }
