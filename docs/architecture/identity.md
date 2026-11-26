@@ -156,7 +156,9 @@ It does not cover:
   client and a name. The name defaults to the client name the client
   registered, which the client reports about itself and is used only for
   display. When consenting, the person may change it, such as to
-  `Claude Code (home)`.
+  `Claude Code (home)`. The name is at most 100 characters, whether kept from
+  the client name or typed at consent, because every record the agent writes
+  shows it.
 - **A person's agents have distinct names.** When the name chosen at consent
   already belongs to another of the person's agents, the person picks
   another name or replaces the old sign-in. Replacing deletes the old

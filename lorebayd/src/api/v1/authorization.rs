@@ -92,6 +92,13 @@ impl From<AuthorizationError> for ApiError {
                     .message("You already have an agent with this name.")
                     .build(),
             ]),
+            AuthorizationError::AgentNameTooLong => Self::InvalidBody(vec![
+                FieldError::builder()
+                    .field("agent_name")
+                    .code("too_long")
+                    .message(error.to_string())
+                    .build(),
+            ]),
             AuthorizationError::InvalidParameter(field) => invalid_parameter(field),
             error => {
                 tracing::error!(%error, "authorization operation failed");

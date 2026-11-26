@@ -147,6 +147,48 @@ async fn exchange_code_fails_when_agent_name_was_taken_after_consent() {
 }
 
 #[tokio::test]
+async fn exchange_code_fails_when_persisted_agent_name_is_too_long() {
+    let server = Server::start().await;
+    let person = server.tokens().await;
+    let client = server.register_client(AGENT_NAME).await;
+    let ordinary_code = server
+        .approve_code_for(
+            &client,
+            Some("Pending"),
+            person["access_token"].as_str().unwrap(),
+        )
+        .await;
+    server
+        .set_oauth_code_agent_name(&ordinary_code, &"P".repeat(101))
+        .await;
+    assert_oauth_error(
+        server.exchange_code(&client, &ordinary_code).await,
+        "invalid_grant",
+    )
+    .await;
+    assert_eq!(server.agent_names(&person).await, Vec::<String>::new());
+
+    let old = server.authorize_agent(AGENT_NAME).await;
+    let replace_client = server.register_client(AGENT_NAME).await;
+    let replace_code = replacement_code(&server, &replace_client, &person).await;
+    let legacy_name = "R".repeat(101);
+    server
+        .set_agent_sign_in_name(AGENT_NAME, &legacy_name)
+        .await;
+    server
+        .set_oauth_code_agent_name(&replace_code, &legacy_name)
+        .await;
+    assert_oauth_error(
+        server.exchange_code(&replace_client, &replace_code).await,
+        "invalid_grant",
+    )
+    .await;
+    assert_eq!(server.agent_names(&person).await, vec![legacy_name]);
+    assert_live(&server, &old.client_id, &old.tokens).await;
+    server.stop().await;
+}
+
+#[tokio::test]
 async fn exchange_code_fails_when_client_differs() {
     let server = Server::start().await;
     let client = server.register_client("Example client").await;
