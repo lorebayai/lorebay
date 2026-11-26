@@ -358,7 +358,7 @@ async fn call_create_agent_file_fails_with_reopen_hint_when_task_is_done() {
     assert_eq!(error["code"], "task.state_invalid");
     assert_eq!(
         error["message"],
-        "Operation is not allowed while the task is done; claim or reopen it first"
+        "Operation is not allowed while the task is done; reopen it first"
     );
     assert_eq!(
         upload(&server, &registered, "Pending").await.status(),

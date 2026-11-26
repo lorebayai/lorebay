@@ -28,6 +28,8 @@ pub enum TaskAccessError {
     Space(#[from] SpaceAccessError),
     #[error("Operation is not allowed while the task is {0}; {hint}", hint = invalid_state_hint(.0))]
     StateInvalid(String),
+    #[error("Operation is not allowed while the task is {state}; {hint}")]
+    StateOperationInvalid { state: String, hint: &'static str },
 }
 
 impl TaskAccessError {
@@ -36,10 +38,19 @@ impl TaskAccessError {
             Self::Database(_) | Self::Internal(_) => "server.internal",
             Self::Held(_) | Self::HeldByAnotherParty(_) => "task.held",
             Self::NotHolder(_) => "task.not_holder",
-            Self::StateInvalid(_) => "task.state_invalid",
+            Self::StateInvalid(_) | Self::StateOperationInvalid { .. } => "task.state_invalid",
             Self::NotFound => "task.not_found",
             Self::PermissionRequired => "space.permission_required",
             Self::Space(error) => error.code(),
+        }
+    }
+
+    pub(super) fn invalid_state(state: impl Into<String>, hint: &'static str) -> Self {
+        let state = state.into();
+        if hint == invalid_state_hint(&state) {
+            Self::StateInvalid(state)
+        } else {
+            Self::StateOperationInvalid { state, hint }
         }
     }
 }
@@ -141,7 +152,7 @@ fn check_party(
     }
     if action == TaskAction::Claim {
         if !matches!(task.state.as_str(), "planned" | "working" | "waiting") {
-            return Err(TaskAccessError::StateInvalid(task.state.clone()));
+            return Err(claim_state_error(task, caller));
         }
         if task.state == "planned" || task.person_id == caller.person_id() {
             return Ok(());
@@ -190,15 +201,32 @@ fn check_task_state(
     };
     if valid {
         Ok(())
+    } else if action == TaskAction::Claim {
+        Err(claim_state_error(task, caller))
+    } else if action == TaskAction::Release && task.state == "planned" {
+        Err(TaskAccessError::invalid_state(
+            task.state.clone(),
+            "only a working task can be released",
+        ))
     } else {
         Err(TaskAccessError::StateInvalid(task.state.clone()))
     }
 }
 
-fn invalid_state_hint(state: &str) -> &'static str {
-    if matches!(state, "failed" | "canceled") {
+pub(super) fn claim_state_error(task: &Model, caller: &Caller) -> TaskAccessError {
+    let hint = if task.state == "done" && task.person_id != caller.person_id() {
         "create a new task"
     } else {
-        "claim or reopen it first"
+        invalid_state_hint(&task.state)
+    };
+    TaskAccessError::invalid_state(task.state.clone(), hint)
+}
+
+pub(super) fn invalid_state_hint(state: &str) -> &'static str {
+    match state {
+        "planned" => "claim it first",
+        "done" => "reopen it first",
+        "waiting" => "resume it first",
+        _ => "create a new task",
     }
 }

@@ -124,9 +124,18 @@ A call that carries a task ID is checked in this order:
    its holder is refused with `task.not_holder`, naming the holder; a claim on
    a task another party holds is refused with `task.held`.
 6. Reject the call if the person is a space viewer.
-7. Reject a checkpoint or a file registration unless the task is `working` or
-   `waiting`, with a hint to claim or reopen it, or to create a task when the
-   state is final.
+7. Reject operations whose state precondition is not met with
+   `task.state_invalid`, naming the current state and a valid next step:
+   checkpoints and file registrations outside `working` or `waiting`, and waiting
+   on a request outside `working` (claim `planned`, reopen `done`, resume
+   `waiting` when `working` is required, or create a new task after `failed` or
+   `canceled`); claims on finished tasks (reopen `done` for the task's party, or
+   create a new task for another party or a final state); releases outside
+   `working` (only a `working` task can be released from `planned`, resume
+   `waiting`, reopen `done`, or create a new task after a final state); and
+   disallowed state changes (including refusing to cancel `done` without
+   suggesting claim or reopen, and ending rather than releasing once work is
+   recorded).
 
 A call that carries a space is checked in this order:
 

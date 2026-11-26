@@ -424,7 +424,7 @@ async fn register_agent_file_fails_with_reopen_hint_when_task_is_done() {
     .await;
     assert_eq!(
         refusal["title"],
-        "Operation is not allowed while the task is done; claim or reopen it first"
+        "Operation is not allowed while the task is done; reopen it first"
     );
     assert_eq!(read(&server, &person, "TK-1").await, ended);
     upload_ok(&server, &registered, "Before ending").await;

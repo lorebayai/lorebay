@@ -139,7 +139,7 @@ async fn add_checkpoint_fails_with_reopen_hint_when_task_is_done() {
     .await;
     assert_eq!(
         refusal["title"],
-        "Operation is not allowed while the task is done; claim or reopen it first"
+        "Operation is not allowed while the task is done; reopen it first"
     );
     assert_eq!(scratchpad(&server, &person, "TK-1").await, checkpoints);
     assert_eq!(read(&server, &person, "TK-1").await, ended);
@@ -157,6 +157,160 @@ async fn add_checkpoint_fails_with_reopen_hint_when_task_is_done() {
     assert_eq!(reopened["state"], "working");
     assert!(reopened["ended_at"].is_null());
     server.stop().await;
+}
+
+#[tokio::test]
+async fn cancel_task_fails_without_claim_or_reopen_hint_when_task_is_done() {
+    let (server, person, _) = setup().await;
+    let bob = login(&server, "bob").await;
+    let bob_agent = authorize_for(&server, &bob, "Bob agent").await;
+    space_member(&server, &person, Method::POST, "contributor").await;
+    let bob_task = create(&server, &bob_agent, SPACE, "Bob finished task").await;
+    let done = change(&server, &bob_agent, &bob_task, json!({"state":"done"})).await;
+    space_member(&server, &person, Method::DELETE, "").await;
+    let refusal = assert_problem(
+        change_request(
+            &server,
+            &person,
+            SPACE,
+            bob_task["task_id"].as_str().unwrap(),
+            json!({"state":"canceled", "state_reason":"No longer needed"}),
+        )
+        .await,
+        StatusCode::CONFLICT,
+        "task.state_invalid",
+    )
+    .await;
+    assert_eq!(
+        refusal["title"],
+        "Operation is not allowed while the task is done; a finished task cannot be canceled"
+    );
+    assert_eq!(read(&server, &person, "TK-1").await, done);
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn add_checkpoint_fails_with_state_hint_for_planned_and_final_tasks() {
+    let (server, person, agent) = setup().await;
+    let response = request(
+        &server,
+        &person,
+        Method::POST,
+        TASKS,
+        json!({"title":"Planned work", "planned":true}),
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let planned = response.json::<Value>().await.unwrap()["data"].clone();
+    assert_checkpoint_refused(
+        &server,
+        &person,
+        &agent,
+        &planned,
+        "Operation is not allowed while the task is planned; claim it first",
+    )
+    .await;
+    assert_eq!(read(&server, &person, "TK-1").await["state"], "planned");
+    for state in ["failed", "canceled"] {
+        assert_final_task_writes_refused(&server, &person, &agent, state).await;
+    }
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn change_task_to_planned_hints_release_before_work_and_end_after_work() {
+    let (server, person, agent) = setup().await;
+    let task = create(&server, &agent, SPACE, "Started work").await;
+    let id = task["task_id"].as_str().unwrap();
+    let before_work = assert_problem(
+        change_request(&server, &agent, SPACE, id, json!({"state":"planned"})).await,
+        StatusCode::CONFLICT,
+        "task.state_invalid",
+    )
+    .await;
+    assert_eq!(
+        before_work["title"],
+        "Operation is not allowed while the task is working; release it instead"
+    );
+    assert_eq!(read(&server, &person, "TK-1").await["state"], "working");
+    append(&server, &agent, &task, "Recorded work").await;
+    let after_checkpoint = read(&server, &person, "TK-1").await;
+    let after_work = assert_problem(
+        change_request(&server, &agent, SPACE, id, json!({"state":"planned"})).await,
+        StatusCode::CONFLICT,
+        "task.state_invalid",
+    )
+    .await;
+    assert_eq!(
+        after_work["title"],
+        "Operation is not allowed while the task is working; end the task instead because it already has recorded work"
+    );
+    assert_eq!(read(&server, &person, "TK-1").await, after_checkpoint);
+    change(&server, &agent, &task, json!({"state":"done"})).await;
+    server.stop().await;
+}
+
+async fn assert_checkpoint_refused(
+    server: &Server,
+    person: &Value,
+    agent: &Value,
+    task: &Value,
+    expected_title: &str,
+) {
+    let refusal = assert_problem(
+        checkpoint_request(
+            server,
+            agent,
+            SPACE,
+            task["task_id"].as_str().unwrap(),
+            "Refused checkpoint",
+        )
+        .await,
+        StatusCode::CONFLICT,
+        "task.state_invalid",
+    )
+    .await;
+    assert_eq!(refusal["title"], expected_title);
+    assert_eq!(
+        scratchpad(server, person, task["key"].as_str().unwrap()).await,
+        json!([])
+    );
+}
+
+async fn assert_final_task_writes_refused(
+    server: &Server,
+    person: &Value,
+    agent: &Value,
+    state: &str,
+) {
+    let task = create(server, agent, SPACE, "Final work").await;
+    let final_task = change(
+        server,
+        agent,
+        &task,
+        json!({"state":state, "state_reason":"Stopped"}),
+    )
+    .await;
+    let expected = format!("Operation is not allowed while the task is {state}; create a new task");
+    assert_checkpoint_refused(server, person, agent, &task, &expected).await;
+    let update_refusal = assert_problem(
+        change_request(
+            server,
+            agent,
+            SPACE,
+            task["task_id"].as_str().unwrap(),
+            json!({"result":"Forbidden change"}),
+        )
+        .await,
+        StatusCode::CONFLICT,
+        "task.state_invalid",
+    )
+    .await;
+    assert_eq!(update_refusal["title"], expected);
+    assert_eq!(
+        read(server, person, task["key"].as_str().unwrap()).await,
+        final_task
+    );
 }
 
 #[tokio::test]
