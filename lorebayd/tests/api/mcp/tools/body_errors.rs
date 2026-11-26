@@ -139,6 +139,9 @@ async fn create_request_names_wrongly_typed_body_fields() {
     let task = tasks::create(&server, &agent, SPACE, "Original").await;
     let original = tasks::read(&server, &person, "TK-1").await;
     for (body, field) in [
+        (json!({"action":5}), "action"),
+        (json!({"action":false}), "action"),
+        (json!({"action":{"private-sentinel":true}}), "action"),
         (
             json!({"action":"create", "name":5, "summary":"Summary", "content":"Content"}),
             "name",

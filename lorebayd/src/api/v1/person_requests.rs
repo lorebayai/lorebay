@@ -19,19 +19,11 @@ use crate::server::ServerState;
 
 use super::knowledge::present_string;
 
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub(crate) enum SubmitAction {
-    Change,
-    Create,
-    Delete,
-}
-
 #[derive(Clone, Debug, Deserialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
 #[serde(deny_unknown_fields)]
 pub(crate) struct SubmitRequest {
-    action: SubmitAction,
+    action: String,
     #[serde(default, deserialize_with = "present_string")]
     target_name: Option<String>,
     #[serde(default, deserialize_with = "present_string")]
@@ -128,8 +120,8 @@ impl TryFrom<SubmitRequest> for PersonRequestContent {
     type Error = ApiError;
 
     fn try_from(value: SubmitRequest) -> Result<Self, Self::Error> {
-        Ok(match value.action {
-            SubmitAction::Create => {
+        Ok(match value.action.as_str() {
+            "create" => {
                 refuse_fields(&[
                     ("target_name", &value.target_name),
                     ("target_key", &value.target_key),
@@ -140,17 +132,24 @@ impl TryFrom<SubmitRequest> for PersonRequestContent {
                     required("content", value.content)?,
                 )?)
             }
-            SubmitAction::Change => Self::Change(
+            "change" => Self::Change(
                 KnowledgeTarget::new(value.target_name, value.target_key)?,
                 KnowledgeChanges::new(value.name, value.summary, value.content)?,
             ),
-            SubmitAction::Delete => {
+            "delete" => {
                 refuse_fields(&[
                     ("name", &value.name),
                     ("summary", &value.summary),
                     ("content", &value.content),
                 ])?;
                 Self::Delete(KnowledgeTarget::new(value.target_name, value.target_key)?)
+            }
+            _ => {
+                return Err(invalid_field(
+                    "action",
+                    "invalid",
+                    "`action` must be one of `change`, `create`, `delete`.",
+                ));
             }
         })
     }
