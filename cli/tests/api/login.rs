@@ -140,32 +140,7 @@ async fn login_continues_when_browser_cannot_open() {
 #[tokio::test]
 async fn help_and_usage_use_documented_exit_codes() {
     let server = Server::start().await;
-    for arguments in [
-        vec![],
-        vec!["--help"],
-        vec!["login", "--help"],
-        vec!["agent", "list", "--help"],
-        vec!["file", "url", "--help"],
-        vec!["file", "delete", "--help"],
-        vec!["task", "--help"],
-        vec!["task", "list", "--help"],
-        vec!["task", "show", "--help"],
-        vec!["task", "cancel", "--help"],
-        vec!["task", "delete", "--help"],
-        vec!["checkpoint", "delete", "--help"],
-        vec!["task", "scratchpad", "--help"],
-    ] {
-        let output = server.run(&arguments).await;
-        assert_success(&output);
-        assert!(String::from_utf8_lossy(&output.stdout).contains("Usage:"));
-        assert!(output.stderr.is_empty());
-        if arguments.starts_with(&["task", "delete"]) {
-            assert!(
-                String::from_utf8_lossy(&output.stdout)
-                    .contains("Delete a task, its checkpoints, files and their content")
-            );
-        }
-    }
+    assert_command_help_documented(&server).await;
     for arguments in [
         vec!["login"],
         vec!["task"],
@@ -306,4 +281,132 @@ async fn login_completes_while_browser_launcher_waits() {
     server.decide(&login.link, "approve").await;
     assert_success(&login.finish().await);
     assert_success(&server.run(&["agent", "list"]).await);
+}
+
+const HELP_COMMANDS: &[&[&str]] = &[
+    &[],
+    &["--help"],
+    &["agent", "--help"],
+    &["agent", "list", "--help"],
+    &["agent", "revoke", "--help"],
+    &["file", "--help"],
+    &["file", "delete", "--help"],
+    &["file", "url", "--help"],
+    &["checkpoint", "--help"],
+    &["checkpoint", "delete", "--help"],
+    &["knowledge", "--help"],
+    &["knowledge", "change", "--help"],
+    &["knowledge", "create", "--help"],
+    &["knowledge", "delete", "--help"],
+    &["knowledge", "deleted", "--help"],
+    &["knowledge", "history", "--help"],
+    &["knowledge", "list", "--help"],
+    &["knowledge", "rollback", "--help"],
+    &["knowledge", "show", "--help"],
+    &["login", "--help"],
+    &["logout", "--help"],
+    &["member", "--help"],
+    &["member", "add", "--help"],
+    &["member", "list", "--help"],
+    &["member", "remove", "--help"],
+    &["member", "set-role", "--help"],
+    &["request", "--help"],
+    &["request", "approve", "--help"],
+    &["request", "change", "--help"],
+    &["request", "create", "--help"],
+    &["request", "delete", "--help"],
+    &["request", "list", "--help"],
+    &["request", "reject", "--help"],
+    &["request", "revise", "--help"],
+    &["request", "show", "--help"],
+    &["space", "--help"],
+    &["space", "change", "--help"],
+    &["space", "create", "--help"],
+    &["space", "list", "--help"],
+    &["space", "show", "--help"],
+    &["task", "--help"],
+    &["task", "cancel", "--help"],
+    &["task", "delete", "--help"],
+    &["task", "list", "--help"],
+    &["task", "plan", "--help"],
+    &["task", "results", "--help"],
+    &["task", "scratchpad", "--help"],
+    &["task", "show", "--help"],
+    &["user", "--help"],
+    &["user", "list", "--help"],
+];
+
+async fn assert_command_help_documented(server: &Server) {
+    for arguments in HELP_COMMANDS {
+        let output = server.run(arguments).await;
+        assert_success(&output);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(stdout.contains("Usage:"));
+        assert!(output.stderr.is_empty());
+        assert_help_lines_described(&stdout, arguments);
+        if arguments.starts_with(&["task", "delete"]) {
+            assert!(stdout.contains("Delete a task, its checkpoints, files and their content"));
+        }
+    }
+}
+
+fn assert_help_lines_described(help: &str, arguments: &[&str]) {
+    let mut section = "";
+    let mut current: Option<(&str, String)> = None;
+    for line in help.lines() {
+        if matches!(line, "Arguments:" | "Options:" | "Commands:" | "Usage:") {
+            flush_help_row(&mut current, arguments);
+            section = line;
+            continue;
+        }
+        if line.is_empty() {
+            flush_help_row(&mut current, arguments);
+            section = "";
+            continue;
+        }
+        if !matches!(section, "Arguments:" | "Options:") {
+            continue;
+        }
+        let trimmed = line.trim_start();
+        let indent = line.len() - trimmed.len();
+        if indent <= 6 {
+            flush_help_row(&mut current, arguments);
+            let help_part = trimmed.split_once("  ").map_or("", |(_, rest)| rest.trim());
+            current = Some((line, help_part.to_owned()));
+        } else if let Some((_, text)) = &mut current {
+            text.push(' ');
+            text.push_str(trimmed);
+        }
+    }
+    flush_help_row(&mut current, arguments);
+}
+
+fn flush_help_row(current: &mut Option<(&str, String)>, arguments: &[&str]) {
+    let Some((row, text)) = current.take() else {
+        return;
+    };
+    let description = strip_clap_annotations(&text);
+    assert!(
+        !description.trim().is_empty(),
+        "missing description in {arguments:?} line: {row}"
+    );
+}
+
+fn strip_clap_annotations(mut text: &str) -> String {
+    let mut description = String::new();
+    while let Some(start) = text.find('[') {
+        description.push_str(&text[..start]);
+        let rest = &text[start..];
+        let is_annotation = ["[default:", "[possible values:", "[aliases:", "[env:"]
+            .iter()
+            .any(|prefix| rest.starts_with(prefix));
+        if is_annotation && let Some(end) = rest.find(']') {
+            text = &rest[end + 1..];
+            continue;
+        }
+        description.push('[');
+        text = &rest[1..];
+    }
+    description.push_str(text);
+    description
 }

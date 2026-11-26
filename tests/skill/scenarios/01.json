@@ -37,11 +37,9 @@
               "{space}"
             ],
             "path": [
+              0,
               "state"
-            ],
-            "select": {
-              "title": "Compare review approaches"
-            }
+            ]
           },
           "op": "equals",
           "value": "planned"
@@ -55,16 +53,34 @@
               "{space}"
             ],
             "path": [
+              0,
               "holder"
-            ],
-            "select": {
-              "title": "Compare review approaches"
-            }
+            ]
           },
           "op": "equals",
           "value": null
         }
       ]
+    },
+    {
+      "action": {
+        "query": {
+          "cli": [
+            "task",
+            "list",
+            "{space}"
+          ],
+          "path": [
+            0
+          ]
+        },
+        "save": {
+          "chat_task": [
+            "key"
+          ]
+        }
+      },
+      "expect": []
     },
     {
       "turn": "Pick up {task} and write a short review checklist in your answer. Finish that work.",
@@ -122,15 +138,13 @@
           "query": {
             "cli": [
               "task",
-              "list",
-              "{space}"
+              "show",
+              "{space}",
+              "{chat_task}"
             ],
             "path": [
               "state"
-            ],
-            "select": {
-              "title": "Compare review approaches"
-            }
+            ]
           },
           "op": "equals",
           "value": "planned"
@@ -152,15 +166,13 @@
           "query": {
             "cli": [
               "task",
-              "list",
-              "{space}"
+              "show",
+              "{space}",
+              "{chat_task}"
             ],
             "path": [
               "planner_agent_name"
-            ],
-            "select": {
-              "title": "Compare review approaches"
-            }
+            ]
           },
           "op": "equals",
           "value": "{primary_agent}"

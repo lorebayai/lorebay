@@ -151,6 +151,34 @@
       "turn": "Switch to a different task titled Inspect the missing input. Read missing-input.txt from this empty project; if absent the work cannot be done. Do not invent or create it.",
       "expect": [
         {
+          "label": "missing-input work creates a second task",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ]
+          },
+          "op": "count",
+          "value": 2
+        },
+        {
+          "label": "launch task remains done after missing-input work",
+          "query": {
+            "cli": [
+              "task",
+              "show",
+              "{space}",
+              "{task}"
+            ],
+            "path": [
+              "state"
+            ]
+          },
+          "op": "equals",
+          "value": "done"
+        },
+        {
           "label": "unavailable input ends failed",
           "query": {
             "cli": [
@@ -159,11 +187,9 @@
               "{space}"
             ],
             "path": [
+              0,
               "state"
-            ],
-            "select": {
-              "title": "Inspect the missing input"
-            }
+            ]
           },
           "op": "equals",
           "value": "failed"
@@ -177,11 +203,9 @@
               "{space}"
             ],
             "path": [
+              0,
               "state_reason"
-            ],
-            "select": {
-              "title": "Inspect the missing input"
-            }
+            ]
           },
           "op": "nonempty",
           "value": true
@@ -194,10 +218,8 @@
               "list",
               "{space}"
             ],
-            "select": {
-              "title": "Inspect the missing input"
-            },
             "path": [
+              0,
               "holder"
             ]
           },
@@ -214,10 +236,9 @@
             "list",
             "{space}"
           ],
-          "select": {
-            "title": "Inspect the missing input"
-          },
-          "path": []
+          "path": [
+            0
+          ]
         },
         "save": {
           "failed_task": [
@@ -248,6 +269,50 @@
       "turn": "Start another task titled Plan the workshop. Ask me its date before planning anything.",
       "expect": [
         {
+          "label": "workshop starts a third task",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ]
+          },
+          "op": "count",
+          "value": 3
+        },
+        {
+          "label": "launch task remains done after workshop starts",
+          "query": {
+            "cli": [
+              "task",
+              "show",
+              "{space}",
+              "{task}"
+            ],
+            "path": [
+              "state"
+            ]
+          },
+          "op": "equals",
+          "value": "done"
+        },
+        {
+          "label": "missing-input task remains failed after workshop starts",
+          "query": {
+            "cli": [
+              "task",
+              "show",
+              "{space}",
+              "{failed_task}"
+            ],
+            "path": [
+              "state"
+            ]
+          },
+          "op": "equals",
+          "value": "failed"
+        },
+        {
           "label": "workshop awaits an answer",
           "query": {
             "cli": [
@@ -256,11 +321,9 @@
               "{space}"
             ],
             "path": [
+              0,
               "state"
-            ],
-            "select": {
-              "title": "Plan the workshop"
-            }
+            ]
           },
           "op": "equals",
           "value": "waiting"
@@ -275,15 +338,13 @@
           "query": {
             "cli": [
               "task",
-              "list",
-              "{space}"
+              "show",
+              "{space}",
+              "{canceled_task}"
             ],
             "path": [
               "state"
-            ],
-            "select": {
-              "title": "Plan the workshop"
-            }
+            ]
           },
           "op": "equals",
           "value": "canceled"
@@ -293,15 +354,13 @@
           "query": {
             "cli": [
               "task",
-              "list",
-              "{space}"
+              "show",
+              "{space}",
+              "{canceled_task}"
             ],
             "path": [
               "state_reason"
-            ],
-            "select": {
-              "title": "Plan the workshop"
-            }
+            ]
           },
           "op": "nonempty",
           "value": true
@@ -311,12 +370,10 @@
           "query": {
             "cli": [
               "task",
-              "list",
-              "{space}"
+              "show",
+              "{space}",
+              "{canceled_task}"
             ],
-            "select": {
-              "title": "Plan the workshop"
-            },
             "path": [
               "holder"
             ]
@@ -348,10 +405,9 @@
             "list",
             "{space}"
           ],
-          "select": {
-            "title": "Plan the workshop"
-          },
-          "path": []
+          "path": [
+            0
+          ]
         },
         "save": {
           "canceled_task": [
