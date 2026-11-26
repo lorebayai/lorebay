@@ -33,6 +33,18 @@ services:
         condition: service_healthy
     environment:
       DOMAIN: ${DOMAIN:?Set DOMAIN}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          nginx -t && curl --insecure --fail --silent --show-error
+          --noproxy '*' --max-time 3
+          --resolve "$$DOMAIN:443:127.0.0.1" "https://$$DOMAIN/readyz"
+          > /dev/null
+      interval: 5s
+      timeout: 4s
+      start_period: 10s
+      retries: 6
     ports:
       - '${HTTPS_PORT:-443}:443'
     entrypoint: ['/bin/sh', '/etc/lorebay/start-nginx.sh']

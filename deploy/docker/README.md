@@ -59,6 +59,7 @@ curl "https://$DOMAIN/readyz"
 ```
 
 Per-caller limits require Docker to preserve client source addresses.
+`up --wait` waits for both services to be healthy; `ps` reports both health states.
 Both services restart after crashes or host reboots unless explicitly stopped.
 nginx follows the backend's DNS address when only the application is recreated.
 Use `docker compose` with the same env/file flags for `logs`, `restart` and `down`;
