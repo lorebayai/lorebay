@@ -97,8 +97,8 @@ went to the right task. When a write is refused:
   person once that the rest of this session goes unrecorded, and don't look
   for another task.
 - **Missing permission:** the task is another party's, or the person is now
-  a viewer. A viewer's agent records nothing more and follows practice 2
-  (leave the task as it is and tell the person once).
+  a viewer. A viewer's agent records nothing more, leaves the task as it is,
+  and gives the person practice 2's viewer message once.
 
 ### 4. Read Knowledge
 
