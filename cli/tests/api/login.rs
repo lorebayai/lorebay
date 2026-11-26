@@ -352,21 +352,61 @@ async fn assert_command_help_documented(server: &Server) {
 
 fn assert_help_lines_described(help: &str, arguments: &[&str]) {
     let mut section = "";
+    let mut current: Option<(&str, String)> = None;
     for line in help.lines() {
         if matches!(line, "Arguments:" | "Options:" | "Commands:" | "Usage:") {
+            flush_help_row(&mut current, arguments);
             section = line;
             continue;
         }
         if line.is_empty() {
+            flush_help_row(&mut current, arguments);
             section = "";
             continue;
         }
-        if matches!(section, "Arguments:" | "Options:") {
-            let trimmed = line.trim_start();
-            assert!(
-                trimmed.contains("  "),
-                "missing description in {arguments:?} line: {line}"
-            );
+        if !matches!(section, "Arguments:" | "Options:") {
+            continue;
+        }
+        let trimmed = line.trim_start();
+        let indent = line.len() - trimmed.len();
+        if indent <= 6 {
+            flush_help_row(&mut current, arguments);
+            let help_part = trimmed.split_once("  ").map_or("", |(_, rest)| rest.trim());
+            current = Some((line, help_part.to_owned()));
+        } else if let Some((_, text)) = &mut current {
+            text.push(' ');
+            text.push_str(trimmed);
         }
     }
+    flush_help_row(&mut current, arguments);
+}
+
+fn flush_help_row(current: &mut Option<(&str, String)>, arguments: &[&str]) {
+    let Some((row, text)) = current.take() else {
+        return;
+    };
+    let description = strip_clap_annotations(&text);
+    assert!(
+        !description.trim().is_empty(),
+        "missing description in {arguments:?} line: {row}"
+    );
+}
+
+fn strip_clap_annotations(mut text: &str) -> String {
+    let mut description = String::new();
+    while let Some(start) = text.find('[') {
+        description.push_str(&text[..start]);
+        let rest = &text[start..];
+        let is_annotation = ["[default:", "[possible values:", "[aliases:", "[env:"]
+            .iter()
+            .any(|prefix| rest.starts_with(prefix));
+        if is_annotation && let Some(end) = rest.find(']') {
+            text = &rest[end + 1..];
+            continue;
+        }
+        description.push('[');
+        text = &rest[1..];
+    }
+    description.push_str(text);
+    description
 }

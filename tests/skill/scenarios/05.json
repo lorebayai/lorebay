@@ -151,6 +151,34 @@
       "turn": "Switch to a different task titled Inspect the missing input. Read missing-input.txt from this empty project; if absent the work cannot be done. Do not invent or create it.",
       "expect": [
         {
+          "label": "missing-input work creates a second task",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ]
+          },
+          "op": "count",
+          "value": 2
+        },
+        {
+          "label": "launch task remains done after missing-input work",
+          "query": {
+            "cli": [
+              "task",
+              "show",
+              "{space}",
+              "{task}"
+            ],
+            "path": [
+              "state"
+            ]
+          },
+          "op": "equals",
+          "value": "done"
+        },
+        {
           "label": "unavailable input ends failed",
           "query": {
             "cli": [
@@ -240,6 +268,50 @@
     {
       "turn": "Start another task titled Plan the workshop. Ask me its date before planning anything.",
       "expect": [
+        {
+          "label": "workshop starts a third task",
+          "query": {
+            "cli": [
+              "task",
+              "list",
+              "{space}"
+            ]
+          },
+          "op": "count",
+          "value": 3
+        },
+        {
+          "label": "launch task remains done after workshop starts",
+          "query": {
+            "cli": [
+              "task",
+              "show",
+              "{space}",
+              "{task}"
+            ],
+            "path": [
+              "state"
+            ]
+          },
+          "op": "equals",
+          "value": "done"
+        },
+        {
+          "label": "missing-input task remains failed after workshop starts",
+          "query": {
+            "cli": [
+              "task",
+              "show",
+              "{space}",
+              "{failed_task}"
+            ],
+            "path": [
+              "state"
+            ]
+          },
+          "op": "equals",
+          "value": "failed"
+        },
         {
           "label": "workshop awaits an answer",
           "query": {
