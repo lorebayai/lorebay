@@ -1,10 +1,13 @@
 import hashlib
 import json
 import os
+import socket
+import ssl
 import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -114,6 +117,114 @@ def rate():
                 token = json.load(response)["data"]["access_token"]
                 api("DELETE", "/api/v1/sign-in", token=token)
     print(json.dumps(codes))
+
+
+def open_partial_post(path, length, body_prefix=b"{", headers=None):
+    parsed = urllib.parse.urlsplit(ORIGIN)
+    port = parsed.port or 443
+    raw = socket.create_connection((parsed.hostname, port), timeout=20)
+    stream = CONTEXT.wrap_socket(raw, server_hostname=parsed.hostname)
+    lines = [
+        f"POST {path} HTTP/1.1",
+        f"Host: {parsed.netloc}",
+        "Content-Type: application/json",
+        f"Content-Length: {length}",
+    ]
+    for name, value in (headers or {}).items():
+        lines.append(f"{name}: {value}")
+    stream.sendall(("\r\n".join(lines) + "\r\n\r\n").encode() + body_prefix)
+    return stream
+
+
+def read_http_head(stream):
+    chunks = []
+    while b"\r\n\r\n" not in b"".join(chunks):
+        chunk = stream.recv(4096)
+        if not chunk:
+            break
+        chunks.append(chunk)
+    head, rest = b"".join(chunks).split(b"\r\n\r\n", 1)
+    status = int(head.splitlines()[0].split()[1])
+    return status, head.decode(errors="replace"), rest
+
+
+def hold_until_released():
+    held_flag = Path("/work/held")
+    release_flag = Path("/work/release")
+    held_flag.write_text("1")
+    deadline = time.monotonic() + 30
+    while not release_flag.exists():
+        require(time.monotonic() < deadline, "Timed out waiting for release signal")
+        time.sleep(0.05)
+
+
+def conn_hold():
+    held = []
+    try:
+        for _ in range(SETTINGS["limit"]):
+            held.append(open_partial_post("/unknown", 100))
+        excess = open_partial_post("/unknown", 100)
+        try:
+            status, _, _ = read_http_head(excess)
+            require(status == 429, f"Excess concurrent connection returned {status}, expected 429")
+        finally:
+            excess.close()
+        hold_until_released()
+    finally:
+        for stream in held:
+            stream.close()
+
+
+def readyz_check():
+    status = api("GET", "/readyz")["data"]
+    require(status == "ok", f"Unexpected /readyz response: {status}")
+
+
+def slow_body():
+    held = [open_partial_post("/api/v1/sign-in", 100) for _ in range(5)]
+    try:
+        hold_until_released()
+        held[0].sendall(b'"x":1}' + b" " * 93)
+        status, _, _ = read_http_head(held[0])
+        require(status in (400, 422), f"Completed slow body returned {status}, expected lorebayd 400/422")
+    finally:
+        for stream in held:
+            stream.close()
+
+
+def body_cap():
+    state = json.loads(STATE.read_text())
+    mcp_headers = {
+        "Authorization": "Bearer " + state["agent"],
+        "Accept": "application/json, text/event-stream",
+        "MCP-Protocol-Version": "2026-07-28",
+        "Mcp-Method": "tools/list",
+        "Connection": "close",
+    }
+    meta = (
+        '"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28",'
+        '"io.modelcontextprotocol/clientInfo":{"name":"Deployment probe","version":"1"},'
+        '"io.modelcontextprotocol/clientCapabilities":{}}'
+    )
+    prefix = f'{{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{{{meta}'.encode()
+    suffix = b"}}"
+    exact = prefix + b" " * (6306358 - len(prefix) - len(suffix)) + suffix
+    require(len(exact) == 6306358, "Unexpected exact MCP payload length")
+    request = urllib.request.Request(
+        ORIGIN + "/mcp", exact, {"Content-Type": "application/json"} | mcp_headers, method="POST",
+    )
+    with urllib.request.urlopen(request, context=CONTEXT, timeout=60) as response:
+        require(response.status == 200, f"Exact MCP payload returned {response.status}")
+        payload = json.load(response)
+        require("result" in payload and not payload["result"].get("isError"), "Unexpected MCP answer")
+    over = open_partial_post("/mcp", 7 * 1024 * 1024 + 1, body_prefix=b"", headers=mcp_headers)
+    try:
+        status, head, rest = read_http_head(over)
+        require(status == 413, f"Over-cap body returned {status}, expected 413")
+        require("nginx" in (head + rest.decode(errors="replace")).lower(), "Expected nginx 413 response")
+    finally:
+        over.close()
+    print(f"PASS body_cap_accepts_{len(exact)}_and_rejects_{7 * 1024 * 1024 + 1}_with_413", flush=True)
 
 
 def trust():

@@ -13,6 +13,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 TLS = Path("/etc/nginx/lorebay-tls")
+# Every active request counts, including uploads, downloads and MCP calls; size well above one office.
+CONNECTION_LIMIT = 200
 
 
 def run(*args, **kwargs):
@@ -139,14 +141,26 @@ def served_certificate(cert, domain, connect="127.0.0.1"):
     fail(f"nginx did not serve the staged certificate: {last_error}")
 
 
-def render(domain, tls=TLS, upstream="127.0.0.1:8080", upload_limit=5000000000):
+def render(
+    domain,
+    tls=TLS,
+    upstream="127.0.0.1:8080",
+    upload_limit=5000000000,
+    connection_limit=CONNECTION_LIMIT,
+):
     text = (HERE / "nginx.conf.in").read_text()
+    limit = (
+        f"limit_conn_status 429;\n    limit_conn lorebay_connections {connection_limit};"
+        if connection_limit
+        else ""
+    )
     for name, value in {
         "DOMAIN": domain,
         "TLS": tls,
         "UPSTREAM": upstream,
         "UPLOAD_LIMIT": upload_limit,
-        "ACCESS_LOG": "",
+        "ACCESS_LOG": "access_log /var/log/nginx/access.log lorebay_redacted;",
+        "CONNECTION_LIMIT": limit,
     }.items():
         text = text.replace(f"@{name}@", str(value))
     return text

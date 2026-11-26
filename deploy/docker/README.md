@@ -24,10 +24,9 @@ docker run --rm -i ghcr.io/lorebayai/lorebayd:${VERSION#v} hash-password < /srv/
 cp deploy/docker/example.env /srv/lorebay.env
 ```
 
-Edit that one env file using the table below. Supply the users file in
-[the documented format](../../lorebayd/README.md#usage), using `lorebayd hash-password`.
-Use an empty local data directory with no other writer. Before first start,
-inspect the data owner/mode, users readability and processes; stop any writer:
+Edit that file using the table below, with users formatted as
+[documented](../../lorebayd/README.md#usage) via `lorebayd hash-password` and an empty
+local data path. Before first start, check ownership, readability and running writers:
 
 ```bash
 set -a; . /srv/lorebay.env; set +a
@@ -43,10 +42,9 @@ sudo setpriv --reuid=65532 --regid=65532 --clear-groups test -r "$USERS_FILE"
 sudo setpriv --reuid=65532 --regid=65532 --clear-groups test -w "$DATA_DIRECTORY"
 ```
 
-Expected data ownership/mode is `65532:65532 700`. Ancestors must allow UID 65532
-traversal. The grants change metadata only; supplied file contents stay unchanged.
-The configuration must be readable by UID 65532. No other `lorebayd` may write this data.
-Create the managed certificate directory, copying the supplied pair for nginx alone:
+Expected data mode/owner is `65532:65532 700`; ancestors must allow UID 65532
+traversal. Grants change metadata only; the configuration must be readable by
+UID 65532 with no other `lorebayd` writing this data. Create the certificate directory:
 
 ```bash
 sudo install -d -m 0700 "$CERTIFICATE_DIRECTORY" "$CERTIFICATE_DIRECTORY/pair-initial"
@@ -58,12 +56,15 @@ docker compose --env-file /srv/lorebay.env -f deploy/docker/compose.yml up -d --
 curl "https://$DOMAIN/readyz"
 ```
 
-Per-caller limits require Docker to preserve client source addresses.
-`up --wait` waits for both services to be healthy; `ps` reports both health states.
-Both services restart after crashes or host reboots unless explicitly stopped.
-nginx follows the backend's DNS address when only the application is recreated.
-Use the same env/file flags for `docker compose logs`, `restart` and `down`; `down` retains data.
-Only nginx publishes HTTPS; its access logs omit loopback `GET /readyz`. To replace certificates:
+Per-caller rate limits require Docker to preserve client addresses; the userland
+proxy, address-specific publishes (such as loopback), or IPv6 clients without Docker
+IPv6 collapse callers to the bridge gateway and share one budget (check whether
+access log lines start with the bridge gateway). Compose therefore sets no per-source
+connection limit; nginx buffers non-upload bodies and bounds clients by its worker
+connections. `up --wait` waits for both services to be healthy (`ps` reports both);
+both restart unless stopped, and nginx follows `lorebayd`'s DNS address. Use the
+same env/file flags for `logs`, `restart` and `down` (retains data). Only nginx serves
+HTTPS; access logs omit query strings and loopback `GET /readyz`. Replace certs with:
 
 ```bash
 python3 -B deploy/common/replace-certificate.py --domain "$DOMAIN" \
@@ -90,10 +91,9 @@ All supplied paths are absolute. Every bind refuses a missing source.
 | `HTTPS_PORT` | Published nginx port; default `443` |
 | `HTTPS_SUFFIX` | Empty for `443`; otherwise `:<HTTPS_PORT>` for the public origin |
 
-The shipped configuration raises the four application budgets for shared proxy
-traffic. nginx owns per-caller policy. Match its upload limit when changing
-`upload_size_limit_bytes`; [the key reference](../../lorebayd/README.md#configuration)
-lists all service settings. Run `moon run deploy:check` from the repository root.
+The shipped config raises the four application budgets for shared proxy traffic; nginx
+owns per-caller policy. Match its `/files/` upload limit when changing
+`upload_size_limit_bytes` ([all keys](../../lorebayd/README.md#configuration)); run `moon run deploy:check`.
 
 ## Docs
 
