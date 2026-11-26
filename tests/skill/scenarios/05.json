@@ -159,11 +159,9 @@
               "{space}"
             ],
             "path": [
+              0,
               "state"
-            ],
-            "select": {
-              "title": "Inspect the missing input"
-            }
+            ]
           },
           "op": "equals",
           "value": "failed"
@@ -177,11 +175,9 @@
               "{space}"
             ],
             "path": [
+              0,
               "state_reason"
-            ],
-            "select": {
-              "title": "Inspect the missing input"
-            }
+            ]
           },
           "op": "nonempty",
           "value": true
@@ -194,10 +190,8 @@
               "list",
               "{space}"
             ],
-            "select": {
-              "title": "Inspect the missing input"
-            },
             "path": [
+              0,
               "holder"
             ]
           },
@@ -214,10 +208,9 @@
             "list",
             "{space}"
           ],
-          "select": {
-            "title": "Inspect the missing input"
-          },
-          "path": []
+          "path": [
+            0
+          ]
         },
         "save": {
           "failed_task": [
@@ -256,11 +249,9 @@
               "{space}"
             ],
             "path": [
+              0,
               "state"
-            ],
-            "select": {
-              "title": "Plan the workshop"
-            }
+            ]
           },
           "op": "equals",
           "value": "waiting"
@@ -275,15 +266,13 @@
           "query": {
             "cli": [
               "task",
-              "list",
-              "{space}"
+              "show",
+              "{space}",
+              "{canceled_task}"
             ],
             "path": [
               "state"
-            ],
-            "select": {
-              "title": "Plan the workshop"
-            }
+            ]
           },
           "op": "equals",
           "value": "canceled"
@@ -293,15 +282,13 @@
           "query": {
             "cli": [
               "task",
-              "list",
-              "{space}"
+              "show",
+              "{space}",
+              "{canceled_task}"
             ],
             "path": [
               "state_reason"
-            ],
-            "select": {
-              "title": "Plan the workshop"
-            }
+            ]
           },
           "op": "nonempty",
           "value": true
@@ -311,12 +298,10 @@
           "query": {
             "cli": [
               "task",
-              "list",
-              "{space}"
+              "show",
+              "{space}",
+              "{canceled_task}"
             ],
-            "select": {
-              "title": "Plan the workshop"
-            },
             "path": [
               "holder"
             ]
@@ -348,10 +333,9 @@
             "list",
             "{space}"
           ],
-          "select": {
-            "title": "Plan the workshop"
-          },
-          "path": []
+          "path": [
+            0
+          ]
         },
         "save": {
           "canceled_task": [

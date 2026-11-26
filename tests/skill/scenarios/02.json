@@ -24,10 +24,8 @@
               "list",
               "{space}"
             ],
-            "select": {
-              "title": "Draft a release checklist"
-            },
             "path": [
+              0,
               "state"
             ]
           },
@@ -42,10 +40,8 @@
               "list",
               "{space}"
             ],
-            "select": {
-              "title": "Draft a release checklist"
-            },
             "path": [
+              0,
               "planner"
             ]
           },
@@ -60,10 +56,8 @@
               "list",
               "{space}"
             ],
-            "select": {
-              "title": "Draft a release checklist"
-            },
             "path": [
+              0,
               "planner_agent_name"
             ]
           },
@@ -81,9 +75,9 @@
             "list",
             "{space}"
           ],
-          "select": {
-            "title": "Draft a release checklist"
-          }
+          "path": [
+            0
+          ]
         },
         "save": {
           "task": [
