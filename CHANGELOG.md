@@ -33,9 +33,9 @@ skill, tagged `v<version>`. The library's changes are in
 - Compose checks nginx's configuration and HTTPS readiness through to
   `lorebayd`, so `up --wait` waits for both services and `ps` reports both
   health states.
-- nginx access logs omit loopback `GET /readyz` probes. Other requests
-  keep their logging; native installations keep the host's log path and
-  format.
+- Compose's nginx access log omits its health check's loopback
+  `GET /readyz` requests; other requests are logged as before. Native
+  installations' logging is unchanged.
 
 ## 0.1.3
 
