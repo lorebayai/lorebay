@@ -335,23 +335,54 @@ async fn decide_authorization_fails_when_agent_name_is_dot_segment() {
             StatusCode::OK
         );
     }
-    let response = server
-        .json(
-            Method::GET,
-            "/api/v1/agents",
-            Value::Null,
-            tokens["access_token"].as_str(),
-        )
-        .await;
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = response.json::<Value>().await.unwrap();
-    let names: Vec<_> = body["data"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|agent| agent["name"].as_str().unwrap())
-        .collect();
-    assert_eq!(names, ["Build .", "Build .."]);
+    assert_eq!(agent_names(&server, &tokens).await, ["Build .", "Build .."]);
+    server.stop().await;
+}
+
+#[tokio::test]
+async fn decide_authorization_fails_when_agent_name_is_too_long() {
+    let server = Server::start().await;
+    let person = server.tokens().await;
+    let long_client = server.register_client(&"c".repeat(101)).await;
+    let request = authorization_request(&long_client, TOKEN_REDIRECT_URI, &server);
+    let mut default_approve = request.clone();
+    default_approve["decision"] = json!("approve");
+    assert_too_long(operation(&server, DECISION_PATH, default_approve, Some(&person)).await).await;
+    let mut typed_too_long = request.clone();
+    typed_too_long["decision"] = json!("approve");
+    typed_too_long["agent_name"] = json!("x".repeat(101));
+    assert_too_long(operation(&server, DECISION_PATH, typed_too_long, Some(&person)).await).await;
+    assert_eq!(agent_names(&server, &person).await, Vec::<String>::new());
+
+    let short_name = "Short agent";
+    let mut shortened = request;
+    shortened["decision"] = json!("approve");
+    shortened["agent_name"] = json!(short_name);
+    let code = decide(&server, shortened, &person).await["code"].clone();
+    let existing = successful_tokens(server.exchange_code(&long_client, &code).await).await;
+
+    let mut replace_too_long = authorization_request(&long_client, TOKEN_REDIRECT_URI, &server);
+    replace_too_long["decision"] = json!("approve");
+    replace_too_long["replace_existing"] = json!(true);
+    replace_too_long["agent_name"] = json!("\u{4e2d}".repeat(101));
+    assert_too_long(operation(&server, DECISION_PATH, replace_too_long, Some(&person)).await).await;
+    successful_tokens(
+        server
+            .refresh_oauth(&long_client, existing["refresh_token"].as_str().unwrap())
+            .await,
+    )
+    .await;
+
+    let multibyte_100 = "\u{4e2d}".repeat(100);
+    let mut exact = authorization_request(&long_client, TOKEN_REDIRECT_URI, &server);
+    exact["decision"] = json!("approve");
+    exact["agent_name"] = json!(multibyte_100);
+    let code = decide(&server, exact, &person).await["code"].clone();
+    successful_tokens(server.exchange_code(&long_client, &code).await).await;
+    assert_eq!(
+        agent_names(&server, &person).await,
+        vec![short_name.to_owned(), multibyte_100]
+    );
     server.stop().await;
 }
 
@@ -593,12 +624,41 @@ async fn assert_rejected_by_both(server: &Server, mut input: Value, tokens: &Val
 }
 
 async fn assert_invalid(response: Response, field: &str) {
+    assert_invalid_code(response, field, None).await;
+}
+
+async fn assert_too_long(response: Response) {
+    assert_invalid_code(response, "agent_name", Some("too_long")).await;
+}
+
+async fn assert_invalid_code(response: Response, field: &str, code: Option<&str>) {
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     assert!(!response.headers().contains_key("location"));
     let problem = response.json::<Value>().await.unwrap();
     assert_eq!(problem["code"], "request.invalid_body");
     assert_eq!(problem["errors"][0]["field"], field);
+    if let Some(code) = code {
+        assert_eq!(problem["errors"][0]["code"], code);
+    }
     assert!(problem.get("redirect_url").is_none());
+}
+
+async fn agent_names(server: &Server, tokens: &Value) -> Vec<String> {
+    let response = server
+        .json(
+            Method::GET,
+            "/api/v1/agents",
+            Value::Null,
+            tokens["access_token"].as_str(),
+        )
+        .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    response.json::<Value>().await.unwrap()["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|agent| agent["name"].as_str().unwrap().to_owned())
+        .collect()
 }
 
 async fn decide(server: &Server, input: Value, tokens: &Value) -> HashMap<String, String> {
