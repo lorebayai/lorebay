@@ -4,7 +4,7 @@ use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use reqwest::{Method, Response, StatusCode};
 use sea_orm::sea_query::{Alias, Expr, Query};
-use sea_orm::{ConnectionTrait, Database, DatabaseConnection, ExprTrait};
+use sea_orm::{ConnectionTrait, Database, DatabaseConnection, DeriveIden, ExprTrait};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use typed_builder::TypedBuilder;
@@ -173,9 +173,9 @@ impl Server {
     pub async fn set_agent_sign_in_name(&self, current_name: &str, name: &str) {
         let database = self.open_database().await;
         let statement = Query::update()
-            .table(Alias::new("agent_sign_in"))
-            .value(Alias::new("name"), Expr::value(name))
-            .and_where(Expr::col(Alias::new("name")).eq(current_name))
+            .table(AgentSignIn::Table)
+            .value(AgentSignIn::Name, Expr::value(name))
+            .and_where(Expr::col(AgentSignIn::Name).eq(current_name))
             .to_owned();
         let result = database.execute(&statement).await.unwrap();
         assert_eq!(result.rows_affected(), 1);
@@ -192,9 +192,9 @@ impl Server {
         );
         let database = self.open_database().await;
         let statement = Query::update()
-            .table(Alias::new("oauth_code"))
-            .value(Alias::new("agent_name"), Expr::value(name))
-            .and_where(Expr::col(Alias::new("code_hash")).eq(hash))
+            .table(OauthCode::Table)
+            .value(OauthCode::AgentName, Expr::value(name))
+            .and_where(Expr::col(OauthCode::CodeHash).eq(hash))
             .to_owned();
         let result = database.execute(&statement).await.unwrap();
         assert_eq!(result.rows_affected(), 1);
@@ -221,3 +221,16 @@ pub async fn assert_taken(response: Response) {
 }
 
 const PKCE_CHALLENGE: &str = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
+
+#[derive(DeriveIden)]
+enum AgentSignIn {
+    Name,
+    Table,
+}
+
+#[derive(DeriveIden)]
+enum OauthCode {
+    AgentName,
+    CodeHash,
+    Table,
+}
