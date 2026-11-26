@@ -22,7 +22,7 @@ use crate::repository::refresh_token_history::RefreshTokenHistoryRepository;
 
 use crate::time::now_millis;
 
-use super::authorization::CLI_CLIENT_ID;
+use super::authorization::{CLI_CLIENT_ID, validate_agent_name};
 use super::device_sign_in::{DeviceError, exchange_device_code};
 use super::person_sign_in::{
     self, Identity, LoginError, Tokens, issue_tokens, new_refresh_token, sign_in_expiry,
@@ -127,6 +127,10 @@ async fn exchange_code(
         return Err(TokenError::InvalidGrant);
     }
     let account = active_account(&transaction, &code.account_id).await?;
+    let is_cli = code.client_id == CLI_CLIENT_ID;
+    if !is_cli {
+        validate_code_agent_name(&code)?;
+    }
     if let Some(id) = &code.replaces_sign_in_id {
         AgentSignInRepository::builder()
             .connection(&transaction)
@@ -134,7 +138,6 @@ async fn exchange_code(
             .delete(id, &code.account_id)
             .await?;
     }
-    let is_cli = code.client_id == CLI_CLIENT_ID;
     let (id, tokens) = if is_cli {
         person_sign_in::create_sign_in(identity, &transaction, account).await?
     } else {
@@ -151,6 +154,11 @@ async fn exchange_code(
     repository.update(model).await?;
     transaction.commit().await?;
     Ok(tokens)
+}
+
+fn validate_code_agent_name(code: &Code) -> Result<(), TokenError> {
+    let name = code.agent_name.as_deref().ok_or(TokenError::InvalidGrant)?;
+    validate_agent_name(name).map_err(|_| TokenError::InvalidGrant)
 }
 
 async fn create_agent(

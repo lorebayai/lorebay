@@ -1,9 +1,12 @@
+use std::fmt::Write;
+
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use reqwest::{Method, Response, StatusCode};
 use sea_orm::sea_query::{Alias, Expr, Query};
-use sea_orm::{ConnectionTrait, Database};
+use sea_orm::{ConnectionTrait, Database, DatabaseConnection, ExprTrait};
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 use typed_builder::TypedBuilder;
 use url::Url;
 
@@ -130,11 +133,26 @@ impl Server {
         authorize_for_client(self, &client_id, name, &tokens).await
     }
 
+    pub async fn agent_names(&self, tokens: &Value) -> Vec<String> {
+        let response = self
+            .json(
+                Method::GET,
+                "/api/v1/agents",
+                Value::Null,
+                tokens["access_token"].as_str(),
+            )
+            .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        response.json::<Value>().await.unwrap()["data"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|agent| agent["name"].as_str().unwrap().to_owned())
+            .collect()
+    }
+
     pub async fn expire_oauth_credential(&self, table: &str, column: &str) {
-        let path = self.directory.path().join("data/lorebay.sqlite3");
-        let database = Database::connect(format!("sqlite://{}", path.display()))
-            .await
-            .unwrap();
+        let database = self.open_database().await;
         let statement = Query::update()
             .table(Alias::new(table))
             .value(Alias::new(column), Expr::value(0_i64))
@@ -144,15 +162,50 @@ impl Server {
     }
 
     pub async fn remove_agent_sign_ins(&self) {
-        let path = self.directory.path().join("data/lorebay.sqlite3");
-        let database = Database::connect(format!("sqlite://{}", path.display()))
-            .await
-            .unwrap();
+        let database = self.open_database().await;
         let statement = Query::delete()
             .from_table(Alias::new("agent_sign_in"))
             .to_owned();
         database.execute(&statement).await.unwrap();
         database.close().await.unwrap();
+    }
+
+    pub async fn set_agent_sign_in_name(&self, current_name: &str, name: &str) {
+        let database = self.open_database().await;
+        let statement = Query::update()
+            .table(Alias::new("agent_sign_in"))
+            .value(Alias::new("name"), Expr::value(name))
+            .and_where(Expr::col(Alias::new("name")).eq(current_name))
+            .to_owned();
+        let result = database.execute(&statement).await.unwrap();
+        assert_eq!(result.rows_affected(), 1);
+        database.close().await.unwrap();
+    }
+
+    pub async fn set_oauth_code_agent_name(&self, code: &str, name: &str) {
+        let hash = Sha256::digest(code.as_bytes()).iter().fold(
+            String::with_capacity(64),
+            |mut out, byte| {
+                let _ = write!(out, "{byte:02x}");
+                out
+            },
+        );
+        let database = self.open_database().await;
+        let statement = Query::update()
+            .table(Alias::new("oauth_code"))
+            .value(Alias::new("agent_name"), Expr::value(name))
+            .and_where(Expr::col(Alias::new("code_hash")).eq(hash))
+            .to_owned();
+        let result = database.execute(&statement).await.unwrap();
+        assert_eq!(result.rows_affected(), 1);
+        database.close().await.unwrap();
+    }
+
+    async fn open_database(&self) -> DatabaseConnection {
+        let path = self.directory.path().join("data/lorebay.sqlite3");
+        Database::connect(format!("sqlite://{}", path.display()))
+            .await
+            .unwrap()
     }
 }
 

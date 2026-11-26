@@ -335,7 +335,7 @@ async fn decide_authorization_fails_when_agent_name_is_dot_segment() {
             StatusCode::OK
         );
     }
-    assert_eq!(agent_names(&server, &tokens).await, ["Build .", "Build .."]);
+    assert_eq!(server.agent_names(&tokens).await, ["Build .", "Build .."]);
     server.stop().await;
 }
 
@@ -352,7 +352,7 @@ async fn decide_authorization_fails_when_agent_name_is_too_long() {
     typed_too_long["decision"] = json!("approve");
     typed_too_long["agent_name"] = json!("x".repeat(101));
     assert_too_long(operation(&server, DECISION_PATH, typed_too_long, Some(&person)).await).await;
-    assert_eq!(agent_names(&server, &person).await, Vec::<String>::new());
+    assert_eq!(server.agent_names(&person).await, Vec::<String>::new());
 
     let short_name = "Short agent";
     let mut shortened = request;
@@ -360,12 +360,18 @@ async fn decide_authorization_fails_when_agent_name_is_too_long() {
     shortened["agent_name"] = json!(short_name);
     let code = decide(&server, shortened, &person).await["code"].clone();
     let existing = successful_tokens(server.exchange_code(&long_client, &code).await).await;
+    assert_eq!(server.agent_names(&person).await, vec![short_name]);
 
+    let legacy_name = "\u{4e2d}".repeat(101);
+    server
+        .set_agent_sign_in_name(short_name, &legacy_name)
+        .await;
     let mut replace_too_long = authorization_request(&long_client, TOKEN_REDIRECT_URI, &server);
     replace_too_long["decision"] = json!("approve");
     replace_too_long["replace_existing"] = json!(true);
-    replace_too_long["agent_name"] = json!("\u{4e2d}".repeat(101));
+    replace_too_long["agent_name"] = json!(legacy_name);
     assert_too_long(operation(&server, DECISION_PATH, replace_too_long, Some(&person)).await).await;
+    assert_eq!(server.agent_names(&person).await, vec![legacy_name.clone()]);
     successful_tokens(
         server
             .refresh_oauth(&long_client, existing["refresh_token"].as_str().unwrap())
@@ -380,8 +386,8 @@ async fn decide_authorization_fails_when_agent_name_is_too_long() {
     let code = decide(&server, exact, &person).await["code"].clone();
     successful_tokens(server.exchange_code(&long_client, &code).await).await;
     assert_eq!(
-        agent_names(&server, &person).await,
-        vec![short_name.to_owned(), multibyte_100]
+        server.agent_names(&person).await,
+        vec![multibyte_100, legacy_name]
     );
     server.stop().await;
 }
@@ -641,24 +647,6 @@ async fn assert_invalid_code(response: Response, field: &str, code: Option<&str>
         assert_eq!(problem["errors"][0]["code"], code);
     }
     assert!(problem.get("redirect_url").is_none());
-}
-
-async fn agent_names(server: &Server, tokens: &Value) -> Vec<String> {
-    let response = server
-        .json(
-            Method::GET,
-            "/api/v1/agents",
-            Value::Null,
-            tokens["access_token"].as_str(),
-        )
-        .await;
-    assert_eq!(response.status(), StatusCode::OK);
-    response.json::<Value>().await.unwrap()["data"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|agent| agent["name"].as_str().unwrap().to_owned())
-        .collect()
 }
 
 async fn decide(server: &Server, input: Value, tokens: &Value) -> HashMap<String, String> {

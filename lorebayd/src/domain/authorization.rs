@@ -111,6 +111,16 @@ pub(crate) async fn decide_authorization(
     Ok(redirect)
 }
 
+pub(crate) fn validate_agent_name(name: &str) -> Result<(), AuthorizationError> {
+    if name.trim().is_empty() || matches!(name, "." | "..") {
+        return Err(AuthorizationError::InvalidParameter("agent_name"));
+    }
+    if name.chars().count() > AGENT_NAME_MAX_CHARACTERS {
+        return Err(AuthorizationError::AgentNameTooLong);
+    }
+    Ok(())
+}
+
 const AGENT_NAME_MAX_CHARACTERS: usize = 100;
 const CODE_LIFETIME_MILLIS: i64 = 300_000;
 
@@ -257,12 +267,7 @@ fn chosen_agent_name(
         (None, None) => Ok(None),
         (Some(default), name) => {
             let name = name.unwrap_or(default);
-            if name.trim().is_empty() || matches!(name.as_str(), "." | "..") {
-                return Err(AuthorizationError::InvalidParameter("agent_name"));
-            }
-            if name.chars().count() > AGENT_NAME_MAX_CHARACTERS {
-                return Err(AuthorizationError::AgentNameTooLong);
-            }
+            validate_agent_name(&name)?;
             Ok(Some(name))
         }
         (None, Some(_)) => Err(AuthorizationError::InvalidParameter("agent_name")),
