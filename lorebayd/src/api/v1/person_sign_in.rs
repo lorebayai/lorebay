@@ -2,14 +2,13 @@ use std::net::SocketAddr;
 
 use axum::extract::State;
 use axum::extract::rejection::JsonRejection;
-use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
 use lorebay_lib_types::Secret;
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 
-use crate::api::{ApiError, Envelope, FieldError};
+use crate::api::{ApiError, Envelope, FieldError, invalid_json};
 use crate::domain::caller::VerifiedCaller;
 use crate::domain::person_sign_in::{self, Tokens};
 use crate::oauth::no_store_headers;
@@ -104,13 +103,6 @@ pub(crate) async fn log_out(
 ) -> Result<Envelope<()>, ApiError> {
     person_sign_in::log_out(&state.database, caller).await?;
     Ok(Envelope::builder().data(()).build())
-}
-
-pub(super) fn invalid_json(error: JsonRejection) -> ApiError {
-    if error.status() == StatusCode::PAYLOAD_TOO_LARGE {
-        return ApiError::PayloadTooLarge;
-    }
-    ApiError::invalid_body()
 }
 
 fn validate_field(field: &str, value: &str) -> Result<(), ApiError> {

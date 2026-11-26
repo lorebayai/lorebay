@@ -109,6 +109,14 @@ For each tool it does two things:
    return the title directly, and for `update_task` the MCP layer copies
    it from the updated task.
 
+**Arguments that cannot be converted return `request.invalid_body`.** Each
+offending argument has one entry in `errors`: `field` names the argument,
+`code` is `required` when it is missing and `invalid` for a wrong type,
+invalid value or unknown argument. The message names the argument and what
+is expected, such as "`task_id` is required." or "`result_version` must be
+a positive integer or null." Non-object tool arguments have one `body`
+entry instead. Query and path errors keep their own codes.
+
 A product's entry point takes the same arguments its own way; MCP takes
 them from the tool arguments. A call that carries a task ID passes it
 alone, and the task check finds the task's space. From then on the checks are identical; see

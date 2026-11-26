@@ -7,6 +7,12 @@ crates `lorebay-lib-types`, `lorebay-lib-core`, `lorebay-lib-migration` and
 
 ## Unreleased
 
+- MCP argument conversion reports each missing, wrongly typed, invalid or
+  unknown argument by name in the `errors` entries of `request.invalid_body`.
+  Missing arguments use `required`; other conversion errors use `invalid`.
+  Messages name the argument and its expected shape. Non-object arguments
+  have one `body` entry.
+
 - **Breaking:** The library's created migration is named
   `m20261125_000001_create_space_tables`. Databases recording
   `m20261118_000001_create_space_tables` must be recreated.

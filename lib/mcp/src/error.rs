@@ -23,12 +23,20 @@ impl ToolError {
         Self::body_field(
             "body",
             "invalid",
-            "Expected a JSON object with the required string fields.",
+            "Expected a JSON object with the required fields.",
         )
     }
 
     pub fn body_field(field: &str, code: &str, message: &str) -> Self {
         Self::field("request.invalid_body", field, code, message)
+    }
+
+    pub fn body_fields(errors: Vec<Value>) -> Self {
+        Self {
+            code: "request.invalid_body",
+            message: "Bad Request".to_owned(),
+            errors,
+        }
     }
 
     pub fn query_field(field: &str, code: &str, message: &str) -> Self {

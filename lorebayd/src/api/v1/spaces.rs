@@ -5,13 +5,11 @@ use axum::http::StatusCode;
 use serde::{Deserialize, Deserializer};
 use typed_builder::TypedBuilder;
 
-use crate::api::{ApiError, Envelope, FieldError, ListQuery, Meta, invalid_query};
+use crate::api::{ApiError, Envelope, FieldError, ListQuery, Meta, invalid_json, invalid_query};
 use crate::domain::caller::VerifiedCaller;
 use crate::domain::create_space;
 use crate::server::ServerState;
 use lorebay_lib_core::{NewSpace, Space, SpaceChanges, change_space, list_spaces, read_space};
-
-use super::person_sign_in::invalid_json;
 
 #[derive(Clone, Debug, Deserialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]

@@ -9,6 +9,7 @@ use super::{
 };
 
 mod agent_files;
+mod body_errors;
 mod filters;
 mod knowledge;
 mod person_requests;

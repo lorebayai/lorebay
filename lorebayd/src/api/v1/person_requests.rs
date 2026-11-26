@@ -13,35 +13,27 @@ use lorebay_lib_types::Secret;
 use serde::Deserialize;
 use typed_builder::TypedBuilder;
 
-use crate::api::{ApiError, Envelope, Meta, invalid_query};
+use crate::api::{ApiError, Envelope, FieldError, Meta, invalid_json, invalid_query};
 use crate::domain::caller::VerifiedCaller;
 use crate::server::ServerState;
 
 use super::knowledge::present_string;
-use super::person_sign_in::invalid_json;
 
-#[derive(Clone, Debug, Deserialize)]
-#[serde(tag = "action", rename_all = "lowercase", deny_unknown_fields)]
-pub(crate) enum SubmitRequest {
-    Change {
-        target_name: Option<String>,
-        target_key: Option<String>,
-        #[serde(default, deserialize_with = "present_string")]
-        name: Option<String>,
-        #[serde(default, deserialize_with = "present_string")]
-        summary: Option<String>,
-        #[serde(default, deserialize_with = "present_string")]
-        content: Option<String>,
-    },
-    Create {
-        name: String,
-        summary: String,
-        content: String,
-    },
-    Delete {
-        target_name: Option<String>,
-        target_key: Option<String>,
-    },
+#[derive(Clone, Debug, Deserialize, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+#[serde(deny_unknown_fields)]
+pub(crate) struct SubmitRequest {
+    action: String,
+    #[serde(default, deserialize_with = "present_string")]
+    target_name: Option<String>,
+    #[serde(default, deserialize_with = "present_string")]
+    target_key: Option<String>,
+    #[serde(default, deserialize_with = "present_string")]
+    name: Option<String>,
+    #[serde(default, deserialize_with = "present_string")]
+    summary: Option<String>,
+    #[serde(default, deserialize_with = "present_string")]
+    content: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, TypedBuilder)]
@@ -128,26 +120,37 @@ impl TryFrom<SubmitRequest> for PersonRequestContent {
     type Error = ApiError;
 
     fn try_from(value: SubmitRequest) -> Result<Self, Self::Error> {
-        Ok(match value {
-            SubmitRequest::Create {
-                name,
-                summary,
-                content,
-            } => Self::Create(NewKnowledgeEntry::new(name, summary, content)?),
-            SubmitRequest::Change {
-                target_name,
-                target_key,
-                name,
-                summary,
-                content,
-            } => Self::Change(
-                KnowledgeTarget::new(target_name, target_key)?,
-                KnowledgeChanges::new(name, summary, content)?,
+        Ok(match value.action.as_str() {
+            "create" => {
+                refuse_fields(&[
+                    ("target_name", &value.target_name),
+                    ("target_key", &value.target_key),
+                ])?;
+                Self::Create(NewKnowledgeEntry::new(
+                    required("name", value.name)?,
+                    required("summary", value.summary)?,
+                    required("content", value.content)?,
+                )?)
+            }
+            "change" => Self::Change(
+                KnowledgeTarget::new(value.target_name, value.target_key)?,
+                KnowledgeChanges::new(value.name, value.summary, value.content)?,
             ),
-            SubmitRequest::Delete {
-                target_name,
-                target_key,
-            } => Self::Delete(KnowledgeTarget::new(target_name, target_key)?),
+            "delete" => {
+                refuse_fields(&[
+                    ("name", &value.name),
+                    ("summary", &value.summary),
+                    ("content", &value.content),
+                ])?;
+                Self::Delete(KnowledgeTarget::new(value.target_name, value.target_key)?)
+            }
+            _ => {
+                return Err(invalid_field(
+                    "action",
+                    "invalid",
+                    "`action` must be one of `change`, `create`, `delete`.",
+                ));
+            }
         })
     }
 }
@@ -280,4 +283,29 @@ pub(crate) async fn reject(
         })
         .await?;
     Ok(Envelope::builder().data(result).build())
+}
+
+fn required(field: &str, value: Option<String>) -> Result<String, ApiError> {
+    value.ok_or_else(|| invalid_field(field, "required", &format!("`{field}` is required.")))
+}
+
+fn refuse_fields(fields: &[(&str, &Option<String>)]) -> Result<(), ApiError> {
+    if let Some((field, _)) = fields.iter().find(|(_, value)| value.is_some()) {
+        return Err(invalid_field(
+            field,
+            "invalid",
+            &format!("`{field}` is not accepted."),
+        ));
+    }
+    Ok(())
+}
+
+fn invalid_field(field: &str, code: &str, message: &str) -> ApiError {
+    ApiError::InvalidBody(vec![
+        FieldError::builder()
+            .field(field)
+            .code(code)
+            .message(message)
+            .build(),
+    ])
 }

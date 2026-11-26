@@ -6,15 +6,13 @@ use lorebay_lib_core::SpaceRole;
 use serde::{Deserialize, Serialize};
 use typed_builder::TypedBuilder;
 
-use crate::api::{ApiError, Envelope, FieldError, ListQuery, Meta, invalid_query};
+use crate::api::{ApiError, Envelope, FieldError, ListQuery, Meta, invalid_json, invalid_query};
 use crate::domain::caller::VerifiedCaller;
 use crate::domain::{
     SpaceMember, SpaceMemberError, add_space_member, change_space_member_role, list_space_members,
     remove_space_member,
 };
 use crate::server::ServerState;
-
-use super::person_sign_in::invalid_json;
 
 #[derive(Clone, Debug, Deserialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
