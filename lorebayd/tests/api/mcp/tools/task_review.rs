@@ -170,6 +170,61 @@ async fn state_invalid_mcp_hints_fit_planned_done_and_final_tasks() {
     server.stop().await;
 }
 
+#[tokio::test]
+async fn update_task_to_planned_hints_release_before_work_and_end_after_work() {
+    let (server, person, agent) = tasks::setup().await;
+    let task = tasks::create(&server, &agent, SPACE, "Started work").await;
+    let before_work = call_error(
+        &server,
+        &agent,
+        "update_task",
+        json!({"task_id":task["task_id"], "state":"planned"}),
+    )
+    .await;
+    assert_eq!(before_work["code"], "task.state_invalid");
+    assert_eq!(
+        before_work["message"],
+        "Operation is not allowed while the task is working; release it instead"
+    );
+    assert_eq!(
+        tasks::read(&server, &person, "TK-1").await["state"],
+        "working"
+    );
+    call(
+        &server,
+        &agent,
+        "add_checkpoint",
+        json!({"task_id":task["task_id"], "content":"Recorded work"}),
+    )
+    .await;
+    let after_checkpoint = tasks::read(&server, &person, "TK-1").await;
+    let after_work = call_error(
+        &server,
+        &agent,
+        "update_task",
+        json!({"task_id":task["task_id"], "state":"planned"}),
+    )
+    .await;
+    assert_eq!(after_work["code"], "task.state_invalid");
+    assert_eq!(
+        after_work["message"],
+        "Operation is not allowed while the task is working; end the task instead because it already has recorded work"
+    );
+    assert_eq!(
+        tasks::read(&server, &person, "TK-1").await,
+        after_checkpoint
+    );
+    let ended = call(
+        &server,
+        &agent,
+        "update_task",
+        json!({"task_id":task["task_id"], "state":"done"}),
+    )
+    .await;
+    assert_eq!(ended["state"], "done");
+    server.stop().await;
+}
+
 async fn assert_checkpoint_hint(
     server: &Server,
     person: &Value,

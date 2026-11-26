@@ -217,6 +217,39 @@ async fn add_checkpoint_fails_with_state_hint_for_planned_and_final_tasks() {
     server.stop().await;
 }
 
+#[tokio::test]
+async fn change_task_to_planned_hints_release_before_work_and_end_after_work() {
+    let (server, person, agent) = setup().await;
+    let task = create(&server, &agent, SPACE, "Started work").await;
+    let id = task["task_id"].as_str().unwrap();
+    let before_work = assert_problem(
+        change_request(&server, &agent, SPACE, id, json!({"state":"planned"})).await,
+        StatusCode::CONFLICT,
+        "task.state_invalid",
+    )
+    .await;
+    assert_eq!(
+        before_work["title"],
+        "Operation is not allowed while the task is working; release it instead"
+    );
+    assert_eq!(read(&server, &person, "TK-1").await["state"], "working");
+    append(&server, &agent, &task, "Recorded work").await;
+    let after_checkpoint = read(&server, &person, "TK-1").await;
+    let after_work = assert_problem(
+        change_request(&server, &agent, SPACE, id, json!({"state":"planned"})).await,
+        StatusCode::CONFLICT,
+        "task.state_invalid",
+    )
+    .await;
+    assert_eq!(
+        after_work["title"],
+        "Operation is not allowed while the task is working; end the task instead because it already has recorded work"
+    );
+    assert_eq!(read(&server, &person, "TK-1").await, after_checkpoint);
+    change(&server, &agent, &task, json!({"state":"done"})).await;
+    server.stop().await;
+}
+
 async fn assert_checkpoint_refused(
     server: &Server,
     person: &Value,

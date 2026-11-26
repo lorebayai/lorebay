@@ -87,6 +87,11 @@ pub(super) fn change_state(
     if !allowed {
         let hint = match (current, next) {
             (TaskState::Done, TaskState::Canceled) => "a finished task cannot be canceled",
+            (TaskState::Working | TaskState::Waiting, TaskState::Planned)
+                if task.work_recorded != 0 =>
+            {
+                "end the task instead because it already has recorded work"
+            }
             (TaskState::Working, TaskState::Planned) => "release it instead",
             (TaskState::Waiting, TaskState::Planned) => "resume it first",
             _ if current == next => "omit state_reason to keep the current state",

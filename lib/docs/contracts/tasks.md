@@ -76,8 +76,16 @@ stateDiagram-v2
 ```
 
 - **The library holds the state and refuses any other change**, with
-  `task.state_invalid` naming the current state. The library never changes a
-  state on its own, so a session closed abruptly leaves its task `working`.
+  `task.state_invalid` naming the current state and a hint the caller can take:
+  claim `planned`, reopen `done` for an own-party agent change, create a new
+  task after `failed` or `canceled`, omit a reason when keeping the current
+  state, or report that a finished `done` task cannot be canceled. Moving a
+  `working` or `waiting` task back to `planned` hints to release it when
+  `working` with no recorded work, resume `waiting`, or end it once work is
+  recorded. Waiting on a request requires `working`, hinting to resume
+  `waiting`, claim `planned`, reopen `done`, or create a new task after a
+  final state. The library never changes a state on its own, so a session closed
+  abruptly leaves its task `working`.
 - **Repeating the current state without a reason is a no-op.** The state, its
   reason, holder, end time, state attribution and waiting request link do not
   change.
@@ -115,11 +123,17 @@ stateDiagram-v2
 - **Taking over a held task.** Another agent of the holder's party may claim a
   `working` or `waiting` task; the hold moves to it, and the state stays. This
   is how a person continues a task with another of their agents. An agent of
-  another party is refused with `task.held`.
+  another party is refused with `task.held`. Claiming a `done`, `failed` or
+  `canceled` task is refused with `task.state_invalid`, hinting to reopen
+  `done` for the task's party or create a new task for another party or a final
+  state.
 - **Releasing.** The holder may release a `working` task back to `planned` only
   while no work is recorded on it: no checkpoint, no file registration and no
   result write, even if deleted or cleared afterward. Otherwise it is refused
-  with `task.has_work`, and the holder ends the task instead. A released task
+  with `task.has_work`, and the holder ends the task instead. Releasing outside
+  `working` is refused with `task.state_invalid`, reporting from `planned` that
+  only a `working` task can be released, or hinting to resume `waiting`, reopen
+  `done`, or create a new task after `failed` or `canceled`. A released task
   goes back to its planner's party. If it has no planner, release records its
   current person and the releasing agent as planner. Its agent name is cleared.
 - **No expiry.** The library keeps no lease or timer. A hold ends only by a

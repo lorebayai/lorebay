@@ -86,7 +86,7 @@ fn build_catalog() -> Vec<(ToolName, Tool)> {
         ),
         tool(
             ToolName::AddCheckpoint,
-            "Append a nonempty Markdown checkpoint using task_id, not a task key. Only the holder of a working or waiting task may append; claim or reopen first. Returns the checkpoint time and task title.",
+            "Append a nonempty Markdown checkpoint using task_id, not a task key. Only the holder of a working or waiting task may append; claim a planned task, reopen an own-party done one, or create a new task after failed or canceled. Returns the checkpoint time and task title.",
             json!({"task_id":{"type":"string"}, "content":{"type":"string", "minLength":1, "maxLength":CHECKPOINT_MAX_CHARACTERS}}),
             &["task_id", "content"],
             false,
@@ -166,7 +166,7 @@ fn task_list_properties() -> Value {
 fn create_agent_file() -> (ToolName, Tool) {
     tool(
         ToolName::CreateAgentFile,
-        "Register a file using task_id, a file name and a summary. Returns its key, upload_url, method, headers and task title. Upload the file's content with an HTTP PUT to upload_url carrying every returned header; file content never passes through MCP. HTTP 412 means the file's content is already stored: call complete_file with the returned key. Only the holder of a working or waiting task may register; claim or reopen first.",
+        "Register a file using task_id, a file name and a summary. Returns its key, upload_url, method, headers and task title. Upload the file's content with an HTTP PUT to upload_url carrying every returned header; file content never passes through MCP. HTTP 412 means the file's content is already stored: call complete_file with the returned key. Only the holder of a working or waiting task may register; claim a planned task, reopen an own-party done one, or create a new task after failed or canceled.",
         json!({
             "task_id":{"type":"string"},
             "file_name":{"type":"string", "minLength":1, "maxLength":AGENT_FILE_NAME_MAX_BYTES, "description":"Nonempty file name, at most 255 UTF-8 bytes."},

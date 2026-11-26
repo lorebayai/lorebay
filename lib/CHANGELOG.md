@@ -7,12 +7,16 @@ crates `lorebay-lib-types`, `lorebay-lib-core`, `lorebay-lib-migration` and
 
 ## Unreleased
 
-- `task.state_invalid` error messages name a next step that fits the state and
-  caller: claim a `planned` task, reopen a `done` task for an own-party agent
-  operation, report that a finished task cannot be canceled when canceling
-  `done`, resume a `waiting` task when a `working` one is required, and create
+- **Breaking:** `task.state_invalid` error messages name a next step that fits
+  the state and caller: claim a `planned` task, reopen a `done` task for an
+  own-party agent operation, report that a finished task cannot be canceled when
+  canceling `done`, resume a `waiting` task when a `working` one is required,
+  end a task with recorded work instead of returning it to `planned`, and create
   a new task for `failed`, `canceled`, or another party's `done` task.
-  `TaskAccessError` adds `StateOperationInvalid` for operation-specific hints.
+  `TaskAccessError` adds `StateOperationInvalid` for operation- and
+  caller-specific hints such as canceling `done` and another party's `done`
+  claim; product adapters matching `TaskAccessError` variants must handle
+  `StateOperationInvalid` alongside `StateInvalid`.
 
 - MCP argument conversion reports each missing, wrongly typed, invalid or
   unknown argument by name in the `errors` entries of `request.invalid_body`.

@@ -2,7 +2,7 @@ use reqwest::{Method, StatusCode};
 use serde_json::{Value, json};
 
 use crate::agent_files::helpers::upload_ok;
-use crate::helpers::{Server, assert_problem, authorize_for, login, request};
+use crate::helpers::{Server, assert_problem, authorize_for, list_page, login, request};
 use crate::tasks::helpers::{self as tasks, SPACE, TASKS};
 
 use super::{call, call_error};
@@ -145,6 +145,7 @@ async fn claim_task_moves_planned_task_and_release_restores_planner() {
     assert_eq!(before["planner"], "alice");
     assert!(before["holder"].is_null());
     assert!(before["started_at"].is_null());
+    assert_planned_release_refused(&server, &person, &agent, &task).await;
     let claimed = hold(&server, &other, &task, "claim_task").await;
     assert_attribution(&claimed, "bob", Some("Bob worker"));
     assert_eq!(claimed["state_changed_at"], claimed["started_at"]);
@@ -188,6 +189,7 @@ async fn claim_task_takes_over_and_old_holder_completes_upload() {
     let planned = tasks::read(&server, &person, "TK-1").await;
     assert_eq!(planned["planner_agent_name"], "Research agent");
     hold(&server, &agent, &task, "claim_task").await;
+    assert_waiting_release_requires_resume(&server, &person, &agent, &task).await;
     assert_non_holder_refusals(&server, &peer, &task).await;
     let file = call(
         &server,
@@ -246,6 +248,9 @@ async fn create_request_waits_until_approved_or_withdrawn() {
                 .unwrap()
                 .contains(proposed["key"].as_str().unwrap())
         );
+        if index == 0 {
+            assert_waiting_request_refused(&server, &person, &agent, &task, 1).await;
+        }
         if index == 2 {
             transition(&server, &agent, &task, "done", None).await;
         }
@@ -373,4 +378,87 @@ fn assert_attribution(task: &Value, person: &str, agent: Option<&str>) {
     assert_eq!(task["state_changed_by"], person);
     assert_eq!(task["state_changed_agent_name"], json!(agent));
     assert!(task["state_changed_at"].as_i64().unwrap() > 0);
+}
+
+async fn assert_planned_release_refused(
+    server: &Server,
+    person: &Value,
+    agent: &Value,
+    task: &Value,
+) {
+    let error = refused_hold(server, agent, task, "release_task").await;
+    assert_eq!(error["code"], "task.state_invalid");
+    assert_eq!(
+        error["message"],
+        "Operation is not allowed while the task is planned; only a working task can be released"
+    );
+    assert_eq!(
+        tasks::read(server, person, task["key"].as_str().unwrap()).await["state"],
+        "planned"
+    );
+}
+
+async fn assert_waiting_release_requires_resume(
+    server: &Server,
+    person: &Value,
+    agent: &Value,
+    task: &Value,
+) {
+    let key = task["key"].as_str().unwrap();
+    transition(server, agent, task, "waiting", Some("Pending answer")).await;
+    let error = refused_hold(server, agent, task, "release_task").await;
+    assert_eq!(error["code"], "task.state_invalid");
+    assert_eq!(
+        error["message"],
+        "Operation is not allowed while the task is waiting; resume it first"
+    );
+    assert_eq!(tasks::read(server, person, key).await["state"], "waiting");
+    transition(server, agent, task, "working", None).await;
+    let released = hold(server, agent, task, "release_task").await;
+    assert_eq!(released["state"], "planned");
+    assert_eq!(tasks::read(server, person, key).await["state"], "planned");
+    hold(server, agent, task, "claim_task").await;
+}
+
+async fn assert_waiting_request_refused(
+    server: &Server,
+    person: &Value,
+    agent: &Value,
+    task: &Value,
+    expected_requests: usize,
+) {
+    let error = call_error(
+        server,
+        agent,
+        "create_request",
+        json!({
+            "task_id":task["task_id"],
+            "wait":true,
+            "action":"create",
+            "name":"duplicate-wait",
+            "summary":"Guide",
+            "content":"Guide body"
+        }),
+    )
+    .await;
+    assert_eq!(error["code"], "task.state_invalid");
+    assert_eq!(
+        error["message"],
+        "Operation is not allowed while the task is waiting; resume it first"
+    );
+    assert_eq!(
+        tasks::read(server, person, task["key"].as_str().unwrap()).await["state"],
+        "waiting"
+    );
+    let requests = list_page(
+        server,
+        person,
+        &format!("/api/v1/spaces/{SPACE}/requests"),
+        &[],
+    )
+    .await;
+    assert_eq!(
+        requests["data"].as_array().unwrap().len(),
+        expected_requests
+    );
 }
