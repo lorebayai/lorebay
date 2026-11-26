@@ -61,10 +61,9 @@ When a task was already created in any of those cases:
   `lorebay task delete <space> <task-id>`, giving its space key and its task ID,
   not its key such as `TK-12`;
 - if they may no longer delete it, leave the task as it is (a viewer's agent
-  cannot change or end it) and tell them once that the rest of the session goes
-  unrecorded, they can no longer delete the task, and to ask an owner or an
-  admin of the space to delete it, naming the task by its key, with no delete
-  command.
+  cannot change or end it), give no delete command, and tell the person once:
+  "The rest of this session will not be recorded. You can no longer delete this
+  task yourself; ask an owner or an admin of the space to delete `<key>`."
 
 ### 3. Continue a task
 
