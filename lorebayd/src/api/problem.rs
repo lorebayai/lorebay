@@ -25,6 +25,8 @@ use lorebay_lib_core::{PageSizeError, TaskChangeError};
 
 #[derive(Debug, Error)]
 pub(crate) enum ApiError {
+    #[error("Agent not found")]
+    AgentNotFound(Vec<FieldError>),
     #[error("Internal Server Error")]
     Internal,
     #[error("Bad Request")]
@@ -125,6 +127,7 @@ impl ApiError {
 
     fn parts(&self) -> (StatusCode, &'static str) {
         match self {
+            Self::AgentNotFound(_) => (StatusCode::NOT_FOUND, "agent.not_found"),
             Self::Internal => (StatusCode::INTERNAL_SERVER_ERROR, "server.internal"),
             Self::InvalidBody(_) => (StatusCode::BAD_REQUEST, "request.invalid_body"),
             Self::InvalidPath(_) => (StatusCode::BAD_REQUEST, "request.invalid_path"),
@@ -362,7 +365,8 @@ impl From<ApiError> for ProblemDetails {
         let (status, code) = error.parts();
         let title = error.to_string();
         let errors = match error {
-            ApiError::InvalidBody(errors)
+            ApiError::AgentNotFound(errors)
+            | ApiError::InvalidBody(errors)
             | ApiError::InvalidPath(errors)
             | ApiError::InvalidQuery(errors)
             | ApiError::Library { errors, .. } => errors,

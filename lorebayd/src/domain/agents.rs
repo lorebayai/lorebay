@@ -18,8 +18,8 @@ pub(crate) enum AgentError {
     Database(#[from] DbErr),
     #[error("Invalid cursor")]
     InvalidCursor,
-    #[error("Not Found")]
-    NotFound,
+    #[error("Agent not found")]
+    NotFound(String),
 }
 
 #[derive(Clone, Debug, TypedBuilder)]
@@ -88,7 +88,7 @@ pub(crate) async fn revoke(
         .delete_by_name(caller.account_id(), name)
         .await?;
     if deleted == 0 {
-        return Err(AgentError::NotFound);
+        return Err(AgentError::NotFound(name.to_owned()));
     }
     transaction.commit().await?;
     Ok(())

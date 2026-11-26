@@ -158,6 +158,10 @@ contains spaces. Optional arguments appear in brackets. List rows follow
   the chosen old version and supply its content and summary, following
   [Knowledge](../../lib/docs/contracts/knowledge.md#3-knowledge-entries).
   The CLI never silently changes a direct operation into a request.
+- **Revoking an unknown agent names it.** When the caller has no agent under
+  `<name>`, `agent revoke <name>` prints the `Agent not found` error naming
+  `<name>` and pointing to `lorebay agent list` on standard error (with code
+  `agent.not_found` in `json`) and exits 1.
 
 ## 4. Sign-in and credentials
 
