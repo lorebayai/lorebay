@@ -53,7 +53,8 @@ server {
     @CONNECTION_LIMIT@
     client_body_timeout 60s;
 
-    location /files/ {
+    # Stream only the single-segment /files/{location} route; nested paths fall through to location /.
+    location ~ ^/files/[^/]+$ {
         client_max_body_size @UPLOAD_LIMIT@;
         proxy_pass http://@UPSTREAM@;
         proxy_set_header Host $host;

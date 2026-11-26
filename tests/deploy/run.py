@@ -435,6 +435,7 @@ class Suite:
         try:
             process.stdin.write(json.dumps(settings))
             process.stdin.close()
+            process.stdin = None
             deadline = time.monotonic() + 30
             while self.execute(client, "test", "-f", "/work/held", check=False).returncode != 0:
                 if process.poll() is not None:
@@ -479,17 +480,21 @@ class Suite:
 
     def body_and_log_checks(self):
         self.stage = self.method + ": access logs"
+        self.drive("wrong_host_file")
         if self.method == "compose":
-            logs = self.compose("logs", "--no-color", "nginx").stdout
+            logs = self.docker("logs", self.nginx).stdout
             require(
-                not re.search(r'(?:^|\|\s*)(?:127\.\d+\.\d+\.\d+|::1)\s+-\s+[^\n]*"GET /readyz HTTP/', logs, re.M),
+                not re.search(r"^(?:127\.\d+\.\d+\.\d+|::1)\s+-\s+[^\n]*\"GET /readyz HTTP/", logs, re.M),
                 "Compose access log recorded loopback GET /readyz",
             )
         else:
             logs = self.execute(self.native, "cat", "/var/log/nginx/access.log").stdout
         require(re.search(r'"PUT /files/[^"?\s]+ HTTP/1\.1" 201\b', logs) is not None, "Upload access log missing")
         require(re.search(r'"GET /files/[^"?\s]+ HTTP/1\.1" 200\b', logs) is not None, "Download access log missing")
-        require("expires=" not in logs and "signature=" not in logs, "Signed URL query leaked into access log")
+        require(
+            "expires=" not in logs and "signature=" not in logs and "wrong-host-marker" not in logs,
+            "Signed URL query leaked into access log",
+        )
         self.say("PASS access_log_omits_query_strings " + self.method)
 
         self.stage = self.method + ": slow body and cap"

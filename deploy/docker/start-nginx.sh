@@ -10,6 +10,7 @@ upstream lorebay_backend {
 server {
     listen 443 ssl default_server;
     listen [::]:443 ssl default_server;
+    access_log off;
     ssl_reject_handshake on;
 }
 CONFIG

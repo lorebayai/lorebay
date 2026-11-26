@@ -181,15 +181,34 @@ def readyz_check():
 
 
 def slow_body():
-    held = [open_partial_post("/api/v1/sign-in", 100) for _ in range(5)]
+    held = [open_partial_post("/api/v1/sign-in", 100) for _ in range(3)]
+    held += [open_partial_post("/files/not/a/location", 100) for _ in range(3)]
     try:
         hold_until_released()
         held[0].sendall(b'"x":1}' + b" " * 93)
         status, _, _ = read_http_head(held[0])
-        require(status in (400, 422), f"Completed slow body returned {status}, expected lorebayd 400/422")
+        require(status in (400, 422), f"Completed sign-in slow body returned {status}, expected lorebayd 400/422")
+        held[3].sendall(b'"x":1}' + b" " * 93)
+        nested_status, _, _ = read_http_head(held[3])
+        require(nested_status == 404, f"Completed nested file slow body returned {nested_status}, expected 404")
     finally:
         for stream in held:
             stream.close()
+
+
+def wrong_host_file():
+    parsed = urllib.parse.urlsplit(ORIGIN)
+    raw = socket.create_connection((parsed.hostname, parsed.port or 443), timeout=20)
+    stream = CONTEXT.wrap_socket(raw, server_hostname=parsed.hostname)
+    try:
+        stream.sendall(
+            b"GET /files/wrong-host-probe?expires=123&signature=wrong-host-marker HTTP/1.1\r\n"
+            b"Host: wrong.test\r\nConnection: close\r\n\r\n"
+        )
+        status, _, _ = read_http_head(stream)
+        require(status == 404, f"Wrong-Host file request returned {status}, expected 404")
+    finally:
+        stream.close()
 
 
 def body_cap():
