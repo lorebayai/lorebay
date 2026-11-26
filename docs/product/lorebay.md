@@ -38,7 +38,7 @@ It does not cover:
 - **Web pages.** Deploying Lorebay gives the data, the APIs and the pages
   people read, from one process. See
   [System architecture](../architecture/system.md).
-- **`v0.1.1` serves only the authorization and device sign-in pages.** The
+- **`v0.1.4` serves only the authorization and device sign-in pages.** The
   [`lorebay` CLI](../contracts/cli.md) and the skill's
   [README](../../skill/README.md) cover what the other pages will, and those
   pages come in a later release. The CLI shows people what they must act on,

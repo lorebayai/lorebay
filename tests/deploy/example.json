@@ -1,5 +1,5 @@
 {
-  "target": {"version": "v0.1.3"},
+  "target": {"version": "v0.1.4"},
   "domain": "lorebay.example.com",
   "certificate": "/path/to/certificate.pem",
   "key": "/path/to/key.pem",

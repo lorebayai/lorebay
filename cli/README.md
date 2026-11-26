@@ -9,7 +9,7 @@ On Linux, get `lorebay` from a release, as the
 with Cargo at the server's release tag:
 
 ```bash
-cargo install --locked --git https://github.com/lorebayai/lorebay --tag v0.1.3 lorebay-cli
+cargo install --locked --git https://github.com/lorebayai/lorebay --tag v0.1.4 lorebay-cli
 ```
 
 The installed `lorebay` takes the arguments below in place of

@@ -12,7 +12,7 @@ As root, use Python 3.11+ and supply `/srv/inputs/password.txt` with mode `0600`
 ```bash
 apt-get update
 apt-get install -y python3 curl openssl ca-certificates tar gzip coreutils
-VERSION=v0.1.3
+VERSION=v0.1.4
 RELEASE="https://github.com/lorebayai/lorebay/releases/download/$VERSION"
 curl -fLO "$RELEASE/lorebay-deploy.tar.gz"
 curl -fLO "$RELEASE/SHA256SUMS"

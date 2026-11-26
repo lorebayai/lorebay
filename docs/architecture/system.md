@@ -66,7 +66,7 @@ by IPv4 address or IPv6 /64.
 The application's limits cover the team's shared proxy peer, keyed on the
 TCP peer without reading forwarded headers.
 
-`v0.1.1` keeps file content in a local directory; the S3 backend is
+`v0.1.4` keeps file content in a local directory; the S3 backend is
 designed but not built ([Storage](storage.md)).
 
 | Caller | Entry point | Credential |
