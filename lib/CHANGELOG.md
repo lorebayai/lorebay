@@ -7,6 +7,14 @@ crates `lorebay-lib-types`, `lorebay-lib-core`, `lorebay-lib-migration` and
 
 ## Unreleased
 
+- The MCP layer serves a read-only request card for `create_request`,
+  `get_request` and `revise_request`. The tools add `space_key` and
+  `space_name` to their structured results. Products can supply the card's
+  display name with `router_with_display_name`. The core crate adds companions
+  `submit_person_request_with_space`, `read_person_request_with_space`
+  and `revise_person_request_with_space` that pair their results with
+  `PersonRequestSpace`.
+
 - **Breaking:** Agent practices 2, 3 and 12, which a product's skill restates,
   change. Practice 2 has the person delete an already created task only when
   they may, and an owner or an admin of the space delete it when the person

@@ -10,7 +10,9 @@ use super::key::parse_key;
 use super::person_requests::person_request_result;
 use super::space_access::{WRITE_ROLES, check_space};
 use super::time::now_millis;
-use super::{KnowledgeChanges, PersonRequest, PersonRequestError, SpaceAccessError};
+use super::{
+    KnowledgeChanges, PersonRequest, PersonRequestError, PersonRequestSpace, SpaceAccessError,
+};
 
 #[derive(Clone, Debug, Serialize, TypedBuilder)]
 #[builder(field_defaults(setter(into)))]
@@ -27,6 +29,17 @@ pub async fn revise_person_request(
     key: &str,
     changes: Option<KnowledgeChanges>,
 ) -> Result<RevisedPersonRequest, PersonRequestError> {
+    let (request, _) = revise_person_request_with_space(write, caller, space, key, changes).await?;
+    Ok(request)
+}
+
+pub async fn revise_person_request_with_space(
+    write: &mut Write<'_>,
+    caller: &Caller,
+    space: &str,
+    key: &str,
+    changes: Option<KnowledgeChanges>,
+) -> Result<(RevisedPersonRequest, PersonRequestSpace), PersonRequestError> {
     write.begin_operation(Some(caller))?;
     let space = check_space(write.state(), write.handle(), caller, space, WRITE_ROLES).await?;
     let number = parse_key("RQ", key).ok_or(PersonRequestError::NotFound)?;
@@ -64,11 +77,17 @@ pub async fn revise_person_request(
         .await?;
     let result =
         person_request_result(write.state(), write.handle(), &space.space.id, number).await?;
-    write.record(WriteOperation::RevisePersonRequest, Some(space.space.id));
-    Ok(RevisedPersonRequest {
-        person_request: result,
-        was_outdated,
-    })
+    write.record(
+        WriteOperation::RevisePersonRequest,
+        Some(space.space.id.clone()),
+    );
+    Ok((
+        RevisedPersonRequest {
+            person_request: result,
+            was_outdated,
+        },
+        space.space.into(),
+    ))
 }
 
 async fn refresh_snapshot(

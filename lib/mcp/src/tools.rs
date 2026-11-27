@@ -4,6 +4,7 @@ use lorebay_lib_core::{
     list_spaces, list_tasks, plan_task, prepare_agent_file_completion, read_task,
     register_agent_file, release_task,
 };
+use rmcp::model::CallToolResult;
 use serde::Serialize;
 use serde_json::{Value, json};
 
@@ -18,8 +19,8 @@ pub(super) async fn call(
     caller: &Caller,
     name: ToolName,
     arguments: Arguments,
-) -> Result<Value, ToolError> {
-    match name {
+) -> Result<CallToolResult, ToolError> {
+    let result = match name {
         ToolName::ListSpaces => page_response(list_spaces(state, caller, arguments.page()?).await?),
         ToolName::CreateTask => create(state, caller, &arguments).await,
         ToolName::ClaimTask | ToolName::ReleaseTask => hold(state, caller, name, &arguments).await,
@@ -54,11 +55,16 @@ pub(super) async fn call(
         ),
         ToolName::ListKnowledge => knowledge::list(state, caller, &arguments).await,
         ToolName::ReadKnowledge => knowledge::read(state, caller, &arguments).await,
-        ToolName::CreatePersonRequest => knowledge::propose(state, caller, &arguments).await,
+        ToolName::CreatePersonRequest => {
+            return knowledge::propose(state, caller, &arguments).await;
+        }
         ToolName::ListPersonRequests => knowledge::person_requests(state, caller, &arguments).await,
-        ToolName::RevisePersonRequest => knowledge::revise(state, caller, &arguments).await,
-        ToolName::GetPersonRequest => knowledge::person_request(state, caller, &arguments).await,
-    }
+        ToolName::RevisePersonRequest => return knowledge::revise(state, caller, &arguments).await,
+        ToolName::GetPersonRequest => {
+            return knowledge::person_request(state, caller, &arguments).await;
+        }
+    }?;
+    Ok(CallToolResult::structured(result))
 }
 
 async fn register(

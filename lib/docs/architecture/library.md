@@ -583,6 +583,12 @@ Both rounds are safe to run again.
 - **The MCP layer is the library's entry point for agents.** Each tool maps
   to one library operation and adds no logic of its own, beyond converting
   arguments and results.
+- **The MCP layer serves the [request card](../contracts/mcp-tools.md#7-request-card).**
+  Its HTML, styles and script are embedded in the MCP crate. The card asks
+  the host to read current request state through the existing tool. The
+  operation reads the card's space context where it reads or writes the
+  request. A product passes its card identity to `router_with_display_name`.
+  The `router` entry point uses the MCP server name from the settings.
 - **The library serves the `401` and the protected resource metadata.** A
   call whose caller interface answers unauthorized gets a `401` whose
   challenge names the protected resource metadata, and the library serves

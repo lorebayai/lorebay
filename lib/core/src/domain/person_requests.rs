@@ -39,12 +39,80 @@ pub struct SubmittedPersonRequest {
     pub task_title: Option<String>,
 }
 
+#[derive(Clone, Debug, TypedBuilder)]
+#[builder(field_defaults(setter(into)))]
+pub struct PersonRequestSpace {
+    pub key: String,
+    pub name: String,
+}
+
+impl From<space::Model> for PersonRequestSpace {
+    fn from(space: space::Model) -> Self {
+        Self {
+            key: super::key::format_key("SPACE", space.number),
+            name: space.name,
+        }
+    }
+}
+
 pub async fn submit_person_request(
     write: &mut Write<'_>,
     caller: &Caller,
     source: PersonRequestSource<'_>,
     content: PersonRequestContent,
 ) -> Result<SubmittedPersonRequest, PersonRequestError> {
+    let (request, _) = submit_request(write, caller, source, content).await?;
+    Ok(request)
+}
+
+pub async fn submit_person_request_with_space(
+    write: &mut Write<'_>,
+    caller: &Caller,
+    source: PersonRequestSource<'_>,
+    content: PersonRequestContent,
+) -> Result<(SubmittedPersonRequest, PersonRequestSpace), PersonRequestError> {
+    let (request, space_id) = submit_request(write, caller, source, content).await?;
+    let space = SpaceRepository::builder()
+        .connection(write.transaction())
+        .build()
+        .by_id(&space_id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Request space is missing"))?;
+    Ok((request, space.into()))
+}
+
+pub async fn read_person_request(
+    state: &LibraryState,
+    caller: &Caller,
+    space: &str,
+    key: &str,
+) -> Result<PersonRequest, PersonRequestError> {
+    let (request, _) = read_person_request_with_space(state, caller, space, key).await?;
+    Ok(request)
+}
+
+pub async fn read_person_request_with_space(
+    state: &LibraryState,
+    caller: &Caller,
+    space: &str,
+    key: &str,
+) -> Result<(PersonRequest, PersonRequestSpace), PersonRequestError> {
+    state
+        .run_read(async |handle| {
+            let space = check_space(state, handle, caller, space, READ_ROLES).await?;
+            let number = parse_key("RQ", key).ok_or(PersonRequestError::NotFound)?;
+            let request = person_request_result(state, handle, &space.space.id, number).await?;
+            Ok((request, space.space.into()))
+        })
+        .await
+}
+
+async fn submit_request(
+    write: &mut Write<'_>,
+    caller: &Caller,
+    source: PersonRequestSource<'_>,
+    content: PersonRequestContent,
+) -> Result<(SubmittedPersonRequest, String), PersonRequestError> {
     write.begin_operation(Some(caller))?;
     let wait = matches!(source, PersonRequestSource::WaitingTask(_));
     let (space_id, task) = submission_space(write, caller, source).await?;
@@ -65,26 +133,14 @@ pub async fn submit_person_request(
         .insert(model.into_active_model())
         .await?;
     let result = person_request_result(write.state(), write.handle(), &space_id, number).await?;
-    write.record(WriteOperation::SubmitPersonRequest, Some(space_id));
-    Ok(SubmittedPersonRequest {
-        person_request: result,
-        task_title: task.map(|(_, title)| title),
-    })
-}
-
-pub async fn read_person_request(
-    state: &LibraryState,
-    caller: &Caller,
-    space: &str,
-    key: &str,
-) -> Result<PersonRequest, PersonRequestError> {
-    state
-        .run_read(async |handle| {
-            let space = check_space(state, handle, caller, space, READ_ROLES).await?;
-            let number = parse_key("RQ", key).ok_or(PersonRequestError::NotFound)?;
-            person_request_result(state, handle, &space.space.id, number).await
-        })
-        .await
+    write.record(WriteOperation::SubmitPersonRequest, Some(space_id.clone()));
+    Ok((
+        SubmittedPersonRequest {
+            person_request: result,
+            task_title: task.map(|(_, title)| title),
+        },
+        space_id,
+    ))
 }
 
 pub(super) async fn person_request_result(

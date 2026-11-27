@@ -433,10 +433,18 @@ async fn invoke(
     let body: Value = serde_json::from_str(&text).unwrap();
     assert!(body.get("error").is_none(), "{body}");
     let result = &body["result"];
-    assert_eq!(
-        serde_json::from_str::<Value>(result["content"][0]["text"].as_str().unwrap()).unwrap(),
-        result["structuredContent"]
-    );
+    let text_record =
+        serde_json::from_str::<Value>(result["content"][0]["text"].as_str().unwrap()).unwrap();
+    let mut structured_record = result["structuredContent"].clone();
+    if result["isError"] == false
+        && matches!(name, "create_request" | "get_request" | "revise_request")
+    {
+        let fields = structured_record.as_object_mut().unwrap();
+        for key in ["space_key", "space_name"] {
+            assert!(fields.remove(key).unwrap().is_string());
+        }
+    }
+    assert_eq!(text_record, structured_record);
     if version == NEWEST_VERSION {
         assert_eq!(result["resultType"], "complete");
     } else {

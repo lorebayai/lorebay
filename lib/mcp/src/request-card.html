@@ -1,0 +1,784 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src https://assets.claude.ai"
+    />
+    <title>Request card</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --ink: var(--color-text-primary, light-dark(#10262c, #e4edef));
+        --muted: var(--color-text-secondary, light-dark(#536468, #a1afb2));
+        --divider: var(--color-border-tertiary, light-dark(#e6e2db, #1e2729));
+        --fill: var(--color-background-tertiary, light-dark(#ece8e2, #223033));
+        --success: var(--color-text-success, light-dark(#26753e, #76c788));
+        --warning: var(--color-text-warning, light-dark(#895916, #e3b667));
+        --accent: light-dark(#c94a24, #e0703f);
+        --radius: var(--border-radius-md, 0.5rem);
+        --caption-size: var(--font-text-xs-size, 0.75rem);
+        --headline-size: max(
+          var(--font-heading-sm-size, 1.25rem),
+          var(--font-text-md-size, 0.875rem)
+        );
+        --normal: var(--font-weight-normal, 400);
+        --semibold: var(--font-weight-semibold, 600);
+        --type: var(--font-sans, system-ui, sans-serif);
+        --heading-type: var(--font-sans, Georgia, serif);
+      }
+
+      :root[data-theme="light"] {
+        color-scheme: light;
+      }
+
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      body,
+      h1,
+      p {
+        margin: 0;
+      }
+
+      body {
+        container-type: inline-size;
+        background: transparent;
+        color: var(--ink);
+        font: var(--normal) var(--font-text-md-size, 0.875rem) / 1.45
+          var(--type);
+      }
+
+      main {
+        --pad: 0.75rem;
+        inline-size: 100%;
+        padding: calc(
+            var(--pad) + var(--safe-top, env(safe-area-inset-top, 0px))
+          )
+          calc(var(--pad) + var(--safe-right, env(safe-area-inset-right, 0px)))
+          calc(
+            var(--pad) + var(--safe-bottom, env(safe-area-inset-bottom, 0px))
+          )
+          calc(var(--pad) + var(--safe-left, env(safe-area-inset-left, 0px)));
+        border: var(--border-width-regular, 1px) solid var(--divider);
+        border-radius: var(--radius);
+        overflow-wrap: anywhere;
+      }
+
+      header,
+      .skeleton {
+        display: grid;
+        gap: 0.375rem;
+        min-inline-size: 0;
+      }
+
+      .byline {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        min-inline-size: 0;
+      }
+
+      .byline,
+      .caption {
+        color: var(--muted);
+        font-size: var(--caption-size);
+      }
+
+      .space {
+        max-inline-size: calc(100% - 0.75rem);
+      }
+
+      .target {
+        flex: 1 1 6ch;
+        min-inline-size: 0;
+        margin-inline-start: 0.25em;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .buoy {
+        flex: none;
+        align-self: start;
+        inline-size: 0.4375rem;
+        block-size: 0.4375rem;
+        margin-block-start: 0.43em;
+        margin-inline-end: 0.25rem;
+        border-radius: 50%;
+        background: var(--accent);
+      }
+
+      h1 {
+        font: var(--semibold) var(--headline-size) / 1.3 var(--heading-type);
+        text-wrap: pretty;
+        white-space: pre-wrap;
+      }
+
+      h1[data-long-summary] {
+        font: inherit;
+      }
+
+      .wait,
+      .request-key {
+        white-space: nowrap;
+      }
+
+      .wait,
+      .request-key,
+      time {
+        font-variant-numeric: tabular-nums;
+      }
+
+      .actor {
+        display: inline-flex;
+        align-items: center;
+        vertical-align: middle;
+        gap: 0.3125rem;
+        max-inline-size: 100%;
+        min-inline-size: 0;
+        font-weight: var(--semibold);
+      }
+
+      .actor-tile {
+        display: grid;
+        flex: none;
+        place-items: center;
+        inline-size: 1.125rem;
+        block-size: 1.125rem;
+        border-radius: min(var(--radius), 0.375rem);
+        background: var(--fill);
+        font-size: 0.6875rem;
+      }
+
+      .rows,
+      .receipt,
+      .unreachable.with-request:not(:empty) {
+        margin-block-start: 0.625rem;
+      }
+
+      .rows {
+        display: grid;
+        gap: 0.3125rem;
+      }
+
+      .outdated,
+      .receipt {
+        display: flex;
+        align-items: baseline;
+        gap: 0.4375rem;
+        text-wrap: pretty;
+      }
+
+      .outdated-mark {
+        flex: none;
+        inline-size: 0.5em;
+        block-size: 0.5em;
+        border-radius: 50%;
+        background: var(--warning);
+      }
+
+      .receipt-mark {
+        flex: none;
+        color: var(--success);
+        font-weight: var(--semibold);
+      }
+
+      .receipt-reason {
+        white-space: pre-wrap;
+      }
+
+      .skeleton-bar {
+        border-radius: 0.25rem;
+        background: var(--fill);
+      }
+
+      .skeleton-byline {
+        inline-size: min(14em, 82%);
+        block-size: calc(1.45 * var(--caption-size));
+      }
+
+      .skeleton-heading {
+        display: grid;
+        inline-size: min(16em, 95%);
+        font-size: var(--headline-size);
+      }
+
+      .skeleton-heading .skeleton-bar {
+        block-size: 1.05em;
+        margin-block-end: 0.25em;
+      }
+
+      .skeleton-heading .skeleton-continuation {
+        inline-size: 54%;
+      }
+
+      .skeleton-caption {
+        inline-size: min(17em, 88%);
+        block-size: 1.125rem;
+      }
+
+      .skeleton-row {
+        inline-size: 4em;
+        block-size: 1.45em;
+        margin-block-start: 0.25rem;
+      }
+
+      .sr-only {
+        position: absolute;
+        inline-size: 1px;
+        block-size: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+      }
+
+      [hidden] {
+        display: none !important;
+      }
+
+      @container (min-width: 31rem) {
+        main {
+          --pad: 1.125rem;
+        }
+
+        .skeleton-continuation {
+          display: none;
+        }
+      }
+
+      @container (max-width: 14rem) {
+        .target {
+          overflow: visible;
+          white-space: normal;
+        }
+      }
+    </style>
+    <style id="host-fonts"></style>
+  </head>
+  <body data-product-name="">
+    <main id="card">
+      <h1 class="sr-only" id="request-state">
+        <span id="loading-status" role="status">Loading request</span>
+      </h1>
+      <div class="skeleton" id="skeleton" aria-hidden="true">
+        <div class="skeleton-bar skeleton-byline"></div>
+        <div class="skeleton-heading">
+          <div class="skeleton-bar"></div>
+          <div class="skeleton-bar skeleton-continuation"></div>
+        </div>
+        <div class="skeleton-bar skeleton-caption"></div>
+        <div class="skeleton-bar skeleton-row"></div>
+      </div>
+      <section id="request" aria-labelledby="headline" hidden>
+        <header>
+          <p class="byline" data-card-part="byline">
+            <span class="buoy" id="buoy" aria-hidden="true"></span>
+            <span class="space" id="space"></span>
+            <span class="target" id="target"></span>
+          </p>
+          <h1 id="headline" data-card-part="headline" dir="auto"></h1>
+          <p class="caption" data-card-part="caption">
+            <span class="actor">
+              <span
+                class="actor-tile"
+                id="actor-tile"
+                aria-hidden="true"
+              ></span>
+              <bdi id="actor-name"></bdi> </span
+            ><span> · Knowledge review</span><span class="wait" id="wait"></span
+            ><span class="request-key" id="request-key"></span>
+          </p>
+        </header>
+        <div class="rows" id="rows" data-card-part="rows" hidden>
+          <p id="pending-action"></p>
+          <p class="outdated" id="outdated" hidden>
+            <span class="outdated-mark" aria-hidden="true"></span>Outdated
+          </p>
+        </div>
+        <div class="receipt" id="receipt" data-card-part="receipt" hidden>
+          <span class="receipt-mark" aria-hidden="true">✓</span>
+          <p>
+            <span id="outcome"></span><time id="decided-at"></time
+            ><span class="receipt-reason" id="reason"></span>
+          </p>
+        </div>
+      </section>
+      <p
+        class="unreachable"
+        id="unreachable"
+        data-card-part="unreachable"
+        role="status"
+      ></p>
+    </main>
+    <script type="module">
+      const styleVariables = [
+        "--color-text-primary",
+        "--color-text-secondary",
+        "--color-border-tertiary",
+        "--color-background-tertiary",
+        "--color-text-success",
+        "--color-text-warning",
+        "--border-radius-md",
+        "--border-width-regular",
+        "--font-sans",
+        "--font-text-xs-size",
+        "--font-text-md-size",
+        "--font-heading-sm-size",
+        "--font-weight-normal",
+        "--font-weight-semibold",
+      ];
+      const rpcTimeoutMs = 10000;
+      const protocolVersion = "2026-01-26";
+
+      /** @typedef {{ space: string; key: string }} RequestLookup */
+      /** @typedef {NonNullable<ReturnType<typeof requestSnapshot>>} RequestSnapshot */
+      /** @typedef {(message: Record<string, unknown>) => void} Reply */
+
+      const root = document.documentElement;
+      const productName = document.body.dataset.productName;
+      const unreachableMessage = productName
+        ? `Can’t reach ${productName}.`
+        : "Can’t reach the server.";
+      const host = window.parent;
+      const card = element("card");
+      const request = element("request");
+      const unreachable = element("unreachable");
+      const sizeObserver = new ResizeObserver(reportSize);
+
+      /** @type {Map<number, Reply>} */
+      const replies = new Map();
+      /** @type {RequestLookup | undefined} */
+      let inputLookup;
+      /** @type {RequestLookup | undefined} */
+      let requestLookup;
+      /** @type {RequestSnapshot | undefined} */
+      let snapshot;
+      /** @type {Record<string, unknown> | undefined} */
+      let hostCapabilities;
+      /** @type {string | undefined} */
+      let locale;
+      /** @type {string | undefined} */
+      let timeZone;
+      let nextId = 0;
+      let initialized = false;
+      let originalToolFinished = false;
+      /** @type {boolean | undefined} */
+      let visible;
+      let refreshGeneration = 0;
+      let lastWidth = -1;
+      let lastHeight = -1;
+
+      window.addEventListener("message", receive);
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) showAgain();
+      });
+      new IntersectionObserver(([entry]) => {
+        const wasHidden = visible === false;
+        visible = entry?.isIntersecting === true;
+        if (visible && wasHidden) showAgain();
+      }).observe(card);
+      void initialize();
+
+      /** @param {string} id */
+      function element(id) {
+        const match = document.getElementById(id);
+        if (!match) throw new Error(`Missing card element: ${id}`);
+        return match;
+      }
+
+      /** @param {unknown} value */
+      function object(value) {
+        return value && typeof value === "object" && !Array.isArray(value)
+          ? /** @type {Record<string, unknown>} */ (value)
+          : undefined;
+      }
+
+      /** @param {unknown} value */
+      function text(value) {
+        return typeof value === "string" && value.length ? value : undefined;
+      }
+
+      /** @param {unknown} value */
+      function timestamp(value) {
+        return typeof value === "number" &&
+          !Number.isNaN(new Date(value).getTime())
+          ? value
+          : undefined;
+      }
+
+      /** @param {unknown} value */
+      function requestSnapshot(value) {
+        const result = object(value);
+        if (result?.isError) return;
+        const data = object(result?.structuredContent);
+        if (!data) return;
+
+        const space = text(data.space_key);
+        const spaceName = text(data.space_name);
+        const key = text(data.key);
+        const target = object(data.target);
+        const entry =
+          text(target?.name) ?? text(data.base_name) ?? text(data.new_name);
+        const requester =
+          text(data.requester_agent_name) ?? text(data.requested_by);
+        const { action, status } = data;
+        if (!space || !spaceName || !key || !entry || !requester) return;
+        if (action !== "create" && action !== "change" && action !== "delete")
+          return;
+        if (
+          status !== "pending" &&
+          status !== "approved" &&
+          status !== "rejected"
+        )
+          return;
+
+        const actionLabel = {
+          create: "Create",
+          change: "Change",
+          delete: "Delete",
+        }[action];
+        return {
+          lookup: { space, key },
+          spaceName,
+          entry,
+          requester,
+          pendingAction: {
+            create: "New entry",
+            change: "1 change",
+            delete: "Removal",
+          }[action],
+          status,
+          summary: text(data.new_summary) ?? `${actionLabel} ${entry}`,
+          outdated: data.outdated === true,
+          createdAt: timestamp(data.created_at),
+          decidedAt: timestamp(data.decided_at),
+          decidedBy: text(data.decided_by),
+          reason: text(data.reject_reason),
+        };
+      }
+
+      /** @param {number} since */
+      function wait(since) {
+        const minutes = Math.floor((Date.now() - since) / 60000);
+        if (minutes < 1) return "<1 min";
+        if (minutes < 60) return `${String(minutes)} min`;
+        if (minutes < 1440) return `${String(Math.floor(minutes / 60))} h`;
+        return `${String(Math.floor(minutes / 1440))} d`;
+      }
+
+      /** @param {number} when */
+      function decisionTime(when) {
+        try {
+          return formatDecision(when, locale, timeZone);
+        } catch {
+          return formatDecision(when);
+        }
+      }
+
+      /** @param {number} when @param {string} [language] @param {string} [zone] */
+      function formatDecision(when, language, zone) {
+        const time = new Intl.DateTimeFormat(language, {
+          hour: "2-digit",
+          minute: "2-digit",
+          hourCycle: "h23",
+          timeZone: zone,
+        }).format(when);
+        const dayInZone = new Intl.DateTimeFormat(language, {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+          timeZone: zone,
+        });
+        const day = dayInZone.format(when);
+        return day === dayInZone.format(Date.now()) ? time : `${day} · ${time}`;
+      }
+
+      /** @param {RequestSnapshot} data */
+      function render(data) {
+        const pending = data.status === "pending";
+        element("buoy").hidden = !pending;
+        element("space").textContent = productName
+          ? `${productName} · ${data.spaceName}`
+          : data.spaceName;
+        element("target").textContent = `· ${data.entry}`;
+        const headline = element("headline");
+        headline.textContent = data.summary;
+        headline.toggleAttribute(
+          "data-long-summary",
+          data.summary.length > 300,
+        );
+        const [initial] = new Intl.Segmenter().segment(data.requester);
+        element("actor-tile").textContent = initial?.segment ?? "";
+        element("actor-name").textContent = data.requester;
+        element("wait").textContent =
+          pending && data.createdAt !== undefined
+            ? ` · ${wait(data.createdAt)}`
+            : "";
+        element("request-key").textContent = ` · ${data.lookup.key}`;
+        element("rows").hidden = !pending;
+        if (pending) element("pending-action").textContent = data.pendingAction;
+        element("outdated").hidden = !data.outdated;
+        const receipt = element("receipt");
+        receipt.hidden = pending;
+        if (!pending) renderReceipt(data);
+        request.hidden = false;
+      }
+
+      /** @param {RequestSnapshot} data */
+      function renderReceipt(data) {
+        const rejected = data.status === "rejected";
+        const outcome = rejected ? "Rejected" : "Approved";
+        element("outcome").textContent = data.decidedBy
+          ? `${outcome} by ${data.decidedBy}`
+          : outcome;
+        const when = element("decided-at");
+        when.textContent =
+          data.decidedAt === undefined
+            ? ""
+            : ` · ${decisionTime(data.decidedAt)}`;
+        if (data.decidedAt !== undefined) {
+          when.setAttribute("datetime", new Date(data.decidedAt).toISOString());
+        } else {
+          when.removeAttribute("datetime");
+        }
+        element("reason").textContent =
+          rejected && data.reason ? ` · ${data.reason}` : "";
+      }
+
+      /** @param {string} notice */
+      function settle(notice = "") {
+        card.hidden = !snapshot && !notice;
+        element("skeleton").hidden = true;
+        element("request-state").hidden = snapshot !== undefined;
+        element("loading-status").textContent = "Request card";
+        if (snapshot) render(snapshot);
+        else request.hidden = true;
+        unreachable.textContent = notice;
+        unreachable.classList.toggle("with-request", snapshot !== undefined);
+      }
+
+      /** @param {unknown} value */
+      function applyHostContext(value) {
+        const context = object(value);
+        const theme = context?.theme;
+        if (theme === "light" || theme === "dark") root.dataset.theme = theme;
+        const styles = object(context?.styles);
+        const variables = object(styles?.variables);
+        if (variables) {
+          for (const name of styleVariables) {
+            if (Object.hasOwn(variables, name)) {
+              root.style.setProperty(name, text(variables[name]) ?? "");
+            }
+          }
+        }
+        const fontCss = object(styles?.css)?.fonts;
+        if (typeof fontCss === "string") applyHostFonts(fontCss);
+        const safeArea = object(context?.safeAreaInsets);
+        if (safeArea) {
+          for (const side of ["top", "right", "bottom", "left"]) {
+            const inset = safeArea[side];
+            if (
+              typeof inset === "number" &&
+              Number.isFinite(inset) &&
+              inset >= 0
+            ) {
+              root.style.setProperty(`--safe-${side}`, `${String(inset)}px`);
+            }
+          }
+        }
+        locale = text(context?.locale) ?? locale;
+        timeZone = text(context?.timeZone) ?? timeZone;
+        if (snapshot && !request.hidden) render(snapshot);
+      }
+
+      /** @param {string} fontCss */
+      function applyHostFonts(fontCss) {
+        const stylesheet = new CSSStyleSheet();
+        stylesheet.replaceSync(fontCss);
+        element("host-fonts").textContent = [...stylesheet.cssRules]
+          .filter((rule) => rule instanceof CSSFontFaceRule)
+          .map((rule) => rule.cssText)
+          .join("\n");
+      }
+
+      /** @param {Record<string, unknown>} message */
+      function send(message) {
+        host.postMessage({ jsonrpc: "2.0", ...message }, "*");
+      }
+
+      /** @param {string} method @param {Record<string, unknown>} params */
+      function rpc(method, params) {
+        const id = ++nextId;
+        return new Promise((resolve, reject) => {
+          const timer = window.setTimeout(() => {
+            replies.delete(id);
+            reject(new Error("Host did not respond"));
+          }, rpcTimeoutMs);
+          replies.set(id, (response) => {
+            window.clearTimeout(timer);
+            replies.delete(id);
+            if (response.error) reject(new Error("Host request failed"));
+            else resolve(response.result);
+          });
+          send({ id, method, params });
+        });
+      }
+
+      async function initialize() {
+        sizeObserver.observe(card, { box: "border-box" });
+        try {
+          const result = object(
+            await rpc("ui/initialize", {
+              protocolVersion,
+              appInfo: {
+                name: productName
+                  ? `${productName} request card`
+                  : "Request card",
+                version: "1",
+              },
+              appCapabilities: { availableDisplayModes: ["inline"] },
+            }),
+          );
+          if (!result || !text(result.protocolVersion))
+            throw new Error("Missing Apps protocol version");
+          hostCapabilities = object(result.hostCapabilities);
+          applyHostContext(result.hostContext);
+          initialized = true;
+          send({ method: "ui/notifications/initialized" });
+        } catch {
+          settle();
+        }
+        reportSize();
+      }
+
+      /** @param {MessageEvent<unknown>} event */
+      function receive(event) {
+        if (host === window || event.source !== host) return;
+        const message = object(event.data);
+        if (message?.jsonrpc !== "2.0") return;
+        const { id, method, params } = message;
+        if (method === undefined && typeof id === "number") {
+          replies.get(id)?.(message);
+        } else if (
+          initialized &&
+          (typeof id === "number" || typeof id === "string")
+        ) {
+          answerHost(id, method);
+        } else if (initialized && id === undefined) {
+          receiveNotification(method, params);
+        }
+      }
+
+      /** @param {number | string} id @param {unknown} method */
+      function answerHost(id, method) {
+        if (method === "ui/resource-teardown") {
+          initialized = false;
+          refreshGeneration++;
+          sizeObserver.disconnect();
+        } else if (method !== "ping") {
+          send({ id, error: { code: -32601, message: "Method not found" } });
+          return;
+        }
+        send({ id, result: {} });
+      }
+
+      /** @param {unknown} method @param {unknown} params */
+      function receiveNotification(method, params) {
+        if (method === "ui/notifications/host-context-changed") {
+          applyHostContext(params);
+          return;
+        }
+        if (originalToolFinished) return;
+
+        switch (method) {
+          case "ui/notifications/tool-input": {
+            const args = object(object(params)?.arguments);
+            const space = text(args?.space);
+            const key = text(args?.key);
+            if (space && key) inputLookup = { space, key };
+            break;
+          }
+          case "ui/notifications/tool-result": {
+            originalToolFinished = true;
+            snapshot = requestSnapshot(params);
+            requestLookup = snapshot?.lookup ?? inputLookup;
+            showRequest();
+            break;
+          }
+          case "ui/notifications/tool-cancelled":
+            originalToolFinished = true;
+            requestLookup = inputLookup;
+            showRequest(false);
+            break;
+        }
+      }
+
+      /** @param {boolean} showTransportError */
+      function showRequest(showTransportError = true) {
+        if (requestLookup && object(hostCapabilities?.serverTools)) {
+          void refresh(requestLookup, showTransportError);
+        } else {
+          settle();
+        }
+      }
+
+      /** @param {RequestLookup} lookup @param {boolean} showTransportError */
+      async function refresh(lookup, showTransportError) {
+        const generation = ++refreshGeneration;
+        let refreshed;
+        try {
+          refreshed = requestSnapshot(
+            await rpc("tools/call", {
+              name: "get_request",
+              arguments: lookup,
+            }),
+          );
+        } catch {
+          if (generation !== refreshGeneration) return;
+          settle(snapshot || showTransportError ? unreachableMessage : "");
+          return;
+        }
+        if (generation !== refreshGeneration) return;
+        if (
+          refreshed?.lookup.key === lookup.key &&
+          refreshed.lookup.space === lookup.space
+        ) {
+          snapshot = refreshed;
+          settle();
+        } else {
+          settle(snapshot ? unreachableMessage : "");
+        }
+      }
+
+      function showAgain() {
+        if (!initialized || !visible || document.hidden || !requestLookup)
+          return;
+        showRequest();
+      }
+
+      function reportSize() {
+        const bounds = card.getBoundingClientRect();
+        const width = Math.ceil(bounds.width);
+        const height = Math.ceil(bounds.height);
+        if (width === lastWidth && height === lastHeight) return;
+        lastWidth = width;
+        lastHeight = height;
+        send({
+          method: "ui/notifications/size-changed",
+          params: { width, height },
+        });
+      }
+    </script>
+  </body>
+</html>

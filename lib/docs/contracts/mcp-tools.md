@@ -20,8 +20,9 @@ agent may do, and nothing more.
 
 ## 2. Scope
 
-This doc covers the MCP protocol versions, the tools, and how they map to
-library operations. Permissions are in [Access control](access-control.md).
+This doc covers the MCP protocol versions, the tools and how they map to
+library operations, and the request card resource. Permissions are in
+[Access control](access-control.md).
 
 It does not cover:
 
@@ -141,7 +142,39 @@ Three rules reduce the risk:
   wrote into.
 - **`list_tasks` can list only the caller's party's `working` and `waiting` tasks**, so an agent that lost its task ID can find it again.
 
-## 7. References
+## 7. Request card
+
+- **A chat app can draw the Knowledge-change request.** The MCP layer
+  advertises the resources capability. The `create_request`, `get_request`
+  and `revise_request` tool definitions include `_meta.ui.resourceUri` with
+  `ui://requests/request-card.html`. All clients receive the same tool
+  definitions.
+- **The resource uses the tool sign-in.** `resources/list` lists the card and
+  `resources/read` serves it as `text/html;profile=mcp-app`. Its UI metadata
+  sets `prefersBorder` to false because the card draws its own outline.
+  Reading an unknown URI returns "Resource not found" with JSON-RPC code
+  `-32602` from MCP 2026-07-28 or `-32002` on earlier supported versions.
+- **The card uses the product's display name and the host's style.** The
+  router embeds the product's display name in the resource. The card uses
+  host typography and supports the host's font rules from the allowed font
+  origin, `https://assets.claude.ai`. The resource contains no request data
+  and permits network loads only for fonts from that origin.
+- **The same tools give the full record as text.** Their successful
+  `structuredContent` adds `space_key` and `space_name` to that record.
+  The card uses them to name the space and read the request by space and key
+  with `get_request` when shown if the host supports tool calls. It uses
+  the last request result when a refresh is unavailable and hides the
+  card when a refused or canceled call yields no request.
+- **The card is read-only.** It shows the request's proposed summary or
+  names the action and entry when the request has no proposed summary.
+  For a pending request, the action row reads “New entry”, “1 change” or
+  “Removal” and the card marks an outdated proposal. A decided request
+  shows the person's decision and any rejection reason. The receipt includes the
+  decision date when it falls on a different day in the host's time zone.
+  The caption names the requesting agent or the person who submitted the
+  request.
+
+## 8. References
 
 - [MCP changelog, 2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28/changelog):
   protocol-level sessions and the initialization handshake are removed, and

@@ -161,6 +161,9 @@ revision they read. Its party may revise it while pending, keeping its key.
 **Request revision**: The current form of a request, numbered from 1. Revising
 replaces that form and its target snapshot; no earlier revision is kept.
 
+**Request card**: The read-only preview of a Knowledge-change request that
+the MCP layer supplies to a chat app. It shows the proposal or outcome.
+
 **Outdated request**: A pending request whose target version or name differs
 from its snapshot, or whose create name is taken. It cannot be approved until
 revised against current Knowledge.
