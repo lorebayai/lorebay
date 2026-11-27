@@ -51,9 +51,9 @@ def host():
     identity = tuple(release.get(key, "").strip('"') for key in ("ID", "VERSION_ID"))
     if platform.machine() != "x86_64" or identity not in (
         ("debian", "12"),
-        ("ubuntu", "24.04"),
+        ("ubuntu", "26.04"),
     ):
-        fail("Supported hosts: x86_64 Debian 12 or Ubuntu 24.04 only")
+        fail("Supported hosts: x86_64 Debian 12 or Ubuntu 26.04 only")
     if Path("/proc/1/comm").read_text().strip() != "systemd":
         fail("systemd must run as PID 1")
     if os.geteuid() != 0:

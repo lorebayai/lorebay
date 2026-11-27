@@ -1,6 +1,6 @@
 # Native deployment
 
-Install one Lorebay server on x86_64 Debian 12 or Ubuntu 24.04 with systemd as
+Install one Lorebay server on x86_64 Debian 12 or Ubuntu 26.04 with systemd as
 PID 1. nginx serves HTTPS and caller limits; `lorebayd` listens on loopback.
 A native install requires a dedicated host whose local users are trusted: any
 local process can reach `lorebayd` on loopback without nginx's per-caller limits.

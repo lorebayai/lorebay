@@ -13,7 +13,7 @@ and both reach the server over HTTPS.
 
 On the server host, follow [the deployment guides](deploy/README.md) to run
 `lorebayd` behind nginx HTTPS, as a systemd service or with Docker Compose. The installer qualifies
-x86_64 Debian 12 and Ubuntu 24.04; Linux musl archives are also available for
+x86_64 Debian 12 and Ubuntu 26.04; Linux musl archives are also available for
 manual use on x86_64 and aarch64. Supply the users file, domain, certificate,
 key and a private local data path. The installer checks the selected archive
 against the release's `SHA256SUMS`.
