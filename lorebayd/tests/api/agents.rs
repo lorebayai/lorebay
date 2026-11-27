@@ -154,6 +154,7 @@ async fn revoke_agent_ends_agent_sign_in() {
         name,
     )
     .await;
+    assert_reauthorized_agent(&server, &person, &agent, name).await;
     server.stop().await;
 }
 
@@ -505,4 +506,47 @@ async fn assert_invalid_refresh(server: &Server, agent: &AuthorizedAgent) {
         response.json::<Value>().await.unwrap()["error"],
         "invalid_grant"
     );
+}
+
+async fn assert_reauthorized_agent(
+    server: &Server,
+    person: &Value,
+    revoked: &AuthorizedAgent,
+    name: &str,
+) {
+    let replacement = authorize_for_client(server, &revoked.client_id, name, person).await;
+    assert_ne!(
+        replacement.tokens["access_token"],
+        revoked.tokens["access_token"]
+    );
+    assert_ne!(
+        replacement.tokens["refresh_token"],
+        revoked.tokens["refresh_token"]
+    );
+    assert_eq!(
+        names(&list_page(server, person, AGENTS_PATH, &[]).await),
+        json!([name])
+    );
+    assert_person_required(list_response(AGENTS_PATH, server, &replacement.tokens, &[]).await)
+        .await;
+    let response = server
+        .refresh_oauth(
+            &replacement.client_id,
+            replacement.tokens["refresh_token"].as_str().unwrap(),
+        )
+        .await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let refreshed = response.json::<Value>().await.unwrap();
+    assert_ne!(
+        refreshed["refresh_token"],
+        replacement.tokens["refresh_token"]
+    );
+    assert_person_required(list_response(AGENTS_PATH, server, &refreshed, &[]).await).await;
+    assert_problem(
+        list_response(AGENTS_PATH, server, &revoked.tokens, &[]).await,
+        StatusCode::UNAUTHORIZED,
+        "auth.unauthorized",
+    )
+    .await;
+    assert_invalid_refresh(server, revoked).await;
 }

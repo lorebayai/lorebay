@@ -416,6 +416,15 @@ async fn list_space_members_includes_agents_with_capped_roles() {
         walk(&server, &agent, SPACE_MEMBERS, "2", 99).await,
         expected
     );
+    authorize_for(&server, &owner, "Second agent").await;
+    expected.insert(
+        1,
+        json!({"type":"agent","username":"alice","agent_name":"Second agent","role":"contributor"}),
+    );
+    assert_eq!(
+        walk(&server, &agent, SPACE_MEMBERS, "2", 99).await,
+        expected
+    );
     server.stop().await;
 }
 

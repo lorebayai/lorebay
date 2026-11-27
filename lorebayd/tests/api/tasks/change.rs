@@ -325,6 +325,7 @@ async fn change_task_fails_when_task_belongs_to_another_party() {
         for changes in [
             json!({"title":"Forbidden"}),
             json!({"state":"done"}),
+            json!({"state":"canceled", "state_reason":"Forbidden"}),
             json!({"result":"Forbidden"}),
         ] {
             assert_change_denied(&server, tokens, &alice_task, changes).await;

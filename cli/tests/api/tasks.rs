@@ -1,10 +1,10 @@
-use serde_json::json;
+use serde_json::{Value, json};
 
 use crate::helpers::{
     SECOND_USERNAME, Server, append_checkpoint, assert_planned_task_output, assert_success,
     assert_task_error, assert_usage, assert_waiting_task_listed, body, create, create_task,
     human_files, human_time, read_task, take_over_task, task_after_takeover, task_context,
-    task_id_from_show, task_pages, task_with_agent_files,
+    task_id_from_show, task_pages, task_with_agent_files, team,
 };
 
 #[tokio::test]
@@ -145,6 +145,55 @@ async fn task_cancel_fails_with_server_error_when_given_task_key() {
             }
             assert_eq!(read_task(&server, &space, key).await, expected);
         }
+    }
+}
+
+#[tokio::test]
+async fn task_cancel_fails_with_server_error_when_task_belongs_to_another_person() {
+    let server = team().await;
+    let space = create(&server, "Team", "Shared work").await;
+    assert_success(
+        &server
+            .run(&[
+                "member",
+                "add",
+                &space,
+                SECOND_USERNAME,
+                "--role",
+                "contributor",
+            ])
+            .await,
+    );
+    let agent = server.agent("Task agent").await;
+    let task = create_task(&server, &space, &agent, "Keep task").await;
+    let key = task["key"].as_str().unwrap();
+    let id = task["task_id"].as_str().unwrap();
+    let expected = read_task(&server, &space, key).await;
+    assert_eq!(expected["state"], "working");
+    for mode in ["human", "json"] {
+        let refused = server
+            .run_as(
+                SECOND_USERNAME,
+                &[
+                    "task", "cancel", &space, id, "--reason", "Stopped", "--output", mode,
+                ],
+            )
+            .await;
+        assert_eq!(refused.status.code(), Some(1));
+        assert!(refused.stdout.is_empty());
+        assert_eq!(String::from_utf8_lossy(&refused.stderr).lines().count(), 1);
+        if mode == "json" {
+            let error: Value = serde_json::from_slice(&refused.stderr).unwrap();
+            assert_eq!(error["status"], 403);
+            assert_eq!(error["code"], "space.permission_required");
+            assert_eq!(error["errors"], json!([]));
+        } else {
+            assert_eq!(
+                refused.stderr,
+                b"The space role does not allow this operation\n"
+            );
+        }
+        assert_eq!(read_task(&server, &space, key).await, expected);
     }
 }
 
