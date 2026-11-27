@@ -57,6 +57,8 @@ class Suite:
         self.builder = self.prefix + "-builder"
         self.builder_created = False
         self.compose_args = None
+        self.compose_data = None
+        self.compose_healthy_at = None
         self.port = None
         self.stage = "configuration"
         self.people = [{"username": name, "password": secrets.token_urlsafe(32)} for name in self.config["people"]]
@@ -479,15 +481,69 @@ class Suite:
         )
         self.say(f"PASS native_limit_conn_refuses_excess_and_serves_other_caller limit={CONNECTION_LIMIT}")
 
+    def upload_mode_checks(self):
+        self.stage = self.method + ": upload modes"
+        if self.method == "compose":
+            data = self.compose_data
+            owner, mode_format = "65532:65532", "%u:%g %a"
+
+            def run(*args):
+                return self.run("sudo", "-n", *args)
+        else:
+            data = Path("/srv/data")
+            owner, mode_format = "lorebay:lorebay", "%U:%G %a"
+
+            def run(*args):
+                return self.execute(self.native, *args)
+
+        directories = run("stat", "-c", mode_format, data / "uploads", data / "agent_files").stdout.splitlines()
+        require(
+            directories == [f"{owner} 700", f"{owner} 700"],
+            f"Upload directory modes are not private: {directories}",
+        )
+        self.say("PASS upload_directories_have_private_modes " + self.method)
+        non_files = run("find", data / "agent_files", "-mindepth", "1", "!", "-type", "f").stdout.splitlines()
+        require(not non_files, f"Unexpected non-regular entry in agent_files: {non_files}")
+        files = run(
+            "find", data / "agent_files", "-type", "f", "-exec", "stat", "-c", mode_format, "{}", "+"
+        ).stdout.splitlines()
+        require(
+            bool(files) and all(line == f"{owner} 600" for line in files),
+            f"Stored file modes are not private: {files}",
+        )
+        self.say("PASS agent_files_have_private_modes " + self.method)
+
     def body_and_log_checks(self):
         self.stage = self.method + ": access logs"
         self.drive("wrong_host_file")
         if self.method == "compose":
-            logs = self.docker("logs", self.nginx).stdout
+            remaining = 10 - (time.monotonic() - self.compose_healthy_at)
+            if remaining > 0:
+                time.sleep(remaining)
+            loopback_readyz = re.compile(r'^(?:127\.\d+\.\d+\.\d+|::1)\s+-\s+[^\n]*"GET /readyz HTTP/', re.M)
+
+            def readyz_lines(text):
+                return [line for line in text.splitlines() if re.search(r'"GET /readyz HTTP/1\.1" 200\b', line)]
+
+            before_logs = self.docker("logs", self.nginx).stdout
+            require(not loopback_readyz.search(before_logs), "Compose access log recorded loopback GET /readyz")
+            before_readyz = readyz_lines(before_logs)
+            self.drive("readyz_check", client=self.client_a)
+            deadline = time.monotonic() + 2
+            while True:
+                logs = self.docker("logs", self.nginx).stdout
+                after_readyz = readyz_lines(logs)
+                if len(after_readyz) > len(before_readyz) or time.monotonic() >= deadline:
+                    break
+                time.sleep(0.1)
+            require(not loopback_readyz.search(logs), "Compose access log recorded loopback GET /readyz")
+            client_ip = self.address(self.client_a, self.compose_network)
+            added = after_readyz[len(before_readyz):]
             require(
-                not re.search(r"^(?:127\.\d+\.\d+\.\d+|::1)\s+-\s+[^\n]*\"GET /readyz HTTP/", logs, re.M),
-                "Compose access log recorded loopback GET /readyz",
+                len(added) == 1 and added[0].startswith(client_ip + " "),
+                f"Expected one client GET /readyz log line from {client_ip}: {added}",
             )
+            self.say("PASS compose_access_log_omits_loopback_readyz_and_logs_client_readyz")
         else:
             logs = self.execute(self.native, "cat", "/var/log/nginx/access.log").stdout
         require(re.search(r'"PUT /files/[^"?\s]+ HTTP/1\.1" 201\b', logs) is not None, "Upload access log missing")
@@ -565,6 +621,7 @@ class Suite:
         self.say(
             f"PASS nginx_streams_without_temporary_growth baseline={baseline} maximum={maximum} samples={len(samples)}"
         )
+        self.upload_mode_checks()
         self.body_and_log_checks()
 
     def journey_checks(self):
@@ -1143,6 +1200,8 @@ class Suite:
 
     def compose_start(self, data):
         self.compose("up", "-d", "--wait", "--wait-timeout", "120")
+        self.compose_healthy_at = time.monotonic()
+        self.compose_data = data
         self.ready()
         app = self.compose("ps", "-q", "lorebayd").stdout.strip()
         self.nginx = self.compose("ps", "-q", "nginx").stdout.strip()
