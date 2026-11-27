@@ -255,7 +255,7 @@ def nginx_preflight(domain):
     return (
         "server {\n    "
         + "\n    ".join(listeners)
-        + "\n    ssl_reject_handshake on;\n}\n"
+        + "\n    access_log off;\n    ssl_reject_handshake on;\n}\n"
     )
 
 

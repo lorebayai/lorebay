@@ -23,6 +23,9 @@ from artifacts import NATIVE_ARCHIVES, TARGET
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "common"))
 from people import create_journey_people
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "deploy/common"))
+from helpers import CONNECTION_LIMIT, without_comments
+
 
 HERE = Path(__file__).resolve().parent
 REPOSITORY = "lorebayai/lorebay"
@@ -417,10 +420,103 @@ class Suite:
         self.say(result.stdout.strip())
         return result.stdout
 
+    def while_holding(self, operation, client, action, **options):
+        settings = {"operation": operation, "origin": self.origin, "people": self.people} | options
+        self.execute(client, "rm", "-f", "/work/held", "/work/release")
+        process = subprocess.Popen(
+            ["docker", "exec", "-i", client, "python3", "-B", "/driver.py"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=self.environment,
+        )
+        assert process.stdin is not None
+        try:
+            process.stdin.write(json.dumps(settings))
+            process.stdin.close()
+            process.stdin = None
+            deadline = time.monotonic() + 30
+            while self.execute(client, "test", "-f", "/work/held", check=False).returncode != 0:
+                if process.poll() is not None:
+                    stdout, stderr = process.communicate(timeout=5)
+                    raise RuntimeError(f"{operation} fixture exited early ({process.returncode}): {stdout}\n{stderr}")
+                require(time.monotonic() < deadline, f"{operation} fixture did not reach held state")
+                time.sleep(0.1)
+            action()
+            self.execute(client, "touch", "/work/release")
+            stdout, stderr = process.communicate(timeout=30)
+            require(process.returncode == 0, f"{operation} check failed: {stdout}\n{stderr}")
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.communicate(timeout=10)
+            self.execute(client, "rm", "-f", "/work/held", "/work/release", check=False)
+
+    def upstream_established(self):
+        table = self.execute(self.nginx, "cat", "/proc/net/tcp").stdout.splitlines()[1:]
+        return sum(
+            1
+            for line in table
+            if len(fields := line.split()) >= 4 and fields[2].endswith(":1F90") and fields[3] == "01"
+        )
+
+    def nginx_policy_checks(self):
+        self.stage = self.method + ": nginx policy"
+        rendered = without_comments(self.execute(self.nginx, "nginx", "-T").stdout)
+        has_limit_conn = re.search(r"^\s*limit_conn\b", rendered, re.M) is not None
+        if self.method == "compose":
+            require(not has_limit_conn, "Compose nginx configuration must not set limit_conn")
+            self.say("PASS compose_omits_limit_conn")
+            return
+        require(has_limit_conn, "Native nginx configuration is missing limit_conn")
+        self.while_holding(
+            "conn_hold",
+            self.client_b,
+            lambda: self.drive("readyz_check", client=self.client_a),
+            limit=CONNECTION_LIMIT,
+        )
+        self.say(f"PASS native_limit_conn_refuses_excess_and_serves_other_caller limit={CONNECTION_LIMIT}")
+
+    def body_and_log_checks(self):
+        self.stage = self.method + ": access logs"
+        self.drive("wrong_host_file")
+        if self.method == "compose":
+            logs = self.docker("logs", self.nginx).stdout
+            require(
+                not re.search(r"^(?:127\.\d+\.\d+\.\d+|::1)\s+-\s+[^\n]*\"GET /readyz HTTP/", logs, re.M),
+                "Compose access log recorded loopback GET /readyz",
+            )
+        else:
+            logs = self.execute(self.native, "cat", "/var/log/nginx/access.log").stdout
+        require(re.search(r'"PUT /files/[^"?\s]+ HTTP/1\.1" 201\b', logs) is not None, "Upload access log missing")
+        require(re.search(r'"GET /files/[^"?\s]+ HTTP/1\.1" 200\b', logs) is not None, "Download access log missing")
+        require(
+            "expires=" not in logs and "signature=" not in logs and "wrong-host-marker" not in logs,
+            "Signed URL query leaked into access log",
+        )
+        self.say("PASS access_log_omits_query_strings " + self.method)
+
+        self.stage = self.method + ": slow body and cap"
+        before = self.upstream_established()
+
+        def verify_no_upstream():
+            time.sleep(0.5)
+            samples = [self.upstream_established() for _ in range(2)]
+            require(
+                min(samples) <= before,
+                f"Slow requests opened extra upstream connections: before={before} samples={samples}",
+            )
+
+        self.while_holding("slow_body", self.client_a, verify_no_upstream)
+        self.say("PASS slow_body_buffered_without_upstream_connection")
+        self.drive("body_cap")
+
     def operation_checks(self):
         self.stage = self.method + ": browser trust"
         self.drive("trust")
         self.journey_checks()
+        self.nginx_policy_checks()
         self.stage = self.method + ": per-caller limits"
         first = json.loads(self.drive("rate", client=self.client_b, attempts=25, valid=False))
         second = json.loads(self.drive("rate", attempts=1, valid=True))
@@ -468,6 +564,7 @@ class Suite:
         self.say(
             f"PASS nginx_streams_without_temporary_growth baseline={baseline} maximum={maximum} samples={len(samples)}"
         )
+        self.body_and_log_checks()
 
     def journey_checks(self):
         for number, people in self.journey_people.items():

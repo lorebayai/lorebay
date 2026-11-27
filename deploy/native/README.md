@@ -79,10 +79,9 @@ Uninstall retains nginx, transfers kept data and its contents to root, removes
 the service account, and reloads running nginx. Reinstall with a new empty path.
 
 For single-host use, set `public_url` in `/etc/lorebay/lorebayd.json` to the exact
-loopback origin, e.g. `http://127.0.0.1:8080`, then `systemctl restart lorebay`.
-SSH forwarding needs the same local port (`ssh -L 8080:127.0.0.1:8080 server`).
-Domain sign-ins are refused while set. Changing the origin invalidates access
-tokens but keeps sign-ins; `lorebay logout` ends one. Restore HTTPS and restart.
+loopback origin, e.g. `http://127.0.0.1:8080`, and `systemctl restart lorebay`; SSH
+forwarding needs the same local port (`ssh -L 8080:127.0.0.1:8080 server`). Domain
+sign-ins are refused while set; changing origin invalidates access tokens (`lorebay logout` ends one). Restore HTTPS and restart.
 
 Run `moon run deploy:check` from the repo root with Docker, OpenSSL and Python 3.11+.
 
@@ -92,8 +91,9 @@ Paths must be absolute, using letters, digits, `/`, `.`, `_` and `-`. Required:
 `--domain` (lowercase DNS name), `--users`, `--certificate`, `--key` and `--data`.
 Select the release explicitly with `--version`. Service keys are in
 `/etc/lorebay/lorebayd.json`; see [the reference](../../lorebayd/README.md#configuration).
-The four application budgets are 1000; per-caller policy is in [nginx.conf.in](../common/nginx.conf.in).
-Match `client_max_body_size` to `upload_size_limit_bytes`; run `nginx -t` before reload.
+The four application budgets are 1000; per-caller rate and connection limits are
+in [nginx.conf.in](../common/nginx.conf.in) and [helpers.py](../common/helpers.py). Match `/files/`
+`client_max_body_size` to `upload_size_limit_bytes`; run `nginx -t` before reload.
 
 ## Docs
 
