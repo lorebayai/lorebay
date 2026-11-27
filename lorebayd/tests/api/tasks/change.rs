@@ -574,7 +574,7 @@ async fn change(server: &Server, tokens: &Value, task: &Value, changes: Value) -
 
 async fn assert_change_denied(server: &Server, tokens: &Value, task: &Value, changes: Value) {
     let original = read(server, tokens, task["key"].as_str().unwrap()).await;
-    assert_problem(
+    let problem = assert_problem(
         change_request(
             server,
             tokens,
@@ -587,6 +587,7 @@ async fn assert_change_denied(server: &Server, tokens: &Value, task: &Value, cha
         "space.permission_required",
     )
     .await;
+    assert_eq!(problem["errors"], json!([]));
     assert_eq!(
         read(server, tokens, task["key"].as_str().unwrap()).await,
         original

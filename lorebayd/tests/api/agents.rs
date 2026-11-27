@@ -537,9 +537,11 @@ async fn assert_reauthorized_agent(
         .await;
     assert_eq!(response.status(), StatusCode::OK);
     let refreshed = response.json::<Value>().await.unwrap();
+    let refreshed_token = refreshed["refresh_token"].as_str().unwrap();
+    assert!(!refreshed_token.is_empty());
     assert_ne!(
-        refreshed["refresh_token"],
-        replacement.tokens["refresh_token"]
+        refreshed_token,
+        replacement.tokens["refresh_token"].as_str().unwrap()
     );
     assert_person_required(list_response(AGENTS_PATH, server, &refreshed, &[]).await).await;
     assert_problem(
