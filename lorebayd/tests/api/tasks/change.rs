@@ -325,6 +325,7 @@ async fn change_task_fails_when_task_belongs_to_another_party() {
         for changes in [
             json!({"title":"Forbidden"}),
             json!({"state":"done"}),
+            json!({"state":"canceled", "state_reason":"Forbidden"}),
             json!({"result":"Forbidden"}),
         ] {
             assert_change_denied(&server, tokens, &alice_task, changes).await;
@@ -573,7 +574,7 @@ async fn change(server: &Server, tokens: &Value, task: &Value, changes: Value) -
 
 async fn assert_change_denied(server: &Server, tokens: &Value, task: &Value, changes: Value) {
     let original = read(server, tokens, task["key"].as_str().unwrap()).await;
-    assert_problem(
+    let problem = assert_problem(
         change_request(
             server,
             tokens,
@@ -586,6 +587,7 @@ async fn assert_change_denied(server: &Server, tokens: &Value, task: &Value, cha
         "space.permission_required",
     )
     .await;
+    assert_eq!(problem["errors"], json!([]));
     assert_eq!(
         read(server, tokens, task["key"].as_str().unwrap()).await,
         original
