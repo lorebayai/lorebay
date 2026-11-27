@@ -11,6 +11,11 @@ skill, tagged `v<version>`. The library's changes are in
 - `lorebayd` serves read-only Knowledge-change request cards to chat apps
   that support MCP Apps. Pending cards label the proposed entry action.
 
+### Changed
+
+- The native installer supports x86_64 Debian 12 and Ubuntu 26.04, and
+  refuses earlier Ubuntu releases.
+
 ### Fixed
 
 - Revoking an unknown agent (`DELETE /api/v1/agents/{name}` and

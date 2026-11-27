@@ -353,8 +353,9 @@ class Suite:
         self.pull("alpine:3")
         self.start_builder()
         self.client_image = self.build("client")
-        self.server_images = {base: self.build("server", base) for base in ("debian:12", "ubuntu:24.04")}
+        self.server_images = {base: self.build("server", base) for base in ("debian:12", "ubuntu:26.04")}
         self.pull("debian:13")
+        self.pull("ubuntu:24.04")
         self.run("sudo", "-n", "mkdir", "-m", "0755", self.data)
         self.data_owned = True
         users = []
@@ -901,12 +902,22 @@ class Suite:
 
     def unsupported(self):
         self.stage = "unsupported native host"
-        name = self.container("unsupported", "debian:13", command=["sleep", "infinity"])
-        self.execute(name, "apt-get", "update")
-        self.execute(name, "apt-get", "install", "-y", "python3")
-        self.native_inputs(name)
-        self.refusal(name, "Supported hosts: x86_64 Debian 12 or Ubuntu 24.04 only")
-        self.docker("rm", "-f", "-v", name)
+        for base in ("debian:13", "ubuntu:24.04"):
+            name = self.container("unsupported-" + base.replace(":", "-"), base, command=["sleep", "infinity"])
+            self.execute(name, "apt-get", "update")
+            self.execute(
+                name,
+                "env",
+                "DEBIAN_FRONTEND=noninteractive",
+                "apt-get",
+                "install",
+                "-y",
+                "--no-install-recommends",
+                "python3",
+            )
+            self.native_inputs(name)
+            self.refusal(name, "Supported hosts: x86_64 Debian 12 or Ubuntu 26.04 only")
+            self.docker("rm", "-f", "-v", name)
 
     def certificate_checks(self):
         self.stage = self.method + ": certificates"
@@ -1261,7 +1272,7 @@ def main():
         suite.release_files()
         suite.prepare()
         suite.unsupported()
-        for base in ("debian:12", "ubuntu:24.04"):
+        for base in ("debian:12", "ubuntu:26.04"):
             suite.native_checks(base)
         suite.compose_checks()
         suite.archive_check()

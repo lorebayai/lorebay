@@ -1,7 +1,7 @@
 # Deployment tests
 
 Qualify release files as an operator, a person and an agent through native
-Debian 12, native Ubuntu 24.04, Compose and the Alpine archive recipe.
+Debian 12, native Ubuntu 26.04, Compose and the Alpine archive recipe.
 The suite drives executables, deployment tools, the CLI, HTTP and Chromium.
 Each install runs the same nine [team journeys](../e2e/README.md): HTTPS for
 native and Compose installations, loopback HTTP for the Alpine archive.
